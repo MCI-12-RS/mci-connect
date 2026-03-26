@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
+import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 
 type Member = Database["public"]["Tables"]["members"]["Row"];
 type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
@@ -23,6 +24,32 @@ const BRAZILIAN_STATES = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
   "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
 ];
+
+// Mask utilities
+const maskCPF = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
+const maskPhone = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, "($1)$2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, "($1)$2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+};
+
+const maskCEP = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  return digits.replace(/(\d{5})(\d)/, "$1-$2");
+};
 
 const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
@@ -61,14 +88,6 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, [member]);
 
-  const { data: allMembers = [] } = useQuery({
-    queryKey: ["members-selector"],
-    queryFn: async () => {
-      const { data } = await supabase.from("members").select("id, name").order("name");
-      return data || [];
-    },
-  });
-
   const { data: roles = [] } = useQuery({
     queryKey: ["roles"],
     queryFn: async () => {
@@ -106,7 +125,9 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const otherMembers = allMembers.filter((m) => m.id !== member?.id);
+  const handleMaskedChange = (field: keyof MemberInsert, value: string, maskFn: (v: string) => string) => {
+    update(field, maskFn(value));
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -124,7 +145,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="cpf">CPF</Label>
-            <Input id="cpf" value={form.cpf || ""} onChange={(e) => update("cpf", e.target.value)} placeholder="000.000.000-00" />
+            <Input id="cpf" value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="gender">Gênero</Label>
@@ -142,23 +163,20 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="spouse">Cônjuge</Label>
-            <Select value={form.spouse_id || "none"} onValueChange={(v) => update("spouse_id", v === "none" ? null : v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum</SelectItem>
-                {otherMembers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <AsyncMemberSelect
+              value={form.spouse_id || null}
+              onChange={(v) => update("spouse_id", v)}
+              excludeId={member?.id}
+              placeholder="Buscar cônjuge..."
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="mobile">Celular / WhatsApp</Label>
-            <Input id="mobile" value={form.mobile_whatsapp || ""} onChange={(e) => update("mobile_whatsapp", e.target.value)} />
+            <Input id="mobile" value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder="(00)00000-0000" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Telefone</Label>
-            <Input id="phone" value={form.phone || ""} onChange={(e) => update("phone", e.target.value)} />
+            <Input id="phone" value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder="(00)0000-0000" />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notes">Observações</Label>
@@ -188,15 +206,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           {form.has_leadership && (
             <div className="space-y-2">
               <Label htmlFor="leader">Líder</Label>
-              <Select value={form.leader_id || "none"} onValueChange={(v) => update("leader_id", v === "none" ? null : v)}>
-                <SelectTrigger><SelectValue placeholder="Selecione o líder" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {otherMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AsyncMemberSelect
+                value={form.leader_id || null}
+                onChange={(v) => update("leader_id", v)}
+                excludeId={member?.id}
+                placeholder="Buscar líder..."
+              />
             </div>
           )}
           <div className="flex items-center justify-between rounded-md border p-3">
@@ -218,6 +233,10 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       <div>
         <h3 className="text-lg font-semibold mb-3">Endereço</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="zip_code">CEP</Label>
+            <Input id="zip_code" value={form.zip_code || ""} onChange={(e) => handleMaskedChange("zip_code", e.target.value, maskCEP)} placeholder="00000-000" />
+          </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="street">Rua</Label>
             <Input id="street" value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
@@ -248,10 +267,6 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="zip_code">CEP</Label>
-            <Input id="zip_code" value={form.zip_code || ""} onChange={(e) => update("zip_code", e.target.value)} placeholder="00000-000" />
           </div>
         </div>
       </div>
