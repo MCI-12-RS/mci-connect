@@ -115,6 +115,7 @@ const Members = () => {
                   <TableHead>Nome</TableHead>
                   <TableHead>Celular</TableHead>
                   <TableHead>Nível G12</TableHead>
+                  <TableHead>Ministério</TableHead>
                   <TableHead>Líder</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-24">Ações</TableHead>
@@ -123,13 +124,13 @@ const Members = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : members.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Nenhum membro encontrado
                     </TableCell>
                   </TableRow>
@@ -150,7 +151,7 @@ const Members = () => {
                           {m.instagram && (
                             <p className="text-xs text-primary font-medium">{m.instagram}</p>
                           )}
-                          {!m.instagram && m.email && (
+                          {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
                             <p className="text-xs text-muted-foreground">{m.email}</p>
                           )}
                         </div>
@@ -165,10 +166,14 @@ const Members = () => {
                           <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">{m.total_disciples} Discípulo{m.total_disciples !== 1 ? 's' : ''}</span>
+                          <span className="text-sm text-muted-foreground">{m.total_cells} Célula{m.total_cells !== 1 ? 's' : ''}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm">
-                        {m.leader_id
-                          ? members.find((l: any) => l.id === m.leader_id)?.name || "—"
-                          : "—"}
+                        {m.leader_id ? (m.leader as any)?.name || "—" : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>

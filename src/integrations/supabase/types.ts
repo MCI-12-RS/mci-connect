@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -99,6 +119,7 @@ export type Database = {
       members: {
         Row: {
           auth_user_id: string | null
+          avatar_url: string | null
           baptism_date: string | null
           birth_date: string | null
           city: string | null
@@ -111,7 +132,6 @@ export type Database = {
           has_leadership: boolean
           id: string
           instagram: string | null
-          avatar_url: string | null
           is_active: boolean
           is_baptized: boolean
           is_pastor: boolean
@@ -126,11 +146,14 @@ export type Database = {
           spouse_id: string | null
           state: string | null
           street: string | null
+          total_cells: number
+          total_disciples: number
           updated_at: string
           zip_code: string | null
         }
         Insert: {
           auth_user_id?: string | null
+          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -143,7 +166,6 @@ export type Database = {
           has_leadership?: boolean
           id?: string
           instagram?: string | null
-          avatar_url?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -158,11 +180,14 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
+          total_cells?: number
+          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
         Update: {
           auth_user_id?: string | null
+          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -175,7 +200,6 @@ export type Database = {
           has_leadership?: boolean
           id?: string
           instagram?: string | null
-          avatar_url?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -190,6 +214,8 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
+          total_cells?: number
+          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
@@ -421,6 +447,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       permission_action: [
@@ -438,3 +467,4 @@ export const Constants = {
     },
   },
 } as const
+

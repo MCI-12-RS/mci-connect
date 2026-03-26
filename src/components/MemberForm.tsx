@@ -117,21 +117,6 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, [member]);
 
-  // Auto-fetch Instagram Profile Picture
-  useEffect(() => {
-    const handle = form.instagram?.trim();
-    if (!handle || handle.length < 3) return;
-
-    const timer = setTimeout(() => {
-      const username = handle.replace("@", "");
-      // Using Microlink to scrape the actual og:image from the profile page
-      // This is more reliable than generic unavatar and returns the real IG CDN URL
-      const avatarUrl = `https://api.microlink.io?url=https://www.instagram.com/${username}&embed=image.url`;
-      setForm(prev => ({ ...prev, avatar_url: avatarUrl }));
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, [form.instagram]);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["roles"],
@@ -143,19 +128,41 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const mutation = useMutation({
     mutationFn: async (data: MemberInsert) => {
+      let email = data.email?.trim();
+
+      if (!email) {
+        if (isEditing && member?.email?.endsWith("@mci12fakemail.com")) {
+          email = member.email;
+        } else if (!isEditing) {
+          const normalizedName = (data.name || "membro")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .replace(/[^a-z0-9]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_|_$/g, "");
+            
+          const hash = Math.random().toString(36).substring(2, 8);
+          email = `${normalizedName}_${hash}@mci12fakemail.com`;
+        }
+      }
+
       const cleanData = {
         ...data,
+        email,
         cpf: data.cpf?.replace(/\D/g, ""),
         mobile_whatsapp: data.mobile_whatsapp?.replace(/\D/g, ""),
         phone: data.phone?.replace(/\D/g, ""),
         zip_code: data.zip_code?.replace(/\D/g, ""),
       };
 
-      if (!isEditing && password) {
+      if (!isEditing) {
+        const finalPassword = password || "123456";
         const { data: result, error } = await supabase.functions.invoke('create-user-admin', {
           body: { 
-            email: data.email, 
-            password, 
+            email: cleanData.email, 
+            password: finalPassword, 
             memberData: cleanData 
           }
         });
@@ -166,9 +173,6 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
       if (isEditing && member) {
         const { error } = await supabase.from("members").update(cleanData).eq("id", member.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("members").insert(cleanData);
         if (error) throw error;
       }
     },
@@ -195,6 +199,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     update(field, maskFn(value));
   };
 
+  const isFakeEmail = form.email?.endsWith("@mci12fakemail.com");
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Personal Data */}
@@ -206,8 +212,16 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             <Input id="name" value={form.name} onChange={(e) => update("name", e.target.value)} required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" value={form.email || ""} onChange={(e) => update("email", e.target.value)} />
+            <Label htmlFor="email">
+              E-mail {isFakeEmail && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
+            </Label>
+            <Input 
+              id="email" 
+              type="email" 
+              value={isFakeEmail ? "" : (form.email || "")} 
+              onChange={(e) => update("email", e.target.value)} 
+              placeholder={isFakeEmail ? "Adicionar e-mail..." : ""} 
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="instagram">Instagram (@)</Label>
@@ -228,14 +242,13 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           </div>
           {!isEditing && (
             <div className="space-y-2">
-              <Label htmlFor="password">Senha para Acesso *</Label>
+              <Label htmlFor="password">Senha para Acesso</Label>
               <Input 
                 id="password" 
                 type="password" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
-                required={!isEditing}
-                placeholder="Defina a senha inicial"
+                placeholder="Padrão: 123456"
               />
             </div>
           )}

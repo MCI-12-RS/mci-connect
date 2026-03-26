@@ -72,7 +72,7 @@ const Cells = () => {
     if (!search) return true;
     const s = search.toLowerCase();
 
-    const getLeaderName = (id: string | null) => 
+    const getLeaderName = (id: string | null) =>
       id && memberMap[id]?.leader_id ? memberMap[memberMap[id].leader_id]?.name?.toLowerCase() || "" : "";
 
     const leaderName = c.leader?.name?.toLowerCase() || "";
@@ -123,7 +123,7 @@ const Cells = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Células</h1>
-            <p className="text-muted-foreground">Gerenciar células e grupos caseiros</p>
+            <p className="text-muted-foreground">Gerenciar células</p>
           </div>
           {hasPermission("create_cell") && (
             <Button onClick={() => setFormOpen(true)}>
