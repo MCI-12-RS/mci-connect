@@ -9,7 +9,7 @@ const AppSidebar = () => {
   const { signOut, hasPermission, member } = useAuth();
 
   const menuItems = [
-    { icon: Home, label: "Painel", path: "/", permission: "view_dashboard" },
+    { icon: Home, label: "Dashboard", path: "/", permission: "view_dashboard" },
     { icon: Users, label: "Membros", path: "/members", permission: "view_members" },
     { icon: Shield, label: "Funções", path: "/roles", permission: "view_roles" },
   ].filter((item) => hasPermission(item.permission));
