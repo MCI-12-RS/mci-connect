@@ -1,4 +1,4 @@
-import { Home, Users, Shield, LogOut, Network } from "lucide-react";
+import { Home, Users, Shield, LogOut, Network, LayoutGrid } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
@@ -11,6 +11,7 @@ const AppSidebar = () => {
   const menuItems = [
     { icon: Home, label: "Dashboard", path: "/", permission: "view_dashboard" },
     { icon: Users, label: "Membros", path: "/members", permission: "view_members" },
+    { icon: LayoutGrid, label: "Células", path: "/cells", permission: "view_members" },
     { icon: Network, label: "Ministérios", path: "/ministries", permission: "view_members" },
     { icon: Shield, label: "Funções", path: "/roles", permission: "view_roles" },
   ].filter((item) => hasPermission(item.permission));

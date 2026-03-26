@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
 import Roles from "./pages/Roles";
 import Ministries from "./pages/Ministries";
+import Cells from "./pages/Cells";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
             <Route path="/roles" element={<ProtectedRoute><Roles /></ProtectedRoute>} />
             <Route path="/ministries" element={<ProtectedRoute><Ministries /></ProtectedRoute>} />
+            <Route path="/cells" element={<ProtectedRoute><Cells /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
