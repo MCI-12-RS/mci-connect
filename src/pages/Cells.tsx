@@ -36,11 +36,7 @@ const Cells = () => {
           timothy:members!cells_timothy_id_fkey(name),
           host:members!cells_host_id_fkey(name)
         `)
-        .order("name");
-
-      if (search) {
-        query = query.ilike("name", `%${search}%`);
-      }
+        .order("created_at", { ascending: false });
 
       const { data, error } = await query;
       if (error) throw error;
@@ -91,15 +87,6 @@ const Cells = () => {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nome da célula..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
               <Badge variant="secondary">{cells.length} células</Badge>
             </div>
           </CardHeader>
@@ -107,7 +94,6 @@ const Cells = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
                   <TableHead>Líder / Timóteo</TableHead>
                   <TableHead>Anfitrião</TableHead>
                   <TableHead>Tipo</TableHead>
@@ -132,7 +118,6 @@ const Cells = () => {
                 ) : (
                   cells.map((c: any) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium">{c.leader?.name}</span>
@@ -175,7 +160,7 @@ const Cells = () => {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Tem certeza que deseja excluir a célula {c.name}? Esta ação não pode ser desfeita.
+                                    Tem certeza que deseja excluir esta célula? Esta ação não pode ser desfeita.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>

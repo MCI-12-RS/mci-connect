@@ -40,7 +40,6 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   const isEditing = !!cell;
   
   const [form, setForm] = useState<CellInsert>({
-    name: "",
     leader_id: "",
     timothy_id: null,
     host_id: null,
@@ -135,16 +134,6 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="name">Nome da Célula *</Label>
-          <Input 
-            id="name" 
-            value={form.name} 
-            onChange={(e) => update("name", e.target.value)} 
-            placeholder="Ex: Célula Videira"
-            required 
-          />
-        </div>
 
         <div className="space-y-2">
           <Label>Líder *</Label>
