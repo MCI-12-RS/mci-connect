@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
+import CellReportForm from "@/components/CellReportForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Pencil, Trash2, Home, Users } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Home, Users, FilePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 
@@ -21,6 +22,8 @@ const Cells = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<Cell | null>(null);
+  const [reportFormOpen, setReportFormOpen] = useState(false);
+  const [selectedCellForReport, setSelectedCellForReport] = useState<string | null>(null);
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -115,6 +118,16 @@ const Cells = () => {
   const handleClose = () => {
     setFormOpen(false);
     setEditingCell(null);
+  };
+
+  const handleOpenReport = (cellId: string) => {
+    setSelectedCellForReport(cellId);
+    setReportFormOpen(true);
+  };
+
+  const handleCloseReport = () => {
+    setReportFormOpen(false);
+    setSelectedCellForReport(null);
   };
 
   return (
@@ -216,6 +229,11 @@ const Cells = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenReport(c.id)} title="Novo Relatório">
+                              <FilePlus className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                           {hasPermission("edit_cell") && (
                             <Button variant="ghost" size="icon" onClick={() => handleEdit(c)}>
                               <Pencil className="w-4 h-4" />
@@ -260,6 +278,17 @@ const Cells = () => {
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
             <CellForm cell={editingCell} onClose={handleClose} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Novo Relatório de Célula</DialogTitle>
+            </DialogHeader>
+            {reportFormOpen && (
+              <CellReportForm initialCellId={selectedCellForReport || undefined} onClose={handleCloseReport} />
+            )}
           </DialogContent>
         </Dialog>
       </div>

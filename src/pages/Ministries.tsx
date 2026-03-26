@@ -109,11 +109,10 @@ const TreeNode = ({ node, level }: { node: TreeNodeData; level: number }) => {
     <div>
       <button
         onClick={hasChildren ? loadChildren : undefined}
-        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors rounded-lg group ${
-          hasChildren
+        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors rounded-lg group ${hasChildren
             ? "hover:bg-muted/60 cursor-pointer"
             : "cursor-default"
-        }`}
+          }`}
         style={{ paddingLeft: `${16 + indentPx}px` }}
         disabled={loading}
       >
@@ -252,12 +251,12 @@ const Ministries = () => {
         </div>
 
         <Card>
-          <CardHeader>
+          {/* <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="w-5 h-5 text-primary" />
               Estrutura G12
             </CardTitle>
-          </CardHeader>
+          </CardHeader> */}
           <CardContent className="p-2">
             {isLoading ? (
               <div className="py-12 text-center text-muted-foreground">

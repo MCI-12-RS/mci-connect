@@ -34,6 +34,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      cell_report_participants: {
+        Row: {
+          member_id: string
+          report_id: string
+        }
+        Insert: {
+          member_id: string
+          report_id: string
+        }
+        Update: {
+          member_id?: string
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "cell_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cell_reports: {
+        Row: {
+          cell_id: string
+          created_at: string
+          date: string
+          id: string
+          observations: string | null
+          offering: number | null
+          reason_not_held: string | null
+          theme: string | null
+          time: string
+          updated_at: string
+          visitors: Json | null
+          was_held: boolean
+        }
+        Insert: {
+          cell_id: string
+          created_at?: string
+          date: string
+          id?: string
+          observations?: string | null
+          offering?: number | null
+          reason_not_held?: string | null
+          theme?: string | null
+          time: string
+          updated_at?: string
+          visitors?: Json | null
+          was_held?: boolean
+        }
+        Update: {
+          cell_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          observations?: string | null
+          offering?: number | null
+          reason_not_held?: string | null
+          theme?: string | null
+          time?: string
+          updated_at?: string
+          visitors?: Json | null
+          was_held?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cells: {
         Row: {
           city: string | null
