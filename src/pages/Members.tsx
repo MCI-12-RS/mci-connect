@@ -30,7 +30,7 @@ const Members = () => {
     queryFn: async () => {
       let query = supabase
         .from("members")
-        .select("*, leader:members!members_leader_id_fkey(name), role:roles(name)")
+        .select("*, role:roles(name)")
         .order("name");
 
       if (search) {
@@ -146,7 +146,11 @@ const Members = () => {
                           {m.is_pastor ? "Pastor" : getLevelLabel(m.g12_level)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{m.leader?.name || "—"}</TableCell>
+                      <TableCell className="text-sm">
+                        {m.leader_id
+                          ? members.find((l: any) => l.id === m.leader_id)?.name || "—"
+                          : "—"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
                           {m.is_active ? "Ativo" : "Inativo"}
