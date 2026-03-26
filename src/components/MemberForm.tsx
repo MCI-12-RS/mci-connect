@@ -104,6 +104,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     city: "",
     state: "",
     zip_code: "",
+    instagram: "",
+    avatar_url: "",
     role_id: null,
   });
 
@@ -112,6 +114,21 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       setForm({ ...member });
     }
   }, [member]);
+
+  // Auto-fetch Instagram Profile Picture
+  useEffect(() => {
+    const handle = form.instagram?.trim();
+    if (!handle || handle.length < 3) return;
+
+    const timer = setTimeout(() => {
+      const avatarUrl = `https://unavatar.io/instagram/${handle.replace("@", "")}`;
+      // Just check if it's potentially valid (unavatar always returns something, often a placeholder if not found)
+      // but we'll save it as the candidate URL.
+      setForm(prev => ({ ...prev, avatar_url: avatarUrl }));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [form.instagram]);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["roles"],
@@ -167,6 +184,19 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
             <Input id="email" type="email" value={form.email || ""} onChange={(e) => update("email", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="instagram">Instagram (@)</Label>
+            <Input 
+              id="instagram" 
+              placeholder="@usuario" 
+              value={form.instagram || ""} 
+              onChange={(e) => {
+                let v = e.target.value;
+                if (v && !v.startsWith("@")) v = "@" + v;
+                update("instagram", v);
+              }} 
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="cpf">CPF</Label>

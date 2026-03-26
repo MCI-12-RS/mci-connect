@@ -110,6 +110,8 @@ export type Database = {
           gender: string | null
           has_leadership: boolean
           id: string
+          instagram: string | null
+          avatar_url: string | null
           is_active: boolean
           is_baptized: boolean
           is_pastor: boolean
@@ -140,6 +142,8 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
+          instagram?: string | null
+          avatar_url?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -170,6 +174,8 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
+          instagram?: string | null
+          avatar_url?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean

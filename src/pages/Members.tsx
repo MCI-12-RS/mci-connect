@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 
@@ -110,6 +111,7 @@ const Members = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12"></TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Celular</TableHead>
                   <TableHead>Nível G12</TableHead>
@@ -121,13 +123,13 @@ const Members = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : members.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum membro encontrado
                     </TableCell>
                   </TableRow>
@@ -135,9 +137,22 @@ const Members = () => {
                   members.map((m: any) => (
                     <TableRow key={m.id}>
                       <TableCell>
+                        <Avatar className="w-10 h-10 border">
+                          <AvatarImage src={m.avatar_url || ""} />
+                          <AvatarFallback className="bg-muted">
+                            <User className="w-5 h-5 text-muted-foreground" />
+                          </AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell>
                         <div>
                           <span className="font-medium">{m.name}</span>
-                          {m.email && <p className="text-xs text-muted-foreground">{m.email}</p>}
+                          {m.instagram && (
+                            <p className="text-xs text-primary font-medium">{m.instagram}</p>
+                          )}
+                          {!m.instagram && m.email && (
+                            <p className="text-xs text-muted-foreground">{m.email}</p>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{m.mobile_whatsapp || "—"}</TableCell>
