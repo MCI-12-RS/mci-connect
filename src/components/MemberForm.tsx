@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,31 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!member;
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const fetchAddressByCEP = useCallback(async (cep: string) => {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm((prev) => ({
+          ...prev,
+          street: data.logradouro || prev.street,
+          neighborhood: data.bairro || prev.neighborhood,
+          city: data.localidade || prev.city,
+          state: data.uf || prev.state,
+          complement: data.complemento || prev.complement,
+        }));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setCepLoading(false);
+    }
+  }, []);
 
   const [form, setForm] = useState<MemberInsert>({
     name: "",
@@ -234,8 +259,19 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         <h3 className="text-lg font-semibold mb-3">Endereço</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="zip_code">CEP</Label>
-            <Input id="zip_code" value={form.zip_code || ""} onChange={(e) => handleMaskedChange("zip_code", e.target.value, maskCEP)} placeholder="00000-000" />
+            <Label htmlFor="zip_code">CEP {cepLoading && <span className="text-xs text-muted-foreground ml-1">Buscando...</span>}</Label>
+            <Input
+              id="zip_code"
+              value={form.zip_code || ""}
+              onChange={(e) => {
+                const masked = maskCEP(e.target.value);
+                update("zip_code", masked);
+                if (masked.replace(/\D/g, "").length === 8) {
+                  fetchAddressByCEP(masked);
+                }
+              }}
+              placeholder="00000-000"
+            />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="street">Rua</Label>
