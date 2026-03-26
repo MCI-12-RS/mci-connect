@@ -14,6 +14,91 @@ export type Database = {
   }
   public: {
     Tables: {
+      cells: {
+        Row: {
+          city: string | null
+          complement: string | null
+          created_at: string
+          host_id: string | null
+          id: string
+          is_active: boolean
+          leader_id: string | null
+          meeting_day: string | null
+          meeting_time: string | null
+          name: string
+          neighborhood: string | null
+          number: string | null
+          state: string | null
+          street: string | null
+          timothy_id: string | null
+          type: string
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          city?: string | null
+          complement?: string | null
+          created_at?: string
+          host_id?: string | null
+          id?: string
+          is_active?: boolean
+          leader_id?: string | null
+          meeting_day?: string | null
+          meeting_time?: string | null
+          name: string
+          neighborhood?: string | null
+          number?: string | null
+          state?: string | null
+          street?: string | null
+          timothy_id?: string | null
+          type?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          city?: string | null
+          complement?: string | null
+          created_at?: string
+          host_id?: string | null
+          id?: string
+          is_active?: boolean
+          leader_id?: string | null
+          meeting_day?: string | null
+          meeting_time?: string | null
+          name?: string
+          neighborhood?: string | null
+          number?: string | null
+          state?: string | null
+          street?: string | null
+          timothy_id?: string | null
+          type?: string
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       members: {
         Row: {
           auth_user_id: string | null
@@ -182,91 +267,6 @@ export type Database = {
         }
         Relationships: []
       }
-      cells: {
-        Row: {
-          city: string | null
-          complement: string | null
-          created_at: string
-          host_id: string | null
-          id: string
-          is_active: boolean
-          leader_id: string
-          meeting_day: string | null
-          meeting_time: string | null
-          name: string
-          neighborhood: string | null
-          number: string | null
-          state: string | null
-          street: string | null
-          timothy_id: string | null
-          type: string | null
-          updated_at: string
-          zip_code: string | null
-        }
-        Insert: {
-          city?: string | null
-          complement?: string | null
-          created_at?: string
-          host_id?: string | null
-          id?: string
-          is_active?: boolean
-          leader_id: string
-          meeting_day?: string | null
-          meeting_time?: string | null
-          name: string
-          neighborhood?: string | null
-          number?: string | null
-          state?: string | null
-          street?: string | null
-          timothy_id?: string | null
-          type?: string | null
-          updated_at?: string
-          zip_code?: string | null
-        }
-        Update: {
-          city?: string | null
-          complement?: string | null
-          created_at?: string
-          host_id?: string | null
-          id?: string
-          is_active?: boolean
-          leader_id?: string
-          meeting_day?: string | null
-          meeting_time?: string | null
-          name?: string
-          neighborhood?: string | null
-          number?: string | null
-          state?: string | null
-          street?: string | null
-          timothy_id?: string | null
-          type?: string | null
-          updated_at?: string
-          zip_code?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cells_leader_id_fkey"
-            columns: ["leader_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cells_timothy_id_fkey"
-            columns: ["timothy_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cells_host_id_fkey"
-            columns: ["host_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -290,7 +290,6 @@ export type Database = {
         | "manage_roles"
         | "view_roles"
         | "view_dashboard"
-        | "view_cells"
         | "create_cell"
         | "edit_cell"
         | "delete_cell"
@@ -429,7 +428,6 @@ export const Constants = {
         "manage_roles",
         "view_roles",
         "view_dashboard",
-        "view_cells",
         "create_cell",
         "edit_cell",
         "delete_cell",
