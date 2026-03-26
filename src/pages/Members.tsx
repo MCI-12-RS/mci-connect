@@ -142,9 +142,13 @@ const Members = () => {
                       </TableCell>
                       <TableCell className="text-sm">{m.mobile_whatsapp || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant={m.is_pastor ? "default" : "outline"}>
-                          {m.is_pastor ? "Pastor" : getLevelLabel(m.g12_level)}
-                        </Badge>
+                        {m.is_pastor ? (
+                          <Badge variant="default">Pastor</Badge>
+                        ) : !m.leader_id ? (
+                          <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">Sem Liderança</Badge>
+                        ) : (
+                          <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {m.leader_id
