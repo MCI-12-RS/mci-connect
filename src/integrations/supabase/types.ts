@@ -14,16 +14,197 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      members: {
+        Row: {
+          auth_user_id: string | null
+          baptism_date: string | null
+          birth_date: string | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
+          created_at: string
+          email: string | null
+          g12_level: number
+          gender: string | null
+          has_leadership: boolean
+          id: string
+          is_active: boolean
+          is_baptized: boolean
+          is_pastor: boolean
+          leader_id: string | null
+          mobile_whatsapp: string | null
+          name: string
+          neighborhood: string | null
+          notes: string | null
+          number: string | null
+          phone: string | null
+          role_id: string | null
+          spouse_id: string | null
+          state: string | null
+          street: string | null
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          baptism_date?: string | null
+          birth_date?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          g12_level?: number
+          gender?: string | null
+          has_leadership?: boolean
+          id?: string
+          is_active?: boolean
+          is_baptized?: boolean
+          is_pastor?: boolean
+          leader_id?: string | null
+          mobile_whatsapp?: string | null
+          name: string
+          neighborhood?: string | null
+          notes?: string | null
+          number?: string | null
+          phone?: string | null
+          role_id?: string | null
+          spouse_id?: string | null
+          state?: string | null
+          street?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          baptism_date?: string | null
+          birth_date?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          g12_level?: number
+          gender?: string | null
+          has_leadership?: boolean
+          id?: string
+          is_active?: boolean
+          is_baptized?: boolean
+          is_pastor?: boolean
+          leader_id?: string | null
+          mobile_whatsapp?: string | null
+          name?: string
+          neighborhood?: string | null
+          notes?: string | null
+          number?: string | null
+          phone?: string | null
+          role_id?: string | null
+          spouse_id?: string | null
+          state?: string | null
+          street?: string | null
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          id: string
+          permission: Database["public"]["Enums"]["permission_action"]
+          role_id: string
+        }
+        Insert: {
+          id?: string
+          permission: Database["public"]["Enums"]["permission_action"]
+          role_id: string
+        }
+        Update: {
+          id?: string
+          permission?: Database["public"]["Enums"]["permission_action"]
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
+      user_has_permission: {
+        Args: {
+          _permission: Database["public"]["Enums"]["permission_action"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      permission_action:
+        | "create_member"
+        | "view_members"
+        | "edit_member"
+        | "delete_member"
+        | "manage_roles"
+        | "view_roles"
+        | "view_dashboard"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +331,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      permission_action: [
+        "create_member",
+        "view_members",
+        "edit_member",
+        "delete_member",
+        "manage_roles",
+        "view_roles",
+        "view_dashboard",
+      ],
+    },
   },
 } as const
