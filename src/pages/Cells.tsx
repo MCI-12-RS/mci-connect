@@ -25,10 +25,24 @@ const Cells = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: cells = [], isLoading } = useQuery({
-    queryKey: ["cells", search],
+  // Fetch all members for hierarchy lookup and filtering
+  const { data: members = [] } = useQuery({
+    queryKey: ["members-lookup"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
+        .from("members")
+        .select("id, name, leader_id, g12_level");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const memberMap = Object.fromEntries(members.map((m) => [m.id, m]));
+
+  const { data: cells = [], isLoading } = useQuery({
+    queryKey: ["cells"],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("cells")
         .select(`
           *,
@@ -38,10 +52,45 @@ const Cells = () => {
         `)
         .order("created_at", { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+  });
+
+  const findG12 = (memberId: string | null): string => {
+    if (!memberId || !memberMap[memberId]) return "—";
+    let current = memberMap[memberId];
+    let safety = 0;
+    while (current && current.g12_level > 1 && current.leader_id && safety < 10) {
+      current = memberMap[current.leader_id];
+      safety++;
+    }
+    return current?.g12_level === 1 ? current.name : (current?.g12_level === 0 ? "Pastores" : "—");
+  };
+
+  const filteredCells = cells.filter((c: any) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+
+    const getLeaderName = (id: string | null) => 
+      id && memberMap[id]?.leader_id ? memberMap[memberMap[id].leader_id]?.name?.toLowerCase() || "" : "";
+
+    const leaderName = c.leader?.name?.toLowerCase() || "";
+    const timothyName = c.timothy?.name?.toLowerCase() || "";
+    const hostName = c.host?.name?.toLowerCase() || "";
+
+    const leaderOfLeader = getLeaderName(c.leader_id);
+    const leaderOfTimothy = getLeaderName(c.timothy_id);
+    const leaderOfHost = getLeaderName(c.host_id);
+
+    return (
+      leaderName.includes(s) ||
+      timothyName.includes(s) ||
+      hostName.includes(s) ||
+      leaderOfLeader.includes(s) ||
+      leaderOfTimothy.includes(s) ||
+      leaderOfHost.includes(s)
+    );
   });
 
   const deleteMutation = useMutation({
@@ -87,15 +136,25 @@ const Cells = () => {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary">{cells.length} células</Badge>
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Líder, Timóteo, Anfitrião..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Badge variant="secondary">{filteredCells.length} células</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Líder / Timóteo</TableHead>
-                  <TableHead>Anfitrião</TableHead>
+                  <TableHead>Líder</TableHead>
+                  <TableHead>G12</TableHead>
+                  <TableHead>Endereço</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Dia / Hora</TableHead>
                   <TableHead>Status</TableHead>
@@ -109,27 +168,40 @@ const Cells = () => {
                       Carregando...
                     </TableCell>
                   </TableRow>
-                ) : cells.length === 0 ? (
+                ) : filteredCells.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhuma célula encontrada
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cells.map((c: any) => (
+                  filteredCells.map((c: any) => (
                     <TableRow key={c.id}>
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium">{c.leader?.name}</span>
-                          {c.timothy?.name && (
-                            <span className="text-xs text-muted-foreground italic">
-                              Timóteo: {c.timothy.name}
-                            </span>
-                          )}
+                          <div className="flex flex-col text-xs text-muted-foreground italic">
+                            {c.timothy?.name && (
+                              <span>Timóteo: {c.timothy.name}</span>
+                            )}
+                            {c.host?.name && (
+                              <span>Anfitrião: {c.host.name}</span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {c.host?.name || "—"}
+                        {findG12(c.leader_id)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {c.street ? `${c.street}, ${c.number || "s/n"}` : "—"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {c.neighborhood || "—"}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{c.type}</Badge>
