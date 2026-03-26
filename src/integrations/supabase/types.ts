@@ -205,6 +205,9 @@ export type Database = {
         | "manage_roles"
         | "view_roles"
         | "view_dashboard"
+        | "create_cell"
+        | "edit_cell"
+        | "delete_cell"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -340,6 +343,9 @@ export const Constants = {
         "manage_roles",
         "view_roles",
         "view_dashboard",
+        "create_cell",
+        "edit_cell",
+        "delete_cell",
       ],
     },
   },
