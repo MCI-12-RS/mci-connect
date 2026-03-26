@@ -71,20 +71,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (login: string, password: string) => {
-    // Try to find member by cpf, mobile, or email to get actual email
     let email = login;
     
+    // If it doesn't look like an email, try resolving it via the Edge Function
     if (!login.includes("@")) {
-      const { data: foundMember } = await supabase
-        .from("members")
-        .select("email")
-        .or(`cpf.eq.${login},mobile_whatsapp.eq.${login}`)
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke("get-user-email", {
+        body: { identifier: login }
+      });
       
-      if (foundMember?.email) {
-        email = foundMember.email;
+      if (error) throw error;
+      if (data?.email) {
+        email = data.email;
       } else {
-        throw new Error("Usuário não encontrado");
+        throw new Error("CPF ou celular não encontrado ou não vinculado a um e-mail.");
       }
     }
 

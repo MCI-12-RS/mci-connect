@@ -109,6 +109,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     role_id: null,
   });
 
+  const [password, setPassword] = useState("");
+
   useEffect(() => {
     if (member) {
       setForm({ ...member });
@@ -121,11 +123,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     if (!handle || handle.length < 3) return;
 
     const timer = setTimeout(() => {
-      const avatarUrl = `https://unavatar.io/instagram/${handle.replace("@", "")}`;
-      // Just check if it's potentially valid (unavatar always returns something, often a placeholder if not found)
-      // but we'll save it as the candidate URL.
+      const username = handle.replace("@", "");
+      // Using Microlink to scrape the actual og:image from the profile page
+      // This is more reliable than generic unavatar and returns the real IG CDN URL
+      const avatarUrl = `https://api.microlink.io?url=https://www.instagram.com/${username}&embed=image.url`;
       setForm(prev => ({ ...prev, avatar_url: avatarUrl }));
-    }, 1000);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [form.instagram]);
@@ -140,11 +143,32 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const mutation = useMutation({
     mutationFn: async (data: MemberInsert) => {
+      const cleanData = {
+        ...data,
+        cpf: data.cpf?.replace(/\D/g, ""),
+        mobile_whatsapp: data.mobile_whatsapp?.replace(/\D/g, ""),
+        phone: data.phone?.replace(/\D/g, ""),
+        zip_code: data.zip_code?.replace(/\D/g, ""),
+      };
+
+      if (!isEditing && password) {
+        const { data: result, error } = await supabase.functions.invoke('create-user-admin', {
+          body: { 
+            email: data.email, 
+            password, 
+            memberData: cleanData 
+          }
+        });
+        if (error) throw error;
+        if (result.error) throw new Error(result.error);
+        return result;
+      }
+
       if (isEditing && member) {
-        const { error } = await supabase.from("members").update(data).eq("id", member.id);
+        const { error } = await supabase.from("members").update(cleanData).eq("id", member.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("members").insert(data);
+        const { error } = await supabase.from("members").insert(cleanData);
         if (error) throw error;
       }
     },
@@ -202,6 +226,19 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             <Label htmlFor="cpf">CPF</Label>
             <Input id="cpf" value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
           </div>
+          {!isEditing && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha para Acesso *</Label>
+              <Input 
+                id="password" 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                required={!isEditing}
+                placeholder="Defina a senha inicial"
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="gender">Gênero</Label>
             <Select value={form.gender || ""} onValueChange={(v) => update("gender", v)}>

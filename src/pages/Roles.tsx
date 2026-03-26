@@ -23,6 +23,10 @@ const ALL_PERMISSIONS = [
   { value: "manage_roles", label: "Gerenciar Funções" },
   { value: "view_roles", label: "Visualizar Funções" },
   { value: "view_dashboard", label: "Visualizar Painel" },
+  { value: "create_cell", label: "Criar Célula" },
+  { value: "view_cells", label: "Visualizar Células" },
+  { value: "edit_cell", label: "Editar Célula" },
+  { value: "delete_cell", label: "Excluir Célula" },
 ] as const;
 
 type PermissionAction = typeof ALL_PERMISSIONS[number]["value"];

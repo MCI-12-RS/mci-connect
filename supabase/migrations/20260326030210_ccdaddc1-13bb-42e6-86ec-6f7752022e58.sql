@@ -39,12 +39,17 @@ CREATE POLICY "Users with delete_cell can delete" ON public.cells
   USING (user_has_permission(auth.uid(), 'delete_cell'::permission_action));
 
 -- Grant cell permissions to Admin role
-INSERT INTO public.role_permissions (role_id, permission) VALUES
-  ('f5206d39-0d98-43ed-9c30-9e570649142f', 'create_cell'),
-  ('f5206d39-0d98-43ed-9c30-9e570649142f', 'edit_cell'),
-  ('f5206d39-0d98-43ed-9c30-9e570649142f', 'delete_cell');
+INSERT INTO public.role_permissions (role_id, permission)
+SELECT r.id, p.permission
+FROM public.roles r,
+  unnest(ARRAY['create_cell', 'edit_cell', 'delete_cell']::permission_action[]) AS p(permission)
+WHERE r.name = 'Administrador'
+ON CONFLICT DO NOTHING;
 
 -- Grant cell permissions to Líder role
-INSERT INTO public.role_permissions (role_id, permission) VALUES
-  ('43bf44d7-0774-429f-9e71-8f658dc0d740', 'create_cell'),
-  ('43bf44d7-0774-429f-9e71-8f658dc0d740', 'edit_cell');
+INSERT INTO public.role_permissions (role_id, permission)
+SELECT r.id, p.permission
+FROM public.roles r,
+  unnest(ARRAY['create_cell', 'edit_cell']::permission_action[]) AS p(permission)
+WHERE r.name = 'Líder'
+ON CONFLICT DO NOTHING;
