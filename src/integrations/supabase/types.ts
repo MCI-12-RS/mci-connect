@@ -213,6 +213,8 @@ export type Database = {
           spouse_id: string | null
           state: string | null
           street: string | null
+          total_cells: number
+          total_disciples: number
           updated_at: string
           zip_code: string | null
         }
@@ -243,6 +245,8 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
+          total_cells?: number
+          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
@@ -273,6 +277,8 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
+          total_cells?: number
+          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
