@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 
-type Member = Database["public"]["Tables"]["members"]["Row"];
+type Member = Database["public"]["Tables"]["members"]["Row"] & { instagram?: string; avatar_url?: string };
+type MemberInsert = Database["public"]["Tables"]["members"]["Insert"] & { instagram?: string; avatar_url?: string };
 type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
 
 interface MemberFormProps {
