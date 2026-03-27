@@ -34,31 +34,50 @@ const CELL_TYPES = [
   { value: "Macrocélula", label: "Macrocélula" }
 ];
 
+const DEFAULT_FORM: CellInsert = {
+  leader_id: "",
+  timothy_id: null,
+  host_id: null,
+  type: "Evangelística",
+  meeting_day: "Sábado",
+  meeting_time: "19:00",
+  street: "",
+  number: "",
+  complement: "",
+  neighborhood: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  is_active: true,
+};
+
+const toCellInsertPayload = (value: Partial<CellInsert>): CellInsert => ({
+  leader_id: value.leader_id ?? "",
+  timothy_id: value.timothy_id ?? null,
+  host_id: value.host_id ?? null,
+  type: value.type ?? "Evangelística",
+  meeting_day: value.meeting_day ?? "Sábado",
+  meeting_time: value.meeting_time ?? "19:00",
+  street: value.street ?? "",
+  number: value.number ?? "",
+  complement: value.complement ?? "",
+  neighborhood: value.neighborhood ?? "",
+  city: value.city ?? "",
+  state: value.state ?? "",
+  zip_code: value.zip_code ?? "",
+  is_active: value.is_active ?? true,
+});
+
 const CellForm = ({ cell, onClose }: CellFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!cell;
   
-  const [form, setForm] = useState<CellInsert>({
-    leader_id: "",
-    timothy_id: null,
-    host_id: null,
-    type: "Evangelística",
-    meeting_day: "Sábado",
-    meeting_time: "19:00",
-    street: "",
-    number: "",
-    complement: "",
-    neighborhood: "",
-    city: "",
-    state: "",
-    zip_code: "",
-    is_active: true,
-  });
+  const [form, setForm] = useState<CellInsert>(DEFAULT_FORM);
 
   useEffect(() => {
     if (cell) {
-      setForm({ ...cell });
+      setForm(toCellInsertPayload(cell));
     }
   }, [cell]);
 
@@ -100,11 +119,12 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
 
   const mutation = useMutation({
     mutationFn: async (data: CellInsert) => {
+      const payload = toCellInsertPayload(data);
       if (isEditing && cell) {
-        const { error } = await supabase.from("cells").update(data).eq("id", cell.id);
+        const { error } = await supabase.from("cells").update(payload).eq("id", cell.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("cells").insert(data);
+        const { error } = await supabase.from("cells").insert(payload);
         if (error) throw error;
       }
     },
