@@ -73,7 +73,7 @@ const Members = () => {
 
   const getLevelLabel = (level: number) => {
     if (level === 0) return "Pastor";
-    return (level * 12).toString();
+    return (Math.pow(12, level)).toString();
   };
 
   return (

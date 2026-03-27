@@ -13,9 +13,10 @@ import {
   Clock,
   UserPlus,
   XCircle,
+  User,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { startOfWeek, endOfWeek, format, parse, isAfter, isBefore } from "date-fns";
+import { startOfWeek, endOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const WEEK_DAYS_MAP: Record<string, number> = {
@@ -76,8 +77,82 @@ const Dashboard = () => {
         notBaptized: notBaptizedRes.count || 0,
         noLeader: noLeaderRes.count || 0,
         cellsByType,
-        totalCells: (cellsRes.data || []).length,
       };
+    },
+  });
+
+  // ---- G12 CELLS ----
+  const { data: g12CellsData } = useQuery({
+    queryKey: ["dashboard-g12-cells"],
+    queryFn: async () => {
+      // Fetch only members at G12 Level 1
+      const { data, error } = await supabase
+        .from("members")
+        .select("id, name, gender, spouse_id, male_cells, female_cells")
+        .eq("g12_level", 1)
+        .eq("is_active", true);
+
+      if (error) throw error;
+
+      // Type cast to handle new columns before types are regenerated
+      const members = (data as any[]) || [];
+      const memberMap = new Map(members.map((m) => [m.id, m]));
+
+      type CoupleStats = {
+        id: string;
+        name: string;
+        spouseName?: string;
+        maleCells: number;
+        femaleCells: number;
+      };
+
+      const coupleMap = new Map<string, CoupleStats>();
+
+      const getCanonicalKey = (memberId: string, spouseId: string | null | undefined): string => {
+        if (!spouseId) return memberId;
+        return [memberId, spouseId].sort().join("|");
+      };
+
+      members.forEach((member) => {
+        const key = getCanonicalKey(member.id, member.spouse_id);
+
+        if (!coupleMap.has(key)) {
+          const spouse = member.spouse_id ? memberMap.get(member.spouse_id) : undefined;
+
+          let name = member.name;
+          let spouseName: string | undefined;
+
+          if (spouse) {
+            // Sort couple by gender (Male first for name display)
+            const isMale = member.gender === "Masculino" || member.gender === "M";
+            if (isMale) {
+              name = member.name;
+              spouseName = spouse.name;
+            } else {
+              name = spouse.name;
+              spouseName = member.name;
+            }
+          }
+
+          coupleMap.set(key, {
+            id: key,
+            name,
+            spouseName,
+            maleCells: 0,
+            femaleCells: 0
+          });
+        }
+
+        const stats = coupleMap.get(key)!;
+        // Sum recursive stats into the couple unit
+        stats.maleCells += (member.male_cells || 0);
+        stats.femaleCells += (member.female_cells || 0);
+      });
+
+      // Sort by total cells descending
+      return Array.from(coupleMap.values()).sort(
+        (a, b) => (b.maleCells + b.femaleCells) - (a.maleCells + a.femaleCells)
+      );
     },
   });
 
@@ -206,6 +281,8 @@ const Dashboard = () => {
     })
   );
 
+  const g12Rows = g12CellsData || [];
+
   return (
     <AppLayout>
       <div className="space-y-8 animate-fade-in">
@@ -214,56 +291,6 @@ const Dashboard = () => {
           <p className="text-muted-foreground">Visão geral da igreja</p>
         </div>
 
-        {/* GERAL */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Geral</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {generalCards.map((card) => (
-              <Card key={card.title}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {card.title}
-                  </CardTitle>
-                  <card.icon className={`w-5 h-5 ${card.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{card.value}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Cells by type */}
-          {cellTypeCards.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cellTypeCards.map((card) => (
-                <Card key={card.title}>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {card.title}
-                    </CardTitle>
-                    <Church className="w-5 h-5 text-secondary" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{card.value}</div>
-                  </CardContent>
-                </Card>
-              ))}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total de Células
-                  </CardTitle>
-                  <Church className="w-5 h-5 text-secondary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{generalStats?.totalCells || 0}</div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </section>
 
         {/* SEMANAL */}
         <section className="space-y-4">
@@ -332,6 +359,108 @@ const Dashboard = () => {
             </Card>
           </div>
         </section>
+
+
+
+        {/* GERAL */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Geral</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {generalCards.map((card) => (
+              <Card key={card.title}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {card.title}
+                  </CardTitle>
+                  <card.icon className={`w-5 h-5 ${card.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{card.value}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Cells by type */}
+          {cellTypeCards.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {cellTypeCards.map((card) => (
+                <Card key={card.title}>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {card.title}
+                    </CardTitle>
+                    <Church className="w-5 h-5 text-secondary" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{card.value}</div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+
+
+
+        {/* G12 CELLS */}
+        {g12Rows.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold">Células por G12</h2>
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">G12 (Casal)</th>
+                        <th className="px-4 py-3 font-medium text-muted-foreground">
+                          <span className="flex items-center gap-1 justify-center">
+                            <User className="w-4 h-4 text-blue-500" /> Homens
+                          </span>
+                        </th>
+                        <th className="px-4 py-3 font-medium text-muted-foreground">
+                          <span className="flex items-center gap-1 justify-center">
+                            <User className="w-4 h-4 text-pink-500" /> Mulheres
+                          </span>
+                        </th>
+                        <th className="px-4 py-3 font-medium text-muted-foreground text-center">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g12Rows.map((row, idx) => (
+                        <tr key={row.id} className={idx % 2 === 0 ? "bg-muted/30" : ""}>
+                          <td className="px-4 py-3 font-medium">
+                            {row.name}
+                            {row.spouseName && (" & " + row.spouseName)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-sm">
+                              {row.maleCells}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 font-bold text-sm">
+                              {row.femaleCells}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-semibold">
+                            {row.maleCells + row.femaleCells}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+
+
       </div>
     </AppLayout>
   );
