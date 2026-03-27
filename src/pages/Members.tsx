@@ -31,7 +31,7 @@ const Members = () => {
     queryFn: async () => {
       let query = supabase
         .from("members")
-        .select("*, leader:members!members_leader_id_fkey(name)")
+        .select("*")
         .order("name");
 
       if (search) {
@@ -40,9 +40,12 @@ const Members = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
+
+  // Build a quick id→name map for leader lookups (avoids self-referential join issues)
+  const leaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -173,7 +176,7 @@ const Members = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {m.leader_id ? (m as any).leader?.name || "—" : "—"}
+                        {m.leader_id ? leaderMap.get(m.leader_id) || "—" : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>

@@ -61,6 +61,9 @@ CREATE TRIGGER trg_recount_cells
 AFTER INSERT OR UPDATE OF leader_id, timothy_id, host_id OR DELETE ON public.cells
 FOR EACH ROW EXECUTE FUNCTION public.recount_cells();
 
+-- Use replica role to skip FK triggers and user triggers during backfill
+SET session_replication_role = replica;
+
 UPDATE members m SET total_disciples = (
   SELECT count(*) FROM members d WHERE d.leader_id = m.id
 );
@@ -68,3 +71,5 @@ UPDATE members m SET total_disciples = (
 UPDATE members m SET total_cells = (
   SELECT count(*) FROM cells c WHERE c.leader_id = m.id OR c.timothy_id = m.id OR c.host_id = m.id
 );
+
+SET session_replication_role = DEFAULT;
