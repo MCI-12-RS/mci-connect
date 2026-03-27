@@ -173,7 +173,7 @@ const Members = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {m.leader_id ? (m.leader as any)?.name || "—" : "—"}
+                        {m.leader_id ? (m as any).leader?.name || "—" : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
