@@ -7,116 +7,13 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
-      cell_report_participants: {
-        Row: {
-          member_id: string
-          report_id: string
-        }
-        Insert: {
-          member_id: string
-          report_id: string
-        }
-        Update: {
-          member_id?: string
-          report_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cell_report_participants_member_id_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "members"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cell_report_participants_report_id_fkey"
-            columns: ["report_id"]
-            isOneToOne: false
-            referencedRelation: "cell_reports"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cell_reports: {
-        Row: {
-          cell_id: string
-          created_at: string
-          date: string
-          id: string
-          observations: string | null
-          offering: number | null
-          reason_not_held: string | null
-          theme: string | null
-          time: string
-          updated_at: string
-          visitors: Json | null
-          was_held: boolean
-        }
-        Insert: {
-          cell_id: string
-          created_at?: string
-          date: string
-          id?: string
-          observations?: string | null
-          offering?: number | null
-          reason_not_held?: string | null
-          theme?: string | null
-          time: string
-          updated_at?: string
-          visitors?: Json | null
-          was_held?: boolean
-        }
-        Update: {
-          cell_id?: string
-          created_at?: string
-          date?: string
-          id?: string
-          observations?: string | null
-          offering?: number | null
-          reason_not_held?: string | null
-          theme?: string | null
-          time?: string
-          updated_at?: string
-          visitors?: Json | null
-          was_held?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cell_reports_cell_id_fkey"
-            columns: ["cell_id"]
-            isOneToOne: false
-            referencedRelation: "cells"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cells: {
         Row: {
           city: string | null
@@ -128,6 +25,7 @@ export type Database = {
           leader_id: string | null
           meeting_day: string | null
           meeting_time: string | null
+          name: string
           neighborhood: string | null
           number: string | null
           state: string | null
@@ -147,6 +45,7 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
+          name: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
@@ -166,6 +65,7 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
+          name?: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
@@ -202,7 +102,6 @@ export type Database = {
       members: {
         Row: {
           auth_user_id: string | null
-          avatar_url: string | null
           baptism_date: string | null
           birth_date: string | null
           city: string | null
@@ -214,7 +113,6 @@ export type Database = {
           gender: string | null
           has_leadership: boolean
           id: string
-          instagram: string | null
           is_active: boolean
           is_baptized: boolean
           is_pastor: boolean
@@ -229,14 +127,11 @@ export type Database = {
           spouse_id: string | null
           state: string | null
           street: string | null
-          total_cells: number
-          total_disciples: number
           updated_at: string
           zip_code: string | null
         }
         Insert: {
           auth_user_id?: string | null
-          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -248,7 +143,6 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
-          instagram?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -263,14 +157,11 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          total_cells?: number
-          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
         Update: {
           auth_user_id?: string | null
-          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -282,7 +173,6 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
-          instagram?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -297,8 +187,6 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          total_cells?: number
-          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
@@ -530,9 +418,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       permission_action: [
@@ -550,4 +435,3 @@ export const Constants = {
     },
   },
 } as const
-
