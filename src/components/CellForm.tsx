@@ -40,6 +40,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   const isEditing = !!cell;
   
   const [form, setForm] = useState<CellInsert>({
+    name: "",
     leader_id: "",
     timothy_id: null,
     host_id: null,
