@@ -31,7 +31,7 @@ const Members = () => {
     queryFn: async () => {
       let query = supabase
         .from("members")
-        .select("*")
+        .select("*, leader:members!members_leader_id_fkey(name)")
         .order("name");
 
       if (search) {
