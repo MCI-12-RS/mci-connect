@@ -111,7 +111,6 @@ export type Database = {
           leader_id: string | null
           meeting_day: string | null
           meeting_time: string | null
-          name: string
           neighborhood: string | null
           number: string | null
           state: string | null
@@ -131,7 +130,6 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
-          name: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
@@ -151,7 +149,6 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
-          name?: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null

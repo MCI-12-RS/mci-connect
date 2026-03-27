@@ -73,10 +73,7 @@ const Members = () => {
 
   const getLevelLabel = (level: number) => {
     if (level === 0) return "Pastor";
-    if (level === 1) return "12";
-    if (level === 2) return "144";
-    if (level === 3) return "1.728";
-    return `Nível ${level}`;
+    return (level * 12).toString();
   };
 
   return (
