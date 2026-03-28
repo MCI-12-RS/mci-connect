@@ -273,7 +273,7 @@ const Cells = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
@@ -282,7 +282,7 @@ const Cells = () => {
         </Dialog>
 
         <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>Novo Relatório de Célula</DialogTitle>
             </DialogHeader>
