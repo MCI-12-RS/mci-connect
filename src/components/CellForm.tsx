@@ -53,6 +53,7 @@ const DEFAULT_FORM: CellInsert = {
 };
 
 const toCellInsertPayload = (value: Partial<CellInsert>): CellInsert => ({
+  name: value.name ?? "",
   leader_id: value.leader_id ?? "",
   timothy_id: value.timothy_id ?? null,
   host_id: value.host_id ?? null,
