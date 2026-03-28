@@ -6,7 +6,7 @@ import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Database } from "@/integrations/supabase/types";
 
 type Member = Database["public"]["Tables"]["members"]["Row"];
@@ -25,26 +26,21 @@ const Members = () => {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", search],
     queryFn: async () => {
-      let query = supabase
-        .from("members")
-        .select("*")
-        .order("name");
-
+      let query = supabase.from("members").select("*").order("name");
       if (search) {
         query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,cpf.ilike.%${search}%`);
       }
-
       const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  // Build a quick id→name map for leader lookups (avoids self-referential join issues)
   const leaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
 
   const deleteMutation = useMutation({
@@ -73,19 +69,97 @@ const Members = () => {
 
   const getLevelLabel = (level: number) => {
     if (level === 0) return "Pastor";
-    return (Math.pow(12, level)).toString();
+    return Math.pow(12, level).toString();
+  };
+
+  const DeleteButton = ({ member }: { member: any }) => (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <Trash2 className="w-4 h-4 text-destructive" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir {member.name}? Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={() => deleteMutation.mutate(member.id)}>Excluir</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  const LevelBadge = ({ m }: { m: any }) => {
+    if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
+    if (!m.leader_id) return <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">Sem Liderança</Badge>;
+    return <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>;
+  };
+
+  const renderMobileCards = () => {
+    if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
+    if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
+
+    return (
+      <div className="space-y-3 px-3 pb-3">
+        {members.map((m: any) => (
+          <div key={m.id} className="border rounded-lg p-3 space-y-2 bg-card">
+            <div className="flex items-start gap-3">
+              <Avatar className="w-10 h-10 border shrink-0">
+                <AvatarImage src={m.avatar_url || ""} />
+                <AvatarFallback className="bg-muted">
+                  <User className="w-5 h-5 text-muted-foreground" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{m.name}</p>
+                {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
+                {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                  <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                )}
+                {m.mobile_whatsapp && <p className="text-xs text-muted-foreground">{m.mobile_whatsapp}</p>}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {hasPermission("edit_member") && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(m)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {hasPermission("delete_member") && <DeleteButton member={m} />}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <LevelBadge m={m} />
+              <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
+                {m.is_active ? "Ativo" : "Inativo"}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {m.total_disciples} disc. · {m.total_cells} cél.
+              </span>
+            </div>
+            {m.leader_id && leaderMap.get(m.leader_id) && (
+              <p className="text-xs text-muted-foreground">Líder: {leaderMap.get(m.leader_id)}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Membros</h1>
-            <p className="text-muted-foreground">Gerenciar membros da igreja</p>
+            <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
+            <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
           </div>
           {hasPermission("create_member") && (
-            <Button onClick={() => setFormOpen(true)}>
+            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Membro
             </Button>
@@ -104,124 +178,91 @@ const Members = () => {
                   className="pl-10"
                 />
               </div>
-              <Badge variant="secondary">{members.length} membros</Badge>
+              <Badge variant="secondary">{members.length}</Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Celular</TableHead>
-                  <TableHead>Nível G12</TableHead>
-                  <TableHead>Ministério</TableHead>
-                  <TableHead>Líder</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-24">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
+
+          {isMobile ? (
+            renderMobileCards()
+          ) : (
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      Carregando...
-                    </TableCell>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Celular</TableHead>
+                    <TableHead>Nível G12</TableHead>
+                    <TableHead>Ministério</TableHead>
+                    <TableHead>Líder</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-24">Ações</TableHead>
                   </TableRow>
-                ) : members.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      Nenhum membro encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  members.map((m: any) => (
-                    <TableRow key={m.id}>
-                      <TableCell>
-                        <Avatar className="w-10 h-10 border">
-                          <AvatarImage src={m.avatar_url || ""} />
-                          <AvatarFallback className="bg-muted">
-                            <User className="w-5 h-5 text-muted-foreground" />
-                          </AvatarFallback>
-                        </Avatar>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">{m.name}</span>
-                          {m.instagram && (
-                            <p className="text-xs text-primary font-medium">{m.instagram}</p>
-                          )}
-                          {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
-                            <p className="text-xs text-muted-foreground">{m.email}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{m.mobile_whatsapp || "—"}</TableCell>
-                      <TableCell>
-                        {m.is_pastor ? (
-                          <Badge variant="default">Pastor</Badge>
-                        ) : !m.leader_id ? (
-                          <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">Sem Liderança</Badge>
-                        ) : (
-                          <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">{m.total_disciples} Discípulo{m.total_disciples !== 1 ? 's' : ''}</span>
-                          <span className="text-sm text-muted-foreground">{m.total_cells} Célula{m.total_cells !== 1 ? 's' : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {m.leader_id ? leaderMap.get(m.leader_id) || "—" : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
-                          {m.is_active ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {hasPermission("edit_member") && (
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {hasPermission("delete_member") && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Tem certeza que deseja excluir {m.name}? Esta ação não pode ser desfeita.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => deleteMutation.mutate(m.id)}>
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </TableCell>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
+                  ) : members.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
+                    </TableRow>
+                  ) : (
+                    members.map((m: any) => (
+                      <TableRow key={m.id}>
+                        <TableCell>
+                          <Avatar className="w-10 h-10 border">
+                            <AvatarImage src={m.avatar_url || ""} />
+                            <AvatarFallback className="bg-muted">
+                              <User className="w-5 h-5 text-muted-foreground" />
+                            </AvatarFallback>
+                          </Avatar>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <span className="font-medium">{m.name}</span>
+                            {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
+                            {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                              <p className="text-xs text-muted-foreground">{m.email}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{m.mobile_whatsapp || "—"}</TableCell>
+                        <TableCell><LevelBadge m={m} /></TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{m.total_disciples} Discípulo{m.total_disciples !== 1 ? "s" : ""}</span>
+                            <span className="text-sm text-muted-foreground">{m.total_cells} Célula{m.total_cells !== 1 ? "s" : ""}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{m.leader_id ? leaderMap.get(m.leader_id) || "—" : "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
+                            {m.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {hasPermission("edit_member") && (
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {hasPermission("delete_member") && <DeleteButton member={m} />}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          )}
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>{editingMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
             </DialogHeader>
