@@ -35,6 +35,7 @@ const CELL_TYPES = [
 ];
 
 const DEFAULT_FORM: CellInsert = {
+  name: "",
   leader_id: "",
   timothy_id: null,
   host_id: null,
