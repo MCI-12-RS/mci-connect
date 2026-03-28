@@ -287,8 +287,8 @@ const Dashboard = () => {
     <AppLayout>
       <div className="space-y-8 animate-fade-in">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Visão geral da igreja</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Visão geral da igreja</p>
         </div>
 
 

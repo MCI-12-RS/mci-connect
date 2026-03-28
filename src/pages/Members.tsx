@@ -79,13 +79,13 @@ const Members = () => {
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Membros</h1>
-            <p className="text-muted-foreground">Gerenciar membros da igreja</p>
+            <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
+            <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
           </div>
           {hasPermission("create_member") && (
-            <Button onClick={() => setFormOpen(true)}>
+            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Membro
             </Button>
@@ -107,8 +107,8 @@ const Members = () => {
               <Badge variant="secondary">{members.length} membros</Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table className="min-w-[800px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12"></TableHead>
