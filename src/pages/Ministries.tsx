@@ -244,8 +244,8 @@ const Ministries = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
-          <h1 className="text-3xl font-bold">Ministérios</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">Ministérios</h1>
+          <p className="text-muted-foreground text-sm">
             Árvore hierárquica G12 — clique para expandir
           </p>
         </div>

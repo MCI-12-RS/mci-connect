@@ -81,16 +81,16 @@ const CellReports = () => {
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <ClipboardList className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+              <ClipboardList className="w-7 h-7 md:w-8 md:h-8 text-primary" />
               Relatórios de Células
             </h1>
-            <p className="text-muted-foreground">Gerenciar relatórios de encontros das células</p>
+            <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
           {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
-            <Button onClick={() => setFormOpen(true)}>
+            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório
             </Button>
@@ -112,8 +112,8 @@ const CellReports = () => {
               <Badge variant="secondary">{filteredReports.length} relatórios</Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table className="min-w-[700px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Célula (Líder)</TableHead>

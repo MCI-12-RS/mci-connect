@@ -127,13 +127,13 @@ const Roles = () => {
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Funções</h1>
-            <p className="text-muted-foreground">Gerenciar funções e permissões</p>
+            <h1 className="text-2xl md:text-3xl font-bold">Funções</h1>
+            <p className="text-muted-foreground text-sm">Gerenciar funções e permissões</p>
           </div>
           {canManage && (
-            <Button onClick={openNew}>
+            <Button onClick={openNew} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Nova Função
             </Button>
@@ -141,8 +141,8 @@ const Roles = () => {
         </div>
 
         <Card>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table className="min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
