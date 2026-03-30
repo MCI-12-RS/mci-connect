@@ -23,7 +23,7 @@ const Members = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, member: currentMember } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
