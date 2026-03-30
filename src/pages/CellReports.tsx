@@ -31,7 +31,7 @@ const CellReports = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cell_reports")
-        .select(`*, cells (id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
+        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
