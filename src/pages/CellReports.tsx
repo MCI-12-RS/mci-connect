@@ -21,7 +21,7 @@ const CellReports = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<any | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, member: currentMember } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
