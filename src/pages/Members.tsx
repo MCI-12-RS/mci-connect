@@ -124,7 +124,7 @@ const Members = () => {
                 {m.mobile_whatsapp && <p className="text-xs text-muted-foreground">{m.mobile_whatsapp}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {hasPermission("edit_member") && (
+                {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(m)}>
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
