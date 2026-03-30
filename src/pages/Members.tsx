@@ -244,7 +244,7 @@ const Members = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {hasPermission("edit_member") && (
+                            {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
                               <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
                                 <Pencil className="w-4 h-4" />
                               </Button>

@@ -17,15 +17,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const ALL_PERMISSIONS = [
+  { value: "view_all_church", label: "Visualizar Toda Igreja" },
+  { value: "view_own_ministry", label: "Visualizar Seu Ministério" },
+  { value: "edit_own_data", label: "Editar Próprio Cadastro" },
   { value: "create_member", label: "Criar Membro" },
-  { value: "view_members", label: "Visualizar Membros" },
+  { value: "view_members", label: "Visualizar Membros (legado)" },
   { value: "edit_member", label: "Editar Membro" },
   { value: "delete_member", label: "Excluir Membro" },
   { value: "manage_roles", label: "Gerenciar Funções" },
   { value: "view_roles", label: "Visualizar Funções" },
   { value: "view_dashboard", label: "Visualizar Painel" },
   { value: "create_cell", label: "Criar Célula" },
-  { value: "view_cells", label: "Visualizar Células" },
   { value: "edit_cell", label: "Editar Célula" },
   { value: "delete_cell", label: "Excluir Célula" },
 ] as const;

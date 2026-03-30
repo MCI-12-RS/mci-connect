@@ -98,14 +98,16 @@ const Cells = () => {
   const handleOpenReport = (cellId: string) => { setSelectedCellForReport(cellId); setReportFormOpen(true); };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
+  const isOwnCell = (c: any) => currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
+
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
+      {(hasPermission("create_cell") || hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c.id)} title="Novo Relatório">
           <FilePlus className="w-3.5 h-3.5 text-primary" />
         </Button>
       )}
-      {hasPermission("edit_cell") && (
+      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
