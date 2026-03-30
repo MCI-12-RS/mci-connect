@@ -364,7 +364,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_own_cell: {
+        Args: { _cell_id: string; _user_id: string }
+        Returns: boolean
+      }
+      get_ministry_root: { Args: { _member_id: string }; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_in_same_ministry: {
+        Args: { _target_member_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
