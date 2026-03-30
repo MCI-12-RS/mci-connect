@@ -21,7 +21,7 @@ const CellReports = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<any | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, member: currentMember } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -31,7 +31,7 @@ const CellReports = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cell_reports")
-        .select(`*, cells (id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
+        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
@@ -61,9 +61,14 @@ const CellReports = () => {
   const handleEdit = (report: any) => { setEditingReport(report); setFormOpen(true); };
   const handleClose = () => { setFormOpen(false); setEditingReport(null); };
 
+  const isOwnCellReport = (r: any) => {
+    if (!currentMember || !r.cells) return false;
+    return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
+  };
+
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("edit_cell") || hasPermission("create_cell")) && (
+      {(hasPermission("edit_cell") || hasPermission("create_cell") || (hasPermission("edit_own_data") && isOwnCellReport(r))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
