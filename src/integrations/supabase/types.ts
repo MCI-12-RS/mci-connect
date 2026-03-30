@@ -385,6 +385,9 @@ export type Database = {
         | "create_cell"
         | "edit_cell"
         | "delete_cell"
+        | "view_all_church"
+        | "view_own_ministry"
+        | "edit_own_data"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -523,6 +526,9 @@ export const Constants = {
         "create_cell",
         "edit_cell",
         "delete_cell",
+        "view_all_church",
+        "view_own_ministry",
+        "edit_own_data",
       ],
     },
   },
