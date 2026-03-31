@@ -107,27 +107,36 @@ const CellReports = () => {
     if (filteredReports.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</p>;
 
     return (
-      <div className="space-y-3 px-3 pb-3">
+      <div className="divide-y divide-border">
         {filteredReports.map((r: any) => (
-          <div key={r.id} className="border rounded-lg p-3 space-y-2 bg-card">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-medium text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} às {r.time?.substring(0, 5) || "—"}
+          <div key={r.id} className="px-4 py-4 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
                 </p>
               </div>
               <ActionButtons r={r} />
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+
+            {/* Status + attendance */}
+            <div className="flex items-center justify-between">
               <StatusBadge r={r} />
               {r.was_held && (
-                <span className="text-xs text-muted-foreground">
-                  {(r.cell_report_participants?.[0]?.count || 0) + (r.visitors?.length || 0)} presenças
+                <span className="text-sm font-medium text-foreground">
+                  {(r.cell_report_participants?.[0]?.count || 0) + (r.visitors?.length || 0)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
                 </span>
               )}
             </div>
-            {r.theme && <p className="text-xs text-muted-foreground truncate">Tema: {r.theme}</p>}
+
+            {/* Theme */}
+            {r.theme && (
+              <p className="text-xs text-muted-foreground">
+                Tema: <span className="text-foreground">{r.theme}</span>
+              </p>
+            )}
           </div>
         ))}
       </div>
