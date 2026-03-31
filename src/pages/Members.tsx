@@ -105,44 +105,52 @@ const Members = () => {
     if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
 
     return (
-      <div className="space-y-3 px-3 pb-3">
+      <div className="divide-y divide-border">
         {members.map((m: any) => (
-          <div key={m.id} className="border rounded-lg p-3 space-y-2 bg-card">
-            <div className="flex items-start gap-3">
-              <Avatar className="w-10 h-10 border shrink-0">
+          <div key={m.id} className="px-4 py-4 space-y-3">
+            {/* Header: Avatar + Name + Actions */}
+            <div className="flex items-center gap-3">
+              <Avatar className="w-11 h-11 border-2 border-muted shrink-0">
                 <AvatarImage src={m.avatar_url || ""} />
                 <AvatarFallback className="bg-muted">
                   <User className="w-5 h-5 text-muted-foreground" />
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{m.name}</p>
-                {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
-                  <p className="text-xs text-muted-foreground truncate">{m.email}</p>
-                )}
-                {m.mobile_whatsapp && <p className="text-xs text-muted-foreground">{m.mobile_whatsapp}</p>}
+                <p className="font-semibold text-sm truncate">{m.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {m.instagram || (m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : m.mobile_whatsapp || "—")}
+                </p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center shrink-0">
                 {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(m)}>
-                    <Pencil className="w-3.5 h-3.5" />
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
+                    <Pencil className="w-4 h-4" />
                   </Button>
                 )}
                 {hasPermission("delete_member") && <DeleteButton member={m} />}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <LevelBadge m={m} />
-              <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
-                {m.is_active ? "Ativo" : "Inativo"}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {m.total_disciples} disc. · {m.total_cells} cél.
-              </span>
+
+            {/* Info row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LevelBadge m={m} />
+                <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
+                  {m.is_active ? "Ativo" : "Inativo"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span>{m.total_disciples} disc.</span>
+                <span>{m.total_cells} cél.</span>
+              </div>
             </div>
+
+            {/* Leader */}
             {m.leader_id && leaderMap.get(m.leader_id) && (
-              <p className="text-xs text-muted-foreground">Líder: {leaderMap.get(m.leader_id)}</p>
+              <p className="text-xs text-muted-foreground">
+                Líder: <span className="font-medium text-foreground">{leaderMap.get(m.leader_id)}</span>
+              </p>
             )}
           </div>
         ))}
