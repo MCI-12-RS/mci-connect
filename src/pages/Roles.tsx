@@ -63,8 +63,8 @@ const Roles = () => {
     },
   });
 
-  const openEdit = (role: any) => { setEditingRole(role); setRoleName(role.name); setRoleDesc(role.description || ""); setSelectedPerms(role.permissions); setFormOpen(true); };
-  const openNew = () => { setEditingRole(null); setRoleName(""); setRoleDesc(""); setSelectedPerms([]); setFormOpen(true); };
+  const openEdit = (role: any) => { setEditingRole(role); setRoleName(role.name); setRoleDesc(role.description || ""); setSelectedPerms(role.permissions); setIsDefault(role.is_default || false); setFormOpen(true); };
+  const openNew = () => { setEditingRole(null); setRoleName(""); setRoleDesc(""); setSelectedPerms([]); setIsDefault(false); setFormOpen(true); };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
