@@ -18,7 +18,7 @@ const AppSidebar = () => {
     { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard"] },
     { icon: Users, label: "Membros", path: "/members", permission: ["view_members", "view_all_church", "view_own_ministry"] },
     { icon: LayoutGrid, label: "Células", path: "/cells", permission: ["view_members", "view_all_church", "view_own_ministry"] },
-    { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: ["view_members", "view_all_church", "view_own_ministry"] },
+    { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: ["view_all_reports", "view_own_reports", "view_members", "view_all_church", "view_own_ministry"] },
     { icon: Network, label: "Ministérios", path: "/ministries", permission: ["view_members", "view_own_ministry"] },
     { icon: Shield, label: "Funções", path: "/roles", permission: ["view_roles"] },
   ].filter((item) => hasPermission(...item.permission));
