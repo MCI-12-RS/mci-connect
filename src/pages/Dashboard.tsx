@@ -291,8 +291,15 @@ const Dashboard = () => {
     <AppLayout>
       <div className="space-y-8 animate-fade-in">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Visão geral da igreja</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+            {isMinistryOnly && (
+              <Badge variant="secondary" className="text-xs">Meu Ministério</Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {isMinistryOnly ? "Visão do seu ministério" : "Visão geral da igreja"}
+          </p>
         </div>
 
 
