@@ -28,6 +28,9 @@ const Members = () => {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
+  const canSeeSensitive = (m: Member) =>
+    hasPermission("view_sensitive_data") || (currentMember && m.id === currentMember.id);
+
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", search],
     queryFn: async () => {
@@ -119,7 +122,7 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (hasPermission("view_sensitive_data") && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : hasPermission("view_sensitive_data") ? m.mobile_whatsapp || "—" : "—")}
+                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? m.mobile_whatsapp || "—" : "—")}
                 </p>
               </div>
               <div className="flex items-center shrink-0">
@@ -231,12 +234,12 @@ const Members = () => {
                           <div>
                             <span className="font-medium">{m.name}</span>
                             {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                            {!m.instagram && hasPermission("view_sensitive_data") && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                            {!m.instagram && canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") && (
                               <p className="text-xs text-muted-foreground">{m.email}</p>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{hasPermission("view_sensitive_data") ? (m.mobile_whatsapp || "—") : "•••••"}</TableCell>
+                        <TableCell className="text-sm">{canSeeSensitive(m) ? (m.mobile_whatsapp || "—") : "•••••"}</TableCell>
                         <TableCell><LevelBadge m={m} /></TableCell>
                         <TableCell>
                           <div className="flex flex-col">
