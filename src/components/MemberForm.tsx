@@ -58,8 +58,16 @@ const maskCEP = (value: string) => {
 const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { hasPermission, isSystem } = useAuth();
   const isEditing = !!member;
   const [cepLoading, setCepLoading] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const canAssignRole = isSystem || hasPermission("assign_role", "manage_roles");
+  const canViewSensitive = isSystem || hasPermission("view_sensitive_data");
+  const canChangePassword = isSystem || hasPermission("change_member_password");
 
   const fetchAddressByCEP = useCallback(async (cep: string) => {
     const digits = cep.replace(/\D/g, "");
