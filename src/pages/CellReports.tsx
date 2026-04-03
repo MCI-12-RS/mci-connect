@@ -66,20 +66,26 @@ const CellReports = () => {
     return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
   };
 
-  const canSubmitReport = (r: any) => {
-    if (hasPermission("edit_cell") || hasPermission("submit_any_visible_report")) return true;
-    if ((hasPermission("submit_own_cell_report") || hasPermission("edit_own_data")) && isOwnCellReport(r)) return true;
-    return false;
+  const canEditReport = (r: any) => {
+    return hasPermission("edit_cell_report");
+  };
+
+  const canDeleteReport = () => {
+    return hasPermission("delete_cell_report");
+  };
+
+  const canSubmitNewReport = () => {
+    return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
   };
 
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {canSubmitReport(r) && (
+      {canEditReport(r) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       )}
-      {hasPermission("delete_cell") && (
+      {canDeleteReport() && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -160,7 +166,7 @@ const CellReports = () => {
             </h1>
             <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
-          {(hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data")) && (
+          {canSubmitNewReport() && (
             <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório

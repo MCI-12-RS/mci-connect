@@ -408,6 +408,8 @@ export type Database = {
         | "view_sensitive_data"
         | "change_member_password"
         | "view_own_ministry_dashboard"
+        | "edit_cell_report"
+        | "delete_cell_report"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -557,6 +559,8 @@ export const Constants = {
         "view_sensitive_data",
         "change_member_password",
         "view_own_ministry_dashboard",
+        "edit_cell_report",
+        "delete_cell_report",
       ],
     },
   },

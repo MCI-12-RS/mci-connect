@@ -28,6 +28,8 @@ const ALL_PERMISSIONS = [
   { value: "view_own_reports", label: "Visualizar Meus Relatórios" },
   { value: "submit_own_cell_report", label: "Enviar Relatório (Células que Lidera)" },
   { value: "submit_any_visible_report", label: "Enviar Relatório (Qualquer Célula Visível)" },
+  { value: "edit_cell_report", label: "Editar Relatórios de Células" },
+  { value: "delete_cell_report", label: "Excluir Relatórios de Células" },
   { value: "create_member", label: "Criar Membro" },
   { value: "view_members", label: "Visualizar Membros (legado)" },
   { value: "edit_member", label: "Editar Membro" },
