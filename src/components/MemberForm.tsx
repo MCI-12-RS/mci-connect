@@ -82,6 +82,16 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, []);
 
+  const { data: roles = [] } = useQuery({
+    queryKey: ["roles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("roles").select("*").order("name");
+      return data || [];
+    },
+  });
+
+  const defaultRoleId = roles.find((r) => r.is_default)?.id || null;
+
   const [form, setForm] = useState<MemberInsert>({
     name: "",
     email: "",
@@ -118,14 +128,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, [member]);
 
-
-  const { data: roles = [] } = useQuery({
-    queryKey: ["roles"],
-    queryFn: async () => {
-      const { data } = await supabase.from("roles").select("*").order("name");
-      return data || [];
-    },
-  });
+  // Auto-select default role for new members
+  useEffect(() => {
+    if (!isEditing && !form.role_id && defaultRoleId) {
+      setForm((prev) => ({ ...prev, role_id: defaultRoleId }));
+    }
+  }, [isEditing, defaultRoleId, form.role_id]);
 
   const mutation = useMutation({
     mutationFn: async (data: MemberInsert) => {
@@ -189,6 +197,10 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.role_id) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione uma função para o membro." });
+      return;
+    }
     mutation.mutate(form);
   };
 
@@ -395,13 +407,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         <h3 className="text-lg font-semibold mb-3">Acesso</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="role">Função</Label>
-            <Select value={form.role_id || "none"} onValueChange={(v) => update("role_id", v === "none" ? null : v)}>
+            <Label htmlFor="role">Função *</Label>
+            <Select value={form.role_id || ""} onValueChange={(v) => update("role_id", v)}>
               <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nenhuma</SelectItem>
                 {roles.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

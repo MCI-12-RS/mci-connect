@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Star } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -44,6 +45,7 @@ const Roles = () => {
   const [roleName, setRoleName] = useState("");
   const [roleDesc, setRoleDesc] = useState("");
   const [selectedPerms, setSelectedPerms] = useState<PermissionAction[]>([]);
+  const [isDefault, setIsDefault] = useState(false);
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -61,13 +63,17 @@ const Roles = () => {
     },
   });
 
-  const openEdit = (role: any) => { setEditingRole(role); setRoleName(role.name); setRoleDesc(role.description || ""); setSelectedPerms(role.permissions); setFormOpen(true); };
-  const openNew = () => { setEditingRole(null); setRoleName(""); setRoleDesc(""); setSelectedPerms([]); setFormOpen(true); };
+  const openEdit = (role: any) => { setEditingRole(role); setRoleName(role.name); setRoleDesc(role.description || ""); setSelectedPerms(role.permissions); setIsDefault(role.is_default || false); setFormOpen(true); };
+  const openNew = () => { setEditingRole(null); setRoleName(""); setRoleDesc(""); setSelectedPerms([]); setIsDefault(false); setFormOpen(true); };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // If setting as default, clear other defaults first
+      if (isDefault) {
+        await supabase.from("roles").update({ is_default: false } as any).eq("is_default", true);
+      }
       if (editingRole) {
-        const { error } = await supabase.from("roles").update({ name: roleName, description: roleDesc }).eq("id", editingRole.id);
+        const { error } = await supabase.from("roles").update({ name: roleName, description: roleDesc, is_default: isDefault } as any).eq("id", editingRole.id);
         if (error) throw error;
         await supabase.from("role_permissions").delete().eq("role_id", editingRole.id);
         if (selectedPerms.length > 0) {
@@ -75,7 +81,7 @@ const Roles = () => {
           if (permError) throw permError;
         }
       } else {
-        const { data: newRole, error } = await supabase.from("roles").insert({ name: roleName, description: roleDesc }).select().single();
+        const { data: newRole, error } = await supabase.from("roles").insert({ name: roleName, description: roleDesc, is_default: isDefault } as any).select().single();
         if (error) throw error;
         if (selectedPerms.length > 0) {
           const { error: permError } = await supabase.from("role_permissions").insert(selectedPerms.map((p) => ({ role_id: newRole.id, permission: p as any })));
@@ -83,7 +89,7 @@ const Roles = () => {
         }
       }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); toast({ title: editingRole ? "Função atualizada" : "Função criada" }); setFormOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); queryClient.invalidateQueries({ queryKey: ["roles"] }); toast({ title: editingRole ? "Função atualizada" : "Função criada" }); setFormOpen(false); },
     onError: (error: any) => { toast({ variant: "destructive", title: "Erro", description: error.message }); },
   });
 
@@ -129,6 +135,7 @@ const Roles = () => {
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-sm">{role.name}</p>
                   {role.is_system && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sistema</Badge>}
+                  {role.is_default && <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
                 </div>
                 {role.description && <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>}
               </div>
@@ -196,6 +203,7 @@ const Roles = () => {
                         <TableCell className="font-medium">
                           {role.name}
                           {role.is_system && <Badge variant="outline" className="ml-2 text-xs">Sistema</Badge>}
+                          {role.is_default && <Badge className="ml-2 text-xs bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{role.description}</TableCell>
                         <TableCell>
@@ -240,7 +248,7 @@ const Roles = () => {
               </div>
               <div className="space-y-2">
                 <Label>Permissões</Label>
-                <div className="grid grid-cols-1 gap-2 border rounded-md p-3">
+                <div className="grid grid-cols-1 gap-2 border rounded-md p-3 max-h-48 overflow-y-auto">
                   {ALL_PERMISSIONS.map((perm) => (
                     <div key={perm.value} className="flex items-center gap-2">
                       <Checkbox checked={selectedPerms.includes(perm.value)} onCheckedChange={() => togglePerm(perm.value)} />
@@ -248,6 +256,13 @@ const Roles = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <Label htmlFor="is_default">Padrão para novos membros</Label>
+                  <p className="text-xs text-muted-foreground">Novos membros receberão esta função automaticamente</p>
+                </div>
+                <Switch id="is_default" checked={isDefault} onCheckedChange={setIsDefault} />
               </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
