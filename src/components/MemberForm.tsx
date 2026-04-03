@@ -82,6 +82,16 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, []);
 
+  const { data: roles = [] } = useQuery({
+    queryKey: ["roles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("roles").select("*").order("name");
+      return data || [];
+    },
+  });
+
+  const defaultRoleId = roles.find((r) => r.is_default)?.id || null;
+
   const [form, setForm] = useState<MemberInsert>({
     name: "",
     email: "",
@@ -118,14 +128,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, [member]);
 
-
-  const { data: roles = [] } = useQuery({
-    queryKey: ["roles"],
-    queryFn: async () => {
-      const { data } = await supabase.from("roles").select("*").order("name");
-      return data || [];
-    },
-  });
+  // Auto-select default role for new members
+  useEffect(() => {
+    if (!isEditing && !form.role_id && defaultRoleId) {
+      setForm((prev) => ({ ...prev, role_id: defaultRoleId }));
+    }
+  }, [isEditing, defaultRoleId, form.role_id]);
 
   const mutation = useMutation({
     mutationFn: async (data: MemberInsert) => {
