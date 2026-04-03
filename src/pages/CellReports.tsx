@@ -66,10 +66,16 @@ const CellReports = () => {
     return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
   };
 
-  const canSubmitReport = (r: any) => {
-    if (hasPermission("edit_cell") || hasPermission("submit_any_visible_report")) return true;
-    if ((hasPermission("submit_own_cell_report") || hasPermission("edit_own_data")) && isOwnCellReport(r)) return true;
-    return false;
+  const canEditReport = (r: any) => {
+    return hasPermission("edit_cell_report");
+  };
+
+  const canDeleteReport = () => {
+    return hasPermission("delete_cell_report");
+  };
+
+  const canSubmitNewReport = () => {
+    return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
   };
 
   const ActionButtons = ({ r }: { r: any }) => (
