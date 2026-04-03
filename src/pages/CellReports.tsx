@@ -160,7 +160,7 @@ const CellReports = () => {
             </h1>
             <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
-          {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
+          {(hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data")) && (
             <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório
