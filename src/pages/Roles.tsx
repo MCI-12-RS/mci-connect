@@ -39,7 +39,7 @@ const ALL_PERMISSIONS = [
   { value: "create_cell", label: "Criar Célula" },
   { value: "edit_cell", label: "Editar Célula" },
   { value: "delete_cell", label: "Excluir Célula" },
-  { value: "view_own_ministry_dashboard", label: "Visualizar Dashboard do seu ministério" },
+] as const;
 
 type PermissionAction = typeof ALL_PERMISSIONS[number]["value"];
 
