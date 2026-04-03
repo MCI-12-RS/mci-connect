@@ -16,8 +16,10 @@ import {
   User,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
 
 const WEEK_DAYS_MAP: Record<string, number> = {
   "Domingo": 0,
@@ -30,6 +32,8 @@ const WEEK_DAYS_MAP: Record<string, number> = {
 };
 
 const Dashboard = () => {
+  const { hasPermission } = useAuth();
+  const isMinistryOnly = !hasPermission("view_dashboard") && hasPermission("view_own_ministry_dashboard");
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
@@ -287,8 +291,15 @@ const Dashboard = () => {
     <AppLayout>
       <div className="space-y-8 animate-fade-in">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Visão geral da igreja</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+            {isMinistryOnly && (
+              <Badge variant="secondary" className="text-xs">Meu Ministério</Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {isMinistryOnly ? "Visão do seu ministério" : "Visão geral da igreja"}
+          </p>
         </div>
 
 

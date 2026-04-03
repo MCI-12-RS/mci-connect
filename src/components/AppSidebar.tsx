@@ -15,7 +15,7 @@ const AppSidebar = () => {
   const [open, setOpen] = useState(false);
 
   const menuItems = [
-    { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard"] },
+    { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard", "view_own_ministry_dashboard"] },
     { icon: Users, label: "Membros", path: "/members", permission: ["view_members", "view_all_church", "view_own_ministry"] },
     { icon: LayoutGrid, label: "Células", path: "/cells", permission: ["view_members", "view_all_church", "view_own_ministry"] },
     { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: ["view_all_reports", "view_own_reports", "view_members", "view_all_church", "view_own_ministry"] },
