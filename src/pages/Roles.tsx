@@ -68,8 +68,12 @@ const Roles = () => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // If setting as default, clear other defaults first
+      if (isDefault) {
+        await supabase.from("roles").update({ is_default: false } as any).eq("is_default", true);
+      }
       if (editingRole) {
-        const { error } = await supabase.from("roles").update({ name: roleName, description: roleDesc }).eq("id", editingRole.id);
+        const { error } = await supabase.from("roles").update({ name: roleName, description: roleDesc, is_default: isDefault } as any).eq("id", editingRole.id);
         if (error) throw error;
         await supabase.from("role_permissions").delete().eq("role_id", editingRole.id);
         if (selectedPerms.length > 0) {
@@ -77,7 +81,7 @@ const Roles = () => {
           if (permError) throw permError;
         }
       } else {
-        const { data: newRole, error } = await supabase.from("roles").insert({ name: roleName, description: roleDesc }).select().single();
+        const { data: newRole, error } = await supabase.from("roles").insert({ name: roleName, description: roleDesc, is_default: isDefault } as any).select().single();
         if (error) throw error;
         if (selectedPerms.length > 0) {
           const { error: permError } = await supabase.from("role_permissions").insert(selectedPerms.map((p) => ({ role_id: newRole.id, permission: p as any })));
@@ -85,7 +89,7 @@ const Roles = () => {
         }
       }
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); toast({ title: editingRole ? "Função atualizada" : "Função criada" }); setFormOpen(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); queryClient.invalidateQueries({ queryKey: ["roles"] }); toast({ title: editingRole ? "Função atualizada" : "Função criada" }); setFormOpen(false); },
     onError: (error: any) => { toast({ variant: "destructive", title: "Erro", description: error.message }); },
   });
 
