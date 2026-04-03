@@ -16,8 +16,10 @@ import {
   User,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
 
 const WEEK_DAYS_MAP: Record<string, number> = {
   "Domingo": 0,
