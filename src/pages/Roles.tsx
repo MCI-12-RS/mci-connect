@@ -203,6 +203,8 @@ const Roles = () => {
                         <TableCell className="font-medium">
                           {role.name}
                           {role.is_system && <Badge variant="outline" className="ml-2 text-xs">Sistema</Badge>}
+                          {role.is_default && <Badge className="ml-2 text-xs bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
+                        </TableCell>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{role.description}</TableCell>
                         <TableCell>
