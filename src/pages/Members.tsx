@@ -239,7 +239,7 @@ const Members = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{hasPermission("view_sensitive_data") ? (m.mobile_whatsapp || "—") : "•••••"}</TableCell>
+                        <TableCell className="text-sm">{canSeeSensitive(m) ? (m.mobile_whatsapp || "—") : "•••••"}</TableCell>
                         <TableCell><LevelBadge m={m} /></TableCell>
                         <TableCell>
                           <div className="flex flex-col">
