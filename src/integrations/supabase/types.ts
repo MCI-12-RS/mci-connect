@@ -407,6 +407,7 @@ export type Database = {
         | "assign_role"
         | "view_sensitive_data"
         | "change_member_password"
+        | "view_own_ministry_dashboard"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -555,6 +556,7 @@ export const Constants = {
         "assign_role",
         "view_sensitive_data",
         "change_member_password",
+        "view_own_ministry_dashboard",
       ],
     },
   },
