@@ -397,6 +397,10 @@ export type Database = {
         | "view_all_church"
         | "view_own_ministry"
         | "edit_own_data"
+        | "view_own_reports"
+        | "view_all_reports"
+        | "submit_own_cell_report"
+        | "submit_any_visible_report"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -538,6 +542,10 @@ export const Constants = {
         "view_all_church",
         "view_own_ministry",
         "edit_own_data",
+        "view_own_reports",
+        "view_all_reports",
+        "submit_own_cell_report",
+        "submit_any_visible_report",
       ],
     },
   },
