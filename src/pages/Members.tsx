@@ -234,7 +234,7 @@ const Members = () => {
                           <div>
                             <span className="font-medium">{m.name}</span>
                             {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                            {!m.instagram && hasPermission("view_sensitive_data") && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                            {!m.instagram && canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") && (
                               <p className="text-xs text-muted-foreground">{m.email}</p>
                             )}
                           </div>
