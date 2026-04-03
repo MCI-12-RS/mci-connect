@@ -45,6 +45,7 @@ const Roles = () => {
   const [roleName, setRoleName] = useState("");
   const [roleDesc, setRoleDesc] = useState("");
   const [selectedPerms, setSelectedPerms] = useState<PermissionAction[]>([]);
+  const [isDefault, setIsDefault] = useState(false);
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
