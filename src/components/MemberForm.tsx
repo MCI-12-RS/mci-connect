@@ -219,6 +219,29 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleChangePassword = async () => {
+    if (!member || !newPassword) return;
+    if (newPassword.length < 6) {
+      toast({ variant: "destructive", title: "A senha deve ter pelo menos 6 caracteres" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("change-member-password", {
+        body: { member_id: member.id, new_password: newPassword },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Senha alterada com sucesso" });
+      setPasswordDialogOpen(false);
+      setNewPassword("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err.message });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const handleMaskedChange = (field: keyof MemberInsert, value: string, maskFn: (v: string) => string) => {
     update(field, maskFn(value));
   };
