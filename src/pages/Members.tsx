@@ -28,6 +28,9 @@ const Members = () => {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
+  const canSeeSensitive = (m: Member) =>
+    hasPermission("view_sensitive_data") || (currentMember && m.id === currentMember.id);
+
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", search],
     queryFn: async () => {
