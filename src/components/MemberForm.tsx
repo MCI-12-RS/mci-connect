@@ -66,7 +66,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const canAssignRole = isSystem || hasPermission("assign_role", "manage_roles");
-  const canViewSensitive = isSystem || hasPermission("view_sensitive_data");
+  const isOwnData = !!member && !!currentMember && member.id === currentMember.id;
+  const canViewSensitive = isOwnData || isSystem || hasPermission("view_sensitive_data");
   const canChangePassword = isSystem || hasPermission("change_member_password");
 
   const fetchAddressByCEP = useCallback(async (cep: string) => {
