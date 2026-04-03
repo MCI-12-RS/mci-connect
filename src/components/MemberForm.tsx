@@ -197,6 +197,10 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.role_id) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione uma função para o membro." });
+      return;
+    }
     mutation.mutate(form);
   };
 
