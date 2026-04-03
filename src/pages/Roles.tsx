@@ -249,7 +249,7 @@ const Roles = () => {
               </div>
               <div className="space-y-2">
                 <Label>Permissões</Label>
-                <div className="grid grid-cols-1 gap-2 border rounded-md p-3">
+                <div className="grid grid-cols-1 gap-2 border rounded-md p-3 max-h-48 overflow-y-auto">
                   {ALL_PERMISSIONS.map((perm) => (
                     <div key={perm.value} className="flex items-center gap-2">
                       <Checkbox checked={selectedPerms.includes(perm.value)} onCheckedChange={() => togglePerm(perm.value)} />
@@ -257,6 +257,13 @@ const Roles = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <Label htmlFor="is_default">Padrão para novos membros</Label>
+                  <p className="text-xs text-muted-foreground">Novos membros receberão esta função automaticamente</p>
+                </div>
+                <Switch id="is_default" checked={isDefault} onCheckedChange={setIsDefault} />
               </div>
               <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
