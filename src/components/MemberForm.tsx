@@ -58,7 +58,7 @@ const maskCEP = (value: string) => {
 const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasPermission, isSystem } = useAuth();
+  const { hasPermission, isSystem, member: currentMember } = useAuth();
   const isEditing = !!member;
   const [cepLoading, setCepLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
