@@ -119,7 +119,7 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : m.mobile_whatsapp || "—")}
+                  {m.instagram || (hasPermission("view_sensitive_data") && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : hasPermission("view_sensitive_data") ? m.mobile_whatsapp || "—" : "—")}
                 </p>
               </div>
               <div className="flex items-center shrink-0">
