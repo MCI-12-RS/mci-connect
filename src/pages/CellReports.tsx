@@ -66,9 +66,15 @@ const CellReports = () => {
     return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
   };
 
+  const canSubmitReport = (r: any) => {
+    if (hasPermission("edit_cell") || hasPermission("submit_any_visible_report")) return true;
+    if ((hasPermission("submit_own_cell_report") || hasPermission("edit_own_data")) && isOwnCellReport(r)) return true;
+    return false;
+  };
+
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCellReport(r))) && (
+      {canSubmitReport(r) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
