@@ -407,13 +407,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         <h3 className="text-lg font-semibold mb-3">Acesso</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="role">Função</Label>
-            <Select value={form.role_id || "none"} onValueChange={(v) => update("role_id", v === "none" ? null : v)}>
+            <Label htmlFor="role">Função *</Label>
+            <Select value={form.role_id || ""} onValueChange={(v) => update("role_id", v)}>
               <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nenhuma</SelectItem>
                 {roles.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
