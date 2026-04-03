@@ -25,7 +25,7 @@ const Cells = () => {
   const [editingCell, setEditingCell] = useState<Cell | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<string | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, member: currentMember } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -98,14 +98,16 @@ const Cells = () => {
   const handleOpenReport = (cellId: string) => { setSelectedCellForReport(cellId); setReportFormOpen(true); };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
+  const isOwnCell = (c: any) => currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
+
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
+      {(hasPermission("create_cell") || hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c.id)} title="Novo Relatório">
           <FilePlus className="w-3.5 h-3.5 text-primary" />
         </Button>
       )}
-      {hasPermission("edit_cell") && (
+      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
@@ -137,30 +139,47 @@ const Cells = () => {
     if (filteredCells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
 
     return (
-      <div className="space-y-3 px-3 pb-3">
+      <div className="divide-y divide-border">
         {filteredCells.map((c: any) => (
-          <div key={c.id} className="border rounded-lg p-3 space-y-2 bg-card">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-medium text-sm">{c.leader?.name || "Sem líder"}</p>
-                <div className="text-xs text-muted-foreground italic space-y-0.5">
-                  {c.timothy?.name && <p>Timóteo: {c.timothy.name}</p>}
-                  {c.host?.name && <p>Anfitrião: {c.host.name}</p>}
-                </div>
+          <div key={c.id} className="px-4 py-4 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm">{c.leader?.name || "Sem líder"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">G12: {findG12(c.leader_id)}</p>
               </div>
               <ActionButtons c={c} />
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline">{c.type}</Badge>
-              <Badge variant={c.is_active ? "default" : "secondary"}>
-                {c.is_active ? "Ativa" : "Inativa"}
-              </Badge>
+
+            {/* Team */}
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              {c.timothy?.name && (
+                <span>Timóteo: <span className="font-medium text-foreground">{c.timothy.name}</span></span>
+              )}
+              {c.host?.name && (
+                <span>Anfitrião: <span className="font-medium text-foreground">{c.host.name}</span></span>
+              )}
             </div>
-            <div className="text-xs text-muted-foreground space-y-0.5">
-              <p>{c.meeting_day} às {c.meeting_time?.substring(0, 5) || "—"}</p>
-              {c.street && <p>{c.street}, {c.number || "s/n"} — {c.neighborhood || ""}</p>}
-              <p className="text-muted-foreground">G12: {findG12(c.leader_id)}</p>
+
+            {/* Footer: badges + schedule */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{c.type}</Badge>
+                <Badge variant={c.is_active ? "default" : "secondary"}>
+                  {c.is_active ? "Ativa" : "Inativa"}
+                </Badge>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {c.meeting_day} · {c.meeting_time?.substring(0, 5) || "—"}
+              </span>
             </div>
+
+            {/* Address */}
+            {c.street && (
+              <p className="text-xs text-muted-foreground">
+                {c.street}, {c.number || "s/n"} — {c.neighborhood || ""}
+              </p>
+            )}
           </div>
         ))}
       </div>

@@ -17,15 +17,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const ALL_PERMISSIONS = [
+  { value: "view_all_church", label: "Visualizar Toda Igreja" },
+  { value: "view_own_ministry", label: "Visualizar Seu Ministério" },
+  { value: "edit_own_data", label: "Editar Próprio Cadastro" },
   { value: "create_member", label: "Criar Membro" },
-  { value: "view_members", label: "Visualizar Membros" },
+  { value: "view_members", label: "Visualizar Membros (legado)" },
   { value: "edit_member", label: "Editar Membro" },
   { value: "delete_member", label: "Excluir Membro" },
   { value: "manage_roles", label: "Gerenciar Funções" },
   { value: "view_roles", label: "Visualizar Funções" },
   { value: "view_dashboard", label: "Visualizar Painel" },
   { value: "create_cell", label: "Criar Célula" },
-  { value: "view_cells", label: "Visualizar Células" },
   { value: "edit_cell", label: "Editar Célula" },
   { value: "delete_cell", label: "Excluir Célula" },
 ] as const;
@@ -114,30 +116,36 @@ const Roles = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
 
     return (
-      <div className="space-y-3 px-3 pb-3">
+      <div className="divide-y divide-border">
         {roles.map((role) => (
-          <div key={role.id} className="border rounded-lg p-3 space-y-2 bg-card">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-medium text-sm">
-                  {role.name}
-                  {role.is_system && <Badge variant="outline" className="ml-2 text-xs">Sistema</Badge>}
-                </p>
-                {role.description && <p className="text-xs text-muted-foreground">{role.description}</p>}
+          <div key={role.id} className="px-4 py-4 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm">{role.name}</p>
+                  {role.is_system && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sistema</Badge>}
+                </div>
+                {role.description && <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>}
               </div>
               {canManage && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(role)}>
-                    <Pencil className="w-3.5 h-3.5" />
+                <div className="flex items-center shrink-0">
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(role)}>
+                    <Pencil className="w-4 h-4" />
                   </Button>
                   {!role.is_system && <DeleteRoleButton role={role} />}
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap gap-1">
+
+            {/* Permissions */}
+            <div className="flex flex-wrap gap-1.5">
               {role.permissions.map((p: string) => (
-                <Badge key={p} variant="secondary" className="text-xs">{getPermLabel(p)}</Badge>
+                <Badge key={p} variant="secondary" className="text-[11px] font-normal">{getPermLabel(p)}</Badge>
               ))}
+              {role.permissions.length === 0 && (
+                <span className="text-xs text-muted-foreground italic">Sem permissões</span>
+              )}
             </div>
           </div>
         ))}
