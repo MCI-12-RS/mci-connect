@@ -258,18 +258,20 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             <Label htmlFor="name">Nome *</Label>
             <Input id="name" value={form.name} onChange={(e) => update("name", e.target.value)} required />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              E-mail {isFakeEmail && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
-            </Label>
-            <Input 
-              id="email" 
-              type="email" 
-              value={isFakeEmail ? "" : (form.email || "")} 
-              onChange={(e) => update("email", e.target.value)} 
-              placeholder={isFakeEmail ? "Adicionar e-mail..." : ""} 
-            />
-          </div>
+          {canViewSensitive && (
+            <div className="space-y-2">
+              <Label htmlFor="email">
+                E-mail {isFakeEmail && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
+              </Label>
+              <Input 
+                id="email" 
+                type="email" 
+                value={isFakeEmail ? "" : (form.email || "")} 
+                onChange={(e) => update("email", e.target.value)} 
+                placeholder={isFakeEmail ? "Adicionar e-mail..." : ""} 
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="instagram">Instagram (@)</Label>
             <Input 
@@ -283,10 +285,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
               }} 
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="cpf">CPF</Label>
-            <Input id="cpf" value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
-          </div>
+          {canViewSensitive && (
+            <div className="space-y-2">
+              <Label htmlFor="cpf">CPF</Label>
+              <Input id="cpf" value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
+            </div>
+          )}
           {!isEditing && (
             <div className="space-y-2">
               <Label htmlFor="password">Senha para Acesso</Label>
@@ -322,14 +326,18 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
               placeholder="Buscar cônjuge..."
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="mobile">Celular / WhatsApp</Label>
-            <Input id="mobile" value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder="(00)00000-0000" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">Telefone</Label>
-            <Input id="phone" value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder="(00)0000-0000" />
-          </div>
+          {canViewSensitive && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="mobile">Celular / WhatsApp</Label>
+                <Input id="mobile" value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder="(00)00000-0000" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone</Label>
+                <Input id="phone" value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder="(00)0000-0000" />
+              </div>
+            </>
+          )}
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notes">Observações</Label>
             <Textarea id="notes" value={form.notes || ""} onChange={(e) => update("notes", e.target.value)} />
@@ -379,60 +387,63 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         </div>
       </div>
 
-      <Separator />
-
-      {/* Address */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Endereço</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="zip_code">CEP {cepLoading && <span className="text-xs text-muted-foreground ml-1">Buscando...</span>}</Label>
-            <Input
-              id="zip_code"
-              value={form.zip_code || ""}
-              onChange={(e) => {
-                const masked = maskCEP(e.target.value);
-                update("zip_code", masked);
-                if (masked.replace(/\D/g, "").length === 8) {
-                  fetchAddressByCEP(masked);
-                }
-              }}
-              placeholder="00000-000"
-            />
+      {canViewSensitive && (
+        <>
+          <Separator />
+          {/* Address */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Endereço</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="zip_code">CEP {cepLoading && <span className="text-xs text-muted-foreground ml-1">Buscando...</span>}</Label>
+                <Input
+                  id="zip_code"
+                  value={form.zip_code || ""}
+                  onChange={(e) => {
+                    const masked = maskCEP(e.target.value);
+                    update("zip_code", masked);
+                    if (masked.replace(/\D/g, "").length === 8) {
+                      fetchAddressByCEP(masked);
+                    }
+                  }}
+                  placeholder="00000-000"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="street">Rua</Label>
+                <Input id="street" value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="number">Número</Label>
+                <Input id="number" value={form.number || ""} onChange={(e) => update("number", e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="complement">Complemento</Label>
+                <Input id="complement" value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="neighborhood">Bairro</Label>
+                <Input id="neighborhood" value={form.neighborhood || ""} onChange={(e) => update("neighborhood", e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Cidade</Label>
+                <Input id="city" value={form.city || ""} onChange={(e) => update("city", e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">Estado</Label>
+                <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
+                  <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                  <SelectContent>
+                    {BRAZILIAN_STATES.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="street">Rua</Label>
-            <Input id="street" value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="number">Número</Label>
-            <Input id="number" value={form.number || ""} onChange={(e) => update("number", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="complement">Complemento</Label>
-            <Input id="complement" value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="neighborhood">Bairro</Label>
-            <Input id="neighborhood" value={form.neighborhood || ""} onChange={(e) => update("neighborhood", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="city">Cidade</Label>
-            <Input id="city" value={form.city || ""} onChange={(e) => update("city", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="state">Estado</Label>
-            <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
-              <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
-              <SelectContent>
-                {BRAZILIAN_STATES.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
       <Separator />
 
@@ -440,17 +451,37 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       <div>
         <h3 className="text-lg font-semibold mb-3">Acesso</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="role">Função *</Label>
-            <Select value={form.role_id || ""} onValueChange={(v) => update("role_id", v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
-              <SelectContent>
-                {roles.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {canAssignRole ? (
+            <div className="space-y-2">
+              <Label htmlFor="role">Função *</Label>
+              <Select value={form.role_id || ""} onValueChange={(v) => update("role_id", v)}>
+                <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
+                <SelectContent>
+                  {roles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Função</Label>
+              <Input 
+                value={roles.find((r) => r.id === form.role_id)?.name || "—"} 
+                disabled 
+                className="bg-muted"
+              />
+            </div>
+          )}
+          {isEditing && canChangePassword && (
+            <div className="space-y-2">
+              <Label>Senha</Label>
+              <Button type="button" variant="outline" className="w-full" onClick={() => setPasswordDialogOpen(true)}>
+                <Key className="w-4 h-4 mr-2" />
+                Alterar Senha
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -462,6 +493,33 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
         </Button>
       </div>
+
+      {/* Password Change Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Alterar Senha - {member?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new_password">Nova Senha</Label>
+              <Input
+                id="new_password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)}>Cancelar</Button>
+              <Button type="button" onClick={handleChangePassword} disabled={changingPassword || newPassword.length < 6}>
+                {changingPassword ? "Alterando..." : "Alterar Senha"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 };
