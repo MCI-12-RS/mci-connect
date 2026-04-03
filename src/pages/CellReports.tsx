@@ -68,7 +68,7 @@ const CellReports = () => {
 
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("edit_cell") || hasPermission("create_cell") || (hasPermission("edit_own_data") && isOwnCellReport(r))) && (
+      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCellReport(r))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
