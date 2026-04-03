@@ -32,6 +32,8 @@ const WEEK_DAYS_MAP: Record<string, number> = {
 };
 
 const Dashboard = () => {
+  const { hasPermission } = useAuth();
+  const isMinistryOnly = !hasPermission("view_dashboard") && hasPermission("view_own_ministry_dashboard");
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
