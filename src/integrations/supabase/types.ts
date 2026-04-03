@@ -404,6 +404,9 @@ export type Database = {
         | "view_all_reports"
         | "submit_own_cell_report"
         | "submit_any_visible_report"
+        | "assign_role"
+        | "view_sensitive_data"
+        | "change_member_password"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -549,6 +552,9 @@ export const Constants = {
         "view_all_reports",
         "submit_own_cell_report",
         "submit_any_visible_report",
+        "assign_role",
+        "view_sensitive_data",
+        "change_member_password",
       ],
     },
   },
