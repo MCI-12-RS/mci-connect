@@ -135,6 +135,7 @@ const Roles = () => {
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-sm">{role.name}</p>
                   {role.is_system && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sistema</Badge>}
+                  {role.is_default && <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
                 </div>
                 {role.description && <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>}
               </div>
