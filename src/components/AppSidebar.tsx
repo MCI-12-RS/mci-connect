@@ -15,13 +15,13 @@ const AppSidebar = () => {
   const [open, setOpen] = useState(false);
 
   const menuItems = [
-    { icon: Home, label: "Dashboard", path: "/", permission: "view_dashboard" },
-    { icon: Users, label: "Membros", path: "/members", permission: "view_members" },
-    { icon: LayoutGrid, label: "Células", path: "/cells", permission: "view_members" },
-    { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: "view_members" },
-    { icon: Network, label: "Ministérios", path: "/ministries", permission: "view_members" },
-    { icon: Shield, label: "Funções", path: "/roles", permission: "view_roles" },
-  ].filter((item) => hasPermission(item.permission));
+    { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard"] },
+    { icon: Users, label: "Membros", path: "/members", permission: ["view_members", "view_all_church", "view_own_ministry"] },
+    { icon: LayoutGrid, label: "Células", path: "/cells", permission: ["view_members", "view_all_church", "view_own_ministry"] },
+    { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: ["view_members", "view_all_church", "view_own_ministry"] },
+    { icon: Network, label: "Ministérios", path: "/ministries", permission: ["view_members", "view_own_ministry"] },
+    { icon: Shield, label: "Funções", path: "/roles", permission: ["view_roles"] },
+  ].filter((item) => hasPermission(...item.permission));
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -42,11 +42,10 @@ const AppSidebar = () => {
             <button
               key={item.path}
               onClick={() => handleNavigate(item.path)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${isActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                }`}
             >
               <item.icon className="w-4 h-4" />
               {item.label}

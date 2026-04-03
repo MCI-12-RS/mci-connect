@@ -10,10 +10,11 @@ interface AuthContextType {
   user: User | null;
   member: Member | null;
   permissions: string[];
+  isSystem: boolean;
   loading: boolean;
   signIn: (login: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  hasPermission: (permission: string) => boolean;
+  hasPermission: (...permissions: string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<Member | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [isSystem, setIsSystem] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadMemberData = async (userId: string) => {
@@ -35,11 +37,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMember(memberData);
 
     if (memberData?.role_id) {
-      const { data: perms } = await supabase
-        .from("role_permissions")
-        .select("permission")
-        .eq("role_id", memberData.role_id);
+      const [{ data: perms }, { data: role }] = await Promise.all([
+        supabase
+          .from("role_permissions")
+          .select("permission")
+          .eq("role_id", memberData.role_id),
+        supabase
+          .from("roles")
+          .select("is_system")
+          .eq("id", memberData.role_id)
+          .maybeSingle()
+      ]);
+
       setPermissions(perms?.map((p) => p.permission) || []);
+      setIsSystem(role?.is_system || false);
+    } else {
+      setPermissions([]);
+      setIsSystem(false);
     }
   };
 
@@ -53,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setMember(null);
           setPermissions([]);
+          setIsSystem(false);
         }
         setLoading(false);
       }
@@ -72,13 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (login: string, password: string) => {
     let email = login;
-    
+
     // If it doesn't look like an email, try resolving it via the Edge Function
     if (!login.includes("@")) {
       const { data, error } = await supabase.functions.invoke("get-user-email", {
         body: { identifier: login }
       });
-      
+
       if (error) throw error;
       if (data?.email) {
         email = data.email;
@@ -95,10 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const hasPermission = (permission: string) => permissions.includes(permission);
+  const hasPermission = (...perms: string[]) => {
+    if (isSystem) return true;
+    return perms.some((p) => permissions.includes(p));
+  };
 
   return (
-    <AuthContext.Provider value={{ session, user, member, permissions, loading, signIn, signOut, hasPermission }}>
+    <AuthContext.Provider value={{ session, user, member, permissions, isSystem, loading, signIn, signOut, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );
