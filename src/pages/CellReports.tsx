@@ -80,12 +80,12 @@ const CellReports = () => {
 
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {canSubmitReport(r) && (
+      {canEditReport(r) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       )}
-      {hasPermission("delete_cell") && (
+      {canDeleteReport() && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
