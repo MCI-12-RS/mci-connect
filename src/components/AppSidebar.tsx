@@ -1,4 +1,4 @@
-import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, X } from "lucide-react";
+import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import MemberForm from "@/components/MemberForm";
 
 const AppSidebar = () => {
   const navigate = useNavigate();
