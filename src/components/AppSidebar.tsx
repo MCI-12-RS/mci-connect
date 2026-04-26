@@ -1,4 +1,4 @@
-import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil } from "lucide-react";
+import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil, History } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
@@ -24,6 +24,7 @@ const AppSidebar = () => {
     { icon: ClipboardList, label: "Relatórios", path: "/cell-reports", permission: ["view_all_reports", "view_own_reports", "view_members", "view_all_church", "view_own_ministry"] },
     { icon: Network, label: "Ministérios", path: "/ministries", permission: ["view_members", "view_own_ministry"] },
     { icon: Shield, label: "Funções", path: "/roles", permission: ["view_roles"] },
+    { icon: History, label: "Auditoria", path: "/events", permission: ["view_audit_log"] },
   ].filter((item) => hasPermission(...item.permission));
 
   const handleNavigate = (path: string) => {

@@ -185,6 +185,54 @@ export type Database = {
           },
         ]
       }
+      events: {
+        Row: {
+          action: Database["public"]["Enums"]["event_action"]
+          actor_label: string | null
+          actor_user_id: string | null
+          changed_fields: string[] | null
+          description: string
+          entity: Database["public"]["Enums"]["event_entity"]
+          entity_id: string | null
+          entity_label: string | null
+          error_reason: string | null
+          id: string
+          metadata: Json | null
+          occurred_at: string
+          success: boolean
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["event_action"]
+          actor_label?: string | null
+          actor_user_id?: string | null
+          changed_fields?: string[] | null
+          description: string
+          entity: Database["public"]["Enums"]["event_entity"]
+          entity_id?: string | null
+          entity_label?: string | null
+          error_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          success?: boolean
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["event_action"]
+          actor_label?: string | null
+          actor_user_id?: string | null
+          changed_fields?: string[] | null
+          description?: string
+          entity?: Database["public"]["Enums"]["event_entity"]
+          entity_id?: string | null
+          entity_label?: string | null
+          error_reason?: string | null
+          id?: string
+          metadata?: Json | null
+          occurred_at?: string
+          success?: boolean
+        }
+        Relationships: []
+      }
       members: {
         Row: {
           auth_user_id: string | null
@@ -373,6 +421,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _log_event: {
+        Args: {
+          _action: Database["public"]["Enums"]["event_action"]
+          _actor_user_id?: string
+          _changed_fields?: string[]
+          _description: string
+          _entity: Database["public"]["Enums"]["event_entity"]
+          _entity_id: string
+          _entity_label: string
+          _error_reason?: string
+          _metadata?: Json
+          _success?: boolean
+        }
+        Returns: undefined
+      }
+      _mask_identifier: { Args: { _id: string }; Returns: string }
       can_manage_own_cell: {
         Args: { _cell_id: string; _user_id: string }
         Returns: boolean
@@ -387,6 +451,15 @@ export type Database = {
         Args: { _candidate_id: string; _user_id: string }
         Returns: boolean
       }
+      log_auth_event: {
+        Args: {
+          _action: Database["public"]["Enums"]["event_action"]
+          _identifier?: string
+          _reason?: string
+          _success: boolean
+        }
+        Returns: undefined
+      }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
@@ -396,6 +469,20 @@ export type Database = {
       }
     }
     Enums: {
+      event_action:
+        | "create"
+        | "update"
+        | "delete"
+        | "login"
+        | "login_failed"
+        | "logout"
+        | "password_changed"
+      event_entity:
+        | "member"
+        | "cell"
+        | "cell_report"
+        | "cell_report_participant"
+        | "auth"
       permission_action:
         | "create_member"
         | "view_members"
@@ -420,6 +507,7 @@ export type Database = {
         | "view_own_ministry_dashboard"
         | "edit_cell_report"
         | "delete_cell_report"
+        | "view_audit_log"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -547,6 +635,22 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      event_action: [
+        "create",
+        "update",
+        "delete",
+        "login",
+        "login_failed",
+        "logout",
+        "password_changed",
+      ],
+      event_entity: [
+        "member",
+        "cell",
+        "cell_report",
+        "cell_report_participant",
+        "auth",
+      ],
       permission_action: [
         "create_member",
         "view_members",
@@ -571,6 +675,7 @@ export const Constants = {
         "view_own_ministry_dashboard",
         "edit_cell_report",
         "delete_cell_report",
+        "view_audit_log",
       ],
     },
   },
