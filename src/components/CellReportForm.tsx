@@ -194,9 +194,12 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
     },
     onError: (error: any) => {
       const msg = error?.message || "";
-      const friendly = msg.includes("Já existe um relatório para esta célula nesta semana")
-        ? "Já existe um relatório dessa célula nesta semana (domingo a sábado)."
-        : msg;
+      let friendly = msg;
+      if (msg.includes("Já existe um relatório para esta célula nesta semana")) {
+        friendly = "Já existe um relatório dessa célula nesta semana (domingo a sábado).";
+      } else if (msg.includes("dentro da semana atual")) {
+        friendly = "A data do relatório precisa estar dentro da semana atual (de domingo a sábado).";
+      }
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
@@ -294,15 +297,25 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
           <FormField
             control={form.control}
             name="date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data *</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const today = new Date();
+              const weekStart = setDay(today, 0, { weekStartsOn: 0 });
+              const weekEnd = setDay(today, 6, { weekStartsOn: 0 });
+              return (
+                <FormItem>
+                  <FormLabel>Data *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      min={format(weekStart, "yyyy-MM-dd")}
+                      max={format(weekEnd, "yyyy-MM-dd")}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField
