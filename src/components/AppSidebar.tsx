@@ -14,6 +14,7 @@ const AppSidebar = () => {
   const { signOut, hasPermission, member } = useAuth();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const menuItems = [
     { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard", "view_own_ministry_dashboard"] },
