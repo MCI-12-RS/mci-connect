@@ -106,6 +106,8 @@ const Cells = () => {
     hasPermission("edit_cell") ||
     hasPermission("delete_cell");
 
+  const anyCellHasActions = filteredCells.some((c: any) => cellHasActions(c));
+
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
       {(hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c))) && (
