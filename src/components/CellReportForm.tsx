@@ -297,15 +297,25 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
           <FormField
             control={form.control}
             name="date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data *</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const today = new Date();
+              const weekStart = setDay(today, 0, { weekStartsOn: 0 });
+              const weekEnd = setDay(today, 6, { weekStartsOn: 0 });
+              return (
+                <FormItem>
+                  <FormLabel>Data *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      min={format(weekStart, "yyyy-MM-dd")}
+                      max={format(weekEnd, "yyyy-MM-dd")}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField
