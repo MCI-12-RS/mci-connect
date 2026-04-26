@@ -78,6 +78,9 @@ const CellReports = () => {
     return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
   };
 
+  const reportHasActions = (r: any) => canEditReport(r) || canDeleteReport();
+  const anyReportHasActions = filteredReports.some((r: any) => reportHasActions(r));
+
   const getStreetLine = (cell: any) => {
     if (!cell) return "";
     const parts = [cell.street, cell.number].filter(Boolean).join(" ");
@@ -142,7 +145,7 @@ const CellReports = () => {
                   {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
                 </p>
               </div>
-              <ActionButtons r={r} />
+              {reportHasActions(r) && <ActionButtons r={r} />}
             </div>
 
             {/* Status + attendance */}
@@ -209,14 +212,14 @@ const CellReports = () => {
                     <TableHead>Tema</TableHead>
                     <TableHead className="text-center">Presenças</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {anyReportHasActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredReports.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
                   ) : (
                     filteredReports.map((r: any) => (
                       <TableRow key={r.id}>
@@ -249,7 +252,7 @@ const CellReports = () => {
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell><StatusBadge r={r} /></TableCell>
-                        <TableCell><ActionButtons r={r} /></TableCell>
+                        {anyReportHasActions && <TableCell>{reportHasActions(r) && <ActionButtons r={r} />}</TableCell>}
                       </TableRow>
                     ))
                   )}
