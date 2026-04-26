@@ -274,26 +274,31 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
           <FormField
             control={form.control}
             name="cell_id"
-            render={({ field }) => (
-              <FormItem className="col-span-1 md:col-span-2">
-                <FormLabel>Célula *</FormLabel>
-                <div className="relative">
-                  <select
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    {...field}
-                    disabled={!!report || !!initialCellId}
-                  >
-                    <option value="">Selecione uma célula...</option>
-                    {cells.map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {c.leader?.name ? `Célula de ${c.leader.name}` : `Célula (${c.id.substring(0, 5)})`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const selected = (cells as any[]).find((c) => c.id === field.value);
+              const selectedOption = selected
+                ? { value: selected.id, label: formatCellLabel(selected), data: selected }
+                : null;
+              return (
+                <FormItem className="col-span-1 md:col-span-2">
+                  <FormLabel>Célula *</FormLabel>
+                  <AsyncSelect
+                    cacheOptions
+                    defaultOptions
+                    loadOptions={loadCellOptions}
+                    value={selectedOption}
+                    onChange={(opt: any) => field.onChange(opt?.value || "")}
+                    isDisabled={!!report || !!initialCellId}
+                    placeholder="Buscar célula por líder, endereço ou bairro..."
+                    noOptionsMessage={() => "Nenhuma célula encontrada"}
+                    loadingMessage={() => "Carregando..."}
+                    styles={customSelectStyles}
+                    className="text-sm"
+                  />
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField
