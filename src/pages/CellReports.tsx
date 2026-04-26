@@ -220,7 +220,17 @@ const CellReports = () => {
                   ) : (
                     filteredReports.map((r: any) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.cells?.leader?.name || "Célula sem líder"}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col leading-tight">
+                            <span>{r.cells?.leader?.name || "Célula sem líder"}</span>
+                            {getStreetLine(r.cells) && (
+                              <span className="text-xs font-normal text-muted-foreground">{getStreetLine(r.cells)}</span>
+                            )}
+                            {r.cells?.neighborhood && (
+                              <span className="text-xs font-normal text-muted-foreground">{r.cells.neighborhood}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
                             <span>{format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })}</span>
