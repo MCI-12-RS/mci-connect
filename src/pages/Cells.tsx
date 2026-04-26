@@ -100,6 +100,14 @@ const Cells = () => {
 
   const isOwnCell = (c: any) => currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
 
+  const cellHasActions = (c: any) =>
+    hasPermission("submit_any_visible_report") ||
+    (hasPermission("submit_own_cell_report") && isOwnCell(c)) ||
+    hasPermission("edit_cell") ||
+    hasPermission("delete_cell");
+
+  const anyCellHasActions = filteredCells.some((c: any) => cellHasActions(c));
+
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
       {(hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c))) && (
@@ -148,7 +156,7 @@ const Cells = () => {
                 <p className="font-semibold text-sm">{c.leader?.name || "Sem líder"}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">G12: {findG12(c.leader_id)}</p>
               </div>
-              <ActionButtons c={c} />
+              {cellHasActions(c) && <ActionButtons c={c} />}
             </div>
 
             {/* Team */}
@@ -226,14 +234,14 @@ const Cells = () => {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {anyCellHasActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredCells.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
                   ) : (
                     filteredCells.map((c: any) => (
                       <TableRow key={c.id}>
@@ -258,7 +266,7 @@ const Cells = () => {
                         <TableCell>
                           <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Ativa" : "Inativa"}</Badge>
                         </TableCell>
-                        <TableCell><ActionButtons c={c} /></TableCell>
+                        {anyCellHasActions && <TableCell>{cellHasActions(c) && <ActionButtons c={c} />}</TableCell>}
                       </TableRow>
                     ))
                   )}
