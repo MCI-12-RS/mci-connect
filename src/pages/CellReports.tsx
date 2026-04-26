@@ -132,6 +132,12 @@ const CellReports = () => {
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
+                {(getStreetLine(r.cells) || r.cells?.neighborhood) && (
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                    {getStreetLine(r.cells) && <p>{getStreetLine(r.cells)}</p>}
+                    {r.cells?.neighborhood && <p>{r.cells.neighborhood}</p>}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
                 </p>
