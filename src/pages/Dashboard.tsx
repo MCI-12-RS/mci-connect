@@ -92,13 +92,12 @@ const Dashboard = () => {
       // Fetch only members at G12 Level 1
       const { data, error } = await supabase
         .from("members")
-        .select("id, name, gender, spouse_id, male_cells, female_cells")
+        .select("id, name, gender, spouse_id, total_cells")
         .eq("g12_level", 1)
         .eq("is_active", true);
 
       if (error) throw error;
 
-      // Type cast to handle new columns before types are regenerated
       const members = (data as any[]) || [];
       const memberMap = new Map(members.map((m) => [m.id, m]));
 
@@ -119,6 +118,7 @@ const Dashboard = () => {
 
       members.forEach((member) => {
         const key = getCanonicalKey(member.id, member.spouse_id);
+        const isMale = member.gender === "Masculino" || member.gender === "M";
 
         if (!coupleMap.has(key)) {
           const spouse = member.spouse_id ? memberMap.get(member.spouse_id) : undefined;
@@ -127,8 +127,6 @@ const Dashboard = () => {
           let spouseName: string | undefined;
 
           if (spouse) {
-            // Sort couple by gender (Male first for name display)
-            const isMale = member.gender === "Masculino" || member.gender === "M";
             if (isMale) {
               name = member.name;
               spouseName = spouse.name;
@@ -143,17 +141,19 @@ const Dashboard = () => {
             name,
             spouseName,
             maleCells: 0,
-            femaleCells: 0
+            femaleCells: 0,
           });
         }
 
         const stats = coupleMap.get(key)!;
-        // Sum recursive stats into the couple unit
-        stats.maleCells += (member.male_cells || 0);
-        stats.femaleCells += (member.female_cells || 0);
+        const cells = member.total_cells || 0;
+        if (isMale) {
+          stats.maleCells += cells;
+        } else {
+          stats.femaleCells += cells;
+        }
       });
 
-      // Sort by total cells descending
       return Array.from(coupleMap.values()).sort(
         (a, b) => (b.maleCells + b.femaleCells) - (a.maleCells + a.femaleCells)
       );
