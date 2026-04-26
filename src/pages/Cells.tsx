@@ -102,12 +102,12 @@ const Cells = () => {
 
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
+      {(hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c))) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c.id)} title="Novo Relatório">
           <FilePlus className="w-3.5 h-3.5 text-primary" />
         </Button>
       )}
-      {(hasPermission("edit_cell") || (hasPermission("edit_own_data") && isOwnCell(c))) && (
+      {hasPermission("edit_cell") && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
