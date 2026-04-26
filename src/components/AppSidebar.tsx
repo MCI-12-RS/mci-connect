@@ -1,4 +1,4 @@
-import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, X } from "lucide-react";
+import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import MemberForm from "@/components/MemberForm";
 
 const AppSidebar = () => {
   const navigate = useNavigate();
@@ -13,6 +14,7 @@ const AppSidebar = () => {
   const { signOut, hasPermission, member } = useAuth();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const menuItems = [
     { icon: Home, label: "Dashboard", path: "/", permission: ["view_dashboard", "view_own_ministry_dashboard"] },
@@ -55,8 +57,22 @@ const AppSidebar = () => {
       </nav>
 
       <div className="p-3 border-t border-sidebar-border">
-        <div className="px-3 py-2 text-xs text-sidebar-foreground opacity-70 truncate mb-1">
-          {member?.name}
+        <div className="px-3 py-2 mb-1 flex items-center gap-2">
+          <span className="text-xs text-sidebar-foreground opacity-70 truncate flex-1">
+            {member?.name}
+          </span>
+          {member && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+              onClick={() => { setEditOpen(true); setOpen(false); }}
+              title="Editar meus dados"
+              aria-label="Editar meus dados"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
         <button
           onClick={() => { signOut(); setOpen(false); }}
@@ -69,25 +85,35 @@ const AppSidebar = () => {
     </div>
   );
 
+  const editDialog = editOpen && member ? (
+    <MemberForm member={member as any} onClose={() => setEditOpen(false)} />
+  ) : null;
+
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden">
-            <Menu className="w-5 h-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64 bg-sidebar border-sidebar-border">
-          {sidebarContent}
-        </SheetContent>
-      </Sheet>
+      <>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden">
+              <Menu className="w-5 h-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64 bg-sidebar border-sidebar-border">
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+        {editDialog}
+      </>
     );
   }
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col border-r border-sidebar-border hidden md:flex">
-      {sidebarContent}
-    </aside>
+    <>
+      <aside className="w-64 min-h-screen flex flex-col border-r border-sidebar-border hidden md:flex">
+        {sidebarContent}
+      </aside>
+      {editDialog}
+    </>
   );
 };
 
