@@ -377,6 +377,10 @@ export type Database = {
         Args: { _target_member_id: string; _user_id: string }
         Returns: boolean
       }
+      is_leader_of_visible_member: {
+        Args: { _candidate_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
