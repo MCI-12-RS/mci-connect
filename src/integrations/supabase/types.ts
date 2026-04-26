@@ -188,6 +188,7 @@ export type Database = {
       members: {
         Row: {
           auth_user_id: string | null
+          avatar_url: string | null
           baptism_date: string | null
           birth_date: string | null
           city: string | null
@@ -199,6 +200,7 @@ export type Database = {
           gender: string | null
           has_leadership: boolean
           id: string
+          instagram: string | null
           is_active: boolean
           is_baptized: boolean
           is_pastor: boolean
@@ -220,6 +222,7 @@ export type Database = {
         }
         Insert: {
           auth_user_id?: string | null
+          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -231,6 +234,7 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
+          instagram?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
@@ -252,6 +256,7 @@ export type Database = {
         }
         Update: {
           auth_user_id?: string | null
+          avatar_url?: string | null
           baptism_date?: string | null
           birth_date?: string | null
           city?: string | null
@@ -263,6 +268,7 @@ export type Database = {
           gender?: string | null
           has_leadership?: boolean
           id?: string
+          instagram?: string | null
           is_active?: boolean
           is_baptized?: boolean
           is_pastor?: boolean
