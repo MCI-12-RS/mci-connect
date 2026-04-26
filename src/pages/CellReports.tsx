@@ -78,6 +78,12 @@ const CellReports = () => {
     return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
   };
 
+  const getStreetLine = (cell: any) => {
+    if (!cell) return "";
+    const parts = [cell.street, cell.number].filter(Boolean).join(" ");
+    return [parts, cell.complement].filter(Boolean).join(" - ");
+  };
+
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
       {canEditReport(r) && (
