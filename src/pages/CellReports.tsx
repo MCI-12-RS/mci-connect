@@ -31,7 +31,7 @@ const CellReports = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cell_reports")
-        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
+        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood), cell_report_participants(count)`)
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
@@ -76,6 +76,12 @@ const CellReports = () => {
 
   const canSubmitNewReport = () => {
     return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
+  };
+
+  const getStreetLine = (cell: any) => {
+    if (!cell) return "";
+    const parts = [cell.street, cell.number].filter(Boolean).join(" ");
+    return [parts, cell.complement].filter(Boolean).join(" - ");
   };
 
   const ActionButtons = ({ r }: { r: any }) => (
@@ -126,6 +132,12 @@ const CellReports = () => {
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
+                {(getStreetLine(r.cells) || r.cells?.neighborhood) && (
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                    {getStreetLine(r.cells) && <p>{getStreetLine(r.cells)}</p>}
+                    {r.cells?.neighborhood && <p>{r.cells.neighborhood}</p>}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
                 </p>
@@ -208,7 +220,17 @@ const CellReports = () => {
                   ) : (
                     filteredReports.map((r: any) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.cells?.leader?.name || "Célula sem líder"}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col leading-tight">
+                            <span>{r.cells?.leader?.name || "Célula sem líder"}</span>
+                            {getStreetLine(r.cells) && (
+                              <span className="text-xs font-normal text-muted-foreground">{getStreetLine(r.cells)}</span>
+                            )}
+                            {r.cells?.neighborhood && (
+                              <span className="text-xs font-normal text-muted-foreground">{r.cells.neighborhood}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
                             <span>{format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })}</span>
