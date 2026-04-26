@@ -69,6 +69,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const isOwnData = !!member && !!currentMember && member.id === currentMember.id;
   const canViewSensitive = isOwnData || isSystem || hasPermission("view_sensitive_data");
   const canChangePassword = isSystem || hasPermission("change_member_password");
+  const canEditMinistry = isSystem || hasPermission("edit_member");
 
   const fetchAddressByCEP = useCallback(async (cep: string) => {
     const digits = cep.replace(/\D/g, "");
@@ -346,47 +347,51 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         </div>
       </div>
 
-      <Separator />
+      {canEditMinistry && (
+        <>
+          <Separator />
 
-      {/* Ministry Data */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Dados Ministeriais</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <Label htmlFor="is_pastor">É Pastor(a)?</Label>
-            <Switch id="is_pastor" checked={form.is_pastor || false} onCheckedChange={(v) => update("is_pastor", v)} />
-          </div>
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <Label htmlFor="is_active">Ativo</Label>
-            <Switch id="is_active" checked={form.is_active !== false} onCheckedChange={(v) => update("is_active", v)} />
-          </div>
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <Label htmlFor="has_leadership">Tem Liderança?</Label>
-            <Switch id="has_leadership" checked={form.has_leadership || false} onCheckedChange={(v) => update("has_leadership", v)} />
-          </div>
-          {form.has_leadership && (
-            <div className="space-y-2">
-              <Label htmlFor="leader">Líder</Label>
-              <AsyncMemberSelect
-                value={form.leader_id || null}
-                onChange={(v) => update("leader_id", v)}
-                excludeId={member?.id}
-                placeholder="Buscar líder..."
-              />
+          {/* Ministry Data */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Dados Ministeriais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="is_pastor">É Pastor(a)?</Label>
+                <Switch id="is_pastor" checked={form.is_pastor || false} onCheckedChange={(v) => update("is_pastor", v)} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="is_active">Ativo</Label>
+                <Switch id="is_active" checked={form.is_active !== false} onCheckedChange={(v) => update("is_active", v)} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="has_leadership">Tem Liderança?</Label>
+                <Switch id="has_leadership" checked={form.has_leadership || false} onCheckedChange={(v) => update("has_leadership", v)} />
+              </div>
+              {form.has_leadership && (
+                <div className="space-y-2">
+                  <Label htmlFor="leader">Líder</Label>
+                  <AsyncMemberSelect
+                    value={form.leader_id || null}
+                    onChange={(v) => update("leader_id", v)}
+                    excludeId={member?.id}
+                    placeholder="Buscar líder..."
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="is_baptized">Batizado(a)?</Label>
+                <Switch id="is_baptized" checked={form.is_baptized || false} onCheckedChange={(v) => update("is_baptized", v)} />
+              </div>
+              {form.is_baptized && (
+                <div className="space-y-2">
+                  <Label htmlFor="baptism_date">Data do Batismo</Label>
+                  <Input id="baptism_date" type="date" value={form.baptism_date || ""} onChange={(e) => update("baptism_date", e.target.value)} />
+                </div>
+              )}
             </div>
-          )}
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <Label htmlFor="is_baptized">Batizado(a)?</Label>
-            <Switch id="is_baptized" checked={form.is_baptized || false} onCheckedChange={(v) => update("is_baptized", v)} />
           </div>
-          {form.is_baptized && (
-            <div className="space-y-2">
-              <Label htmlFor="baptism_date">Data do Batismo</Label>
-              <Input id="baptism_date" type="date" value={form.baptism_date || ""} onChange={(e) => update("baptism_date", e.target.value)} />
-            </div>
-          )}
-        </div>
-      </div>
+        </>
+      )}
 
       {canViewSensitive && (
         <>
