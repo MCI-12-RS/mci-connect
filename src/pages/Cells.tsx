@@ -100,6 +100,12 @@ const Cells = () => {
 
   const isOwnCell = (c: any) => currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
 
+  const cellHasActions = (c: any) =>
+    hasPermission("submit_any_visible_report") ||
+    (hasPermission("submit_own_cell_report") && isOwnCell(c)) ||
+    hasPermission("edit_cell") ||
+    hasPermission("delete_cell");
+
   const ActionButtons = ({ c }: { c: any }) => (
     <div className="flex items-center gap-1">
       {(hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c))) && (
