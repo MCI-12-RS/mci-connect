@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { format, setDay, isFuture, subWeeks } from "date-fns";
 import Select from "react-select";
+import AsyncSelect from "react-select/async";
 
 const reportSchema = z.object({
   cell_id: z.string().min(1, "Selecione uma célula"),
