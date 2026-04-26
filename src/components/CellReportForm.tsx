@@ -193,10 +193,14 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
       onClose();
     },
     onError: (error: any) => {
+      const msg = error?.message || "";
+      const friendly = msg.includes("Já existe um relatório para esta célula nesta semana")
+        ? "Já existe um relatório dessa célula nesta semana (domingo a sábado)."
+        : msg;
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: error.message,
+        description: friendly,
       });
     },
   });
