@@ -69,6 +69,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const isOwnData = !!member && !!currentMember && member.id === currentMember.id;
   const canViewSensitive = isOwnData || isSystem || hasPermission("view_sensitive_data");
   const canChangePassword = isSystem || hasPermission("change_member_password");
+  const canEditMinistry = isSystem || hasPermission("edit_member");
 
   const fetchAddressByCEP = useCallback(async (cep: string) => {
     const digits = cep.replace(/\D/g, "");
