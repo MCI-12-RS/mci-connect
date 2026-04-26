@@ -158,7 +158,7 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? m.mobile_whatsapp || "—" : "—")}
+                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
               {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
