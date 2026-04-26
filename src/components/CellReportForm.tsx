@@ -64,12 +64,28 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cells")
-        .select(`id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time`)
+        .select(`id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood`)
         .eq("is_active", true);
       if (error) throw error;
       return data;
     },
   });
+
+  const formatCellLabel = (c: any) => {
+    const leaderName = c?.leader?.name ? `Célula de ${c.leader.name}` : `Célula (${(c?.id || "").substring(0, 5)})`;
+    const street = [c?.street, c?.number].filter(Boolean).join(" ");
+    const addressBits = [street, c?.neighborhood].filter(Boolean).join(", ");
+    return addressBits ? `${leaderName}, em ${addressBits}` : leaderName;
+  };
+
+  const loadCellOptions = async (input: string) => {
+    const term = (input || "").toLowerCase();
+    const filtered = (cells as any[]).filter((c) => {
+      if (!term) return true;
+      return formatCellLabel(c).toLowerCase().includes(term);
+    });
+    return filtered.map((c) => ({ value: c.id, label: formatCellLabel(c), data: c }));
+  };
 
   const { data: members = [] } = useQuery({
     queryKey: ["members-basic"],
