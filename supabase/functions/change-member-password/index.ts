@@ -59,6 +59,37 @@ serve(async (req) => {
 
     if (updateError) throw updateError
 
+    // Audit: register password_changed event using service role (bypasses RLS).
+    // We insert directly into events because _log_event is REVOKEd from public roles.
+    try {
+      // Resolve actor label
+      const { data: actorMember } = await supabaseAdmin
+        .from('members')
+        .select('name')
+        .eq('auth_user_id', callingUser.id)
+        .maybeSingle()
+
+      const { data: targetMember } = await supabaseAdmin
+        .from('members')
+        .select('name')
+        .eq('id', member_id)
+        .maybeSingle()
+
+      await supabaseAdmin.from('events').insert({
+        actor_user_id: callingUser.id,
+        actor_label: actorMember?.name ?? null,
+        action: 'password_changed',
+        entity: 'member',
+        entity_id: member_id,
+        entity_label: targetMember?.name ?? null,
+        description: `Alterou a senha de ${targetMember?.name ?? 'membro'}`,
+        metadata: { target_member_id: member_id },
+        success: true,
+      })
+    } catch (logErr) {
+      console.warn('Failed to log password_changed event:', logErr)
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
