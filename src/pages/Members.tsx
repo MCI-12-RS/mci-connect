@@ -45,7 +45,30 @@ const Members = () => {
     },
   });
 
-  const leaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
+  const visibleLeaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
+  const missingLeaderIds = Array.from(
+    new Set(
+      (members as any[])
+        .map((m) => m.leader_id)
+        .filter((id): id is string => !!id && !visibleLeaderMap.has(id))
+    )
+  );
+
+  const { data: extraLeaders = [] } = useQuery({
+    queryKey: ["members-leader-names", missingLeaderIds.sort().join(",")],
+    enabled: missingLeaderIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select("id,name")
+        .in("id", missingLeaderIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const leaderMap = new Map(visibleLeaderMap);
+  (extraLeaders as any[]).forEach((l) => leaderMap.set(l.id, l.name));
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
