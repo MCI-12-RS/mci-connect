@@ -19,6 +19,14 @@ import { Database } from "@/integrations/supabase/types";
 
 type Member = Database["public"]["Tables"]["members"]["Row"];
 
+const formatPhone = (value?: string | null): string => {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return value;
+};
+
 const Members = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -150,7 +158,7 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? m.mobile_whatsapp || "—" : "—")}
+                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
               {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
@@ -269,7 +277,7 @@ const Members = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{canSeeSensitive(m) ? (m.mobile_whatsapp || "—") : "•••••"}</TableCell>
+                        <TableCell className="text-sm">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
                         <TableCell><LevelBadge m={m} /></TableCell>
                         <TableCell>
                           <div className="flex flex-col">
