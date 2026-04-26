@@ -232,14 +232,14 @@ const Cells = () => {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {anyCellHasActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredCells.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
                   ) : (
                     filteredCells.map((c: any) => (
                       <TableRow key={c.id}>
@@ -264,7 +264,7 @@ const Cells = () => {
                         <TableCell>
                           <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Ativa" : "Inativa"}</Badge>
                         </TableCell>
-                        <TableCell><ActionButtons c={c} /></TableCell>
+                        {anyCellHasActions && <TableCell>{cellHasActions(c) && <ActionButtons c={c} />}</TableCell>}
                       </TableRow>
                     ))
                   )}
