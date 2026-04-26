@@ -420,6 +420,7 @@ export type Database = {
         | "view_own_ministry_dashboard"
         | "edit_cell_report"
         | "delete_cell_report"
+        | "view_audit_log"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -571,6 +572,7 @@ export const Constants = {
         "view_own_ministry_dashboard",
         "edit_cell_report",
         "delete_cell_report",
+        "view_audit_log",
       ],
     },
   },
