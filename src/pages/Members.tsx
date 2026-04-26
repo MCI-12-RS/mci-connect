@@ -99,6 +99,10 @@ const Members = () => {
     return Math.pow(12, level).toString();
   };
 
+  const canEditAny = hasPermission("edit_member") || hasPermission("edit_own_data");
+  const canDeleteAny = hasPermission("delete_member");
+  const showActions = canEditAny || canDeleteAny;
+
   const DeleteButton = ({ member }: { member: any }) => (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -149,14 +153,16 @@ const Members = () => {
                   {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? m.mobile_whatsapp || "—" : "—")}
                 </p>
               </div>
-              <div className="flex items-center shrink-0">
-                {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                )}
-                {hasPermission("delete_member") && <DeleteButton member={m} />}
-              </div>
+              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
+                <div className="flex items-center shrink-0">
+                  {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {hasPermission("delete_member") && <DeleteButton member={m} />}
+                </div>
+              )}
             </div>
 
             {/* Info row */}
@@ -231,17 +237,17 @@ const Members = () => {
                     <TableHead>Ministério</TableHead>
                     <TableHead>Líder</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {showActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                     </TableRow>
                   ) : members.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
+                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
                     </TableRow>
                   ) : (
                     members.map((m: any) => (
@@ -277,16 +283,18 @@ const Members = () => {
                             {m.is_active ? "Ativo" : "Inativo"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {hasPermission("delete_member") && <DeleteButton member={m} />}
-                          </div>
-                        </TableCell>
+                        {showActions && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {hasPermission("delete_member") && <DeleteButton member={m} />}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
