@@ -57,8 +57,22 @@ const AppSidebar = () => {
       </nav>
 
       <div className="p-3 border-t border-sidebar-border">
-        <div className="px-3 py-2 text-xs text-sidebar-foreground opacity-70 truncate mb-1">
-          {member?.name}
+        <div className="px-3 py-2 mb-1 flex items-center gap-2">
+          <span className="text-xs text-sidebar-foreground opacity-70 truncate flex-1">
+            {member?.name}
+          </span>
+          {member && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+              onClick={() => { setEditOpen(true); setOpen(false); }}
+              title="Editar meus dados"
+              aria-label="Editar meus dados"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
         <button
           onClick={() => { signOut(); setOpen(false); }}
