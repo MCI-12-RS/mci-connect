@@ -29,7 +29,8 @@ const Members = () => {
   const isMobile = useIsMobile();
 
   const canSeeSensitive = (m: Member) =>
-    hasPermission("view_sensitive_data") || (currentMember && m.id === currentMember.id);
+    hasPermission("view_sensitive_data", "view_own_ministry") ||
+    (currentMember && m.id === currentMember.id);
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", search],
