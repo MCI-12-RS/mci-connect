@@ -85,25 +85,35 @@ const AppSidebar = () => {
     </div>
   );
 
+  const editDialog = editOpen && member ? (
+    <MemberForm member={member as any} onClose={() => setEditOpen(false)} />
+  ) : null;
+
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden">
-            <Menu className="w-5 h-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64 bg-sidebar border-sidebar-border">
-          {sidebarContent}
-        </SheetContent>
-      </Sheet>
+      <>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden">
+              <Menu className="w-5 h-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64 bg-sidebar border-sidebar-border">
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+        {editDialog}
+      </>
     );
   }
 
   return (
-    <aside className="w-64 min-h-screen flex flex-col border-r border-sidebar-border hidden md:flex">
-      {sidebarContent}
-    </aside>
+    <>
+      <aside className="w-64 min-h-screen flex flex-col border-r border-sidebar-border hidden md:flex">
+        {sidebarContent}
+      </aside>
+      {editDialog}
+    </>
   );
 };
 
