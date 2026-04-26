@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MemberForm from "@/components/MemberForm";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const AppSidebar = () => {
   const navigate = useNavigate();
