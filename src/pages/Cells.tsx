@@ -154,7 +154,7 @@ const Cells = () => {
                 <p className="font-semibold text-sm">{c.leader?.name || "Sem líder"}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">G12: {findG12(c.leader_id)}</p>
               </div>
-              <ActionButtons c={c} />
+              {cellHasActions(c) && <ActionButtons c={c} />}
             </div>
 
             {/* Team */}
