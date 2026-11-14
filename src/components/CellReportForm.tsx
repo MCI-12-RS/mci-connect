@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { format, setDay, isFuture, subWeeks } from "date-fns";
 import Select from "react-select";
+import AsyncSelect from "react-select/async";
 
 const reportSchema = z.object({
   cell_id: z.string().min(1, "Selecione uma célula"),
@@ -63,12 +64,28 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cells")
-        .select(`id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time`)
+        .select(`id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood`)
         .eq("is_active", true);
       if (error) throw error;
       return data;
     },
   });
+
+  const formatCellLabel = (c: any) => {
+    const leaderName = c?.leader?.name ? `Célula de ${c.leader.name}` : `Célula (${(c?.id || "").substring(0, 5)})`;
+    const street = [c?.street, c?.number].filter(Boolean).join(" ");
+    const addressBits = [street, c?.neighborhood].filter(Boolean).join(", ");
+    return addressBits ? `${leaderName}, em ${addressBits}` : leaderName;
+  };
+
+  const loadCellOptions = async (input: string) => {
+    const term = (input || "").toLowerCase();
+    const filtered = (cells as any[]).filter((c) => {
+      if (!term) return true;
+      return formatCellLabel(c).toLowerCase().includes(term);
+    });
+    return filtered.map((c) => ({ value: c.id, label: formatCellLabel(c), data: c }));
+  };
 
   const { data: members = [] } = useQuery({
     queryKey: ["members-basic"],
@@ -193,10 +210,17 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
       onClose();
     },
     onError: (error: any) => {
+      const msg = error?.message || "";
+      let friendly = msg;
+      if (msg.includes("Já existe um relatório para esta célula nesta semana")) {
+        friendly = "Já existe um relatório dessa célula nesta semana (domingo a sábado).";
+      } else if (msg.includes("dentro da semana atual")) {
+        friendly = "A data do relatório precisa estar dentro da semana atual (de domingo a sábado).";
+      }
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: error.message,
+        description: friendly,
       });
     },
   });
@@ -250,26 +274,31 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
           <FormField
             control={form.control}
             name="cell_id"
-            render={({ field }) => (
-              <FormItem className="col-span-1 md:col-span-2">
-                <FormLabel>Célula *</FormLabel>
-                <div className="relative">
-                  <select
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    {...field}
-                    disabled={!!report || !!initialCellId}
-                  >
-                    <option value="">Selecione uma célula...</option>
-                    {cells.map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {c.leader?.name ? `Célula de ${c.leader.name}` : `Célula (${c.id.substring(0, 5)})`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const selected = (cells as any[]).find((c) => c.id === field.value);
+              const selectedOption = selected
+                ? { value: selected.id, label: formatCellLabel(selected), data: selected }
+                : null;
+              return (
+                <FormItem className="col-span-1 md:col-span-2">
+                  <FormLabel>Célula *</FormLabel>
+                  <AsyncSelect
+                    cacheOptions
+                    defaultOptions
+                    loadOptions={loadCellOptions}
+                    value={selectedOption}
+                    onChange={(opt: any) => field.onChange(opt?.value || "")}
+                    isDisabled={!!report || !!initialCellId}
+                    placeholder="Buscar célula por líder, endereço ou bairro..."
+                    noOptionsMessage={() => "Nenhuma célula encontrada"}
+                    loadingMessage={() => "Carregando..."}
+                    styles={customSelectStyles}
+                    className="text-sm"
+                  />
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField
@@ -290,15 +319,25 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
           <FormField
             control={form.control}
             name="date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data *</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const today = new Date();
+              const weekStart = setDay(today, 0, { weekStartsOn: 0 });
+              const weekEnd = setDay(today, 6, { weekStartsOn: 0 });
+              return (
+                <FormItem>
+                  <FormLabel>Data *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      min={format(weekStart, "yyyy-MM-dd")}
+                      max={format(weekEnd, "yyyy-MM-dd")}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField

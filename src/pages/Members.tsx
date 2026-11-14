@@ -19,6 +19,14 @@ import { Database } from "@/integrations/supabase/types";
 
 type Member = Database["public"]["Tables"]["members"]["Row"];
 
+const formatPhone = (value?: string | null): string => {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return value;
+};
+
 const Members = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -27,6 +35,10 @@ const Members = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+
+  const canSeeSensitive = (m: Member) =>
+    hasPermission("view_sensitive_data", "view_own_ministry") ||
+    (currentMember && m.id === currentMember.id);
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", search],
@@ -41,7 +53,30 @@ const Members = () => {
     },
   });
 
-  const leaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
+  const visibleLeaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
+  const missingLeaderIds = Array.from(
+    new Set(
+      (members as any[])
+        .map((m) => m.leader_id)
+        .filter((id): id is string => !!id && !visibleLeaderMap.has(id))
+    )
+  );
+
+  const { data: extraLeaders = [] } = useQuery({
+    queryKey: ["members-leader-names", missingLeaderIds.sort().join(",")],
+    enabled: missingLeaderIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("members")
+        .select("id,name")
+        .in("id", missingLeaderIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const leaderMap = new Map(visibleLeaderMap);
+  (extraLeaders as any[]).forEach((l) => leaderMap.set(l.id, l.name));
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -71,6 +106,10 @@ const Members = () => {
     if (level === 0) return "Pastor";
     return Math.pow(12, level).toString();
   };
+
+  const canEditAny = hasPermission("edit_member") || hasPermission("edit_own_data");
+  const canDeleteAny = hasPermission("delete_member");
+  const showActions = canEditAny || canDeleteAny;
 
   const DeleteButton = ({ member }: { member: any }) => (
     <AlertDialog>
@@ -119,17 +158,19 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : m.mobile_whatsapp || "—")}
+                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
-              <div className="flex items-center shrink-0">
-                {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                )}
-                {hasPermission("delete_member") && <DeleteButton member={m} />}
-              </div>
+              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
+                <div className="flex items-center shrink-0">
+                  {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {hasPermission("delete_member") && <DeleteButton member={m} />}
+                </div>
+              )}
             </div>
 
             {/* Info row */}
@@ -204,17 +245,17 @@ const Members = () => {
                     <TableHead>Ministério</TableHead>
                     <TableHead>Líder</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {showActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                     </TableRow>
                   ) : members.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
+                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
                     </TableRow>
                   ) : (
                     members.map((m: any) => (
@@ -231,12 +272,12 @@ const Members = () => {
                           <div>
                             <span className="font-medium">{m.name}</span>
                             {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                            {!m.instagram && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                            {!m.instagram && canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") && (
                               <p className="text-xs text-muted-foreground">{m.email}</p>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{m.mobile_whatsapp || "—"}</TableCell>
+                        <TableCell className="text-sm">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
                         <TableCell><LevelBadge m={m} /></TableCell>
                         <TableCell>
                           <div className="flex flex-col">
@@ -250,16 +291,18 @@ const Members = () => {
                             {m.is_active ? "Ativo" : "Inativo"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {hasPermission("delete_member") && <DeleteButton member={m} />}
-                          </div>
-                        </TableCell>
+                        {showActions && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {hasPermission("delete_member") && <DeleteButton member={m} />}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}

@@ -1,0 +1,3 @@
+ALTER TABLE public.members
+ADD COLUMN IF NOT EXISTS instagram TEXT,
+ADD COLUMN IF NOT EXISTS avatar_url TEXT;

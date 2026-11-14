@@ -31,7 +31,7 @@ const CellReports = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cell_reports")
-        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time), cell_report_participants(count)`)
+        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood), cell_report_participants(count)`)
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
@@ -66,14 +66,35 @@ const CellReports = () => {
     return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
   };
 
+  const canEditReport = (r: any) => {
+    return hasPermission("edit_cell_report");
+  };
+
+  const canDeleteReport = () => {
+    return hasPermission("delete_cell_report");
+  };
+
+  const canSubmitNewReport = () => {
+    return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
+  };
+
+  const reportHasActions = (r: any) => canEditReport(r) || canDeleteReport();
+  const anyReportHasActions = filteredReports.some((r: any) => reportHasActions(r));
+
+  const getStreetLine = (cell: any) => {
+    if (!cell) return "";
+    const parts = [cell.street, cell.number].filter(Boolean).join(" ");
+    return [parts, cell.complement].filter(Boolean).join(" - ");
+  };
+
   const ActionButtons = ({ r }: { r: any }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("edit_cell") || hasPermission("create_cell") || (hasPermission("edit_own_data") && isOwnCellReport(r))) && (
+      {canEditReport(r) && (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       )}
-      {hasPermission("delete_cell") && (
+      {canDeleteReport() && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -114,11 +135,17 @@ const CellReports = () => {
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
+                {(getStreetLine(r.cells) || r.cells?.neighborhood) && (
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                    {getStreetLine(r.cells) && <p>{getStreetLine(r.cells)}</p>}
+                    {r.cells?.neighborhood && <p>{r.cells.neighborhood}</p>}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
                 </p>
               </div>
-              <ActionButtons r={r} />
+              {reportHasActions(r) && <ActionButtons r={r} />}
             </div>
 
             {/* Status + attendance */}
@@ -154,7 +181,7 @@ const CellReports = () => {
             </h1>
             <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
-          {(hasPermission("create_cell") || hasPermission("edit_cell")) && (
+          {canSubmitNewReport() && (
             <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório
@@ -185,18 +212,28 @@ const CellReports = () => {
                     <TableHead>Tema</TableHead>
                     <TableHead className="text-center">Presenças</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Ações</TableHead>
+                    {anyReportHasActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : filteredReports.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
                   ) : (
                     filteredReports.map((r: any) => (
                       <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.cells?.leader?.name || "Célula sem líder"}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col leading-tight">
+                            <span>{r.cells?.leader?.name || "Célula sem líder"}</span>
+                            {getStreetLine(r.cells) && (
+                              <span className="text-xs font-normal text-muted-foreground">{getStreetLine(r.cells)}</span>
+                            )}
+                            {r.cells?.neighborhood && (
+                              <span className="text-xs font-normal text-muted-foreground">{r.cells.neighborhood}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
                             <span>{format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })}</span>
@@ -215,7 +252,7 @@ const CellReports = () => {
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell><StatusBadge r={r} /></TableCell>
-                        <TableCell><ActionButtons r={r} /></TableCell>
+                        {anyReportHasActions && <TableCell>{reportHasActions(r) && <ActionButtons r={r} />}</TableCell>}
                       </TableRow>
                     ))
                   )}

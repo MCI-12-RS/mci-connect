@@ -98,15 +98,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data?.email) {
         email = data.email;
       } else {
-        throw new Error("CPF ou celular não encontrado ou não vinculado a um e-mail.");
+        const reason = "CPF ou celular não encontrado ou não vinculado a um e-mail.";
+        await supabase.rpc("log_auth_event", {
+          _action: "login_failed",
+          _success: false,
+          _identifier: login,
+          _reason: reason,
+        }).then(() => {}, () => {});
+        throw new Error(reason);
       }
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) {
+      await supabase.rpc("log_auth_event", {
+        _action: "login_failed",
+        _success: false,
+        _identifier: login,
+        _reason: error.message,
+      }).then(() => {}, () => {});
+      throw error;
+    }
+
+    // Logged in — register success event
+    await supabase.rpc("log_auth_event", {
+      _action: "login",
+      _success: true,
+      _identifier: login,
+      _reason: null,
+    }).then(() => {}, () => {});
   };
 
   const signOut = async () => {
+    await supabase.rpc("log_auth_event", {
+      _action: "logout",
+      _success: true,
+      _identifier: null,
+      _reason: null,
+    }).then(() => {}, () => {});
     await supabase.auth.signOut();
   };
 

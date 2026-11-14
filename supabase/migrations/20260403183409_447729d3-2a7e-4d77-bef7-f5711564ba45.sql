@@ -1,0 +1,1 @@
+ALTER TYPE public.permission_action ADD VALUE IF NOT EXISTS 'view_own_ministry_dashboard';
