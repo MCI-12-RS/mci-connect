@@ -3,8 +3,10 @@
 // Segurança (passo E1.02 de docs/migracao.md no repositório apps-mci):
 // - quem chama precisa estar autenticado e ter a permissão `create_member`;
 // - só as colunas de cadastro listadas em MEMBER_FIELDS são aceitas;
-// - sem `assign_role`, o membro só recebe o perfil padrão. Com `assign_role`,
-//   não é possível atribuir um perfil com permissões que quem chama não tem;
+// - sem `assign_role` (ou `manage_roles`), o membro só recebe o perfil padrão.
+//   Com elas, não é possível atribuir um perfil com permissões que quem chama
+//   não tem;
+// - erros do banco e do Auth viram mensagens genéricas, sem detalhes internos;
 // - o membro é gravado com a sessão de quem chama, então o RLS de `members` vale
 //   e a auditoria registra o autor;
 // - se a gravação do membro falhar, a conta de acesso recém-criada é removida.
@@ -35,6 +37,34 @@ class HttpError extends Error {
   }
 }
 
+// Traduz erros do Postgres/PostgREST sem expor nomes de constraints ou valores.
+function insertErrorToHttp(error: { code?: string; message?: string }): HttpError {
+  switch (error.code) {
+    case '23505': return new HttpError(409, 'Já existe um membro com este e-mail, CPF ou celular.')
+    case '23503': return new HttpError(400, 'Líder, cônjuge ou função informados não existem.')
+    case '23514': return new HttpError(400, 'Algum campo tem um valor inválido.')
+    case '22P02':
+    case '22007':
+    case '22008': return new HttpError(400, 'Algum campo tem um formato inválido.')
+    case '42501': return new HttpError(403, 'Você não tem permissão para cadastrar membros.')
+    default:
+      console.error('create-user-admin: falha ao inserir membro', error)
+      return new HttpError(400, 'Não foi possível salvar o cadastro.')
+  }
+}
+
+function authErrorToHttp(error: { code?: string; message?: string; status?: number }): HttpError {
+  if (error.code === 'email_exists' || error.code === 'user_already_exists') {
+    return new HttpError(409, 'Já existe uma conta de acesso com este e-mail.')
+  }
+  if (error.code === 'weak_password') return new HttpError(400, 'A senha não atende aos requisitos mínimos.')
+  if (error.code === 'email_address_invalid' || error.code === 'validation_failed') {
+    return new HttpError(400, 'E-mail inválido.')
+  }
+  console.error('create-user-admin: falha ao criar a conta de acesso', error)
+  return new HttpError(400, 'Não foi possível criar o acesso.')
+}
+
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -53,18 +83,36 @@ async function rolePermissions(admin: SupabaseClient, roleId: string): Promise<S
   return new Set((data ?? []).map((row: { permission: string }) => row.permission))
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 async function resolveRole(
   admin: SupabaseClient,
   callerId: string,
-  requestedRoleId: string | null | undefined,
+  requested: unknown,
 ): Promise<string | null> {
+  // Vazio ou ausente = sem pedido de perfil (usa o padrão).
+  let requestedRoleId: string | null = null
+  if (requested !== undefined && requested !== null && requested !== '') {
+    if (typeof requested !== 'string' || !UUID_RE.test(requested)) {
+      throw new HttpError(400, 'Função inválida.')
+    }
+    requestedRoleId = requested
+  }
+
   const { data: defaultRole, error } = await admin.from('roles').select('id').eq('is_default', true).maybeSingle()
   if (error) throw error
 
   const roleId = requestedRoleId ?? defaultRole?.id ?? null
   if (!roleId || roleId === defaultRole?.id) return roleId
 
-  if (!(await hasPermission(admin, callerId, 'assign_role'))) {
+  const { data: role, error: roleError } = await admin.from('roles').select('id').eq('id', roleId).maybeSingle()
+  if (roleError) throw roleError
+  if (!role) throw new HttpError(400, 'Função inválida.')
+
+  // O formulário libera a escolha de função para assign_role ou manage_roles.
+  const canAssign = (await hasPermission(admin, callerId, 'assign_role'))
+    || (await hasPermission(admin, callerId, 'manage_roles'))
+  if (!canAssign) {
     throw new HttpError(403, 'Você não tem permissão para definir a função do membro.')
   }
 
@@ -108,7 +156,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => null)
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
     const password = typeof body?.password === 'string' ? body.password : ''
-    const input = (body?.memberData ?? {}) as Record<string, unknown>
+    const rawInput = body?.memberData ?? {}
+    if (typeof rawInput !== 'object' || Array.isArray(rawInput)) {
+      throw new HttpError(400, 'Dados do membro inválidos.')
+    }
+    const input = rawInput as Record<string, unknown>
     if (!email || !password) throw new HttpError(400, 'E-mail e senha são obrigatórios.')
     if (typeof input.name !== 'string' || !input.name.trim()) throw new HttpError(400, 'O nome é obrigatório.')
 
@@ -117,7 +169,7 @@ serve(async (req) => {
       if (field in input) memberRow[field] = input[field]
     }
     memberRow.email = email
-    memberRow.role_id = await resolveRole(admin, caller.id, memberRow.role_id as string | null | undefined)
+    memberRow.role_id = await resolveRole(admin, caller.id, memberRow.role_id)
 
     // 4. Conta de acesso
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -127,7 +179,7 @@ serve(async (req) => {
       user_metadata: { name: input.name },
     })
     if (authError || !authData.user) {
-      throw new HttpError(400, authError?.message ?? 'Não foi possível criar o acesso.')
+      throw authError ? authErrorToHttp(authError) : new HttpError(400, 'Não foi possível criar o acesso.')
     }
     createdUserId = authData.user.id
 
@@ -139,20 +191,22 @@ serve(async (req) => {
     const { error: insertError } = await asCaller
       .from('members')
       .insert({ ...memberRow, auth_user_id: createdUserId })
-    if (insertError) throw new HttpError(400, insertError.message)
+    if (insertError) throw insertErrorToHttp(insertError)
+
+    // O membro foi gravado: a partir daqui a conta de acesso não deve ser desfeita.
+    const authUserId = createdUserId
+    createdUserId = null
 
     const { data: member, error: readError } = await admin
-      .from('members').select('*').eq('auth_user_id', createdUserId).single()
-    if (readError) throw readError
-
-    createdUserId = null // deu certo: nada a desfazer
-    return json({ member }, 200)
+      .from('members').select('*').eq('auth_user_id', authUserId).maybeSingle()
+    if (readError) console.error('create-user-admin: membro gravado, mas a releitura falhou', readError)
+    return json({ member: member ?? null }, 200)
   } catch (error) {
     if (createdUserId) {
       await admin.auth.admin.deleteUser(createdUserId).catch(() => undefined)
     }
-    const status = error instanceof HttpError ? error.status : 500
-    const message = error instanceof Error ? error.message : 'Erro inesperado.'
-    return json({ error: message }, status)
+    if (error instanceof HttpError) return json({ error: error.message }, error.status)
+    console.error('create-user-admin: erro inesperado', error)
+    return json({ error: 'Erro inesperado ao cadastrar o membro.' }, 500)
   }
 })
