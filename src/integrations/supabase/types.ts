@@ -438,6 +438,7 @@ export type Database = {
         Returns: undefined
       }
       _mask_identifier: { Args: { _id: string }; Returns: string }
+      can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_manage_own_cell: {
         Args: { _cell_id: string; _user_id: string }
         Returns: boolean
