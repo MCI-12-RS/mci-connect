@@ -7,26 +7,18 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
-  }
   public: {
     Tables: {
       cell_report_participants: {
         Row: {
-          id: string
           member_id: string
           report_id: string
         }
         Insert: {
-          id?: string
           member_id: string
           report_id: string
         }
         Update: {
-          id?: string
           member_id?: string
           report_id?: string
         }
@@ -111,7 +103,6 @@ export type Database = {
           leader_id: string | null
           meeting_day: string | null
           meeting_time: string | null
-          name: string
           neighborhood: string | null
           number: string | null
           state: string | null
@@ -131,7 +122,6 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
-          name: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
@@ -151,7 +141,6 @@ export type Database = {
           leader_id?: string | null
           meeting_day?: string | null
           meeting_time?: string | null
-          name?: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
@@ -244,6 +233,7 @@ export type Database = {
           cpf: string | null
           created_at: string
           email: string | null
+          female_cells: number | null
           g12_level: number
           gender: string | null
           has_leadership: boolean
@@ -253,6 +243,7 @@ export type Database = {
           is_baptized: boolean
           is_pastor: boolean
           leader_id: string | null
+          male_cells: number | null
           mobile_whatsapp: string | null
           name: string
           neighborhood: string | null
@@ -278,6 +269,7 @@ export type Database = {
           cpf?: string | null
           created_at?: string
           email?: string | null
+          female_cells?: number | null
           g12_level?: number
           gender?: string | null
           has_leadership?: boolean
@@ -287,6 +279,7 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
+          male_cells?: number | null
           mobile_whatsapp?: string | null
           name: string
           neighborhood?: string | null
@@ -312,6 +305,7 @@ export type Database = {
           cpf?: string | null
           created_at?: string
           email?: string | null
+          female_cells?: number | null
           g12_level?: number
           gender?: string | null
           has_leadership?: boolean
@@ -321,6 +315,7 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
+          male_cells?: number | null
           mobile_whatsapp?: string | null
           name?: string
           neighborhood?: string | null
@@ -421,6 +416,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _cell_label_by_leader: { Args: { _leader_id: string }; Returns: string }
       _log_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -680,3 +676,4 @@ export const Constants = {
     },
   },
 } as const
+
