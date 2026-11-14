@@ -185,10 +185,14 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           body: { 
             email: cleanData.email, 
             password: finalPassword, 
-            memberData: cleanData 
+            memberData: cleanData
           }
         });
-        if (error) throw error;
+        if (error) {
+          // Respostas 4xx/5xx da função trazem a mensagem em { error }.
+          const detail = await error.context?.json?.().catch(() => null);
+          throw new Error(detail?.error ?? error.message);
+        }
         if (result.error) throw new Error(result.error);
         return result;
       }

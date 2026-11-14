@@ -1,4 +1,7 @@
 project_id = "gkhnjhmgeceoaqeynhrj"
 
+# A verificação do JWT é feita dentro da função (auth.getUser), que funciona
+# com as chaves antigas e com as novas (publishable/secret). Ver o cabeçalho de
+# supabase/functions/create-user-admin/index.ts.
 [functions.create-user-admin]
 verify_jwt = false
