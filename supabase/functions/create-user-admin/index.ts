@@ -48,7 +48,8 @@ function insertErrorToHttp(error: { code?: string; message?: string }): HttpErro
     case '22008': return new HttpError(400, 'Algum campo tem um formato inválido.')
     case '42501': return new HttpError(403, 'Você não tem permissão para cadastrar membros.')
     default:
-      console.error('create-user-admin: falha ao inserir membro', error)
+      // Sem `details`: ele pode trazer valores digitados (e-mail, CPF).
+      console.error('create-user-admin: falha ao inserir membro', error.code, error.message)
       return new HttpError(400, 'Não foi possível salvar o cadastro.')
   }
 }
@@ -203,7 +204,10 @@ serve(async (req) => {
     return json({ member: member ?? null }, 200)
   } catch (error) {
     if (createdUserId) {
-      await admin.auth.admin.deleteUser(createdUserId).catch(() => undefined)
+      const { error: rollbackError } = await admin.auth.admin.deleteUser(createdUserId)
+      if (rollbackError) {
+        console.error('create-user-admin: rollback falhou, conta de acesso órfã', createdUserId, rollbackError.message)
+      }
     }
     if (error instanceof HttpError) return json({ error: error.message }, error.status)
     console.error('create-user-admin: erro inesperado', error)
