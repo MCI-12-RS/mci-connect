@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
+import { MEMBER_ROW_SELECT, type MemberRow } from "@/lib/members/fields";
 
-type Member = Database["public"]["Tables"]["members"]["Row"];
+type Member = MemberRow;
 
 interface AuthContextType {
   session: Session | null;
@@ -28,9 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const loadMemberData = async (userId: string) => {
+    // Pela members_view: o próprio cadastro vem sem máscara.
     const { data: memberData } = await supabase
-      .from("members")
-      .select("*")
+      .from("members_view")
+      .select(MEMBER_ROW_SELECT)
       .eq("auth_user_id", userId)
       .maybeSingle();
 
