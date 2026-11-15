@@ -1,0 +1,110 @@
+# Deploy de produção, parte 2 de 2: front (Vercel).
+# Actions → "Deploy: promote (Vercel)" → Run workflow.
+#
+# Aponta o domínio de produção para o deploy da Vercel do commit escolhido.
+# Antes de promover, confere que o banco não tem migrations pendentes para esse
+# commit: o front nunca vai ao ar antes das migrations de que ele depende. Se
+# houver pendências, rode antes "Deploy: banco (Supabase)".
+#
+# Configuração no GitHub (Settings → Secrets and variables → Actions):
+#   secrets:   SUPABASE_DB_URL, VERCEL_TOKEN
+#   variables: VERCEL_PROJECT_ID, VERCEL_TEAM_ID
+#
+# Para o promote fazer sentido, a Vercel não deve atribuir os domínios de
+# produção sozinha a cada merge ("auto-assign custom domains" desligado).
+
+name: "Deploy: promote (Vercel)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag ou commit a colocar no ar (precisa ter um deploy de produção na Vercel)
+        required: true
+        default: main
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_CLI_VERSION: 2.58.5
+
+jobs:
+  promote:
+    name: Promote na Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Conferir que o banco está em dia
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          out=$(supabase db push --db-url "$DB_URL" --dry-run 2>&1)
+          echo "$out"
+          if grep -q "Would push" <<<"$out"; then
+            echo "::error::Há migrations pendentes para este commit. Rode antes o workflow \"Deploy: banco (Supabase)\"."
+            exit 1
+          fi
+
+      - name: Encontrar o deploy da Vercel deste commit
+        id: vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          resp=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&target=production&limit=50")
+          dep=$(jq -c --arg sha "$SHA" '[.deployments[] | select(.meta.githubCommitSha == $sha)] | first // empty' <<<"$resp")
+          if [ -z "$dep" ]; then
+            echo "::error::Nenhum deploy de produção da Vercel para o commit $SHA. Só commits da branch de produção (main) geram esse deploy."
+            exit 1
+          fi
+          state=$(jq -r '.state // .readyState' <<<"$dep")
+          if [ "$state" != "READY" ]; then
+            echo "::error::O deploy da Vercel do commit $SHA está em '$state'. Espere ficar READY e rode de novo."
+            exit 1
+          fi
+          echo "deployment_id=$(jq -r '.uid' <<<"$dep")" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=https://$(jq -r '.url' <<<"$dep")" >> "$GITHUB_OUTPUT"
+
+      - name: Promover para produção
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+          DEPLOYMENT_ID: ${{ steps.vercel.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.vercel.outputs.deployment_url }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          code=$(curl -sS -o /tmp/promote.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/promote/$DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID")
+          if [ "$code" = "409" ] && grep -q "already the current production deployment" /tmp/promote.json; then
+            msg="Commit \`$SHA\` já estava em produção: deploy \`$DEPLOYMENT_ID\` ($DEPLOYMENT_URL)"
+          elif [ "${code:0:1}" = "2" ]; then
+            msg="Commit \`$SHA\` promovido para produção: deploy \`$DEPLOYMENT_ID\` ($DEPLOYMENT_URL)"
+          else
+            echo "::error::Promote falhou (HTTP $code): $(cat /tmp/promote.json)"
+            exit 1
+          fi
+          echo "$msg"
+          {
+            echo "## Front (Vercel)"
+            echo "$msg"
+          } >> "$GITHUB_STEP_SUMMARY"

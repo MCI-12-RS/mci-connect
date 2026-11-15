@@ -1,0 +1,99 @@
+# Deploy de produção, parte 1 de 2: banco (Supabase).
+# Actions → "Deploy: banco (Supabase)" → Run workflow.
+#
+# Mostra as migrations pendentes no resumo da execução, aplica (`supabase db push`)
+# e publica as Edge Functions da lista. Com "somente plano", só mostra o que faria.
+# Depois rode "Deploy: promote (Vercel)" para colocar o front no ar.
+#
+# Configuração no GitHub (Settings → Secrets and variables → Actions):
+#   secrets:   SUPABASE_DB_URL (pooler, com senha), SUPABASE_ACCESS_TOKEN
+#   variables: SUPABASE_PROJECT_REF
+#
+# A Supabase CLI lê variáveis SUPABASE_* do ambiente como configuração dela, por
+# isso a URL do banco é passada como DB_URL, e não como SUPABASE_DB_URL.
+
+name: "Deploy: banco (Supabase)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag ou commit cujas migrations e funções serão publicadas
+        required: true
+        default: main
+      somente_plano:
+        description: Só mostrar o que seria feito (dry run), sem alterar nada
+        type: boolean
+        default: false
+      publicar_funcoes:
+        description: Publicar as Edge Functions da lista
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_CLI_VERSION: 2.58.5
+  # Lista explícita de funções publicadas. change-member-password fica de fora
+  # até o passo E2.03 do plano de migração.
+  EDGE_FUNCTIONS: create-user-admin get-user-email
+
+jobs:
+  banco:
+    name: Banco e Edge Functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Plano (dry run)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          out=$(supabase db push --db-url "$DB_URL" --dry-run 2>&1)
+          echo "$out"
+          {
+            echo "## Banco (Supabase) — commit \`$(git rev-parse --short HEAD)\`"
+            echo '```'
+            echo "$out"
+            echo '```'
+            if [ "${{ inputs.publicar_funcoes }}" = "true" ]; then
+              echo "Edge Functions: \`${EDGE_FUNCTIONS}\`"
+            else
+              echo "Edge Functions: não serão publicadas."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Aplicar migrations
+        if: ${{ !inputs.somente_plano }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$DB_URL" --yes
+
+      - name: Publicar Edge Functions
+        if: ${{ !inputs.somente_plano && inputs.publicar_funcoes }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          for fn in $EDGE_FUNCTIONS; do
+            echo "::group::$fn"
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+            echo "::endgroup::"
+          done
+          echo "Edge Functions publicadas: \`${EDGE_FUNCTIONS}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resultado
+        if: ${{ inputs.somente_plano }}
+        run: |
+          echo "Somente plano: nada foi alterado." >> "$GITHUB_STEP_SUMMARY"
