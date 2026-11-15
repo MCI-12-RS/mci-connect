@@ -22,7 +22,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS members_auth_user_id_key
   ON public.members (auth_user_id)
   WHERE auth_user_id IS NOT NULL;
 
--- 4. Quem pode atribuir (ou tirar) uma função
+-- 4. Quem pode atribuir (ou tirar) uma função.
+--    Com _role_id NULL ("tirar a função"), só vale a primeira parte: exige
+--    assign_role ou manage_roles. No trigger, quem tira a função também precisa
+--    poder atribuir a função atual da pessoa, então não rebaixa quem está acima.
 CREATE OR REPLACE FUNCTION public.can_assign_role(_role_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -47,8 +50,10 @@ $$;
 REVOKE ALL ON FUNCTION public.can_assign_role(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.can_assign_role(uuid) TO authenticated;
 
--- SECURITY INVOKER de propósito: current_user diferencia a chamada direta da API
--- (`authenticated`) das atualizações feitas por triggers e funções internas.
+-- SECURITY INVOKER de propósito: current_user diferencia a chamada da API
+-- (`authenticated`/`anon`) das atualizações feitas por triggers e funções
+-- internas (SECURITY DEFINER do `postgres`) e pela service role. A lista é de
+-- papéis confiáveis: qualquer outro papel cai nas regras (falha fechada).
 CREATE OR REPLACE FUNCTION public.enforce_member_write_rules()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -59,9 +64,11 @@ DECLARE
   _default_role uuid;
   _blocked text[] := ARRAY[]::text[];
 BEGIN
-  IF current_user <> 'authenticated' THEN
+  IF current_user IN ('postgres', 'service_role', 'supabase_admin') THEN
     RETURN NEW;
   END IF;
+
+  SELECT id INTO _default_role FROM public.roles WHERE is_default LIMIT 1;
 
   -- 3. Colunas calculadas pelo servidor
   IF TG_OP = 'UPDATE' THEN
@@ -92,11 +99,13 @@ BEGIN
     IF OLD.auth_user_id = _uid THEN
       RAISE EXCEPTION 'Ninguém pode alterar a própria função.' USING ERRCODE = '42501';
     END IF;
-    IF NOT public.can_assign_role(OLD.role_id) OR NOT public.can_assign_role(NEW.role_id) THEN
+    -- Dar a função padrão a quem não tem função é livre, como no cadastro.
+    IF NOT (OLD.role_id IS NULL AND NEW.role_id = _default_role)
+       AND (NOT public.can_assign_role(OLD.role_id) OR NOT public.can_assign_role(NEW.role_id)) THEN
       RAISE EXCEPTION 'Você não tem permissão para alterar a função deste membro.' USING ERRCODE = '42501';
     END IF;
   ELSIF TG_OP = 'INSERT' AND NEW.role_id IS NOT NULL THEN
-    SELECT id INTO _default_role FROM public.roles WHERE is_default LIMIT 1;
+    -- Cadastro sem função (role_id NULL) é aceito: o membro fica sem permissões.
     IF NEW.role_id IS DISTINCT FROM _default_role AND NOT public.can_assign_role(NEW.role_id) THEN
       RAISE EXCEPTION 'Você não tem permissão para atribuir esta função.' USING ERRCODE = '42501';
     END IF;
