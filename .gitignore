@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Estado local da Supabase CLI
+supabase/.temp/
+supabase/.branches/
+
+# Playwright
+playwright-report/
+test-results/
