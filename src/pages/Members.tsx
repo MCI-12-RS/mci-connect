@@ -66,10 +66,8 @@ const Members = () => {
     queryKey: ["members-leader-names", missingLeaderIds.sort().join(",")],
     enabled: missingLeaderIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select("id,name")
-        .in("id", missingLeaderIds);
+      // Líderes fora do escopo de quem consulta: a função devolve só id e nome.
+      const { data, error } = await supabase.rpc("member_names", { _ids: missingLeaderIds });
       if (error) throw error;
       return data ?? [];
     },

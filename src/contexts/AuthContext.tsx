@@ -98,27 +98,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data?.email) {
         email = data.email;
       } else {
-        const reason = "CPF ou celular não encontrado ou não vinculado a um e-mail.";
-        await supabase.rpc("log_auth_event", {
-          _action: "login_failed",
-          _success: false,
-          _identifier: login,
-          _reason: reason,
-        }).then(() => {}, () => {});
-        throw new Error(reason);
+        throw new Error("CPF ou celular não encontrado ou não vinculado a um e-mail.");
       }
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      await supabase.rpc("log_auth_event", {
-        _action: "login_failed",
-        _success: false,
-        _identifier: login,
-        _reason: error.message,
-      }).then(() => {}, () => {});
-      throw error;
-    }
+    // Falhas de login não são registradas daqui: sem sessão, o registro poderia
+    // ser forjado. Elas passam a ser registradas no servidor (passo E1.04).
+    if (error) throw error;
 
     // Logged in — register success event
     await supabase.rpc("log_auth_event", {

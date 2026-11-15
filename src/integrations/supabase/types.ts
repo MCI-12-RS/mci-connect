@@ -462,6 +462,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      member_names: {
+        Args: { _ids: string[] }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
