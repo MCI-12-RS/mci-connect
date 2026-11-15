@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
+import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,9 +17,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Database } from "@/integrations/supabase/types";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useMembersList } from "@/hooks/use-members-list";
+import { DEFAULT_PAGE_SIZE, lastPage, parsePage, parsePageSize } from "@/lib/pagination";
+import type { MemberRow } from "@/lib/members/fields";
 
-type Member = Database["public"]["Tables"]["members"]["Row"];
+type Member = MemberRow;
 
 const formatPhone = (value?: string | null): string => {
   if (!value) return "";
@@ -28,58 +33,67 @@ const formatPhone = (value?: string | null): string => {
 };
 
 const Members = () => {
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = parsePage(searchParams.get("page"));
+  const pageSize = parsePageSize(searchParams.get("size"));
+  const search = searchParams.get("q") ?? "";
+  const [searchInput, setSearchInput] = useState(search);
+  const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const { hasPermission, user, member: currentMember } = useAuth();
+  const { hasPermission, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  const canSeeSensitive = (m: Member) =>
-    hasPermission("view_sensitive_data", "view_own_ministry") ||
-    (currentMember && m.id === currentMember.id);
+  // Página, tamanho e busca ficam na URL; os valores padrão não aparecem nela.
+  const updateParams = (changes: { page?: number; size?: number; q?: string }) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (changes.page !== undefined) {
+          if (changes.page > 1) next.set("page", String(changes.page));
+          else next.delete("page");
+        }
+        if (changes.size !== undefined) {
+          if (changes.size !== DEFAULT_PAGE_SIZE) next.set("size", String(changes.size));
+          else next.delete("size");
+        }
+        if (changes.q !== undefined) {
+          if (changes.q) next.set("q", changes.q);
+          else next.delete("q");
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
-  const { data: members = [], isLoading } = useQuery({
-    queryKey: ["members", search],
-    queryFn: async () => {
-      let query = supabase.from("members").select("*").order("name");
-      if (search) {
-        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,cpf.ilike.%${search}%`);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  // Mudar a busca volta para a página 1.
+  useEffect(() => {
+    if (debouncedSearch !== search) updateParams({ q: debouncedSearch, page: 1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
-  const visibleLeaderMap = new Map((members as any[]).map((m) => [m.id, m.name]));
-  const missingLeaderIds = Array.from(
-    new Set(
-      (members as any[])
-        .map((m) => m.leader_id)
-        .filter((id): id is string => !!id && !visibleLeaderMap.has(id))
-    )
-  );
+  // A URL mudou por fora (link do menu, botão voltar): o campo acompanha.
+  useEffect(() => {
+    if (search !== debouncedSearch) setSearchInput(search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
-  const { data: extraLeaders = [] } = useQuery({
-    queryKey: ["members-leader-names", missingLeaderIds.sort().join(",")],
-    enabled: missingLeaderIds.length > 0,
-    queryFn: async () => {
-      // Líderes fora do escopo de quem consulta: a função devolve só id e nome,
-      // no máximo 500 por chamada.
-      const names: { id: string; name: string }[] = [];
-      for (let i = 0; i < missingLeaderIds.length; i += 500) {
-        const { data, error } = await supabase.rpc("member_names", { _ids: missingLeaderIds.slice(i, i + 500) });
-        if (error) throw error;
-        names.push(...(data ?? []));
-      }
-      return names;
-    },
-  });
+  const { data, isLoading, isError, isPlaceholderData } = useMembersList({ page, pageSize, search });
+  const members = data?.rows ?? [];
+  const total = data?.total ?? 0;
 
-  const leaderMap = new Map(visibleLeaderMap);
-  (extraLeaders as any[]).forEach((l) => leaderMap.set(l.id, l.name));
+  // Página além do fim (ex.: depois de uma exclusão): vai para a última.
+  useEffect(() => {
+    if (data && page > lastPage(data.total, pageSize)) updateParams({ page: lastPage(data.total, pageSize) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, page, pageSize]);
+
+  // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
+  const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -114,7 +128,7 @@ const Members = () => {
   const canDeleteAny = hasPermission("delete_member");
   const showActions = canEditAny || canDeleteAny;
 
-  const DeleteButton = ({ member }: { member: any }) => (
+  const DeleteButton = ({ member }: { member: Member }) => (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size="icon">
@@ -136,7 +150,7 @@ const Members = () => {
     </AlertDialog>
   );
 
-  const LevelBadge = ({ m }: { m: any }) => {
+  const LevelBadge = ({ m }: { m: Member }) => {
     if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
     if (!m.leader_id) return <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">Sem Liderança</Badge>;
     return <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>;
@@ -144,11 +158,12 @@ const Members = () => {
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
+    if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os membros</p>;
     if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
 
     return (
-      <div className="divide-y divide-border">
-        {members.map((m: any) => (
+      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+        {members.map((m) => (
           <div key={m.id} className="px-4 py-4 space-y-3">
             {/* Header: Avatar + Name + Actions */}
             <div className="flex items-center gap-3">
@@ -191,9 +206,9 @@ const Members = () => {
             </div>
 
             {/* Leader */}
-            {m.leader_id && leaderMap.get(m.leader_id) && (
+            {m.leader_name && (
               <p className="text-xs text-muted-foreground">
-                Líder: <span className="font-medium text-foreground">{leaderMap.get(m.leader_id)}</span>
+                Líder: <span className="font-medium text-foreground">{m.leader_name}</span>
               </p>
             )}
           </div>
@@ -225,12 +240,13 @@ const Members = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por nome, e-mail ou CPF..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  maxLength={100}
                   className="pl-10"
                 />
               </div>
-              <Badge variant="secondary">{members.length}</Badge>
+              <Badge variant="secondary">{total.toLocaleString("pt-BR")}</Badge>
             </div>
           </CardHeader>
 
@@ -256,13 +272,17 @@ const Members = () => {
                     <TableRow>
                       <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                     </TableRow>
+                  ) : isError ? (
+                    <TableRow>
+                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-destructive">Erro ao carregar os membros</TableCell>
+                    </TableRow>
                   ) : members.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
                     </TableRow>
                   ) : (
-                    members.map((m: any) => (
-                      <TableRow key={m.id}>
+                    members.map((m) => (
+                      <TableRow key={m.id} className={isPlaceholderData ? "opacity-60" : undefined}>
                         <TableCell>
                           <Avatar className="w-10 h-10 border">
                             <AvatarImage src={m.avatar_url || ""} />
@@ -288,7 +308,7 @@ const Members = () => {
                             <span className="text-sm text-muted-foreground">{m.total_cells} Célula{m.total_cells !== 1 ? "s" : ""}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{m.leader_id ? leaderMap.get(m.leader_id) || "—" : "—"}</TableCell>
+                        <TableCell className="text-sm">{m.leader_name || "—"}</TableCell>
                         <TableCell>
                           <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
                             {m.is_active ? "Ativo" : "Inativo"}
@@ -312,6 +332,17 @@ const Members = () => {
                 </TableBody>
               </Table>
             </CardContent>
+          )}
+
+          {!isLoading && !isError && (
+            <ListPagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              itemLabel={["membro", "membros"]}
+              onPageChange={(next) => updateParams({ page: next })}
+              onPageSizeChange={(size) => updateParams({ size, page: 1 })}
+            />
           )}
         </Card>
 

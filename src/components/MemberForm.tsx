@@ -14,10 +14,12 @@ import { Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
+import { toMemberWritePayload, type MemberRow } from "@/lib/members/fields";
 
-type Member = Database["public"]["Tables"]["members"]["Row"] & { instagram?: string; avatar_url?: string };
-type MemberInsert = Database["public"]["Tables"]["members"]["Insert"] & { instagram?: string; avatar_url?: string };
+type Member = MemberRow;
+type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
 
+const FAKE_EMAIL_DOMAIN = "@mci12fakemail.com";
 
 interface MemberFormProps {
   member: Member | null;
@@ -58,7 +60,7 @@ const maskCEP = (value: string) => {
 const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasPermission, isSystem, member: currentMember } = useAuth();
+  const { hasPermission, isSystem } = useAuth();
   const isEditing = !!member;
   const [cepLoading, setCepLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -66,8 +68,10 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const canAssignRole = isSystem || hasPermission("assign_role", "manage_roles");
-  const isOwnData = !!member && !!currentMember && member.id === currentMember.id;
-  const canViewSensitive = isOwnData || isSystem || hasPermission("view_sensitive_data");
+  // Na edição, a members_view diz se os dados sensíveis deste membro estão
+  // visíveis (o próprio cadastro ou view_sensitive_data). No cadastro, quem
+  // tem create_member preenche todos os campos (E1.08, RN-11 e RN-12).
+  const canViewSensitive = !isEditing || member?.sensitive_visible === true;
   const canChangePassword = isSystem || hasPermission("change_member_password");
   const canEditMinistry = isSystem || hasPermission("edit_member");
 
@@ -150,10 +154,12 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const mutation = useMutation({
     mutationFn: async (data: MemberInsert) => {
-      let email = data.email?.trim();
+      // E-mail em branco: na edição, mantém o atual (o fictício, se for o caso);
+      // no cadastro, gera um fictício, porque o Auth exige e-mail.
+      let email: string | undefined = data.email?.trim() || undefined;
 
       if (!email) {
-        if (isEditing && member?.email?.endsWith("@mci12fakemail.com")) {
+        if (isEditing && member?.email?.endsWith(FAKE_EMAIL_DOMAIN)) {
           email = member.email;
         } else if (!isEditing) {
           const normalizedName = (data.name || "membro")
@@ -166,26 +172,24 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             .replace(/^_|_$/g, "");
             
           const hash = Math.random().toString(36).substring(2, 8);
-          email = `${normalizedName}_${hash}@mci12fakemail.com`;
+          email = `${normalizedName}_${hash}${FAKE_EMAIL_DOMAIN}`;
         }
       }
 
-      const cleanData = {
-        ...data,
-        email,
-        cpf: data.cpf?.replace(/\D/g, ""),
-        mobile_whatsapp: data.mobile_whatsapp?.replace(/\D/g, ""),
-        phone: data.phone?.replace(/\D/g, ""),
-        zip_code: data.zip_code?.replace(/\D/g, ""),
-      };
+      // Só os campos que o usuário vê e pode editar (lista branca). O banco
+      // também ignora os dados sensíveis enviados por quem não os vê.
+      const payload = toMemberWritePayload(
+        { ...data, email },
+        { sensitiveVisible: canViewSensitive, canEditMinistry, includeRole: !isEditing || canAssignRole },
+      );
 
       if (!isEditing) {
         const finalPassword = password || "123456";
         const { data: result, error } = await supabase.functions.invoke('create-user-admin', {
-          body: { 
-            email: cleanData.email, 
-            password: finalPassword, 
-            memberData: cleanData
+          body: {
+            email: payload.email,
+            password: finalPassword,
+            memberData: payload,
           }
         });
         if (error) {
@@ -198,7 +202,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       }
 
       if (isEditing && member) {
-        const { error } = await supabase.from("members").update(cleanData).eq("id", member.id);
+        const { error } = await supabase.from("members").update(payload).eq("id", member.id);
         if (error) throw error;
       }
     },
@@ -207,7 +211,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       toast({ title: isEditing ? "Membro atualizado com sucesso" : "Membro criado com sucesso" });
       onClose();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     },
   });
@@ -221,7 +225,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     mutation.mutate(form);
   };
 
-  const update = (field: keyof MemberInsert, value: any) => {
+  const update = (field: keyof MemberInsert, value: string | boolean | null) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -241,8 +245,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       toast({ title: "Senha alterada com sucesso" });
       setPasswordDialogOpen(false);
       setNewPassword("");
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Erro", description: err.message });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro", description: err instanceof Error ? err.message : String(err) });
     } finally {
       setChangingPassword(false);
     }
@@ -252,7 +256,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     update(field, maskFn(value));
   };
 
-  const isFakeEmail = form.email?.endsWith("@mci12fakemail.com");
+  const isFakeEmail = form.email?.endsWith(FAKE_EMAIL_DOMAIN);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -323,15 +327,17 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             <Label htmlFor="birth_date">Data de Nascimento</Label>
             <Input id="birth_date" type="date" value={form.birth_date || ""} onChange={(e) => update("birth_date", e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="spouse">Cônjuge</Label>
-            <AsyncMemberSelect
-              value={form.spouse_id || null}
-              onChange={(v) => update("spouse_id", v)}
-              excludeId={member?.id}
-              placeholder="Buscar cônjuge..."
-            />
-          </div>
+          {canEditMinistry && (
+            <div className="space-y-2">
+              <Label htmlFor="spouse">Cônjuge</Label>
+              <AsyncMemberSelect
+                value={form.spouse_id || null}
+                onChange={(v) => update("spouse_id", v)}
+                excludeId={member?.id}
+                placeholder="Buscar cônjuge..."
+              />
+            </div>
+          )}
           {canViewSensitive && (
             <>
               <div className="space-y-2">

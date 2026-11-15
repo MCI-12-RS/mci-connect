@@ -36,6 +36,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cell_report_participants_report_id_fkey"
             columns: ["report_id"]
             isOneToOne: false
@@ -164,8 +171,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cells_leader_id_fkey"
             columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
             isOneToOne: false
             referencedRelation: "members"
             referencedColumns: ["id"]
@@ -174,7 +202,7 @@ export type Database = {
             foreignKeyName: "cells_timothy_id_fkey"
             columns: ["timothy_id"]
             isOneToOne: false
-            referencedRelation: "members"
+            referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
         ]
@@ -345,6 +373,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "members_role_id_fkey"
             columns: ["role_id"]
             isOneToOne: false
@@ -356,6 +391,13 @@ export type Database = {
             columns: ["spouse_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
         ]
@@ -418,7 +460,88 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      members_view: {
+        Row: {
+          attended_last_30_days: boolean | null
+          auth_user_id: string | null
+          avatar_url: string | null
+          baptism_date: string | null
+          birth_date: string | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
+          created_at: string | null
+          email: string | null
+          female_cells: number | null
+          g12_level: number | null
+          gender: string | null
+          has_leadership: boolean | null
+          id: string | null
+          instagram: string | null
+          is_active: boolean | null
+          is_baptized: boolean | null
+          is_cell_host: boolean | null
+          is_cell_leader: boolean | null
+          is_cell_timothy: boolean | null
+          is_pastor: boolean | null
+          leader_id: string | null
+          leader_name: string | null
+          male_cells: number | null
+          mobile_whatsapp: string | null
+          name: string | null
+          neighborhood: string | null
+          notes: string | null
+          number: string | null
+          phone: string | null
+          role_id: string | null
+          search_text: string | null
+          sensitive_visible: boolean | null
+          spouse_id: string | null
+          state: string | null
+          street: string | null
+          total_cells: number | null
+          total_disciples: number | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _cell_label_by_leader: { Args: { _leader_id: string }; Returns: string }
@@ -469,6 +592,9 @@ export type Database = {
           name: string
         }[]
       }
+      search_normalize: { Args: { _value: string }; Returns: string }
+      sp_now: { Args: never; Returns: string }
+      sp_today: { Args: never; Returns: string }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
@@ -476,6 +602,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      viewer_has: {
+        Args: { _permission: Database["public"]["Enums"]["permission_action"] }
+        Returns: boolean
+      }
+      viewer_member_id: { Args: never; Returns: string }
+      viewer_ministry_member_ids: { Args: never; Returns: string[] }
+      week_start: { Args: { _day: string }; Returns: string }
+      weekday_index: { Args: { _meeting_day: string }; Returns: number }
     }
     Enums: {
       event_action:
@@ -689,3 +823,4 @@ export const Constants = {
     },
   },
 } as const
+

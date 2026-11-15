@@ -93,7 +93,7 @@ const AppSidebar = () => {
         <DialogHeader>
           <DialogTitle>Editar Meus Dados</DialogTitle>
         </DialogHeader>
-        <MemberForm member={member as any} onClose={() => setEditOpen(false)} />
+        <MemberForm member={member} onClose={() => setEditOpen(false)} />
       </DialogContent>
     </Dialog>
   ) : null;

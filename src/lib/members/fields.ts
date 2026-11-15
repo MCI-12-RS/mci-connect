@@ -1,0 +1,114 @@
+// Campos de membro por grupo (E1.08, RN-11 e RN-12).
+//
+// SENSITIVE_MEMBER_FIELDS espelha a máscara da `members_view` e a regra 6 de
+// `enforce_member_write_rules` (migration 20261115120000_e108_read_foundation).
+// Mudou aqui, mude lá.
+import type { Database } from "@/integrations/supabase/types";
+
+export type MemberViewRow = Database["public"]["Views"]["members_view"]["Row"];
+export type MemberWrite = Database["public"]["Tables"]["members"]["Update"];
+
+/**
+ * Colunas da `members_view` usadas nas telas de membro (lista, formulário e o
+ * próprio cadastro no AuthContext). Ficam de fora as colunas de vínculo
+ * celular e de busca, que custam uma subconsulta por linha.
+ */
+// Uma string literal só: o supabase-js deriva o tipo do resultado dela.
+export const MEMBER_ROW_SELECT =
+  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, is_baptized, baptism_date, is_active, g12_level, total_disciples, total_cells, role_id, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
+
+export type MemberRow = Omit<
+  MemberViewRow,
+  | "is_cell_leader"
+  | "is_cell_timothy"
+  | "is_cell_host"
+  | "attended_last_30_days"
+  | "search_text"
+  | "male_cells"
+  | "female_cells"
+  | "created_at"
+  | "updated_at"
+>;
+
+/** Só saem do banco para o próprio membro e para quem tem view_sensitive_data. */
+export const SENSITIVE_MEMBER_FIELDS = [
+  "email",
+  "cpf",
+  "mobile_whatsapp",
+  "phone",
+  "street",
+  "number",
+  "complement",
+  "zip_code",
+] as const;
+
+/** Dados pessoais que qualquer editor do cadastro altera. Bairro, cidade e UF não são sensíveis (D-2). */
+export const PERSONAL_MEMBER_FIELDS = [
+  "name",
+  "gender",
+  "birth_date",
+  "instagram",
+  "avatar_url",
+  "notes",
+  "neighborhood",
+  "city",
+  "state",
+] as const;
+
+/** Dados ministeriais: só com edit_member (regra 5 do E1.03). */
+export const MINISTRY_MEMBER_FIELDS = [
+  "is_pastor",
+  "has_leadership",
+  "leader_id",
+  "spouse_id",
+  "is_baptized",
+  "baptism_date",
+  "is_active",
+] as const;
+
+// Gravados só com dígitos.
+const DIGITS_ONLY_FIELDS = new Set<string>(["cpf", "mobile_whatsapp", "phone", "zip_code"]);
+
+type WritableField =
+  | (typeof SENSITIVE_MEMBER_FIELDS)[number]
+  | (typeof PERSONAL_MEMBER_FIELDS)[number]
+  | (typeof MINISTRY_MEMBER_FIELDS)[number]
+  | "role_id";
+
+export type MemberFormValues = Partial<Record<WritableField, string | boolean | null | undefined>>;
+
+export interface MemberWriteOptions {
+  /** O usuário vê (e portanto edita) os dados sensíveis deste membro. */
+  sensitiveVisible: boolean;
+  /** O usuário edita os dados ministeriais (edit_member). */
+  canEditMinistry: boolean;
+  /** A função (role_id) vai junto: no cadastro e para quem pode atribuí-la. */
+  includeRole: boolean;
+}
+
+function clean(field: string, value: string | boolean | null | undefined): string | boolean | null | undefined {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  return DIGITS_ONLY_FIELDS.has(field) ? trimmed.replace(/\D/g, "") || null : trimmed;
+}
+
+/**
+ * Monta o corpo do INSERT/UPDATE de `members` com lista branca: só vão os
+ * campos que o usuário pode ver e editar; texto vazio vira `null`; CPF,
+ * telefones e CEP vão só com dígitos. Campos `undefined` ficam de fora (não
+ * mudam no banco).
+ */
+export function toMemberWritePayload(form: MemberFormValues, options: MemberWriteOptions): MemberWrite {
+  const fields: WritableField[] = [...PERSONAL_MEMBER_FIELDS];
+  if (options.sensitiveVisible) fields.push(...SENSITIVE_MEMBER_FIELDS);
+  if (options.canEditMinistry) fields.push(...MINISTRY_MEMBER_FIELDS);
+  if (options.includeRole) fields.push("role_id");
+
+  const payload: Record<string, string | boolean | null> = {};
+  for (const field of fields) {
+    const value = clean(field, form[field]);
+    if (value !== undefined) payload[field] = value;
+  }
+  return payload;
+}
