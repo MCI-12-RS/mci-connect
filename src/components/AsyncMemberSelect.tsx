@@ -25,16 +25,15 @@ const AsyncMemberSelect = ({ value, onChange, excludeId, placeholder = "Buscar m
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
 
-  // Load selected member name on mount
+  // Load selected member name on mount. member_names também resolve líderes que
+  // estão fora do escopo de quem edita (ex.: o pastor acima de um G12), que a
+  // leitura direta de members não devolve.
   useEffect(() => {
     if (value) {
       supabase
-        .from("members")
-        .select("id, name")
-        .eq("id", value)
-        .maybeSingle()
+        .rpc("member_names", { _ids: [value] })
         .then(({ data }) => {
-          if (data) setSelectedName(data.name);
+          if (data?.[0]) setSelectedName(data[0].name);
         });
     } else {
       setSelectedName("");

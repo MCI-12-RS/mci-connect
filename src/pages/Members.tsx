@@ -66,12 +66,15 @@ const Members = () => {
     queryKey: ["members-leader-names", missingLeaderIds.sort().join(",")],
     enabled: missingLeaderIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select("id,name")
-        .in("id", missingLeaderIds);
-      if (error) throw error;
-      return data ?? [];
+      // Líderes fora do escopo de quem consulta: a função devolve só id e nome,
+      // no máximo 500 por chamada.
+      const names: { id: string; name: string }[] = [];
+      for (let i = 0; i < missingLeaderIds.length; i += 500) {
+        const { data, error } = await supabase.rpc("member_names", { _ids: missingLeaderIds.slice(i, i + 500) });
+        if (error) throw error;
+        names.push(...(data ?? []));
+      }
+      return names;
     },
   });
 
