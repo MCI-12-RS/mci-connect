@@ -5,3 +5,8 @@ project_id = "gkhnjhmgeceoaqeynhrj"
 # supabase/functions/create-user-admin/index.ts.
 [functions.create-user-admin]
 verify_jwt = false
+
+# Mantém o comportamento já publicado: o front chama esta função antes do login,
+# só com a chave pública (que não é um JWT). Será substituída no passo E1.04.
+[functions.get-user-email]
+verify_jwt = false
