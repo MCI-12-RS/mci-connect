@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { rankG12Couples } from "@/lib/dashboard/g12-ranking";
 
 const WEEK_DAYS_MAP: Record<string, number> = {
   "Domingo": 0,
@@ -89,98 +90,15 @@ const Dashboard = () => {
   const { data: g12CellsData } = useQuery({
     queryKey: ["dashboard-g12-cells"],
     queryFn: async () => {
-      // Fetch ALL active members so we can walk down the leadership tree
+      // Membros ativos: os G12 e os cônjuges deles (para o nome do casal).
+      // As células vêm dos totais já acumulados de cada G12 (ver rankG12Couples).
       const { data, error } = await supabase
         .from("members")
-        .select("id, name, gender, spouse_id, total_cells, leader_id, g12_level")
+        .select("id, name, gender, spouse_id, g12_level, male_cells, female_cells")
         .eq("is_active", true);
 
       if (error) throw error;
-
-      const members = (data as any[]) || [];
-      const memberMap = new Map(members.map((m) => [m.id, m]));
-
-      // Build children index (leader_id -> [members])
-      const childrenMap = new Map<string, any[]>();
-      members.forEach((m) => {
-        if (m.leader_id) {
-          const arr = childrenMap.get(m.leader_id) || [];
-          arr.push(m);
-          childrenMap.set(m.leader_id, arr);
-        }
-      });
-
-      // Sum cells for a member and ALL descendants, splitting by gender of each node
-      const sumDescendantCells = (rootId: string): { male: number; female: number } => {
-        let male = 0;
-        let female = 0;
-        const stack = [rootId];
-        const visited = new Set<string>();
-        while (stack.length) {
-          const id = stack.pop()!;
-          if (visited.has(id)) continue;
-          visited.add(id);
-          const node = memberMap.get(id);
-          if (!node) continue;
-          const cells = node.total_cells || 0;
-          const isMale = node.gender === "Masculino" || node.gender === "M";
-          if (isMale) male += cells;
-          else female += cells;
-          const kids = childrenMap.get(id) || [];
-          kids.forEach((k) => stack.push(k.id));
-        }
-        return { male, female };
-      };
-
-      type CoupleStats = {
-        id: string;
-        name: string;
-        spouseName?: string;
-        maleCells: number;
-        femaleCells: number;
-      };
-
-      const g12Members = members.filter((m) => m.g12_level === 1);
-      const coupleMap = new Map<string, CoupleStats>();
-      const countedRoots = new Set<string>();
-
-      const getCanonicalKey = (memberId: string, spouseId: string | null | undefined): string => {
-        if (!spouseId) return memberId;
-        return [memberId, spouseId].sort().join("|");
-      };
-
-      g12Members.forEach((member) => {
-        const key = getCanonicalKey(member.id, member.spouse_id);
-        const isMale = member.gender === "Masculino" || member.gender === "M";
-
-        if (!coupleMap.has(key)) {
-          const spouse = member.spouse_id ? memberMap.get(member.spouse_id) : undefined;
-          let name = member.name;
-          let spouseName: string | undefined;
-          if (spouse) {
-            if (isMale) {
-              name = member.name;
-              spouseName = spouse.name;
-            } else {
-              name = spouse.name;
-              spouseName = member.name;
-            }
-          }
-          coupleMap.set(key, { id: key, name, spouseName, maleCells: 0, femaleCells: 0 });
-        }
-
-        const stats = coupleMap.get(key)!;
-        if (!countedRoots.has(member.id)) {
-          const sums = sumDescendantCells(member.id);
-          stats.maleCells += sums.male;
-          stats.femaleCells += sums.female;
-          countedRoots.add(member.id);
-        }
-      });
-
-      return Array.from(coupleMap.values()).sort(
-        (a, b) => (b.maleCells + b.femaleCells) - (a.maleCells + a.femaleCells)
-      );
+      return rankG12Couples(data ?? []);
     },
   });
 
