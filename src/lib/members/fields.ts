@@ -30,6 +30,17 @@ export type MemberRow = Omit<
   | "updated_at"
 >;
 
+/**
+ * Endereço de um membro na `members_view` (o formulário de célula copia o do
+ * anfitrião). Rua, número, complemento e CEP vêm nulos sem `sensitive_visible`.
+ */
+export const MEMBER_ADDRESS_SELECT = "street, number, complement, neighborhood, city, state, zip_code, sensitive_visible";
+
+export type MemberAddress = Pick<
+  MemberViewRow,
+  "street" | "number" | "complement" | "neighborhood" | "city" | "state" | "zip_code" | "sensitive_visible"
+>;
+
 /** Só saem do banco para o próprio membro e para quem tem view_sensitive_data. */
 export const SENSITIVE_MEMBER_FIELDS = [
   "email",

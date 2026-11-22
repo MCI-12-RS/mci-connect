@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useMemberAddress } from "@/hooks/use-member-address";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
+import { applyHostAddress } from "@/lib/cells/host-address";
+import type { CellRow } from "@/lib/cells/fields";
 
-type Cell = Database["public"]["Tables"]["cells"]["Row"];
 type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
+type CellField = keyof CellInsert;
 
 interface CellFormProps {
-  cell: Cell | null;
+  /** Célula em edição: a linha da cells_view. */
+  cell: CellRow | null;
   onClose: () => void;
 }
 
@@ -81,41 +85,30 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     }
   }, [cell]);
 
-  // Auto-load address from Host
+  // Endereço do anfitrião: carregado no cadastro e quando o anfitrião muda na
+  // edição. Vem da members_view, que mascara rua, número e CEP para quem não
+  // pode vê-los.
+  const hostToLoad = form.host_id && (!isEditing || form.host_id !== cell?.host_id) ? form.host_id : null;
+  const { data: hostAddress, isError: hostAddressError } = useMemberAddress(hostToLoad);
+
   useEffect(() => {
-    const loadHostAddress = async () => {
-      if (form.host_id) {
-        const { data: host } = await supabase
-          .from("members")
-          .select("street, number, complement, neighborhood, city, state, zip_code")
-          .eq("id", form.host_id)
-          .maybeSingle();
-
-        if (host) {
-          setForm(prev => ({
-            ...prev,
-            street: host.street || prev.street,
-            number: host.number || prev.number,
-            complement: host.complement || prev.complement,
-            neighborhood: host.neighborhood || prev.neighborhood,
-            city: host.city || prev.city,
-            state: host.state || prev.state,
-            zip_code: host.zip_code || prev.zip_code,
-          }));
-          
-          toast({ 
-            title: "Endereço carregado", 
-            description: "O endereço foi preenchido com os dados do anfitrião." 
-          });
-        }
-      }
-    };
-
-    // Only auto-load if we are creating or if the user just changed the host
-    if (form.host_id && (!isEditing || form.host_id !== cell?.host_id)) {
-      loadHostAddress();
+    if (!hostAddress) return;
+    setForm((prev) => applyHostAddress(prev, hostAddress));
+    if (hostAddress.sensitive_visible) {
+      toast({ title: "Endereço carregado", description: "O endereço foi preenchido com os dados do anfitrião." });
+    } else {
+      toast({
+        title: "Endereço carregado em parte",
+        description: "Rua, número e CEP do anfitrião indisponíveis.",
+      });
     }
-  }, [form.host_id, isEditing, cell?.host_id, toast]);
+  }, [hostAddress, toast]);
+
+  useEffect(() => {
+    if (hostAddressError) {
+      toast({ variant: "destructive", title: "Não foi possível carregar o endereço do anfitrião" });
+    }
+  }, [hostAddressError, toast]);
 
   const mutation = useMutation({
     mutationFn: async (data: CellInsert) => {
@@ -130,10 +123,12 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cells"] });
+      // A lista de relatórios mostra o líder e o endereço atuais da célula.
+      queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
       toast({ title: isEditing ? "Célula atualizada" : "Célula criada" });
       onClose();
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({ variant: "destructive", title: "Erro", description: error.message });
     },
   });
@@ -147,7 +142,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     mutation.mutate(form);
   };
 
-  const update = (field: keyof CellInsert, value: any) => {
+  const update = <F extends CellField>(field: F, value: CellInsert[F]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 

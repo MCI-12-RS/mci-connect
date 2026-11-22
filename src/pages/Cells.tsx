@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
 import CellReportForm from "@/components/CellReportForm";
+import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,69 +16,27 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Database } from "@/integrations/supabase/types";
-
-type Cell = Database["public"]["Tables"]["cells"]["Row"];
+import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
+import { useCellsList } from "@/hooks/use-cells-list";
+import { formatG12Label } from "@/lib/cells/labels";
+import type { CellRow } from "@/lib/cells/fields";
 
 const Cells = () => {
-  const [search, setSearch] = useState("");
+  const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
-  const [editingCell, setEditingCell] = useState<Cell | null>(null);
+  const [editingCell, setEditingCell] = useState<CellRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
-  const [selectedCellForReport, setSelectedCellForReport] = useState<string | null>(null);
+  const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
   const { hasPermission, member: currentMember } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  const { data: members = [] } = useQuery({
-    queryKey: ["members-lookup"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("members").select("id, name, leader_id, g12_level");
-      if (error) throw error;
-      return data || [];
-    },
-  });
+  const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
+  const cells = data?.rows ?? [];
+  const total = data?.total ?? 0;
 
-  const memberMap = Object.fromEntries(members.map((m) => [m.id, m]));
-
-  const { data: cells = [], isLoading } = useQuery({
-    queryKey: ["cells"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("cells")
-        .select(`*, leader:members!cells_leader_id_fkey(name), timothy:members!cells_timothy_id_fkey(name), host:members!cells_host_id_fkey(name)`)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const findG12 = (memberId: string | null): string => {
-    if (!memberId || !memberMap[memberId]) return "—";
-    let current = memberMap[memberId];
-    let safety = 0;
-    while (current && current.g12_level > 1 && current.leader_id && safety < 10) {
-      current = memberMap[current.leader_id];
-      safety++;
-    }
-    return current?.g12_level === 1 ? current.name : current?.g12_level === 0 ? "Pastores" : "—";
-  };
-
-  const filteredCells = cells.filter((c: any) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    const getLeaderName = (id: string | null) =>
-      id && memberMap[id]?.leader_id ? memberMap[memberMap[id].leader_id]?.name?.toLowerCase() || "" : "";
-    return (
-      (c.leader?.name?.toLowerCase() || "").includes(s) ||
-      (c.timothy?.name?.toLowerCase() || "").includes(s) ||
-      (c.host?.name?.toLowerCase() || "").includes(s) ||
-      getLeaderName(c.leader_id).includes(s) ||
-      getLeaderName(c.timothy_id).includes(s) ||
-      getLeaderName(c.host_id).includes(s)
-    );
-  });
+  useClampPage(list, data?.total);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -86,6 +45,8 @@ const Cells = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cells"] });
+      // Os relatórios da célula são excluídos junto.
+      queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
       toast({ title: "Célula excluída com sucesso" });
     },
     onError: () => {
@@ -93,37 +54,37 @@ const Cells = () => {
     },
   });
 
-  const handleEdit = (cell: Cell) => { setEditingCell(cell); setFormOpen(true); };
+  const handleEdit = (cell: CellRow) => { setEditingCell(cell); setFormOpen(true); };
   const handleClose = () => { setFormOpen(false); setEditingCell(null); };
-  const handleOpenReport = (cellId: string) => { setSelectedCellForReport(cellId); setReportFormOpen(true); };
+  const handleOpenReport = (cell: CellRow) => { setSelectedCellForReport(cell); setReportFormOpen(true); };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
-  const isOwnCell = (c: any) => currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
+  const isOwnCell = (c: CellRow) => !!currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
 
-  const cellHasActions = (c: any) =>
-    hasPermission("submit_any_visible_report") ||
-    (hasPermission("submit_own_cell_report") && isOwnCell(c)) ||
-    hasPermission("edit_cell") ||
-    hasPermission("delete_cell");
+  const canSubmitReport = (c: CellRow) =>
+    hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c));
 
-  const anyCellHasActions = filteredCells.some((c: any) => cellHasActions(c));
+  const cellHasActions = (c: CellRow) => canSubmitReport(c) || hasPermission("edit_cell") || hasPermission("delete_cell");
 
-  const ActionButtons = ({ c }: { c: any }) => (
+  const anyCellHasActions = cells.some(cellHasActions);
+  const columnCount = anyCellHasActions ? 7 : 6;
+
+  const ActionButtons = ({ c }: { c: CellRow }) => (
     <div className="flex items-center gap-1">
-      {(hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c))) && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c.id)} title="Novo Relatório">
+      {canSubmitReport(c) && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c)} title="Novo Relatório" aria-label="Novo relatório">
           <FilePlus className="w-3.5 h-3.5 text-primary" />
         </Button>
       )}
       {hasPermission("edit_cell") && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)}>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)} aria-label="Editar célula">
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       )}
       {hasPermission("delete_cell") && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Excluir célula">
               <Trash2 className="w-3.5 h-3.5 text-destructive" />
             </Button>
           </AlertDialogTrigger>
@@ -144,28 +105,29 @@ const Cells = () => {
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
-    if (filteredCells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
+    if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar as células</p>;
+    if (cells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
 
     return (
-      <div className="divide-y divide-border">
-        {filteredCells.map((c: any) => (
+      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+        {cells.map((c) => (
           <div key={c.id} className="px-4 py-4 space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm">{c.leader?.name || "Sem líder"}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">G12: {findG12(c.leader_id)}</p>
+                <p className="font-semibold text-sm">{c.leader_name || "Sem líder"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">G12: {formatG12Label(c)}</p>
               </div>
               {cellHasActions(c) && <ActionButtons c={c} />}
             </div>
 
             {/* Team */}
             <div className="flex gap-4 text-xs text-muted-foreground">
-              {c.timothy?.name && (
-                <span>Timóteo: <span className="font-medium text-foreground">{c.timothy.name}</span></span>
+              {c.timothy_name && (
+                <span>Timóteo: <span className="font-medium text-foreground">{c.timothy_name}</span></span>
               )}
-              {c.host?.name && (
-                <span>Anfitrião: <span className="font-medium text-foreground">{c.host.name}</span></span>
+              {c.host_name && (
+                <span>Anfitrião: <span className="font-medium text-foreground">{c.host_name}</span></span>
               )}
             </div>
 
@@ -212,12 +174,16 @@ const Cells = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Líder, Timóteo, Anfitrião..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-              </div>
-              <Badge variant="secondary">{filteredCells.length}</Badge>
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Líder, timóteo, anfitrião, rua ou bairro..."
+                aria-label="Buscar células"
+                value={list.searchInput}
+                onChange={(e) => list.setSearchInput(e.target.value)}
+                maxLength={100}
+                className="pl-10"
+              />
             </div>
           </CardHeader>
 
@@ -239,22 +205,24 @@ const Cells = () => {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : filteredCells.length === 0 ? (
-                    <TableRow><TableCell colSpan={anyCellHasActions ? 7 : 6} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  ) : isError ? (
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar as células</TableCell></TableRow>
+                  ) : cells.length === 0 ? (
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
                   ) : (
-                    filteredCells.map((c: any) => (
-                      <TableRow key={c.id}>
+                    cells.map((c) => (
+                      <TableRow key={c.id} className={isPlaceholderData ? "opacity-60" : undefined}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium">{c.leader?.name}</span>
+                            <span className="text-sm font-medium">{c.leader_name}</span>
                             <div className="flex flex-col text-xs text-muted-foreground italic">
-                              {c.timothy?.name && <span>Timóteo: {c.timothy.name}</span>}
-                              {c.host?.name && <span>Anfitrião: {c.host.name}</span>}
+                              {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
+                              {c.host_name && <span>Anfitrião: {c.host_name}</span>}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{findG12(c.leader_id)}</TableCell>
+                        <TableCell className="text-sm">{formatG12Label(c)}</TableCell>
                         <TableCell className="text-sm">
                           <div className="flex flex-col">
                             <span className="font-medium">{c.street ? `${c.street}, ${c.number || "s/n"}` : "—"}</span>
@@ -274,6 +242,17 @@ const Cells = () => {
               </Table>
             </CardContent>
           )}
+
+          {!isLoading && !isError && (
+            <ListPagination
+              page={list.params.page}
+              pageSize={list.params.pageSize}
+              total={total}
+              itemLabel={["célula", "células"]}
+              onPageChange={list.setPage}
+              onPageSizeChange={list.setPageSize}
+            />
+          )}
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
@@ -290,7 +269,7 @@ const Cells = () => {
             <DialogHeader>
               <DialogTitle>Novo Relatório de Célula</DialogTitle>
             </DialogHeader>
-            {reportFormOpen && <CellReportForm initialCellId={selectedCellForReport || undefined} onClose={handleCloseReport} />}
+            {reportFormOpen && <CellReportForm initialCell={selectedCellForReport} onClose={handleCloseReport} />}
           </DialogContent>
         </Dialog>
       </div>
