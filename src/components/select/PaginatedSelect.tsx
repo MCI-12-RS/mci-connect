@@ -176,7 +176,11 @@ function DeferredBlurInput(props: InputProps<SelectOption, boolean, GroupBase<Se
     <components.Input
       {...props}
       onBlur={(event) => {
-        timer.current = window.setTimeout(() => onBlur?.(event));
+        const input = event.currentTarget;
+        timer.current = window.setTimeout(() => {
+          // O foco já voltou ao campo (Tab e Shift+Tab rápidos): não houve saída.
+          if (document.activeElement !== input) onBlur?.(event);
+        });
       }}
     />
   );

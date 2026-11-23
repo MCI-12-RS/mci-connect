@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -106,11 +106,15 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Na edição, os participantes salvos, com o nome.
   const { data: savedParticipants } = useCellReportParticipants(report?.id);
 
+  // Uma vez por relatório: uma nova leitura (por exemplo, ao voltar para a
+  // janela) não desfaz o que já foi mudado no formulário.
+  const loadedParticipantsOf = useRef<string | null>(null);
   useEffect(() => {
-    if (!savedParticipants) return;
+    if (!savedParticipants || !report?.id || loadedParticipantsOf.current === report.id) return;
+    loadedParticipantsOf.current = report.id;
     setParticipants(toParticipantOptions(savedParticipants));
     form.setValue("participant_ids", savedParticipants.map((p) => p.member_id));
-  }, [savedParticipants, form]);
+  }, [savedParticipants, report?.id, form]);
 
   const cellIdValue = form.watch("cell_id");
   const wasHeldValue = form.watch("was_held");
