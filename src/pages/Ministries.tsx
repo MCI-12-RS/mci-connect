@@ -1,279 +1,190 @@
-import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, Users, Heart } from "lucide-react";
-import { Database } from "@/integrations/supabase/types";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronDown, ChevronRight, Heart, Loader2, Users } from "lucide-react";
+import { useMinistryTree, type MinistryTreeNode } from "@/hooks/use-ministry-tree";
+import { formatCount } from "@/lib/format";
+import { directDisciplesLabel, getLevelLabel, ministryNodeKey, ministryNodeParentIds } from "@/lib/ministries/tree";
+import { cn } from "@/lib/utils";
 
-type Member = Database["public"]["Tables"]["members"]["Row"];
+// Árvore de ministérios (E1.08, RN-10): abrir a tela é uma chamada (as raízes)
+// e abrir um nó é outra (os filhos do casal), já com as contagens.
 
-interface TreeNodeData {
-  member: Member;
-  spouse?: Member;
-  childCount: number;
+const LOADING_MESSAGE = "Carregando…";
+// Linhas exibidas enquanto as raízes carregam.
+const ROOT_PLACEHOLDERS = 4;
+
+// Linha do nó. O recuo de cada nível vem da lista aninhada (`NESTED_LIST`),
+// menor no celular para não espremer os nomes.
+const ROW = "flex w-full items-center gap-2 rounded-lg px-2 py-3 text-left sm:gap-3 sm:px-4";
+const NESTED_LIST = "ml-4 border-l border-border/50 sm:ml-6";
+
+interface RetryLineProps {
+  message: string;
+  onRetry: () => void;
+  className?: string;
 }
 
-const getLevelLabel = (level: number) => {
-  if (level === 0) return "Pastor(a)";
-  if (level === 1) return "12";
-  if (level === 2) return "144";
-  if (level === 3) return "1.728";
-  return `Nível ${level}`;
-};
+const RetryLine = ({ message, onRetry, className }: RetryLineProps) => (
+  <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 text-sm", className)}>
+    <span role="alert" className="text-destructive">
+      {message}
+    </span>
+    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+      Tentar novamente
+    </Button>
+  </div>
+);
 
-const TreeNode = ({ node, level }: { node: TreeNodeData; level: number }) => {
+/** Nomes do casal; o coração é decorativo e o leitor de tela ouve "e". */
+const CoupleNames = ({ node }: { node: MinistryTreeNode }) => (
+  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 font-medium text-foreground">
+    <span className="break-words">{node.member_name}</span>
+    {node.spouse_name && (
+      <>
+        <Heart className="h-3.5 w-3.5 shrink-0 text-destructive/60" aria-hidden="true" />
+        <span className="sr-only"> e </span>
+        <span className="break-words">{node.spouse_name}</span>
+      </>
+    )}
+  </span>
+);
+
+const NodeCounts = ({ node }: { node: MinistryTreeNode }) => (
+  <span className="flex shrink-0 items-center gap-2">
+    {node.direct_disciples > 0 && (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Users className="h-3.5 w-3.5" aria-hidden="true" />
+        <span aria-hidden="true">{formatCount(node.direct_disciples)}</span>
+        <span className="sr-only">{directDisciplesLabel(node.direct_disciples)}</span>
+      </span>
+    )}
+    <Badge variant={node.g12_level === 0 ? "default" : "outline"} className="text-xs">
+      {getLevelLabel(node.g12_level)}
+    </Badge>
+  </span>
+);
+
+const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
   const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState<TreeNodeData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const hasChildren = node.direct_disciples > 0;
+  // Uma chamada por nó aberto; recolher e reabrir usa o cache.
+  const children = useMinistryTree(ministryNodeParentIds(node), { enabled: hasChildren && expanded });
+  const loading = expanded && children.isFetching && !children.data;
 
-  const loadChildren = useCallback(async () => {
-    if (children.length > 0) {
-      setExpanded(!expanded);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Get direct reports for this member (and spouse if applicable)
-      const leaderIds = [node.member.id];
-      if (node.spouse) leaderIds.push(node.spouse.id);
-
-      const { data: directReports } = await supabase
-        .from("members")
-        .select("*")
-        .in("leader_id", leaderIds)
-        .eq("is_active", true)
-        .order("name");
-
-      if (!directReports) {
-        setLoading(false);
-        return;
-      }
-
-      // Get all members to resolve spouses
-      const spouseIds = directReports
-        .map((m) => m.spouse_id)
-        .filter(Boolean) as string[];
-
-      let spouseMap: Record<string, Member> = {};
-      if (spouseIds.length > 0) {
-        const { data: spouses } = await supabase
-          .from("members")
-          .select("*")
-          .in("id", spouseIds);
-        if (spouses) {
-          spouseMap = Object.fromEntries(spouses.map((s) => [s.id, s]));
-        }
-      }
-
-      // Build tree nodes, pairing spouses together
-      const processedIds = new Set<string>();
-      const nodes: TreeNodeData[] = [];
-
-      for (const member of directReports) {
-        if (processedIds.has(member.id)) continue;
-        processedIds.add(member.id);
-
-        let spouse: Member | undefined;
-        if (member.spouse_id && spouseMap[member.spouse_id]) {
-          spouse = spouseMap[member.spouse_id];
-          processedIds.add(spouse.id);
-        }
-
-        // Count direct reports for this node
-        const countIds = [member.id];
-        if (spouse) countIds.push(spouse.id);
-
-        const { count } = await supabase
-          .from("members")
-          .select("*", { count: "exact", head: true })
-          .in("leader_id", countIds)
-          .eq("is_active", true);
-
-        nodes.push({ member, spouse, childCount: count || 0 });
-      }
-
-      setChildren(nodes);
-      setExpanded(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [node, children.length, expanded]);
-
-  const hasChildren = node.childCount > 0;
-  const indentPx = level * 24;
+  if (!hasChildren) {
+    return (
+      <li>
+        <div className={ROW}>
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+          </span>
+          <CoupleNames node={node} />
+          <NodeCounts node={node} />
+        </div>
+      </li>
+    );
+  }
 
   return (
-    <div>
+    <li>
       <button
-        onClick={hasChildren ? loadChildren : undefined}
-        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors rounded-lg group ${hasChildren
-            ? "hover:bg-muted/60 cursor-pointer"
-            : "cursor-default"
-          }`}
-        style={{ paddingLeft: `${16 + indentPx}px` }}
-        disabled={loading}
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((open) => !open)}
+        className={cn(
+          ROW,
+          "transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
       >
-        <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted-foreground">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true">
           {loading ? (
-            <span className="w-4 h-4 border-2 border-muted-foreground/40 border-t-primary rounded-full animate-spin" />
-          ) : hasChildren ? (
-            expanded ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : expanded ? (
+            <ChevronDown className="h-4 w-4" />
           ) : (
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+            <ChevronRight className="h-4 w-4" />
           )}
         </span>
-
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-foreground truncate">
-              {node.member.name}
-            </span>
-            {node.spouse && (
-              <>
-                <Heart className="w-3.5 h-3.5 text-destructive/60 shrink-0" />
-                <span className="font-medium text-foreground truncate">
-                  {node.spouse.name}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {hasChildren && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="w-3.5 h-3.5" />
-              {node.childCount}
-            </span>
-          )}
-          <Badge
-            variant={node.member.g12_level === 0 ? "default" : "outline"}
-            className="text-xs"
-          >
-            {getLevelLabel(node.member.g12_level)}
-          </Badge>
-        </div>
+        <CoupleNames node={node} />
+        <NodeCounts node={node} />
       </button>
-
-      {expanded && children.length > 0 && (
-        <div className="relative">
-          <div
-            className="absolute top-0 bottom-0 border-l border-border/50"
-            style={{ left: `${28 + indentPx}px` }}
-          />
-          {children.map((child) => (
-            <TreeNode
-              key={child.member.id}
-              node={child}
-              level={level + 1}
+      {expanded && (
+        <div className={NESTED_LIST} aria-busy={loading}>
+          {loading ? (
+            <span role="status" className="sr-only">
+              {LOADING_MESSAGE}
+            </span>
+          ) : children.isError ? (
+            <RetryLine
+              message="Não foi possível carregar os discípulos."
+              onRetry={() => void children.refetch()}
+              className="px-2 py-2 sm:px-4"
             />
-          ))}
+          ) : (
+            <ul>
+              {children.data?.map((child) => (
+                <TreeNode key={ministryNodeKey(child)} node={child} />
+              ))}
+            </ul>
+          )}
         </div>
       )}
-    </div>
+    </li>
   );
 };
 
+const RootsLoading = () => (
+  <div aria-busy="true" className="space-y-1 p-2">
+    <span role="status" className="sr-only">
+      {LOADING_MESSAGE}
+    </span>
+    {Array.from({ length: ROOT_PLACEHOLDERS }, (_, index) => (
+      <Skeleton key={index} className="h-11 w-full" />
+    ))}
+  </div>
+);
+
 const Ministries = () => {
-  const { data: roots = [], isLoading } = useQuery({
-    queryKey: ["ministry-tree-roots"],
-    queryFn: async () => {
-      // Get pastors (top level)
-      const { data: pastors } = await supabase
-        .from("members")
-        .select("*")
-        .eq("is_pastor", true)
-        .eq("is_active", true)
-        .order("name");
+  const roots = useMinistryTree(null);
 
-      if (!pastors) return [];
-
-      // Resolve spouses
-      const spouseIds = pastors
-        .map((m) => m.spouse_id)
-        .filter(Boolean) as string[];
-
-      let spouseMap: Record<string, Member> = {};
-      if (spouseIds.length > 0) {
-        const { data: spouses } = await supabase
-          .from("members")
-          .select("*")
-          .in("id", spouseIds);
-        if (spouses) {
-          spouseMap = Object.fromEntries(spouses.map((s) => [s.id, s]));
-        }
-      }
-
-      const processedIds = new Set<string>();
-      const nodes: TreeNodeData[] = [];
-
-      for (const pastor of pastors) {
-        if (processedIds.has(pastor.id)) continue;
-        processedIds.add(pastor.id);
-
-        let spouse: Member | undefined;
-        if (pastor.spouse_id && spouseMap[pastor.spouse_id]) {
-          spouse = spouseMap[pastor.spouse_id];
-          processedIds.add(spouse.id);
-        }
-
-        const countIds = [pastor.id];
-        if (spouse) countIds.push(spouse.id);
-
-        const { count } = await supabase
-          .from("members")
-          .select("*", { count: "exact", head: true })
-          .in("leader_id", countIds)
-          .eq("is_active", true);
-
-        nodes.push({ member: pastor, spouse, childCount: count || 0 });
-      }
-
-      return nodes;
-    },
-  });
+  let content;
+  // Também ao tentar de novo depois de um erro: a consulta segue com erro até responder.
+  if (roots.isPending || (roots.isFetching && !roots.data)) {
+    content = <RootsLoading />;
+  } else if (roots.isError) {
+    content = (
+      <RetryLine
+        message="Não foi possível carregar a árvore."
+        onRetry={() => void roots.refetch()}
+        className="justify-center py-12"
+      />
+    );
+  } else if (roots.data.length === 0) {
+    content = <p className="py-12 text-center text-muted-foreground">Nenhum pastor para exibir.</p>;
+  } else {
+    content = (
+      <ul className="divide-y divide-border/30">
+        {roots.data.map((node) => (
+          <TreeNode key={ministryNodeKey(node)} node={node} />
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Ministérios</h1>
-          <p className="text-muted-foreground text-sm">
-            Árvore hierárquica G12 — clique para expandir
-          </p>
+          <p className="text-muted-foreground text-sm">Árvore hierárquica G12 — clique para expandir</p>
         </div>
 
         <Card>
-          {/* <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="w-5 h-5 text-primary" />
-              Estrutura G12
-            </CardTitle>
-          </CardHeader> */}
-          <CardContent className="p-2">
-            {isLoading ? (
-              <div className="py-12 text-center text-muted-foreground">
-                Carregando...
-              </div>
-            ) : roots.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground">
-                Nenhum pastor cadastrado
-              </div>
-            ) : (
-              <div className="divide-y divide-border/30">
-                {roots.map((node) => (
-                  <TreeNode key={node.member.id} node={node} level={0} />
-                ))}
-              </div>
-            )}
-          </CardContent>
+          <CardContent className="p-2">{content}</CardContent>
         </Card>
       </div>
     </AppLayout>
