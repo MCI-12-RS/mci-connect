@@ -25,6 +25,25 @@ export function isActionOption(option: SelectOption): boolean {
 export const LOADING_LABEL = "Carregando…";
 export const NO_RESULTS_LABEL = "Nenhum resultado";
 export const LOAD_FAILED_LABEL = "Não foi possível carregar as opções";
+export const LOAD_MORE_FAILED_LABEL = "Não foi possível carregar mais opções";
+
+/**
+ * O texto da falha: na primeira página, nada carregou; numa página seguinte,
+ * as opções já carregadas continuam no menu.
+ */
+export function loadFailedLabel(hasOptions: boolean): string {
+  return hasOptions ? LOAD_MORE_FAILED_LABEL : LOAD_FAILED_LABEL;
+}
+
+/**
+ * O `aria-describedby` do campo: o que o react-select já põe (o placeholder ou
+ * a região viva) e, com o campo inválido, o id da mensagem de erro. O
+ * `aria-errormessage` sozinho tem suporte irregular no TalkBack e no VoiceOver.
+ */
+export function describedByWithError(describedBy: string | undefined, errorId: string | undefined): string | undefined {
+  const ids = [describedBy, errorId].filter((id): id is string => !!id);
+  return ids.length ? ids.join(" ") : undefined;
+}
 
 /** O complemento do anúncio com o texto buscado: ` para a busca "ma"`, ou nada sem busca. */
 function searchSuffix(search: string): string {
@@ -38,7 +57,7 @@ function searchSuffix(search: string): string {
 export function resultsMessage(count: number, { failed = false } = {}): string {
   const results = count === 1 ? "1 resultado disponível" : `${count} resultados disponíveis`;
   if (!failed) return results;
-  return count ? `Não foi possível carregar mais opções. ${results}` : LOAD_FAILED_LABEL;
+  return count ? `${LOAD_MORE_FAILED_LABEL}. ${results}` : LOAD_FAILED_LABEL;
 }
 
 /**
@@ -103,6 +122,8 @@ export const SELECT_ARIA_MESSAGES: AriaLiveMessages<SelectOption, boolean, Group
   onFocus: ({ context, focused, options, label = "", selectValue, isSelected, isAppleDevice }) => {
     if (context === "value" && selectValue) return `Selecionado ${label} em foco, ${position(selectValue, focused)}.`;
     if (context === "menu" && isAppleDevice) {
+      // A falha diz o mesmo que o texto do item: "as opções" ou "mais opções".
+      if (focused === RETRY_OPTION) return `${loadFailedLabel(options.some(isChoice))}. Tentar novamente.`;
       if (isActionOption(focused)) return `${label}.`;
       return `${label}${isSelected ? ", selecionada" : ""}, ${position(options, focused)}.`;
     }

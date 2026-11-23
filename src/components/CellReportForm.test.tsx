@@ -191,6 +191,9 @@ describe("CellReportForm: célula obrigatória", () => {
     const cellInput = screen.getByLabelText(CELL);
     expect(cellInput).toHaveAttribute("aria-invalid", "false");
     expect(cellInput).not.toHaveAttribute("aria-errormessage");
+    // Sem erro, a descrição é só a do react-select (o placeholder).
+    const placeholderId = cellInput.getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(placeholderId)).toHaveTextContent("Buscar por líder, rua ou bairro…");
 
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
@@ -198,8 +201,11 @@ describe("CellReportForm: célula obrigatória", () => {
     expect(cellInput).toHaveAttribute("aria-invalid", "true");
     const messageId = cellInput.getAttribute("aria-errormessage") ?? "";
     expect(document.getElementById(messageId)).toHaveTextContent("Selecione uma célula");
+    // A mensagem também entra na descrição, mantendo a do react-select.
+    expect(cellInput).toHaveAttribute("aria-describedby", `${placeholderId} ${messageId}`);
     // Os participantes não têm erro.
     expect(screen.getByLabelText(PARTICIPANTS)).toHaveAttribute("aria-invalid", "false");
+    expect(screen.getByLabelText(PARTICIPANTS).getAttribute("aria-describedby")).not.toContain(messageId);
     // Nada foi gravado.
     expect(fakeQueries()).toHaveLength(0);
   });

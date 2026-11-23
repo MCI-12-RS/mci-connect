@@ -190,4 +190,60 @@ test.describe("Seletores paginados (RN-07)", () => {
     expect(writes.map((request) => `${request.method()} ${pathOf(request)}`)).toEqual([]);
     expect(requests.filter((request) => pathOf(request) === MEMBERS_TABLE)).toHaveLength(0);
   });
+
+  test("Dado o seletor de cônjuge aberto, com texto digitado e a lista rolando, quando aperta Tab, então o foco vai ao campo seguinte sem escolher nada", async ({
+    page,
+  }) => {
+    const user = credentials("E2E_SELECTORS_EMAIL", "E2E_SELECTORS_PASSWORD");
+
+    await login(page, user);
+    await page.getByRole("button", { name: "Editar meus dados" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const spouse = dialog.getByLabel("Cônjuge");
+    const listbox = page.getByRole("listbox");
+
+    // Sem cônjuge escolhido (com um escolhido, o Tab pararia antes no botão de
+    // limpar, que some e volta enquanto a busca carrega). Nada é salvo.
+    await spouse.focus();
+    await page.keyboard.press("Tab");
+    if ((await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Limpar seleção") {
+      await page.keyboard.press("Enter");
+      await expect(spouse).toBeFocused();
+      await page.keyboard.press("Tab");
+    }
+
+    // O campo seguinte na ordem do Tab, com o menu fechado; o cônjuge mostra o placeholder.
+    await expect(spouse).not.toBeFocused();
+    await page.evaluate(() => document.activeElement?.setAttribute("data-e2e-next-field", ""));
+    const nextField = dialog.locator("[data-e2e-next-field]");
+    await expect(nextField).toBeFocused();
+    const emptySpouse = dialog.getByText("Buscar cônjuge…", { exact: true });
+    await expect(emptySpouse).toBeVisible();
+
+    // Menu aberto com texto digitado e mais opções do que cabem: a lista rola.
+    // O texto é a primeira vogal cuja busca enche o menu neste banco.
+    await spouse.focus();
+    await spouse.press("ArrowDown");
+    await expect(listbox.getByRole("option").first()).toBeVisible();
+    let listScrolls = false;
+    for (const term of ["a", "e", "o", "i", "u"]) {
+      const searchResponse = page.waitForResponse(
+        (response) => isMemberOptions(0)(response) && new URL(response.url()).searchParams.has("search_text"),
+      );
+      await spouse.fill(term);
+      await searchResponse;
+      await expect(listbox.getByRole("option").first()).toBeVisible();
+      listScrolls = await listbox.evaluate((list) => list.scrollHeight > list.clientHeight);
+      if (listScrolls) break;
+    }
+    expect(listScrolls).toBe(true);
+
+    await page.keyboard.press("Tab");
+
+    // O Tab sai do seletor (sem parar na lista), fecha o menu e não escolhe ninguém.
+    await expect(nextField).toBeFocused();
+    await expect(listbox).toHaveCount(0);
+    await expect(emptySpouse).toBeVisible();
+  });
 });

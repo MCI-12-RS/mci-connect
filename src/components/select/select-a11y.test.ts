@@ -4,6 +4,8 @@ import {
   LOAD_MORE_OPTION,
   RETRY_OPTION,
   SELECT_ARIA_MESSAGES,
+  describedByWithError,
+  loadFailedLabel,
   noResultsMessage,
   resultsMessage,
 } from "./select-a11y";
@@ -82,5 +84,34 @@ describe("SELECT_ARIA_MESSAGES.onFocus (posição no menu)", () => {
 
   it("o foco no item de ação diz só o rótulo, sem posição", () => {
     expect(focusMessage(LOAD_MORE_OPTION, [...options, LOAD_MORE_OPTION])).toBe("Carregar mais.");
+  });
+
+  it("o foco em Tentar novamente diz a mesma falha que o texto do item", () => {
+    expect(focusMessage(RETRY_OPTION, [RETRY_OPTION])).toBe("Não foi possível carregar as opções. Tentar novamente.");
+    expect(focusMessage(RETRY_OPTION, [...options, RETRY_OPTION])).toBe(
+      "Não foi possível carregar mais opções. Tentar novamente.",
+    );
+  });
+});
+
+describe("loadFailedLabel", () => {
+  it("sem opções no menu, nada carregou; com opções, faltou a página seguinte", () => {
+    expect(loadFailedLabel(false)).toBe("Não foi possível carregar as opções");
+    expect(loadFailedLabel(true)).toBe("Não foi possível carregar mais opções");
+  });
+});
+
+describe("describedByWithError", () => {
+  it("com erro, soma o id da mensagem ao que o react-select já pôs", () => {
+    expect(describedByWithError("rs-placeholder", "cell-message")).toBe("rs-placeholder cell-message");
+  });
+
+  it("sem erro, fica só o do react-select", () => {
+    expect(describedByWithError("rs-placeholder", undefined)).toBe("rs-placeholder");
+  });
+
+  it("só o erro, ou nada", () => {
+    expect(describedByWithError(undefined, "cell-message")).toBe("cell-message");
+    expect(describedByWithError(undefined, undefined)).toBeUndefined();
   });
 });

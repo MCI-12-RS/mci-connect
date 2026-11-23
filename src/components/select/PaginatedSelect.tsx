@@ -17,6 +17,7 @@ import Select, {
   type ClearIndicatorProps,
   type GroupBase,
   type InputProps,
+  type MenuListProps,
   type MultiValueRemoveProps,
   type OnChangeValue,
   type OptionProps,
@@ -31,13 +32,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { OptionsPagination, SelectSearch } from "@/hooks/use-paginated-select";
 import { selectStyles } from "./select-styles";
 import {
-  LOAD_FAILED_LABEL,
   LOAD_MORE_OPTION,
   LOADING_LABEL,
   NO_RESULTS_LABEL,
   RETRY_OPTION,
   SELECT_ARIA_MESSAGES,
+  describedByWithError,
   isActionOption,
+  loadFailedLabel,
   noResultsMessage,
   resultsMessage,
 } from "./select-a11y";
@@ -66,6 +68,8 @@ interface PaginatedMenuContextValue {
   /** O item de ação em foco no menu, se houver (para Enter e espaço). */
   focusedAction: MutableRefObject<SelectOption | null>;
   runAction: (action: SelectOption) => void;
+  /** Põe a opção em foco no menu, como o mouse faz nas opções comuns. */
+  hoverOption: (option: SelectOption) => void;
   focusInput: () => void;
 }
 
@@ -90,9 +94,14 @@ function ItemOption(props: PaginatedOptionProps) {
   return <components.Option {...props} />;
 }
 
-/** "Carregar mais" (ou "Carregando…") e "Tentar novamente", no fim do menu. */
+/**
+ * "Carregar mais" (ou "Carregando…") e "Tentar novamente", no fim do menu. O
+ * react-select não liga o mouse às opções desativadas (os itens de ação são
+ * desativados para nunca serem escolhidos): aqui o mouse põe o item em foco,
+ * como nas opções comuns, e só uma linha do menu fica destacada por vez.
+ */
 function ActionOption({ data, innerProps, innerRef, isFocused }: PaginatedOptionProps) {
-  const { pagination, focusedAction, runAction } = usePaginatedMenu();
+  const { pagination, focusedAction, runAction, hoverOption } = usePaginatedMenu();
 
   useEffect(() => {
     if (!isFocused) return;
@@ -103,6 +112,7 @@ function ActionOption({ data, innerProps, innerRef, isFocused }: PaginatedOption
   }, [isFocused, data, focusedAction]);
 
   const loadingMore = data === LOAD_MORE_OPTION && pagination.isFetchingNextPage;
+  const hover = () => hoverOption(data);
   return (
     <div
       ref={innerRef}
@@ -111,14 +121,16 @@ function ActionOption({ data, innerProps, innerRef, isFocused }: PaginatedOption
       aria-selected={innerProps["aria-selected"]}
       tabIndex={-1}
       onClick={() => runAction(data)}
+      onMouseMove={hover}
+      onMouseOver={hover}
       className={cn(
-        "flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 px-3 py-2 hover:bg-accent hover:text-foreground",
+        "flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 px-3 py-2",
         isFocused ? "bg-accent text-foreground" : "text-primary",
       )}
     >
       {data === RETRY_OPTION ? (
         <>
-          <span className={cn(!isFocused && "text-destructive")}>{LOAD_FAILED_LABEL}.</span>
+          <span className={cn(!isFocused && "text-destructive")}>{loadFailedLabel(pagination.options.length > 0)}.</span>
           <span className="font-medium underline underline-offset-4">Tentar novamente</span>
         </>
       ) : loadingMore ? (
@@ -176,15 +188,18 @@ function ClearIndicator({ clearValue }: ClearIndicatorProps<SelectOption, boolea
  * No blur, o react-select remove nós do DOM (o texto do leitor de tela e o
  * menu); dentro de um Dialog do Radix, uma remoção enquanto o foco está no
  * `body` (entre o blur e o foco do próximo campo) faz o diálogo puxar o foco
- * para si, e o Tab não chegava ao campo seguinte.
+ * para si, e o Tab não chegava ao campo seguinte. Com o campo inválido, a
+ * mensagem de erro também entra no `aria-describedby`.
  */
 function DeferredBlurInput(props: InputProps<SelectOption, boolean, GroupBase<SelectOption>>) {
   const { onBlur } = props;
   const timer = useRef<number>();
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  const invalid = props["aria-invalid"] === true || props["aria-invalid"] === "true";
   return (
     <components.Input
       {...props}
+      aria-describedby={describedByWithError(props["aria-describedby"], invalid ? props["aria-errormessage"] : undefined)}
       onBlur={(event) => {
         const input = event.currentTarget;
         timer.current = window.setTimeout(() => {
@@ -202,10 +217,20 @@ function MultiValueRemove(props: MultiValueRemoveProps<SelectOption, boolean, Gr
   );
 }
 
+/**
+ * A lista do menu fora da ordem do Tab. O Chromium (130 em diante) põe na
+ * ordem do Tab uma área rolável sem `tabindex`: o Tab levava o foco à lista, o
+ * react-select o devolvia ao campo, e o Tab não saía do seletor.
+ */
+function MenuList(props: MenuListProps<SelectOption, boolean, GroupBase<SelectOption>>) {
+  return <components.MenuList {...props} innerProps={{ ...props.innerProps, tabIndex: -1 }} />;
+}
+
 const SELECT_COMPONENTS: SelectComponentsConfig<SelectOption, boolean, GroupBase<SelectOption>> = {
   Option: PaginatedOption,
   ClearIndicator,
   Input: DeferredBlurInput,
+  MenuList,
   MultiValueRemove,
 };
 
@@ -279,9 +304,13 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
     [retry, loadMore],
   );
   const focusInput = useCallback(() => selectRef.current?.focus(), []);
+  // `onOptionHover` é o método da instância que as opções comuns usam no hover
+  // (react-select 5.10): público no tipo, mas não documentado. O teste do hover
+  // no AsyncMemberSelect.test.tsx acusa se uma atualização o quebrar.
+  const hoverOption = useCallback((option: SelectOption) => selectRef.current?.onOptionHover(option), []);
   const menuContext = useMemo(
-    () => ({ pagination, prefetchValues, focusedAction, runAction, focusInput }),
-    [pagination, prefetchValues, runAction, focusInput],
+    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput }),
+    [pagination, prefetchValues, runAction, hoverOption, focusInput],
   );
 
   // Dentro de um Dialog do Radix, o Esc fecharia o diálogo inteiro (ele escuta

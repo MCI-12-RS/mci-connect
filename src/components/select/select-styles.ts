@@ -1,7 +1,10 @@
 import type { GroupBase, StylesConfig } from "react-select";
 
-/** Abaixo de 768 px (o `md` do Tailwind): opções com alvo de toque de 44 px. */
-const MOBILE = "@media (max-width: 767px)";
+/**
+ * Opções com alvo de toque de 44 px abaixo de 768 px (o `md` do Tailwind) e em
+ * qualquer tela de toque (como o tablet, que já mostra o layout do desktop).
+ */
+const TOUCH_TARGET = "@media (max-width: 767px), (pointer: coarse)";
 
 /**
  * Estilos dos seletores do react-select com os tokens do tema (claro e
@@ -49,7 +52,7 @@ export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Op
       fontWeight: state.isSelected ? 600 : 400,
       cursor: "pointer",
       "&:active": { backgroundColor: "hsl(var(--accent))" },
-      [MOBILE]: { minHeight: 44 },
+      [TOUCH_TARGET]: { minHeight: 44 },
     }),
     loadingMessage: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),
     noOptionsMessage: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),

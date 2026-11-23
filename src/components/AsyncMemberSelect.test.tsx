@@ -245,8 +245,10 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
     await waitFor(() => expect(memberOptions()).toHaveLength(20));
     fireEvent.click(loadMoreOption());
 
-    await screen.findByRole("option", { name: /Tentar novamente/ });
+    const retry = await screen.findByRole("option", { name: /Tentar novamente/ });
     expect(memberOptions()).toHaveLength(20);
+    // O texto visível diz o mesmo que o leitor de tela: as opções que já estão no menu ficam.
+    expect(within(retry).getByText("Não foi possível carregar mais opções.")).toBeInTheDocument();
     expect(announcedResults()).toBe("Não foi possível carregar mais opções. 20 resultados disponíveis.");
 
     fireEvent.keyDown(input, { key: "ArrowUp" });
@@ -258,6 +260,45 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
 
     await waitFor(() => expect(memberOptions()).toHaveLength(24));
     expect(fakeQueries()[2].calls).toContainEqual(["range", 20, 40]);
+  });
+
+  it("Dado o mouse sobre Tentar novamente, então ele fica em foco, como uma opção comum, e só uma linha fica destacada por vez", async () => {
+    respondWith({ data: members(21) }, failure);
+    const { input } = renderSelect();
+    openMenu(input);
+    await waitFor(() => expect(memberOptions()).toHaveLength(20));
+    fireEvent.click(loadMoreOption());
+    const retry = await screen.findByRole("option", { name: /Tentar novamente/ });
+    const failureText = within(retry).getByText("Não foi possível carregar mais opções.");
+    // Em repouso: o texto da falha em vermelho, sobre o fundo do menu.
+    expect(retry).not.toHaveClass("bg-accent");
+    expect(failureText).toHaveClass("text-destructive");
+
+    // O primeiro movimento do mouse depois do teclado só destrava o hover (como no react-select).
+    fireEvent.mouseMove(retry);
+    fireEvent.mouseMove(retry);
+
+    expect(input).toHaveAttribute("aria-activedescendant", retry.id);
+    expect(retry).toHaveClass("bg-accent", "text-foreground");
+    expect(failureText).not.toHaveClass("text-destructive");
+
+    // O mouse numa opção comum leva o foco (e o destaque) para ela.
+    const member = screen.getByRole("option", { name: "Membro 019" });
+    fireEvent.mouseOver(member);
+
+    expect(input).toHaveAttribute("aria-activedescendant", member.id);
+    expect(retry).not.toHaveClass("bg-accent");
+    expect(failureText).toHaveClass("text-destructive");
+  });
+
+  it("Dado o menu aberto, então a lista fica fora da ordem do Tab (o Tab sai do campo, sem parar na lista rolável)", async () => {
+    respondWith({ data: members(21) });
+    const { input } = renderSelect();
+    openMenu(input);
+    await waitFor(() => expect(memberOptions()).toHaveLength(20));
+
+    expect(screen.getByRole("listbox")).toHaveAttribute("tabindex", "-1");
+    expect(input).toHaveAttribute("aria-controls", screen.getByRole("listbox").id);
   });
 
   it("Dada uma opção clicada, então ela é escolhida e mostrada no campo", async () => {
