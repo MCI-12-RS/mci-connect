@@ -287,13 +287,13 @@ SELECT is(
         'week_start', 'visitors_count', 'participants_count', 'cell_type', 'cell_is_active',
         'cell_leader_id', 'cell_leader_name', 'cell_timothy_id', 'cell_host_id', 'cell_street',
         'cell_number', 'cell_complement', 'cell_neighborhood', 'cell_meeting_day',
-        'cell_meeting_time', 'search_text'],
-  'cell_reports_view: colunas na ordem do spec');
+        'cell_meeting_time', 'search_text', 'cell_deleted'],
+  'cell_reports_view: colunas na ordem do spec (cell_deleted no fim, E2.01 AQ-4)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_report_participants_view'::regclass AND attnum > 0 AND NOT attisdropped),
-  ARRAY['report_id', 'member_id', 'member_name'],
-  'cell_report_participants_view: colunas na ordem do spec');
+  ARRAY['report_id', 'member_id', 'member_name', 'member_deleted'],
+  'cell_report_participants_view: colunas na ordem do spec (member_deleted no fim, E2.01 AQ-5)');
 
 -- ===========================================================================
 -- 3. Paridade por persona (RN-05) e o que cada uma vê — 9 personas

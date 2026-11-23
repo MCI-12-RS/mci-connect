@@ -214,6 +214,9 @@ UPDATE public.members SET male_cells = NULL WHERE id = pg_temp.m(28);
 
 -- Relatórios. 01 a 05 em datas fixas, sem participantes; 06 a 08 relativos a
 -- hoje (vínculo celular, MEM-14), em células que nunca contam como pendentes.
+-- 06 e 07 ficam em células diferentes (10 e 09): hoje − 30 e hoje − 31 caem na
+-- mesma semana na maioria dos dias, e o índice único da semana (E2.01,
+-- cell_reports_cell_week_key) vale mesmo com session_replication_role = replica.
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, observations, visitors, was_held) VALUES
   (pg_temp.r(1), pg_temp.c(11), '2026-03-02', '20:00', 'Fé',        NULL,    ARRAY['Visitante Um', 'Visitante Dois'], true),
   (pg_temp.r(2), pg_temp.c(12), '2026-03-03', '20:00', 'Amor',      NULL,    ARRAY['X Um', 'X Dois', 'X Três'],       true),
@@ -221,7 +224,7 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, theme, observations, v
   (pg_temp.r(4), pg_temp.c(13), '2026-02-28', '19:00', 'Antes',     NULL,    ARRAY['Visitante Antes'],                true),
   (pg_temp.r(5), pg_temp.c(11), '2026-03-08', '20:00', 'Depois',    NULL,    ARRAY['Visitante Depois'],               true),
   (pg_temp.r(6), pg_temp.c(10), public.sp_today() - 30, '20:00', 'Trinta',    NULL, '{}', true),
-  (pg_temp.r(7), pg_temp.c(10), public.sp_today() - 31, '20:00', 'Trinta e um', NULL, '{}', true),
+  (pg_temp.r(7), pg_temp.c(9),  public.sp_today() - 31, '20:00', 'Trinta e um', NULL, '{}', true),
   (pg_temp.r(8), pg_temp.c(16), public.sp_today() - 1,  '20:00', 'Ontem',     NULL, '{}', true);
 
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
