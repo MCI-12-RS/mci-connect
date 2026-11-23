@@ -761,6 +761,7 @@ export type Database = {
     }
     Functions: {
       _cell_label_by_leader: { Args: { _leader_id: string }; Returns: string }
+      _dashboard_assert_access: { Args: never; Returns: undefined }
       _log_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -781,6 +782,42 @@ export type Database = {
       can_manage_own_cell: {
         Args: { _cell_id: string; _user_id: string }
         Returns: boolean
+      }
+      dashboard_cells_by_type: {
+        Args: never
+        Returns: {
+          cell_type: string
+          total: number
+        }[]
+      }
+      dashboard_g12_ranking: {
+        Args: never
+        Returns: {
+          couple_key: string
+          female_cells: number
+          male_cells: number
+          name: string
+          spouse_name: string
+          total_cells: number
+        }[]
+      }
+      dashboard_summary: {
+        Args: { _at?: string }
+        Returns: {
+          cells_not_held: number
+          cells_pending: number
+          members_active: number
+          members_baptized: number
+          members_inactive: number
+          members_not_baptized: number
+          members_total: number
+          members_without_cell_link: number
+          members_without_leader: number
+          reports_sent: number
+          visitors: number
+          week_end: string
+          week_start: string
+        }[]
       }
       get_ministry_root: { Args: { _member_id: string }; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
