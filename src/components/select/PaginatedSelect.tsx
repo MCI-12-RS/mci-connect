@@ -302,9 +302,10 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
     return () => window.removeEventListener("keydown", closeMenuOnEscape, true);
   }, [isMenuOpen]);
 
-  // O menu abre com "Carregando…" e é posicionado nesse tamanho; quando a 1ª
-  // página chega, ele cresce e pode ficar cortado no fim do diálogo (no
-  // celular, só umas 2 opções apareciam). Aí ele é trazido para a vista.
+  // O menu abre com "Carregando…" e é posicionado nesse tamanho; quando as
+  // opções chegam (ao abrir ou a cada nova busca), ele cresce e pode ficar
+  // cortado no fim do diálogo (no celular, só umas 2 opções apareciam). Aí ele
+  // é trazido para a vista; se já estiver todo visível, nada rola.
   const awaitingFirstPage = useRef(false);
   useEffect(() => {
     if (!isMenuOpen) {

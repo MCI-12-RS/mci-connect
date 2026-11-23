@@ -35,7 +35,7 @@ export function getLevelLabel(level: number): string {
  * ouvir "nível" antes. "Pastor(a)" e "Nível N" já se explicam.
  */
 export function isNumericLevelLabel(level: number): boolean {
-  return level >= 1 && level <= 3;
+  return /^\d/.test(getLevelLabel(level));
 }
 
 /** Texto da contagem do nó para o leitor de tela: "1 discípulo direto", "1.234 discípulos diretos". */
