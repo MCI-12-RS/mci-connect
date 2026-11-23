@@ -331,6 +331,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
             <div className="space-y-2">
               <Label htmlFor="spouse">Cônjuge</Label>
               <AsyncMemberSelect
+                inputId="spouse"
                 value={form.spouse_id || null}
                 onChange={(v) => update("spouse_id", v)}
                 excludeId={member?.id}
@@ -381,6 +382,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
                 <div className="space-y-2">
                   <Label htmlFor="leader">Líder</Label>
                   <AsyncMemberSelect
+                    inputId="leader"
                     value={form.leader_id || null}
                     onChange={(v) => update("leader_id", v)}
                     excludeId={member?.id}

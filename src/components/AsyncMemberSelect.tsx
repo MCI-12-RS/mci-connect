@@ -1,157 +1,64 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { Search, X, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { PaginatedSelect } from "@/components/select/PaginatedSelect";
+import { useMemberName, useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
+import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
+import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
+import type { SelectOption } from "@/lib/selectors";
 
 interface AsyncMemberSelectProps {
   value: string | null;
   onChange: (value: string | null) => void;
+  /** Membro que não pode ser escolhido (o próprio, ao escolher líder ou cônjuge). */
   excludeId?: string;
   placeholder?: string;
+  /** Só membros ativos. Padrão: ativos e inativos. */
+  activeOnly?: boolean;
+  /** Id do campo de busca, para o `<Label htmlFor>`. */
+  inputId?: string;
 }
 
-interface MemberOption {
-  id: string;
-  name: string;
-}
+/**
+ * Seletor de um membro visível, com busca e paginação no servidor (E1.08,
+ * RN-07). O nome do membro já escolhido vem da `member_names`, que também
+ * resolve quem está fora do escopo de quem edita.
+ */
+const AsyncMemberSelect = ({
+  value,
+  onChange,
+  excludeId,
+  placeholder = "Buscar membro...",
+  activeOnly = false,
+  inputId,
+}: AsyncMemberSelectProps) => {
+  const search = useSelectSearch();
+  const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen });
+  const pagination = useOptionsPagination(options, toMemberOption);
 
-const AsyncMemberSelect = ({ value, onChange, excludeId, placeholder = "Buscar membro..." }: AsyncMemberSelectProps) => {
-  const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<MemberOption[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedName, setSelectedName] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  // A opção escolhida agora já tem o nome; o valor que veio de fora (edição)
+  // busca o nome no banco.
+  const [picked, setPicked] = useState<SelectOption | null>(null);
+  const knownName = picked && picked.value === value ? picked.label : null;
+  const { data: savedName, isPending } = useMemberName(value, { enabled: !knownName });
 
-  // Load selected member name on mount. member_names também resolve líderes que
-  // estão fora do escopo de quem edita (ex.: o pastor acima de um G12), que a
-  // leitura direta de members não devolve.
-  useEffect(() => {
-    if (value) {
-      supabase
-        .rpc("member_names", { _ids: [value] })
-        .then(({ data }) => {
-          if (data?.[0]) setSelectedName(data[0].name);
-        });
-    } else {
-      setSelectedName("");
-    }
-  }, [value]);
-
-  const searchMembers = useCallback(
-    async (search: string) => {
-      setIsLoading(true);
-      let q = supabase
-        .from("members")
-        .select("id, name")
-        .order("name")
-        .limit(20);
-
-      if (search.trim()) {
-        q = q.ilike("name", `%${search}%`);
-      }
-
-      if (excludeId) {
-        q = q.neq("id", excludeId);
-      }
-
-      const { data } = await q;
-      setOptions(data || []);
-      setIsLoading(false);
-    },
-    [excludeId]
-  );
-
-  const handleInputChange = (val: string) => {
-    setQuery(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => searchMembers(val), 300);
-  };
-
-  const handleFocus = () => {
-    setIsOpen(true);
-    searchMembers(query);
-  };
-
-  const handleSelect = (member: MemberOption) => {
-    onChange(member.id);
-    setSelectedName(member.name);
-    setQuery("");
-    setIsOpen(false);
-  };
-
-  const handleClear = () => {
-    onChange(null);
-    setSelectedName("");
-    setQuery("");
-  };
-
-  // Close on click outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  let selected: SelectOption | null = null;
+  if (value) {
+    const label = knownName ?? (isPending ? "Carregando…" : savedName || UNNAMED_MEMBER_LABEL);
+    selected = { value, label };
+  }
 
   return (
-    <div ref={containerRef} className="relative">
-      {selectedName && !isOpen ? (
-        <div className="flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <span>{selectedName}</span>
-          <button type="button" onClick={handleClear} className="text-muted-foreground hover:text-foreground">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      ) : (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onFocus={handleFocus}
-            placeholder={placeholder}
-            className="pl-9"
-          />
-          {isLoading && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
-      )}
-
-      {isOpen && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
-          <button
-            type="button"
-            className="w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent"
-            onClick={() => { onChange(null); setSelectedName(""); setIsOpen(false); }}
-          >
-            Nenhum
-          </button>
-          {options.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={cn(
-                "w-full px-3 py-2 text-left text-sm hover:bg-accent",
-                value === m.id && "bg-accent font-medium"
-              )}
-              onClick={() => handleSelect(m)}
-            >
-              {m.name}
-            </button>
-          ))}
-          {!isLoading && options.length === 0 && (
-            <div className="px-3 py-2 text-sm text-muted-foreground">Nenhum resultado</div>
-          )}
-        </div>
-      )}
-    </div>
+    <PaginatedSelect
+      inputId={inputId}
+      search={search}
+      pagination={pagination}
+      value={selected}
+      onChange={(option) => {
+        setPicked(option);
+        onChange(option?.value ?? null);
+      }}
+      placeholder={placeholder}
+      isClearable
+    />
   );
 };
 
