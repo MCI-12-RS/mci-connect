@@ -1,7 +1,9 @@
-// Cliente do Supabase falso para os testes de hooks (sem rede). Cada
-// `from(tabela)` cria uma consulta que registra as chamadas encadeadas
-// (select, ilike, order, range, in, eq…) e, quando aguardada, responde com a
-// próxima resposta da fila.
+// Cliente do Supabase falso para os testes de hooks e telas (sem rede). Cada
+// `from(tabela)` ou `rpc(função, argumentos)` cria uma consulta que registra as
+// chamadas encadeadas (select, ilike, order, range, in, eq, single…) e, quando
+// aguardada, responde com a próxima resposta da fila (uma fila só, na ordem em
+// que as consultas forem criadas). Uma RPC com fila própria (`respondToRpc`)
+// usa essa fila antes da geral.
 //
 // Uso no teste:
 //   vi.mock("@/integrations/supabase/client", async () => {
@@ -28,13 +30,16 @@ export interface FakeResult {
 
 export type FakeCall = [method: string, ...args: unknown[]];
 
-export class FakeQuery implements PromiseLike<FakeResult> {
+// O que o PostgREST responde quando `.single()` não encontra exatamente uma linha.
+export const NOT_SINGLE_ROW: FakeError = {
+  code: "PGRST116",
+  message: "JSON object requested, multiple (or no) rows returned",
+};
+
+abstract class FakeBuilder implements PromiseLike<FakeResult> {
   readonly calls: FakeCall[] = [];
 
-  constructor(
-    readonly table: string,
-    private readonly response: FakeResponse,
-  ) {}
+  protected constructor(private readonly response: FakeResponse) {}
 
   private record(method: string, args: unknown[]): this {
     this.calls.push([method, ...args]);
@@ -62,27 +67,65 @@ export class FakeQuery implements PromiseLike<FakeResult> {
   maybeSingle(...args: unknown[]): this {
     return this.record("maybeSingle", args);
   }
+  single(...args: unknown[]): this {
+    return this.record("single", args);
+  }
 
   /** Os métodos chamados, na ordem, sem os argumentos. */
   methods(): string[] {
     return this.calls.map(([method]) => method);
   }
 
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): PromiseLike<TResult1 | TResult2> {
+  /**
+   * A resposta da fila. Com `.single()` e `data` em lista (as linhas que o
+   * servidor encontrou), responde como o PostgREST: uma linha vira o objeto;
+   * nenhuma ou mais de uma viram o erro PGRST116.
+   */
+  private result(): FakeResult {
     const result: FakeResult = {
       data: this.response.data ?? null,
       count: this.response.count ?? null,
       error: this.response.error ?? null,
     };
-    return Promise.resolve(result).then(onfulfilled, onrejected);
+    if (!this.methods().includes("single") || result.error || !Array.isArray(result.data)) return result;
+    return result.data.length === 1
+      ? { ...result, data: result.data[0] }
+      : { ...result, data: null, error: NOT_SINGLE_ROW };
+  }
+
+  then<TResult1 = FakeResult, TResult2 = never>(
+    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    return Promise.resolve(this.result()).then(onfulfilled, onrejected);
+  }
+}
+
+/** Uma consulta `from(table)`. */
+export class FakeQuery extends FakeBuilder {
+  constructor(
+    readonly table: string,
+    response: FakeResponse,
+  ) {
+    super(response);
+  }
+}
+
+/** Uma chamada `rpc(fn, args)`; `args` fica `undefined` quando não é passado. */
+export class FakeRpc extends FakeBuilder {
+  constructor(
+    readonly fn: string,
+    readonly args: unknown,
+    response: FakeResponse,
+  ) {
+    super(response);
   }
 }
 
 const responses: FakeResponse[] = [];
+const rpcResponses = new Map<string, FakeResponse[]>();
 const queries: FakeQuery[] = [];
+const rpcs: FakeRpc[] = [];
 
 export const fakeSupabase = {
   from(table: string): FakeQuery {
@@ -90,19 +133,39 @@ export const fakeSupabase = {
     queries.push(query);
     return query;
   },
+  rpc(fn: string, args?: unknown): FakeRpc {
+    const call = new FakeRpc(fn, args, rpcResponses.get(fn)?.shift() ?? responses.shift() ?? {});
+    rpcs.push(call);
+    return call;
+  },
 };
 
-/** Respostas das próximas consultas, na ordem em que forem criadas. */
+/** Respostas das próximas consultas e RPCs, na ordem em que forem criadas. */
 export function respondWith(...next: FakeResponse[]): void {
   responses.push(...next);
 }
 
-/** As consultas criadas desde o último reset, na ordem. */
+/**
+ * Respostas das próximas chamadas de uma RPC, na ordem, independentemente das
+ * outras consultas. Útil quando várias RPCs rodam ao mesmo tempo.
+ */
+export function respondToRpc(fn: string, ...next: FakeResponse[]): void {
+  rpcResponses.set(fn, [...(rpcResponses.get(fn) ?? []), ...next]);
+}
+
+/** As consultas `from` criadas desde o último reset, na ordem. */
 export function fakeQueries(): readonly FakeQuery[] {
   return queries;
 }
 
+/** As chamadas `rpc` feitas desde o último reset, na ordem. */
+export function fakeRpcs(): readonly FakeRpc[] {
+  return rpcs;
+}
+
 export function resetFakeSupabase(): void {
   responses.length = 0;
+  rpcResponses.clear();
   queries.length = 0;
+  rpcs.length = 0;
 }

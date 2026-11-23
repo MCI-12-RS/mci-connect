@@ -1,6 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ReactNode } from "react";
 import {
   Users,
   UserCheck,
@@ -14,220 +12,282 @@ import {
   UserPlus,
   XCircle,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { useAuth } from "@/contexts/AuthContext";
-import { startOfWeek, endOfWeek, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
-import { rankG12Couples } from "@/lib/dashboard/g12-ranking";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  useDashboardCellsByType,
+  useDashboardG12Ranking,
+  useDashboardSummary,
+  type DashboardCellsByType,
+  type DashboardG12Couple,
+  type DashboardSummary,
+} from "@/hooks/use-dashboard";
+import { formatWeekRange } from "@/lib/dashboard/week";
+import { isPermissionDenied } from "@/lib/errors";
+import { formatCount } from "@/lib/format";
 
-const WEEK_DAYS_MAP: Record<string, number> = {
-  "Domingo": 0,
-  "Segunda-feira": 1,
-  "Terça-feira": 2,
-  "Quarta-feira": 3,
-  "Quinta-feira": 4,
-  "Sexta-feira": 5,
-  "Sábado": 6,
+// Todos os números vêm prontos das RPCs do dashboard (E1.08, RN-02 e RN-08);
+// a tela só exibe. Sem permissão no banco, mostra o acesso negado (RN-09).
+
+const ACCESS_DENIED_MESSAGE = "Você não tem acesso ao dashboard.";
+const LOAD_ERROR_MESSAGE = "Erro ao carregar o dashboard.";
+const LOADING_MESSAGE = "Carregando…";
+
+const CARD_GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4";
+
+// Cards de tipo de célula exibidos enquanto os tipos carregam.
+const CELL_TYPE_PLACEHOLDERS = 3;
+// Linhas do ranking G12 exibidas enquanto ele carrega.
+const G12_RANKING_PLACEHOLDERS = 4;
+
+type SummaryCount = Exclude<keyof DashboardSummary, "week_start" | "week_end">;
+
+interface SummaryCardSpec {
+  title: string;
+  field: SummaryCount;
+  icon: LucideIcon;
+  color: string;
+}
+
+const WEEK_CARDS: readonly SummaryCardSpec[] = [
+  { title: "Relatórios Enviados", field: "reports_sent", icon: FileText, color: "text-success" },
+  { title: "Células sem Relatório", field: "cells_pending", icon: Clock, color: "text-warning" },
+  { title: "Visitantes em Células", field: "visitors", icon: UserPlus, color: "text-accent" },
+  { title: "Células Não Realizadas", field: "cells_not_held", icon: XCircle, color: "text-destructive" },
+];
+
+const GENERAL_CARDS: readonly SummaryCardSpec[] = [
+  { title: "Total de Membros", field: "members_total", icon: Users, color: "text-secondary" },
+  { title: "Membros Ativos", field: "members_active", icon: UserCheck, color: "text-success" },
+  { title: "Membros Inativos", field: "members_inactive", icon: UserX, color: "text-destructive" },
+  { title: "Batizados", field: "members_baptized", icon: Church, color: "text-accent" },
+  { title: "Não Batizados", field: "members_not_baptized", icon: Droplets, color: "text-warning" },
+  { title: "Sem Liderança", field: "members_without_leader", icon: Shield, color: "text-orange-500" },
+  { title: "Sem Vínculo Celular", field: "members_without_cell_link", icon: Link2Off, color: "text-orange-500" },
+];
+
+// No card (fundo branco), e não direto no fundo da página, para o vermelho ter contraste (WCAG 1.4.3).
+const LoadError = () => (
+  <Card>
+    <CardContent className="p-6 text-center text-destructive">
+      <p role="alert">{LOAD_ERROR_MESSAGE}</p>
+    </CardContent>
+  </Card>
+);
+
+/** Anuncia o carregamento ao leitor de tela; fica dentro da área com `aria-busy`. */
+const LoadingStatus = () => (
+  <span role="status" className="sr-only">
+    {LOADING_MESSAGE}
+  </span>
+);
+
+interface StatCardProps {
+  /** Sem título ou sem valor (carregando), mostra um placeholder no lugar. */
+  title?: string;
+  value?: number;
+  icon: LucideIcon;
+  color: string;
+}
+
+const StatCard = ({ title, value, icon: Icon, color }: StatCardProps) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between pb-2">
+      {title === undefined ? (
+        <Skeleton className="h-4 w-32" />
+      ) : (
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+      )}
+      <Icon className={`w-5 h-5 ${color}`} aria-hidden="true" />
+    </CardHeader>
+    <CardContent>
+      {value === undefined ? (
+        <Skeleton className="h-9 w-16" />
+      ) : (
+        <div className="text-3xl font-bold">{formatCount(value)}</div>
+      )}
+    </CardContent>
+  </Card>
+);
+
+interface SummaryCardsProps {
+  cards: readonly SummaryCardSpec[];
+  summary: DashboardSummary | undefined;
+}
+
+/** Os cards de `dashboard_summary`; enquanto carrega, cada número é um placeholder. */
+const SummaryCards = ({ cards, summary }: SummaryCardsProps) => (
+  <div className={CARD_GRID} aria-busy={!summary}>
+    {cards.map((card) => (
+      <StatCard key={card.field} title={card.title} value={summary?.[card.field]} icon={card.icon} color={card.color} />
+    ))}
+    {!summary && <LoadingStatus />}
+  </div>
+);
+
+/** Um card por tipo de célula; sem nenhuma célula, fica oculto. */
+const CellsByTypeCards = ({ rows }: { rows: DashboardCellsByType[] | undefined }) => {
+  if (!rows) {
+    return (
+      <div className={CARD_GRID} aria-busy="true">
+        {Array.from({ length: CELL_TYPE_PLACEHOLDERS }, (_, i) => (
+          <StatCard key={i} icon={Church} color="text-secondary" />
+        ))}
+        <LoadingStatus />
+      </div>
+    );
+  }
+  if (rows.length === 0) return null;
+  return (
+    <div className={CARD_GRID}>
+      {rows.map((row) => (
+        <StatCard
+          key={row.cell_type}
+          title={`Células ${row.cell_type}`}
+          value={row.total}
+          icon={Church}
+          color="text-secondary"
+        />
+      ))}
+    </div>
+  );
 };
+
+// Espaçamento menor no celular, para a coluna Total (a da ordenação) caber sem rolar.
+const RANKING_CELL = "px-2 sm:px-4 py-3";
+const RANKING_HEADER = `${RANKING_CELL} font-medium text-muted-foreground`;
+// Ícone do cabeçalho só a partir do `sm`; no celular, fica só o texto.
+const RANKING_HEADER_ICON = "hidden sm:inline-block w-4 h-4";
+// `min-w-8 px-2`: um círculo para poucos dígitos, que alarga para "1.234".
+const RANKING_BADGE = "inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full font-bold text-sm";
+
+const G12RankingTable = ({ rows }: { rows: DashboardG12Couple[] }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b">
+          <th scope="col" className={`${RANKING_HEADER} text-left`}>
+            G12 (Casal)
+          </th>
+          <th scope="col" className={RANKING_HEADER}>
+            <span className="flex items-center gap-1 justify-center">
+              <User className={`${RANKING_HEADER_ICON} text-blue-500`} aria-hidden="true" /> Homens
+            </span>
+          </th>
+          <th scope="col" className={RANKING_HEADER}>
+            <span className="flex items-center gap-1 justify-center">
+              <User className={`${RANKING_HEADER_ICON} text-pink-500`} aria-hidden="true" /> Mulheres
+            </span>
+          </th>
+          <th scope="col" className={`${RANKING_HEADER} text-center`}>
+            Total
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, idx) => (
+          <tr key={row.couple_key} className={idx % 2 === 0 ? "bg-muted/30" : ""}>
+            <th scope="row" className={`${RANKING_CELL} text-left font-medium`}>
+              {row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name}
+            </th>
+            <td className={`${RANKING_CELL} text-center`}>
+              <span className={`${RANKING_BADGE} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`}>
+                {formatCount(row.male_cells)}
+              </span>
+            </td>
+            <td className={`${RANKING_CELL} text-center`}>
+              <span className={`${RANKING_BADGE} bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300`}>
+                {formatCount(row.female_cells)}
+              </span>
+            </td>
+            <td className={`${RANKING_CELL} text-center font-semibold`}>{formatCount(row.total_cells)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+interface G12RankingSectionProps {
+  rows: DashboardG12Couple[] | undefined;
+  failed: boolean;
+}
+
+/**
+ * "Células por G12": tabela do ranking, que cabe no celular e só rola na
+ * horizontal se não couber (nomes longos em 320 px); sem casais, fica oculta.
+ */
+const G12RankingSection = ({ rows, failed }: G12RankingSectionProps) => {
+  if (rows?.length === 0) return null;
+
+  let content: ReactNode;
+  if (failed) {
+    content = <LoadError />;
+  } else if (rows) {
+    content = (
+      <Card>
+        <CardContent className="p-0">
+          <G12RankingTable rows={rows} />
+        </CardContent>
+      </Card>
+    );
+  } else {
+    content = (
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          {Array.from({ length: G12_RANKING_PLACEHOLDERS }, (_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+          <LoadingStatus />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <section className="space-y-4" aria-busy={!rows && !failed}>
+      <h2 className="text-xl font-semibold">Células por G12</h2>
+      {content}
+    </section>
+  );
+};
+
+/**
+ * Falhou sem nada para mostrar. Se uma atualização em segundo plano falha, o
+ * TanStack Query mantém os dados anteriores, e a tela continua com eles.
+ */
+const hasFailed = (query: { isError: boolean; data: unknown }) => query.isError && query.data === undefined;
 
 const Dashboard = () => {
   const { hasPermission } = useAuth();
   const isMinistryOnly = !hasPermission("view_dashboard") && hasPermission("view_own_ministry_dashboard");
-  const now = new Date();
-  const weekStart = startOfWeek(now, { weekStartsOn: 0 });
-  const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
-  const weekStartStr = format(weekStart, "yyyy-MM-dd");
-  const weekEndStr = format(weekEnd, "yyyy-MM-dd");
 
-  // ---- GENERAL STATS ----
-  const { data: generalStats } = useQuery({
-    queryKey: ["dashboard-general-stats"],
-    queryFn: async () => {
-      const [
-        totalRes,
-        activeRes,
-        baptizedRes,
-        inactiveRes,
-        notBaptizedRes,
-        noLeaderRes,
-        cellsRes,
-      ] = await Promise.all([
-        supabase.from("members").select("id", { count: "exact", head: true }),
-        supabase.from("members").select("id", { count: "exact", head: true }).eq("is_active", true),
-        supabase.from("members").select("id", { count: "exact", head: true }).eq("is_baptized", true),
-        supabase.from("members").select("id", { count: "exact", head: true }).eq("is_active", false),
-        supabase.from("members").select("id", { count: "exact", head: true }).eq("is_baptized", false),
-        supabase
-          .from("members")
-          .select("id", { count: "exact", head: true })
-          .is("leader_id", null)
-          .eq("is_pastor", false)
-          .eq("is_active", true),
-        supabase.from("cells").select("id, type"),
-      ]);
+  const summary = useDashboardSummary();
+  const cellsByType = useDashboardCellsByType();
+  const g12Ranking = useDashboardG12Ranking();
 
-      // Group cells by type
-      const cellsByType: Record<string, number> = {};
-      (cellsRes.data || []).forEach((c) => {
-        cellsByType[c.type] = (cellsByType[c.type] || 0) + 1;
-      });
+  // RN-09: as três RPCs checam a mesma permissão; basta uma recusar.
+  const accessDenied = [summary, cellsByType, g12Ranking].some((query) => isPermissionDenied(query.error));
 
-      return {
-        total: totalRes.count || 0,
-        active: activeRes.count || 0,
-        baptized: baptizedRes.count || 0,
-        inactive: inactiveRes.count || 0,
-        notBaptized: notBaptizedRes.count || 0,
-        noLeader: noLeaderRes.count || 0,
-        cellsByType,
-      };
-    },
-  });
+  if (accessDenied) {
+    return (
+      <AppLayout>
+        <div className="space-y-8 animate-fade-in">
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">{ACCESS_DENIED_MESSAGE}</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
-  // ---- G12 CELLS ----
-  const { data: g12CellsData } = useQuery({
-    queryKey: ["dashboard-g12-cells"],
-    queryFn: async () => {
-      // Membros ativos: os G12 e os cônjuges deles (para o nome do casal).
-      // As células vêm dos totais já acumulados de cada G12 (ver rankG12Couples).
-      const { data, error } = await supabase
-        .from("members")
-        .select("id, name, gender, spouse_id, g12_level, male_cells, female_cells")
-        .eq("is_active", true);
-
-      if (error) throw error;
-      return rankG12Couples(data ?? []);
-    },
-  });
-
-  // Members without cell link (not pastor, not leader/host/timothy of any cell,
-  // and not in cell report participants in last 4 weeks)
-  const { data: noCellLinkCount } = useQuery({
-    queryKey: ["dashboard-no-cell-link"],
-    queryFn: async () => {
-      const fourWeeksAgo = new Date();
-      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-      const fourWeeksAgoStr = format(fourWeeksAgo, "yyyy-MM-dd");
-
-      // Get all member IDs that ARE linked to cells
-      const [cellsRes, recentParticipantsRes, allMembersRes] = await Promise.all([
-        supabase.from("cells").select("leader_id, timothy_id, host_id"),
-        supabase
-          .from("cell_report_participants")
-          .select("member_id, report_id"),
-        supabase
-          .from("members")
-          .select("id, is_pastor")
-          .eq("is_active", true),
-      ]);
-
-      // Get report IDs from last 4 weeks
-      const reportsRes = await supabase
-        .from("cell_reports")
-        .select("id")
-        .gte("date", fourWeeksAgoStr);
-
-      const recentReportIds = new Set((reportsRes.data || []).map((r) => r.id));
-
-      // Collect linked member IDs
-      const linkedIds = new Set<string>();
-      (cellsRes.data || []).forEach((c) => {
-        if (c.leader_id) linkedIds.add(c.leader_id);
-        if (c.timothy_id) linkedIds.add(c.timothy_id);
-        if (c.host_id) linkedIds.add(c.host_id);
-      });
-      (recentParticipantsRes.data || []).forEach((p) => {
-        if (recentReportIds.has(p.report_id)) {
-          linkedIds.add(p.member_id);
-        }
-      });
-
-      // Count active non-pastor members NOT in linkedIds
-      const unlinked = (allMembersRes.data || []).filter(
-        (m) => !m.is_pastor && !linkedIds.has(m.id)
-      );
-
-      return unlinked.length;
-    },
-  });
-
-  // ---- WEEKLY STATS ----
-  const { data: weeklyStats } = useQuery({
-    queryKey: ["dashboard-weekly-stats", weekStartStr, weekEndStr],
-    queryFn: async () => {
-      const [reportsRes, allCellsRes] = await Promise.all([
-        supabase
-          .from("cell_reports")
-          .select("id, cell_id, was_held, visitors, date")
-          .gte("date", weekStartStr)
-          .lte("date", weekEndStr),
-        supabase.from("cells").select("id, meeting_day, meeting_time, is_active").eq("is_active", true),
-      ]);
-
-      const reports = reportsRes.data || [];
-      const allCells = allCellsRes.data || [];
-
-      const reportsSent = reports.length;
-      const cellsWithReport = new Set(reports.map((r) => r.cell_id));
-
-      // Cells that should have already met this week (meeting_day <= today's day)
-      const todayDow = now.getDay();
-      const currentTime = format(now, "HH:mm:ss");
-
-      const cellsShouldHaveMet = allCells.filter((c) => {
-        const cellDow = WEEK_DAYS_MAP[c.meeting_day || ""] ?? -1;
-        if (cellDow < 0) return false;
-        if (cellDow < todayDow) return true;
-        if (cellDow === todayDow) {
-          return (c.meeting_time || "23:59:59") <= currentTime;
-        }
-        return false;
-      });
-
-      const cellsMissingReport = cellsShouldHaveMet.filter(
-        (c) => !cellsWithReport.has(c.id)
-      ).length;
-
-      // Total visitors
-      let totalVisitors = 0;
-      reports.forEach((r) => {
-        if (r.visitors && Array.isArray(r.visitors)) {
-          totalVisitors += r.visitors.length;
-        }
-      });
-
-      // Cells not held
-      const cellsNotHeld = reports.filter((r) => !r.was_held);
-
-      return {
-        reportsSent,
-        cellsMissingReport,
-        totalVisitors,
-        cellsNotHeld,
-      };
-    },
-  });
-
-  const generalCards = [
-    { title: "Total de Membros", value: generalStats?.total || 0, icon: Users, color: "text-secondary" },
-    { title: "Membros Ativos", value: generalStats?.active || 0, icon: UserCheck, color: "text-success" },
-    { title: "Membros Inativos", value: generalStats?.inactive || 0, icon: UserX, color: "text-destructive" },
-    { title: "Batizados", value: generalStats?.baptized || 0, icon: Church, color: "text-accent" },
-    { title: "Não Batizados", value: generalStats?.notBaptized || 0, icon: Droplets, color: "text-warning" },
-    { title: "Sem Liderança", value: generalStats?.noLeader || 0, icon: Shield, color: "text-orange-500" },
-    { title: "Sem Vínculo Celular", value: noCellLinkCount || 0, icon: Link2Off, color: "text-orange-500" },
-  ];
-
-  const cellTypeCards = Object.entries(generalStats?.cellsByType || {}).map(
-    ([type, count]) => ({
-      title: `Células ${type}`,
-      value: count,
-    })
-  );
-
-  const g12Rows = g12CellsData || [];
+  const summaryRow = summary.data;
+  const summaryFailed = hasFailed(summary);
+  const cellsByTypeFailed = hasFailed(cellsByType);
 
   return (
     <AppLayout>
@@ -244,176 +304,32 @@ const Dashboard = () => {
           </p>
         </div>
 
-
         {/* SEMANAL */}
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Esta Semana{" "}
-            <span className="text-sm font-normal text-muted-foreground">
-              ({format(weekStart, "dd/MM")} - {format(weekEnd, "dd/MM")})
-            </span>
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Relatórios Enviados
-                </CardTitle>
-                <FileText className="w-5 h-5 text-success" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  {weeklyStats?.reportsSent || 0}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Células sem Relatório
-                </CardTitle>
-                <Clock className="w-5 h-5 text-warning" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  {weeklyStats?.cellsMissingReport || 0}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Visitantes em Células
-                </CardTitle>
-                <UserPlus className="w-5 h-5 text-accent" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  {weeklyStats?.totalVisitors || 0}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Células Não Realizadas
-                </CardTitle>
-                <XCircle className="w-5 h-5 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">
-                  {weeklyStats?.cellsNotHeld?.length || 0}
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex flex-wrap items-center gap-x-2">
+            <h2 className="text-xl font-semibold">
+              Esta Semana
+              {summaryRow && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  {" "}({formatWeekRange(summaryRow.week_start, summaryRow.week_end)})
+                </span>
+              )}
+            </h2>
+            {summary.isPending && <Skeleton className="h-4 w-24" />}
           </div>
+          {summaryFailed ? <LoadError /> : <SummaryCards cards={WEEK_CARDS} summary={summaryRow} />}
         </section>
 
-
-
-        {/* GERAL */}
+        {/* GERAL: o erro aparece no lugar do que falhou, uma vez só se as duas consultas falharem */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">Geral</h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {generalCards.map((card) => (
-              <Card key={card.title}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {card.title}
-                  </CardTitle>
-                  <card.icon className={`w-5 h-5 ${card.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{card.value}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Cells by type */}
-          {cellTypeCards.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cellTypeCards.map((card) => (
-                <Card key={card.title}>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {card.title}
-                    </CardTitle>
-                    <Church className="w-5 h-5 text-secondary" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{card.value}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          {summaryFailed ? <LoadError /> : <SummaryCards cards={GENERAL_CARDS} summary={summaryRow} />}
+          {!cellsByTypeFailed && <CellsByTypeCards rows={cellsByType.data} />}
+          {cellsByTypeFailed && !summaryFailed && <LoadError />}
         </section>
 
-
-
-
         {/* G12 CELLS */}
-        {g12Rows.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Células por G12</h2>
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">G12 (Casal)</th>
-                        <th className="px-4 py-3 font-medium text-muted-foreground">
-                          <span className="flex items-center gap-1 justify-center">
-                            <User className="w-4 h-4 text-blue-500" /> Homens
-                          </span>
-                        </th>
-                        <th className="px-4 py-3 font-medium text-muted-foreground">
-                          <span className="flex items-center gap-1 justify-center">
-                            <User className="w-4 h-4 text-pink-500" /> Mulheres
-                          </span>
-                        </th>
-                        <th className="px-4 py-3 font-medium text-muted-foreground text-center">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g12Rows.map((row, idx) => (
-                        <tr key={row.id} className={idx % 2 === 0 ? "bg-muted/30" : ""}>
-                          <td className="px-4 py-3 font-medium">
-                            {row.name}
-                            {row.spouseName && (" & " + row.spouseName)}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-sm">
-                              {row.maleCells}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 font-bold text-sm">
-                              {row.femaleCells}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center font-semibold">
-                            {row.maleCells + row.femaleCells}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
-
-
+        <G12RankingSection rows={g12Ranking.data} failed={hasFailed(g12Ranking)} />
       </div>
     </AppLayout>
   );
