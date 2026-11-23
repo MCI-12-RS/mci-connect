@@ -148,10 +148,27 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
     renderDashboard();
     await settle();
 
-    expect(screen.getAllByText("Erro ao carregar o dashboard.")).toHaveLength(2);
+    const errors = screen.getAllByText("Erro ao carregar o dashboard.");
+    expect(errors).toHaveLength(2);
     expect(screen.queryByRole("heading", { name: "Total de Membros" })).not.toBeInTheDocument();
     expect(cardValue("Células Evangelística")).toBe("750");
+    // Na seção Geral, a mensagem fica no lugar dos cards de membros, antes dos tipos.
+    const typeCard = screen.getByRole("heading", { name: "Células Evangelística" });
+    expect(errors[1].compareDocumentPosition(typeCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("Dada uma falha só nos tipos, então os cards de membros aparecem e a mensagem fica no lugar dos tipos", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] });
+    respondToRpc("dashboard_cells_by_type", failure, failure, failure, failure);
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getAllByText("Erro ao carregar o dashboard.")).toHaveLength(1);
+    expect(cardValue("Sem Vínculo Celular")).toBe("213");
+    expect(screen.queryByText(/^Células (Discipulado|Evangelística)/)).not.toBeInTheDocument();
   });
 
   it("Dadas falhas no resumo e nos tipos, então a seção Geral mostra uma mensagem só", async () => {

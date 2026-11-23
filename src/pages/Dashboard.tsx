@@ -284,12 +284,12 @@ const Dashboard = () => {
           {summaryFailed ? <LoadError /> : <SummaryCards cards={WEEK_CARDS} summary={summaryRow} />}
         </section>
 
-        {/* GERAL: uma mensagem só, mesmo que as duas consultas falhem */}
+        {/* GERAL: o erro aparece no lugar do que falhou, uma vez só se as duas consultas falharem */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">Geral</h2>
-          {!summaryFailed && <SummaryCards cards={GENERAL_CARDS} summary={summaryRow} />}
+          {summaryFailed ? <LoadError /> : <SummaryCards cards={GENERAL_CARDS} summary={summaryRow} />}
           {!cellsByTypeFailed && <CellsByTypeCards rows={cellsByType.data} />}
-          {(summaryFailed || cellsByTypeFailed) && <LoadError />}
+          {cellsByTypeFailed && !summaryFailed && <LoadError />}
         </section>
 
         {/* G12 CELLS */}
