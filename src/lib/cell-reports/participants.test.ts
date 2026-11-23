@@ -32,4 +32,19 @@ describe("toSelectedParticipantOptions (RN-06)", () => {
   it("nenhum participante", () => {
     expect(toSelectedParticipantOptions([], options, [])).toEqual([]);
   });
+
+  it("participante salvo sem nome usa o nome das opções", () => {
+    expect(toSelectedParticipantOptions(["m2"], options, [{ member_id: "m2", member_name: null }])).toEqual([
+      { value: "m2", label: "Bruno" },
+    ]);
+  });
+
+  it("salvar sem mudanças mantém os mesmos participantes, inclusive os que não estão nas opções", () => {
+    const saved = [
+      { member_id: "m9", member_name: "Carlos (inativo)" },
+      { member_id: "m1", member_name: "Ana" },
+    ];
+    const selected = toSelectedParticipantOptions(saved.map((p) => p.member_id), options, saved);
+    expect(selected.map((o) => o.value)).toEqual(["m9", "m1"]);
+  });
 });

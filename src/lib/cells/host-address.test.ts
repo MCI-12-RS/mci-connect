@@ -56,4 +56,9 @@ describe("applyHostAddress (RN-11)", () => {
     const empty = { street: "", number: null, complement: null, neighborhood: null, city: "", state: null, zip_code: null, sensitive_visible: true };
     expect(applyHostAddress(form, empty)).toEqual(form);
   });
+
+  it("sensitive_visible nulo conta como sem acesso: não copia rua, número, complemento nem CEP", () => {
+    const result = applyHostAddress(form, { ...host, sensitive_visible: null });
+    expect(result).toEqual({ ...form, neighborhood: "Centro", city: "Porto Alegre", state: "RS" });
+  });
 });

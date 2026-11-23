@@ -58,4 +58,12 @@ describe("fetchListPage (RN-01)", () => {
       ),
     ).rejects.toBe(countError);
   });
+
+  it("página além do fim (416) e contagem sem total: total 0", async () => {
+    const result = await fetchListPage(
+      Promise.resolve({ data: null, count: null, error: { code: RANGE_NOT_SATISFIABLE, message: "" } }),
+      () => Promise.resolve({ count: null, error: null }),
+    );
+    expect(result).toEqual({ rows: [], total: 0 });
+  });
 });
