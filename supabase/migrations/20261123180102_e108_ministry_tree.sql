@@ -61,8 +61,13 @@
 --   - direct_disciples: membros ativos e visíveis liderados pelo principal ou
 --     pelo cônjuge do nó, menos os próprios integrantes. É o mesmo predicado dos
 --     candidatos: se for maior que zero, expandir o nó com [member_id,
---     spouse_id] devolve ao menos um nó. Uma única leitura da members_view para
---     todos os nós do nível (sem N+1);
+--     spouse_id] devolve ao menos um nó. A contagem tem duas etapas, com custo
+--     linear no número de nós mesmo com estatísticas desatualizadas (risco 6
+--     do spec): (1) uma única leitura da members_view para todos os nós do
+--     nível (sem N+1), pelo índice de leader_id, só com id e leader_id; (2) a
+--     distribuição dessas linhas pelos nós, numa junção por igualdade que o
+--     Postgres só executa por hash ou merge (detalhes nas CTEs disciples e
+--     node_counts);
 --   - total_disciples e total_cells: a soma dos totais guardados do principal e
 --     do cônjuge (refresh_member_stats_v2), que são subárvores disjuntas. A
 --     exceção é o casal em que um lidera o outro diretamente: a subárvore do
@@ -178,24 +183,42 @@ BEGIN
     ORDER BY pr.couple_key
   ),
   links AS (
-    -- Os integrantes de cada nó, um por linha (os líderes dos discípulos diretos).
-    SELECT n.couple_key, n.principal_id AS leader_id FROM nodes n
+    -- Os integrantes de cada nó, um por linha (os líderes dos discípulos
+    -- diretos), com o principal e o cônjuge do nó ao lado para a exclusão.
+    SELECT n.couple_key, n.principal_id, n.partner_id, n.principal_id AS leader_id
+      FROM nodes n
     UNION ALL
-    SELECT n.couple_key, n.partner_id FROM nodes n WHERE n.partner_id IS NOT NULL
+    SELECT n.couple_key, n.principal_id, n.partner_id, n.partner_id
+      FROM nodes n
+     WHERE n.partner_id IS NOT NULL
   ),
-  disciples AS (
-    -- Uma leitura só para todos os nós do nível. O "= ANY (ARRAY(...))"
-    -- repete o join de propósito: leva a busca para o índice de leader_id, em
-    -- vez de varrer a members_view inteira.
-    SELECT l.couple_key, count(*) AS total
-      FROM links l
-      JOIN nodes n ON n.couple_key = l.couple_key
-      JOIN public.members_view d ON d.leader_id = l.leader_id
+  disciples AS MATERIALIZED (
+    -- Contagem, etapa 1: os discípulos diretos ativos e visíveis de todos os
+    -- integrantes do nível, numa leitura só, com só id e leader_id. O
+    -- "= ANY (ARRAY(...))" vira um parâmetro e leva a busca para o índice de
+    -- leader_id; o MATERIALIZED faz a leitura rodar uma vez, nunca uma vez
+    -- por nó.
+    SELECT d.id, d.leader_id
+      FROM public.members_view d
      WHERE d.is_active
-       AND d.leader_id = ANY (ARRAY(SELECT l2.leader_id FROM links l2))
-       AND d.id <> n.principal_id
-       AND d.id IS DISTINCT FROM n.partner_id
-     GROUP BY l.couple_key
+       AND d.leader_id = ANY (ARRAY(SELECT l.leader_id FROM links l))
+  ),
+  node_counts AS MATERIALIZED (
+    -- Contagem, etapa 2: cada discípulo vai para o nó do seu líder, menos os
+    -- integrantes do próprio nó. Sai uma linha por nó, inclusive o nó sem
+    -- discípulos (total 0), e é ela que alimenta o SELECT final, sem outra
+    -- junção com nodes.
+    -- O FULL JOIN é de propósito: o Postgres só o executa por hash ou merge,
+    -- nunca por laço aninhado, então o custo não depende da estimativa de
+    -- linhas (com estatísticas desatualizadas, ela cai para 1 nó). Toda linha
+    -- de disciples encontra o seu líder em links, então nenhuma sobra sem nó.
+    SELECT l.couple_key, l.principal_id, l.partner_id,
+           count(d.id) FILTER (
+             WHERE d.id <> l.principal_id AND d.id IS DISTINCT FROM l.partner_id
+           ) AS total
+      FROM links l
+      FULL JOIN disciples d ON d.leader_id = l.leader_id
+     GROUP BY l.couple_key, l.principal_id, l.partner_id
   )
   SELECT
     p.id,
@@ -205,7 +228,7 @@ BEGIN
     p.is_pastor,
     o.id,
     o.name,
-    coalesce(dc.total, 0),
+    nc.total,
     CASE
       WHEN o.id IS NULL THEN coalesce(p.total_disciples, 0)
       -- Um lidera o outro: só o líder, sem contar o liderado como discípulo.
@@ -219,10 +242,9 @@ BEGIN
       WHEN p.leader_id = o.id THEN coalesce(o.total_cells, 0)
       ELSE coalesce(p.total_cells, 0) + coalesce(o.total_cells, 0)
     END
-  FROM nodes n
-  JOIN people p ON p.id = n.principal_id
-  LEFT JOIN people o ON o.id = n.partner_id
-  LEFT JOIN disciples dc ON dc.couple_key = n.couple_key
+  FROM node_counts nc
+  JOIN people p ON p.id = nc.principal_id
+  LEFT JOIN people o ON o.id = nc.partner_id
   ORDER BY p.name, p.id;
 END;
 $$;

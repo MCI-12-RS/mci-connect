@@ -686,16 +686,8 @@ RESET ROLE;
 -- ===========================================================================
 -- 9. RN-02: um nó com mais de 1000 discípulos diretos — 6 verificações
 -- ===========================================================================
--- Confere o resultado (nada cortado), não o desempenho. As estatísticas da
--- tabela não conhecem as 1.200 linhas inseridas nesta transação (um ANALYZE
--- aqui alteraria o reltuples do banco mesmo com o ROLLBACK); com elas
--- desatualizadas, o planejador escolhe laços aninhados que crescem com o cubo
--- do número de nós. Por isso esta seção desliga os laços aninhados e descarta
--- os planos guardados. O desempenho é medido à parte, com o volume de
--- referência e as estatísticas em dia.
-SET LOCAL enable_nestloop = off;
-DISCARD PLANS;
-
+-- Confere o resultado (nada cortado), não o desempenho, que é medido à parte
+-- com o volume de referência.
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.members (id, name, gender, g12_level, leader_id, is_active, total_disciples)
 VALUES (pg_temp.m(60), 'Vera Volume', 'F', 3, pg_temp.m(50), true, 1100);
@@ -731,9 +723,6 @@ SET LOCAL ROLE authenticated;
 SELECT is_empty(format('SELECT * FROM public.ministry_tree_nodes(%L)', pg_temp.ms(60)),
   'RN-05/P3 do ministério A: o mesmo nó, de outro ministério, não devolve ninguém');
 RESET ROLE;
-
-SET LOCAL enable_nestloop = on;
-DISCARD PLANS;
 
 SELECT * FROM finish();
 ROLLBACK;
