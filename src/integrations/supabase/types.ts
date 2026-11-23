@@ -39,6 +39,13 @@ export type Database = {
             foreignKeyName: "cell_report_participants_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
@@ -47,6 +54,13 @@ export type Database = {
             columns: ["report_id"]
             isOneToOne: false
             referencedRelation: "cell_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "cell_reports_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -63,6 +77,8 @@ export type Database = {
           cell_id: string
           created_at: string
           date: string
+          deleted_at: string | null
+          deleted_by: string | null
           id: string
           observations: string | null
           offering: number | null
@@ -77,6 +93,8 @@ export type Database = {
           cell_id: string
           created_at?: string
           date: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           observations?: string | null
           offering?: number | null
@@ -91,6 +109,8 @@ export type Database = {
           cell_id?: string
           created_at?: string
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           observations?: string | null
           offering?: number | null
@@ -113,7 +133,35 @@ export type Database = {
             foreignKeyName: "cell_reports_cell_id_fkey"
             columns: ["cell_id"]
             isOneToOne: false
+            referencedRelation: "cells_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
             referencedRelation: "cells_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
         ]
@@ -123,6 +171,8 @@ export type Database = {
           city: string | null
           complement: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           host_id: string | null
           id: string
           is_active: boolean
@@ -142,6 +192,8 @@ export type Database = {
           city?: string | null
           complement?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           host_id?: string | null
           id?: string
           is_active?: boolean
@@ -161,6 +213,8 @@ export type Database = {
           city?: string | null
           complement?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           host_id?: string | null
           id?: string
           is_active?: boolean
@@ -178,10 +232,38 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cells_host_id_fkey"
             columns: ["host_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -196,6 +278,13 @@ export type Database = {
             columns: ["leader_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -210,6 +299,13 @@ export type Database = {
             columns: ["timothy_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -279,6 +375,8 @@ export type Database = {
           complement: string | null
           cpf: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           email: string | null
           female_cells: number | null
           g12_level: number
@@ -315,6 +413,8 @@ export type Database = {
           complement?: string | null
           cpf?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           email?: string | null
           female_cells?: number | null
           g12_level?: number
@@ -351,6 +451,8 @@ export type Database = {
           complement?: string | null
           cpf?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           email?: string | null
           female_cells?: number | null
           g12_level?: number
@@ -380,10 +482,38 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "members_leader_id_fkey"
             columns: ["leader_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -405,6 +535,13 @@ export type Database = {
             columns: ["spouse_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -476,6 +613,7 @@ export type Database = {
     Views: {
       cell_report_participants_view: {
         Row: {
+          member_deleted: boolean | null
           member_id: string | null
           member_name: string | null
           report_id: string | null
@@ -486,6 +624,13 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -506,7 +651,99 @@ export type Database = {
             foreignKeyName: "cell_report_participants_report_id_fkey"
             columns: ["report_id"]
             isOneToOne: false
+            referencedRelation: "cell_reports_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
             referencedRelation: "cell_reports_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cell_reports_deleted_view: {
+        Row: {
+          cell_deleted: boolean | null
+          cell_id: string | null
+          cell_leader_id: string | null
+          cell_leader_name: string | null
+          date: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_by_name: string | null
+          id: string | null
+          reason_not_held: string | null
+          search_text: string | null
+          theme: string | null
+          time: string | null
+          was_held: boolean | null
+          week_start: string | null
+          week_taken: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
         ]
@@ -514,6 +751,7 @@ export type Database = {
       cell_reports_view: {
         Row: {
           cell_complement: string | null
+          cell_deleted: boolean | null
           cell_host_id: string | null
           cell_id: string | null
           cell_is_active: boolean | null
@@ -554,6 +792,13 @@ export type Database = {
             foreignKeyName: "cell_reports_cell_id_fkey"
             columns: ["cell_id"]
             isOneToOne: false
+            referencedRelation: "cells_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
             referencedRelation: "cells_view"
             referencedColumns: ["id"]
           },
@@ -568,6 +813,13 @@ export type Database = {
             foreignKeyName: "cells_host_id_fkey"
             columns: ["cell_host_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["cell_host_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
@@ -576,6 +828,13 @@ export type Database = {
             columns: ["cell_leader_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -595,6 +854,126 @@ export type Database = {
           {
             foreignKeyName: "cells_timothy_id_fkey"
             columns: ["cell_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["cell_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cells_deleted_view: {
+        Row: {
+          city: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_by_name: string | null
+          host_deleted: boolean | null
+          host_id: string | null
+          host_name: string | null
+          id: string | null
+          is_active: boolean | null
+          leader_deleted: boolean | null
+          leader_id: string | null
+          leader_name: string | null
+          meeting_day: string | null
+          meeting_time: string | null
+          meeting_weekday: number | null
+          neighborhood: string | null
+          number: string | null
+          search_text: string | null
+          street: string | null
+          timothy_deleted: boolean | null
+          timothy_id: string | null
+          timothy_name: string | null
+          type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
             isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
@@ -643,6 +1022,13 @@ export type Database = {
             foreignKeyName: "cells_host_id_fkey"
             columns: ["host_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
@@ -651,6 +1037,13 @@ export type Database = {
             columns: ["leader_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
             referencedColumns: ["id"]
           },
           {
@@ -671,7 +1064,92 @@ export type Database = {
             foreignKeyName: "cells_timothy_id_fkey"
             columns: ["timothy_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      members_deleted_view: {
+        Row: {
+          city: string | null
+          cpf: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_by_name: string | null
+          email: string | null
+          gender: string | null
+          has_account: boolean | null
+          id: string | null
+          is_active: boolean | null
+          is_pastor: boolean | null
+          leader_deleted: boolean | null
+          leader_id: string | null
+          leader_name: string | null
+          mobile_whatsapp: string | null
+          name: string | null
+          neighborhood: string | null
+          restore_role_name: string | null
+          role_id: string | null
+          role_name: string | null
+          role_reset_on_restore: boolean | null
+          search_text: string | null
+          sensitive_visible: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
         ]
@@ -732,6 +1210,13 @@ export type Database = {
             foreignKeyName: "members_leader_id_fkey"
             columns: ["leader_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
@@ -753,6 +1238,13 @@ export type Database = {
             foreignKeyName: "members_spouse_id_fkey"
             columns: ["spouse_id"]
             isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_spouse_id_fkey"
+            columns: ["spouse_id"]
+            isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
@@ -762,6 +1254,24 @@ export type Database = {
     Functions: {
       _cell_label_by_leader: { Args: { _leader_id: string }; Returns: string }
       _dashboard_assert_access: { Args: never; Returns: undefined }
+      _del_lock_cell_week: {
+        Args: { _cell_id: string; _date: string }
+        Returns: undefined
+      }
+      _del_lock_members: {
+        Args: { _actor: string; _target: string }
+        Returns: undefined
+      }
+      _del_member_blockers: { Args: { _member_id: string }; Returns: Json }
+      _del_raise: {
+        Args: { _code: string; _detail?: Json; _message: string }
+        Returns: undefined
+      }
+      _del_resume_access: { Args: { _member_id: string }; Returns: undefined }
+      _del_suspend_access: {
+        Args: { _auth_user_id: string; _member_id: string }
+        Returns: undefined
+      }
       _log_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -783,6 +1293,8 @@ export type Database = {
         Args: { _cell_id: string; _user_id: string }
         Returns: boolean
       }
+      cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
+      check_member_deletion: { Args: { _member_id: string }; Returns: Json }
       dashboard_cells_by_type: {
         Args: never
         Returns: {
@@ -817,6 +1329,19 @@ export type Database = {
           visitors: number
           week_end: string
           week_start: string
+        }[]
+      }
+      delete_cell: { Args: { _cell_id: string }; Returns: undefined }
+      delete_cell_report: { Args: { _report_id: string }; Returns: undefined }
+      delete_member: { Args: { _member_id: string }; Returns: undefined }
+      find_deleted_member_matches: {
+        Args: { _cpf: string; _email: string; _mobile: string }
+        Returns: {
+          deleted_at: string
+          is_account_email: boolean
+          matched_fields: string[]
+          member_id: string
+          name: string
         }[]
       }
       get_ministry_root: { Args: { _member_id: string }; Returns: string }
@@ -860,7 +1385,24 @@ export type Database = {
           total_disciples: number
         }[]
       }
+      normalize_digits: { Args: { _value: string }; Returns: string }
+      normalize_email: { Args: { _value: string }; Returns: string }
+      restore_cell: { Args: { _cell_id: string }; Returns: undefined }
+      restore_cell_report: { Args: { _report_id: string }; Returns: undefined }
+      restore_member: {
+        Args: { _member_id: string }
+        Returns: {
+          previous_leader_name: string
+          restored_without_leader: boolean
+          role_name: string
+          role_reset_to_default: boolean
+        }[]
+      }
       search_normalize: { Args: { _value: string }; Returns: string }
+      set_cell_report_participants: {
+        Args: { _member_ids: string[]; _report_id: string }
+        Returns: undefined
+      }
       sp_now: { Args: never; Returns: string }
       sp_today: { Args: never; Returns: string }
       user_has_permission: {
@@ -870,6 +1412,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      viewer_covers_role: { Args: { _role_id: string }; Returns: boolean }
       viewer_has: {
         Args: { _permission: Database["public"]["Enums"]["permission_action"] }
         Returns: boolean
@@ -888,6 +1431,7 @@ export type Database = {
         | "login_failed"
         | "logout"
         | "password_changed"
+        | "restore"
       event_entity:
         | "member"
         | "cell"
@@ -1054,6 +1598,7 @@ export const Constants = {
         "login_failed",
         "logout",
         "password_changed",
+        "restore",
       ],
       event_entity: [
         "member",
