@@ -15,8 +15,15 @@ vi.mock("@/integrations/supabase/client", async () => {
 vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
+// Permissões do usuário logado; `null` = todas (o padrão dos testes).
+const auth = vi.hoisted(() => {
+  const state: { permissions: ReadonlySet<string> | null } = { permissions: null };
+  return state;
+});
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({ hasPermission: () => true }),
+  useAuth: () => ({
+    hasPermission: (permission: string) => auth.permissions === null || auth.permissions.has(permission),
+  }),
 }));
 
 const summaryRow = {
@@ -67,6 +74,7 @@ function cardValue(title: string) {
 describe("Dashboard (RN-02, RN-08, RN-09)", () => {
   beforeEach(() => {
     resetFakeSupabase();
+    auth.permissions = null;
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
@@ -194,5 +202,72 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
     expect(cardValue("Total de Membros")).toBe("1530");
     expect(screen.queryByText(/^Células (Discipulado|Evangelística)/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Células por G12" })).not.toBeInTheDocument();
+  });
+});
+
+// Casos acrescentados pelo QA (E1.08, PR 3).
+describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = null;
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  function respondAll(summary = summaryRow) {
+    respondToRpc("dashboard_summary", { data: [summary] });
+    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+  }
+
+  it("Dado o relógio do navegador em outra semana, então o rótulo é a semana devolvida pela RPC, em qualquer fuso", async () => {
+    // Quarta 25/11/2026 ao meio-dia em Brasília (quarta em qualquer fuso de UTC−12 a UTC+8).
+    vi.setSystemTime(new Date("2026-11-25T15:00:00Z"));
+    respondAll({ ...summaryRow, week_start: "2026-03-01", week_end: "2026-03-07" });
+
+    renderDashboard();
+    await settle();
+
+    // O navegador não manda o "agora": a semana é a do banco (horário de Brasília).
+    expect(fakeRpcs().find((call) => call.fn === "dashboard_summary")?.args).toBeUndefined();
+    expect(screen.getByRole("heading", { name: "Esta Semana (01/03 - 07/03)" })).toBeInTheDocument();
+    expect(screen.queryByText(/22\/11|29\/11/)).not.toBeInTheDocument();
+  });
+
+  it("Dado um usuário só com view_own_ministry_dashboard, quando as RPCs respondem, então mostra o selo Meu Ministério e a visão do ministério", async () => {
+    auth.permissions = new Set(["view_own_ministry_dashboard"]);
+    respondAll();
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText("Meu Ministério")).toBeInTheDocument();
+    expect(screen.getByText("Visão do seu ministério")).toBeInTheDocument();
+    expect(cardValue("Total de Membros")).toBe("1530");
+  });
+
+  it("Dado um usuário com view_dashboard, então mostra a visão geral da igreja, sem o selo", async () => {
+    auth.permissions = new Set(["view_dashboard", "view_own_ministry_dashboard"]);
+    respondAll();
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText("Visão geral da igreja")).toBeInTheDocument();
+    expect(screen.queryByText("Meu Ministério")).not.toBeInTheDocument();
+  });
+
+  it("Dado o banco negando só o resumo (42501) e as outras RPCs respondendo, então nenhum número aparece, só a mensagem exata de acesso negado", async () => {
+    respondToRpc("dashboard_summary", denied);
+    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
+    expect(screen.queryByText(/\d/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(fakeRpcs().filter((call) => call.fn === "dashboard_summary")).toHaveLength(1);
   });
 });
