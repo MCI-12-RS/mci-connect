@@ -9,7 +9,9 @@
 // - erros do banco e do Auth viram mensagens genéricas, sem detalhes internos;
 // - o membro é gravado com a sessão de quem chama, então o RLS de `members` vale
 //   e a auditoria registra o autor;
-// - se a gravação do membro falhar, a conta de acesso recém-criada é removida.
+// - se a gravação do membro falhar, a conta de acesso recém-criada é removida;
+// - a resposta traz só o id do membro criado (`{ member: { id } }`), nunca a
+//   linha inteira (E1.08, PR 5).
 //
 // A verificação do JWT é feita aqui dentro (auth.getUser), e não no gateway
 // (`verify_jwt` no config.toml), porque ela funciona tanto com as chaves antigas
@@ -198,10 +200,12 @@ serve(async (req) => {
     const authUserId = createdUserId
     createdUserId = null
 
+    // Devolve só o id: os dados do membro são lidos pela members_view, com a
+    // máscara de dados sensíveis (E1.08, PR 5).
     const { data: member, error: readError } = await admin
-      .from('members').select('*').eq('auth_user_id', authUserId).maybeSingle()
+      .from('members').select('id').eq('auth_user_id', authUserId).maybeSingle()
     if (readError) console.error('create-user-admin: membro gravado, mas a releitura falhou', readError)
-    return json({ member: member ?? null }, 200)
+    return json({ member: member ? { id: member.id } : null }, 200)
   } catch (error) {
     if (createdUserId) {
       const { error: rollbackError } = await admin.auth.admin.deleteUser(createdUserId)
