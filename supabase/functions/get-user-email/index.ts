@@ -26,11 +26,14 @@ serve(async (req) => {
     const cleanIdentifier = identifier.replace(/\D/g, '')
 
     // Search for the member by CPF or Mobile
-    // With data cleaned in DB, we only need to search the clean identifier
+    // With data cleaned in DB, we only need to search the clean identifier.
+    // Deleted members are ignored: the answer is the same as for an unknown
+    // identifier ({ email: null }).
     const { data: member, error } = await supabaseClient
       .from('members')
       .select('email')
       .or(`cpf.eq."${cleanIdentifier}",mobile_whatsapp.eq."${cleanIdentifier}"`)
+      .is('deleted_at', null)
       .limit(1)
       .maybeSingle()
 
