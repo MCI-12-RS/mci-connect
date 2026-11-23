@@ -71,3 +71,19 @@ describe("toMemberWritePayload (RN-12)", () => {
     expect(payload).not.toHaveProperty("leader_name");
   });
 });
+
+describe("SENSITIVE_MEMBER_FIELDS (RN-11)", () => {
+  it("são as 8 colunas que o banco mascara na members_view, preserva na regra 6 e trava na tabela (E1.08, PR 5)", () => {
+    // Mesma lista do pgTAP e108_pr5_members_column_lock.test.sql, que amarra as três listas do banco.
+    expect([...SENSITIVE_MEMBER_FIELDS].sort()).toEqual([
+      "complement",
+      "cpf",
+      "email",
+      "mobile_whatsapp",
+      "number",
+      "phone",
+      "street",
+      "zip_code",
+    ]);
+  });
+});
