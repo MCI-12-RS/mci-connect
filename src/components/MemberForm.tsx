@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,6 +57,79 @@ const maskCEP = (value: string) => {
   return digits.replace(/(\d{5})(\d)/, "$1-$2");
 };
 
+const EMPTY_FORM: MemberInsert = {
+  name: "",
+  email: "",
+  cpf: "",
+  gender: null,
+  birth_date: null,
+  mobile_whatsapp: "",
+  phone: "",
+  notes: "",
+  is_pastor: false,
+  has_leadership: false,
+  leader_id: null,
+  is_baptized: false,
+  baptism_date: null,
+  is_active: true,
+  spouse_id: null,
+  street: "",
+  number: "",
+  complement: "",
+  neighborhood: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  instagram: "",
+  avatar_url: "",
+  role_id: null,
+};
+
+type RoleOption = Pick<Database["public"]["Tables"]["roles"]["Row"], "id" | "name" | "is_default">;
+
+interface RoleFieldProps {
+  /** `undefined` enquanto as funções carregam. */
+  roles: RoleOption[] | undefined;
+  loadError: boolean;
+  value: string | null | undefined;
+  canAssign: boolean;
+  onChange: (roleId: string) => void;
+}
+
+/**
+ * Campo Função. O Select só é montado com as funções já carregadas: dentro de
+ * um <form>, o Select do Radix mantém um <select> nativo oculto, e um valor
+ * sem a <option> correspondente vira "" nesse <select>, que avisa a mudança e
+ * apaga a função escolhida.
+ */
+const RoleField = ({ roles, loadError, value, canAssign, onChange }: RoleFieldProps) => {
+  let field: ReactNode;
+  if (!roles) {
+    const status = loadError ? "Não foi possível carregar as funções" : "Carregando funções…";
+    field = <Input id="role" value={status} disabled className="bg-muted" />;
+  } else if (!canAssign) {
+    field = <Input id="role" value={roles.find((r) => r.id === value)?.name ?? "—"} disabled className="bg-muted" />;
+  } else {
+    field = (
+      <Select value={value || ""} onValueChange={onChange}>
+        <SelectTrigger id="role"><SelectValue placeholder="Selecione a função" /></SelectTrigger>
+        <SelectContent>
+          {roles.map((r) => (
+            <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="role">{canAssign ? "Função *" : "Função"}</Label>
+      {field}
+    </div>
+  );
+};
+
 const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -99,51 +172,24 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     }
   }, []);
 
-  const { data: roles = [] } = useQuery({
+  const { data: roles, isError: rolesError } = useQuery({
     queryKey: ["roles"],
     queryFn: async () => {
-      const { data } = await supabase.from("roles").select("*").order("name");
-      return data || [];
+      const { data, error } = await supabase.from("roles").select("id, name, is_default").order("name");
+      if (error) throw error;
+      return data;
     },
   });
 
-  const defaultRoleId = roles.find((r) => r.is_default)?.id || null;
+  const defaultRoleId = roles?.find((r) => r.is_default)?.id || null;
 
-  const [form, setForm] = useState<MemberInsert>({
-    name: "",
-    email: "",
-    cpf: "",
-    gender: null,
-    birth_date: null,
-    mobile_whatsapp: "",
-    phone: "",
-    notes: "",
-    is_pastor: false,
-    has_leadership: false,
-    leader_id: null,
-    is_baptized: false,
-    baptism_date: null,
-    is_active: true,
-    spouse_id: null,
-    street: "",
-    number: "",
-    complement: "",
-    neighborhood: "",
-    city: "",
-    state: "",
-    zip_code: "",
-    instagram: "",
-    avatar_url: "",
-    role_id: null,
-  });
+  // Os dados do membro entram já na montagem (o diálogo monta o formulário a
+  // cada abertura; quem trocar de membro sem desmontar precisa passar `key`).
+  // Preenchidos depois, num efeito, mudariam o valor dos Selects quando as
+  // opções ainda não existem, e o Radix apagaria o valor.
+  const [form, setForm] = useState<MemberInsert>(() => (member ? { ...member } : EMPTY_FORM));
 
   const [password, setPassword] = useState("");
-
-  useEffect(() => {
-    if (member) {
-      setForm({ ...member });
-    }
-  }, [member]);
 
   // Auto-select default role for new members
   useEffect(() => {
@@ -316,7 +362,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           <div className="space-y-2">
             <Label htmlFor="gender">Gênero</Label>
             <Select value={form.gender || ""} onValueChange={(v) => update("gender", v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger id="gender"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="M">Masculino</SelectItem>
                 <SelectItem value="F">Feminino</SelectItem>
@@ -450,7 +496,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
               <div className="space-y-2">
                 <Label htmlFor="state">Estado</Label>
                 <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
-                  <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                  <SelectTrigger id="state"><SelectValue placeholder="UF" /></SelectTrigger>
                   <SelectContent>
                     {BRAZILIAN_STATES.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -469,28 +515,13 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       <div>
         <h3 className="text-lg font-semibold mb-3">Acesso</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {canAssignRole ? (
-            <div className="space-y-2">
-              <Label htmlFor="role">Função *</Label>
-              <Select value={form.role_id || ""} onValueChange={(v) => update("role_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label>Função</Label>
-              <Input 
-                value={roles.find((r) => r.id === form.role_id)?.name || "—"} 
-                disabled 
-                className="bg-muted"
-              />
-            </div>
-          )}
+          <RoleField
+            roles={roles}
+            loadError={rolesError}
+            value={form.role_id}
+            canAssign={canAssignRole}
+            onChange={(v) => update("role_id", v)}
+          />
           {isEditing && canChangePassword && (
             <div className="space-y-2">
               <Label>Senha</Label>
