@@ -13,6 +13,7 @@ import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 import { applyHostAddress } from "@/lib/cells/host-address";
 import type { CellRow } from "@/lib/cells/fields";
+import { WEEKDAYS } from "@/lib/cells/weekdays";
 
 type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
 type CellField = keyof CellInsert;
@@ -26,10 +27,6 @@ interface CellFormProps {
 const BRAZILIAN_STATES = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
   "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
-];
-
-const DAYS_OF_WEEK = [
-  "Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"
 ];
 
 const CELL_TYPES = [
@@ -151,36 +148,39 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         <div className="space-y-2">
-          <Label>Líder *</Label>
+          <Label htmlFor="leader_id">Líder *</Label>
           <AsyncMemberSelect
+            inputId="leader_id"
             value={form.leader_id}
             onChange={(v) => update("leader_id", v || "")}
-            placeholder="Buscar líder..."
+            placeholder="Buscar líder…"
           />
         </div>
 
         <div className="space-y-2">
-          <Label>Timóteo (Auxiliar)</Label>
+          <Label htmlFor="timothy_id">Timóteo (Auxiliar)</Label>
           <AsyncMemberSelect
+            inputId="timothy_id"
             value={form.timothy_id || null}
             onChange={(v) => update("timothy_id", v)}
-            placeholder="Buscar timóteo..."
+            placeholder="Buscar timóteo…"
           />
         </div>
 
         <div className="space-y-2">
-          <Label>Anfitrião</Label>
+          <Label htmlFor="host_id">Anfitrião</Label>
           <AsyncMemberSelect
+            inputId="host_id"
             value={form.host_id || null}
             onChange={(v) => update("host_id", v)}
-            placeholder="Buscar anfitrião..."
+            placeholder="Buscar anfitrião…"
           />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="type">Tipo</Label>
           <Select value={form.type || ""} onValueChange={(v) => update("type", v)}>
-            <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+            <SelectTrigger id="type"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
             <SelectContent>
               {CELL_TYPES.map(t => (
                 <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -192,9 +192,9 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         <div className="space-y-2">
           <Label htmlFor="day">Dia da Semana</Label>
           <Select value={form.meeting_day || ""} onValueChange={(v) => update("meeting_day", v)}>
-            <SelectTrigger><SelectValue placeholder="Selecione o dia" /></SelectTrigger>
+            <SelectTrigger id="day"><SelectValue placeholder="Selecione o dia" /></SelectTrigger>
             <SelectContent>
-              {DAYS_OF_WEEK.map(d => (
+              {WEEKDAYS.map(d => (
                 <SelectItem key={d} value={d}>{d}</SelectItem>
               ))}
             </SelectContent>

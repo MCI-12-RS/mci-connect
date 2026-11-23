@@ -8,6 +8,9 @@ import type { Database } from "@/integrations/supabase/types";
 export type MemberViewRow = Database["public"]["Views"]["members_view"]["Row"];
 export type MemberWrite = Database["public"]["Tables"]["members"]["Update"];
 
+/** Rótulo de um membro cujo nome não veio do banco (seletores e participantes). */
+export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
+
 /**
  * Colunas da `members_view` usadas nas telas de membro (lista, formulário e o
  * próprio cadastro no AuthContext). Ficam de fora as colunas de vínculo

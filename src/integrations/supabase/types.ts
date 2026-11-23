@@ -845,6 +845,21 @@ export type Database = {
           name: string
         }[]
       }
+      ministry_tree_nodes: {
+        Args: { _parent_ids?: string[] }
+        Returns: {
+          direct_disciples: number
+          g12_level: number
+          is_pastor: boolean
+          member_gender: string
+          member_id: string
+          member_name: string
+          spouse_id: string
+          spouse_name: string
+          total_cells: number
+          total_disciples: number
+        }[]
+      }
       search_normalize: { Args: { _value: string }; Returns: string }
       sp_now: { Args: never; Returns: string }
       sp_today: { Args: never; Returns: string }

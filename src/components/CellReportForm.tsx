@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +11,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
+import { useCellOptions, toCellOption } from "@/hooks/use-cell-options";
+import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
+import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
+import { FormPaginatedSelect } from "@/components/select/FormPaginatedSelect";
 import { format, setDay, isFuture, subWeeks } from "date-fns";
-import Select, { type GroupBase, type StylesConfig } from "react-select";
-import AsyncSelect from "react-select/async";
-import { CELL_SUMMARY_SELECT, type CellSummary } from "@/lib/cells/fields";
+import type { CellSummary } from "@/lib/cells/fields";
 import { formatCellLabel } from "@/lib/cells/labels";
+import { weekdayIndex } from "@/lib/cells/weekdays";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
-import { toSelectedParticipantOptions, type MemberOption } from "@/lib/cell-reports/participants";
+import { toParticipantOptions } from "@/lib/cell-reports/participants";
+import type { SelectOption } from "@/lib/selectors";
 
 const reportSchema = z.object({
   cell_id: z.string().min(1, "Selecione uma célula"),
@@ -42,23 +46,8 @@ interface CellReportFormProps {
   onClose: () => void;
 }
 
-interface CellOption {
-  value: string;
-  label: string;
-}
-
-const DAYS_MAP: Record<string, number> = {
-  "Domingo": 0,
-  "Segunda": 1,
-  "Terça": 2,
-  "Quarta": 3,
-  "Quinta": 4,
-  "Sexta": 5,
-  "Sábado": 6,
-};
-
 const calculateCellDate = (meetingDay: string) => {
-  const dayIndex = DAYS_MAP[meetingDay] ?? 6;
+  const dayIndex = weekdayIndex(meetingDay) ?? 6;
   let d = setDay(new Date(), dayIndex, { weekStartsOn: 0 });
   if (isFuture(d)) {
     d = subWeeks(d, 1);
@@ -66,78 +55,37 @@ const calculateCellDate = (meetingDay: string) => {
   return format(d, "yyyy-MM-dd");
 };
 
-// Cores do tema nos seletores do react-select.
-function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Option, IsMulti, GroupBase<Option>> {
-  return {
-    control: (base) => ({
-      ...base,
-      backgroundColor: "transparent",
-      borderColor: "hsl(var(--input))",
-      minHeight: "40px",
-    }),
-    menu: (base) => ({
-      ...base,
-      backgroundColor: "hsl(var(--popover))",
-      borderColor: "hsl(var(--border))",
-      zIndex: 50,
-    }),
-    option: (base, state) => ({
-      ...base,
-      backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
-      color: state.isFocused ? "hsl(var(--accent-foreground))" : "hsl(var(--foreground))",
-      cursor: "pointer",
-    }),
-    multiValue: (base) => ({
-      ...base,
-      backgroundColor: "hsl(var(--secondary))",
-    }),
-    multiValueLabel: (base) => ({
-      ...base,
-      color: "hsl(var(--secondary-foreground))",
-    }),
-  };
-}
-
-const cellSelectStyles = selectStyles<CellOption, false>();
-const participantSelectStyles = selectStyles<MemberOption, true>();
-
 const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // Células ativas visíveis para o seletor. O PR 4 (tarefa 9) troca por busca
-  // e paginação no servidor.
-  const { data: cells = [] } = useQuery({
-    queryKey: ["cells", "active-summaries"],
-    queryFn: async (): Promise<CellSummary[]> => {
-      const { data, error } = await supabase.from("cells_view").select(CELL_SUMMARY_SELECT).eq("is_active", true);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const cellInputId = useId();
+  const participantsInputId = useId();
+
+  // Seletor de célula: células visíveis e ativas, 20 por vez, buscadas no
+  // servidor (E1.08, RN-07).
+  const cellSearch = useSelectSearch();
+  const cellOptionsQuery = useCellOptions({ search: cellSearch.term, enabled: cellSearch.isMenuOpen });
+  const cellPagination = useOptionsPagination(cellOptionsQuery, toCellOption);
+  // A célula escolhida no seletor: dá o rótulo e sugere o dia e o horário.
+  const [selectedCell, setSelectedCell] = useState<CellSummary | null>(null);
+  const findLoadedCell = (cellId: string | undefined): CellSummary | null =>
+    cellOptionsQuery.data?.pages.flatMap((page) => page.items).find((cell) => cell.id === cellId) ?? null;
 
   // A célula já conhecida: a da tela de Células ou a do relatório em edição.
   // Nos dois casos o seletor fica travado.
   const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
 
-  const loadCellOptions = async (input: string): Promise<CellOption[]> => {
-    const term = (input || "").toLowerCase();
-    return cells
-      .map((c) => ({ value: c.id, label: formatCellLabel(c) }))
-      .filter((option) => !term || option.label.toLowerCase().includes(term));
-  };
-
-  const { data: members = [] } = useQuery({
-    queryKey: ["members-basic"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
+  // Seletor de participantes: membros visíveis e ativos, 20 por vez (RN-07).
+  // As opções escolhidas ficam guardadas com o nome, que não depende das
+  // páginas carregadas nem do texto da busca.
+  const participantSearch = useSelectSearch();
+  const memberOptionsQuery = useMemberOptions({
+    search: participantSearch.term,
+    activeOnly: true,
+    enabled: participantSearch.isMenuOpen,
   });
+  const participantPagination = useOptionsPagination(memberOptionsQuery, toMemberOption);
+  const [participants, setParticipants] = useState<SelectOption[]>([]);
 
   const form = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
@@ -158,15 +106,21 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Na edição, os participantes salvos, com o nome.
   const { data: savedParticipants } = useCellReportParticipants(report?.id);
 
+  // Uma vez por relatório: uma nova leitura (por exemplo, ao voltar para a
+  // janela) não desfaz o que já foi mudado no formulário.
+  const loadedParticipantsOf = useRef<string | null>(null);
   useEffect(() => {
-    if (savedParticipants) form.setValue("participant_ids", savedParticipants.map((p) => p.member_id));
-  }, [savedParticipants, form]);
+    if (!savedParticipants || !report?.id || loadedParticipantsOf.current === report.id) return;
+    loadedParticipantsOf.current = report.id;
+    setParticipants(toParticipantOptions(savedParticipants));
+    form.setValue("participant_ids", savedParticipants.map((p) => p.member_id));
+  }, [savedParticipants, report?.id, form]);
 
   const cellIdValue = form.watch("cell_id");
   const wasHeldValue = form.watch("was_held");
 
   // Novo relatório: dia e horário sugeridos pela célula escolhida.
-  const suggestionCell = report ? null : (initialCell ?? cells.find((c) => c.id === cellIdValue) ?? null);
+  const suggestionCell = report ? null : (initialCell ?? selectedCell);
   const suggestedDay = suggestionCell?.meeting_day;
   const suggestedTime = suggestionCell?.meeting_time;
 
@@ -253,43 +207,34 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     saveMutation.mutate(values);
   };
 
-  const memberOptions: MemberOption[] = members.map((m) => ({
-    value: m.id,
-    label: m.name,
-  }));
-
-  const selectedParticipantOptions = toSelectedParticipantOptions(
-    form.watch("participant_ids"),
-    memberOptions,
-    savedParticipants ?? [],
-  );
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      {/* min-w-0: dentro do grid do diálogo, um nome longo não alarga o formulário. */}
+      <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="cell_id"
             render={({ field }) => {
-              const selected = knownCell ?? cells.find((c) => c.id === field.value);
-              const selectedOption: CellOption | null =
+              const selected = knownCell ?? selectedCell;
+              const selectedOption: SelectOption | null =
                 field.value && selected ? { value: field.value, label: formatCellLabel(selected) } : null;
               return (
                 <FormItem className="col-span-1 md:col-span-2">
-                  <FormLabel>Célula *</FormLabel>
-                  <AsyncSelect<CellOption, false>
-                    cacheOptions
-                    defaultOptions
-                    loadOptions={loadCellOptions}
+                  <FormLabel htmlFor={cellInputId}>Célula *</FormLabel>
+                  <FormPaginatedSelect
+                    inputId={cellInputId}
+                    focusRef={field.ref}
+                    search={cellSearch}
+                    pagination={cellPagination}
                     value={selectedOption}
-                    onChange={(opt) => field.onChange(opt?.value || "")}
+                    onChange={(option) => {
+                      setSelectedCell(findLoadedCell(option?.value));
+                      field.onChange(option?.value ?? "");
+                    }}
                     isDisabled={!!report || !!initialCell}
-                    placeholder="Buscar célula por líder, endereço ou bairro..."
-                    noOptionsMessage={() => "Nenhuma célula encontrada"}
-                    loadingMessage={() => "Carregando..."}
-                    styles={cellSelectStyles}
-                    className="text-sm"
+                    placeholder="Buscar por líder, rua ou bairro…"
+                    noResultsLabel="Nenhuma célula encontrada"
                   />
                   <FormMessage />
                 </FormItem>
@@ -385,21 +330,23 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
             <FormField
               control={form.control}
               name="participant_ids"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Participantes (Membros)</FormLabel>
-                  <FormControl>
-                    <Select<MemberOption, true>
-                      isMulti
-                      options={memberOptions}
-                      value={selectedParticipantOptions}
-                      onChange={(selected) => form.setValue("participant_ids", selected.map((s) => s.value))}
-                      placeholder="Selecione os membros..."
-                      noOptionsMessage={() => "Nenhum membro encontrado"}
-                      styles={participantSelectStyles}
-                      className="text-sm"
-                    />
-                  </FormControl>
+                  <FormLabel htmlFor={participantsInputId}>Participantes (Membros)</FormLabel>
+                  <FormPaginatedSelect
+                    isMulti
+                    inputId={participantsInputId}
+                    focusRef={field.ref}
+                    search={participantSearch}
+                    pagination={participantPagination}
+                    value={participants}
+                    onChange={(selected) => {
+                      setParticipants([...selected]);
+                      form.setValue("participant_ids", selected.map((s) => s.value));
+                    }}
+                    placeholder="Buscar membros…"
+                    noResultsLabel="Nenhum membro encontrado"
+                  />
                   <FormMessage />
                 </FormItem>
               )}
