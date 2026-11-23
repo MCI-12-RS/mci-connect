@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -10,9 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
 import { format, setDay, isFuture, subWeeks } from "date-fns";
-import Select from "react-select";
+import Select, { type GroupBase, type StylesConfig } from "react-select";
 import AsyncSelect from "react-select/async";
+import { CELL_SUMMARY_SELECT, type CellSummary } from "@/lib/cells/fields";
+import { formatCellLabel } from "@/lib/cells/labels";
+import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
+import { toSelectedParticipantOptions, type MemberOption } from "@/lib/cell-reports/participants";
 
 const reportSchema = z.object({
   cell_id: z.string().min(1, "Selecione uma célula"),
@@ -30,9 +35,16 @@ const reportSchema = z.object({
 type ReportFormValues = z.infer<typeof reportSchema>;
 
 interface CellReportFormProps {
-  report?: any | null;
+  /** Relatório em edição: a linha da cell_reports_view. */
+  report?: CellReportRow | null;
+  /** Célula já escolhida (botão "Novo Relatório" da tela de Células): a linha da cells_view. */
+  initialCell?: CellSummary | null;
   onClose: () => void;
-  initialCellId?: string;
+}
+
+interface CellOption {
+  value: string;
+  label: string;
 }
 
 const DAYS_MAP: Record<string, number> = {
@@ -54,37 +66,64 @@ const calculateCellDate = (meetingDay: string) => {
   return format(d, "yyyy-MM-dd");
 };
 
-const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps) => {
+// Cores do tema nos seletores do react-select.
+function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Option, IsMulti, GroupBase<Option>> {
+  return {
+    control: (base) => ({
+      ...base,
+      backgroundColor: "transparent",
+      borderColor: "hsl(var(--input))",
+      minHeight: "40px",
+    }),
+    menu: (base) => ({
+      ...base,
+      backgroundColor: "hsl(var(--popover))",
+      borderColor: "hsl(var(--border))",
+      zIndex: 50,
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
+      color: state.isFocused ? "hsl(var(--accent-foreground))" : "hsl(var(--foreground))",
+      cursor: "pointer",
+    }),
+    multiValue: (base) => ({
+      ...base,
+      backgroundColor: "hsl(var(--secondary))",
+    }),
+    multiValueLabel: (base) => ({
+      ...base,
+      color: "hsl(var(--secondary-foreground))",
+    }),
+  };
+}
+
+const cellSelectStyles = selectStyles<CellOption, false>();
+const participantSelectStyles = selectStyles<MemberOption, true>();
+
+const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedCell, setSelectedCell] = useState<any | null>(null);
-
+  // Células ativas visíveis para o seletor. O PR 4 (tarefa 9) troca por busca
+  // e paginação no servidor.
   const { data: cells = [] } = useQuery({
-    queryKey: ["active-cells"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("cells")
-        .select(`id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood`)
-        .eq("is_active", true);
+    queryKey: ["cells", "active-summaries"],
+    queryFn: async (): Promise<CellSummary[]> => {
+      const { data, error } = await supabase.from("cells_view").select(CELL_SUMMARY_SELECT).eq("is_active", true);
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
-  const formatCellLabel = (c: any) => {
-    const leaderName = c?.leader?.name ? `Célula de ${c.leader.name}` : `Célula (${(c?.id || "").substring(0, 5)})`;
-    const street = [c?.street, c?.number].filter(Boolean).join(" ");
-    const addressBits = [street, c?.neighborhood].filter(Boolean).join(", ");
-    return addressBits ? `${leaderName}, em ${addressBits}` : leaderName;
-  };
+  // A célula já conhecida: a da tela de Células ou a do relatório em edição.
+  // Nos dois casos o seletor fica travado.
+  const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
 
-  const loadCellOptions = async (input: string) => {
+  const loadCellOptions = async (input: string): Promise<CellOption[]> => {
     const term = (input || "").toLowerCase();
-    const filtered = (cells as any[]).filter((c) => {
-      if (!term) return true;
-      return formatCellLabel(c).toLowerCase().includes(term);
-    });
-    return filtered.map((c) => ({ value: c.id, label: formatCellLabel(c), data: c }));
+    return cells
+      .map((c) => ({ value: c.id, label: formatCellLabel(c) }))
+      .filter((option) => !term || option.label.toLowerCase().includes(term));
   };
 
   const { data: members = [] } = useQuery({
@@ -103,7 +142,7 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
   const form = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
     defaultValues: {
-      cell_id: report?.cell_id || initialCellId || "",
+      cell_id: report?.cell_id || initialCell?.id || "",
       date: report?.date || format(new Date(), "yyyy-MM-dd"),
       time: report?.time?.substring(0, 5) || "19:00",
       was_held: report ? report.was_held : true,
@@ -116,40 +155,25 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
     },
   });
 
-  // Fetch participants if editing
-  useQuery({
-    queryKey: ["report-participants", report?.id],
-    queryFn: async () => {
-      if (!report?.id) return [];
-      const { data, error } = await supabase
-        .from("cell_report_participants")
-        .select("member_id")
-        .eq("report_id", report.id);
-      if (error) throw error;
-      const ids = data.map((d) => d.member_id);
-      form.setValue("participant_ids", ids);
-      return ids;
-    },
-    enabled: !!report?.id,
-  });
+  // Na edição, os participantes salvos, com o nome.
+  const { data: savedParticipants } = useCellReportParticipants(report?.id);
+
+  useEffect(() => {
+    if (savedParticipants) form.setValue("participant_ids", savedParticipants.map((p) => p.member_id));
+  }, [savedParticipants, form]);
 
   const cellIdValue = form.watch("cell_id");
   const wasHeldValue = form.watch("was_held");
 
+  // Novo relatório: dia e horário sugeridos pela célula escolhida.
+  const suggestionCell = report ? null : (initialCell ?? cells.find((c) => c.id === cellIdValue) ?? null);
+  const suggestedDay = suggestionCell?.meeting_day;
+  const suggestedTime = suggestionCell?.meeting_time;
+
   useEffect(() => {
-    if (cellIdValue && cells.length > 0 && !report) {
-      const cell = cells.find((c: any) => c.id === cellIdValue);
-      if (cell) {
-        setSelectedCell(cell);
-        if (cell.meeting_day) {
-          form.setValue("date", calculateCellDate(cell.meeting_day));
-        }
-        if (cell.meeting_time) {
-          form.setValue("time", cell.meeting_time.substring(0, 5));
-        }
-      }
-    }
-  }, [cellIdValue, cells, report, form]);
+    if (suggestedDay) form.setValue("date", calculateCellDate(suggestedDay));
+    if (suggestedTime) form.setValue("time", suggestedTime.substring(0, 5));
+  }, [cellIdValue, suggestedDay, suggestedTime, form]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: ReportFormValues) => {
@@ -209,7 +233,7 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
       toast({ title: "Relatório salvo com sucesso" });
       onClose();
     },
-    onError: (error: any) => {
+    onError: (error) => {
       const msg = error?.message || "";
       let friendly = msg;
       if (msg.includes("Já existe um relatório para esta célula nesta semana")) {
@@ -229,43 +253,16 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
     saveMutation.mutate(values);
   };
 
-  const memberOptions = members.map((m: any) => ({
+  const memberOptions: MemberOption[] = members.map((m) => ({
     value: m.id,
     label: m.name,
   }));
 
-  const selectedParticipantOptions = memberOptions.filter(
-    (o) => form.watch("participant_ids").includes(o.value)
+  const selectedParticipantOptions = toSelectedParticipantOptions(
+    form.watch("participant_ids"),
+    memberOptions,
+    savedParticipants ?? [],
   );
-
-  const customSelectStyles = {
-    control: (base: any) => ({
-      ...base,
-      backgroundColor: "transparent",
-      borderColor: "hsl(var(--input))",
-      minHeight: "40px",
-    }),
-    menu: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--popover))",
-      borderColor: "hsl(var(--border))",
-      zIndex: 50,
-    }),
-    option: (base: any, state: any) => ({
-      ...base,
-      backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
-      color: state.isFocused ? "hsl(var(--accent-foreground))" : "hsl(var(--foreground))",
-      cursor: "pointer",
-    }),
-    multiValue: (base: any) => ({
-      ...base,
-      backgroundColor: "hsl(var(--secondary))",
-    }),
-    multiValueLabel: (base: any) => ({
-      ...base,
-      color: "hsl(var(--secondary-foreground))",
-    }),
-  };
 
   return (
     <Form {...form}>
@@ -275,24 +272,23 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
             control={form.control}
             name="cell_id"
             render={({ field }) => {
-              const selected = (cells as any[]).find((c) => c.id === field.value);
-              const selectedOption = selected
-                ? { value: selected.id, label: formatCellLabel(selected), data: selected }
-                : null;
+              const selected = knownCell ?? cells.find((c) => c.id === field.value);
+              const selectedOption: CellOption | null =
+                field.value && selected ? { value: field.value, label: formatCellLabel(selected) } : null;
               return (
                 <FormItem className="col-span-1 md:col-span-2">
                   <FormLabel>Célula *</FormLabel>
-                  <AsyncSelect
+                  <AsyncSelect<CellOption, false>
                     cacheOptions
                     defaultOptions
                     loadOptions={loadCellOptions}
                     value={selectedOption}
-                    onChange={(opt: any) => field.onChange(opt?.value || "")}
-                    isDisabled={!!report || !!initialCellId}
+                    onChange={(opt) => field.onChange(opt?.value || "")}
+                    isDisabled={!!report || !!initialCell}
                     placeholder="Buscar célula por líder, endereço ou bairro..."
                     noOptionsMessage={() => "Nenhuma célula encontrada"}
                     loadingMessage={() => "Carregando..."}
-                    styles={customSelectStyles}
+                    styles={cellSelectStyles}
                     className="text-sm"
                   />
                   <FormMessage />
@@ -393,14 +389,14 @@ const CellReportForm = ({ report, onClose, initialCellId }: CellReportFormProps)
                 <FormItem>
                   <FormLabel>Participantes (Membros)</FormLabel>
                   <FormControl>
-                    <Select
+                    <Select<MemberOption, true>
                       isMulti
                       options={memberOptions}
                       value={selectedParticipantOptions}
                       onChange={(selected) => form.setValue("participant_ids", selected.map((s) => s.value))}
                       placeholder="Selecione os membros..."
                       noOptionsMessage={() => "Nenhum membro encontrado"}
-                      styles={customSelectStyles}
+                      styles={participantSelectStyles}
                       className="text-sm"
                     />
                   </FormControl>

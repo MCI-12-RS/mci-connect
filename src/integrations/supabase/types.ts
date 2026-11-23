@@ -49,6 +49,13 @@ export type Database = {
             referencedRelation: "cell_reports"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "cell_reports_view"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cell_reports: {
@@ -100,6 +107,13 @@ export type Database = {
             columns: ["cell_id"]
             isOneToOne: false
             referencedRelation: "cells"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells_view"
             referencedColumns: ["id"]
           },
         ]
@@ -460,6 +474,208 @@ export type Database = {
       }
     }
     Views: {
+      cell_report_participants_view: {
+        Row: {
+          member_id: string | null
+          member_name: string | null
+          report_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "cell_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_report_participants_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "cell_reports_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cell_reports_view: {
+        Row: {
+          cell_complement: string | null
+          cell_host_id: string | null
+          cell_id: string | null
+          cell_is_active: boolean | null
+          cell_leader_id: string | null
+          cell_leader_name: string | null
+          cell_meeting_day: string | null
+          cell_meeting_time: string | null
+          cell_neighborhood: string | null
+          cell_number: string | null
+          cell_street: string | null
+          cell_timothy_id: string | null
+          cell_type: string | null
+          created_at: string | null
+          date: string | null
+          id: string | null
+          observations: string | null
+          offering: number | null
+          participants_count: number | null
+          reason_not_held: string | null
+          search_text: string | null
+          theme: string | null
+          time: string | null
+          updated_at: string | null
+          visitors: string[] | null
+          visitors_count: number | null
+          was_held: boolean | null
+          week_start: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_cell_id_fkey"
+            columns: ["cell_id"]
+            isOneToOne: false
+            referencedRelation: "cells_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["cell_host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["cell_host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["cell_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["cell_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["cell_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cells_view: {
+        Row: {
+          city: string | null
+          complement: string | null
+          created_at: string | null
+          g12_leader_id: string | null
+          g12_leader_name: string | null
+          host_id: string | null
+          host_name: string | null
+          id: string | null
+          is_active: boolean | null
+          last_report_date: string | null
+          leader_g12_level: number | null
+          leader_gender: string | null
+          leader_id: string | null
+          leader_name: string | null
+          meeting_day: string | null
+          meeting_time: string | null
+          meeting_weekday: number | null
+          neighborhood: string | null
+          number: string | null
+          search_text: string | null
+          state: string | null
+          street: string | null
+          timothy_id: string | null
+          timothy_name: string | null
+          type: string | null
+          updated_at: string | null
+          zip_code: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_timothy_id_fkey"
+            columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       members_view: {
         Row: {
           attended_last_30_days: boolean | null

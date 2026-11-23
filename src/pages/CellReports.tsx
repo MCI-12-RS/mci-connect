@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellReportForm from "@/components/CellReportForm";
+import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -14,35 +15,27 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Search, Pencil, Trash2, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
+import { useCellReportsList } from "@/hooks/use-cell-reports-list";
+import { formatStreetLine } from "@/lib/cells/labels";
+import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const CellReports = () => {
-  const [search, setSearch] = useState("");
+  const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
-  const [editingReport, setEditingReport] = useState<any | null>(null);
-  const { hasPermission, member: currentMember } = useAuth();
+  const [editingReport, setEditingReport] = useState<CellReportRow | null>(null);
+  const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  const { data: reports = [], isLoading } = useQuery({
-    queryKey: ["cell_reports"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("cell_reports")
-        .select(`*, cells (id, leader_id, timothy_id, leader:members!cells_leader_id_fkey(name), meeting_day, meeting_time, street, number, complement, neighborhood), cell_report_participants(count)`)
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data, isLoading, isError, isPlaceholderData } = useCellReportsList(list.params);
+  const reports = data?.rows ?? [];
+  const total = data?.total ?? 0;
 
-  const filteredReports = reports.filter((r: any) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (r.cells?.leader?.name?.toLowerCase() || "").includes(s) || (r.theme?.toLowerCase() || "").includes(s);
-  });
+  useClampPage(list, { data, isPlaceholderData });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -58,46 +51,29 @@ const CellReports = () => {
     },
   });
 
-  const handleEdit = (report: any) => { setEditingReport(report); setFormOpen(true); };
+  const handleEdit = (report: CellReportRow) => { setEditingReport(report); setFormOpen(true); };
   const handleClose = () => { setFormOpen(false); setEditingReport(null); };
 
-  const isOwnCellReport = (r: any) => {
-    if (!currentMember || !r.cells) return false;
-    return r.cells.leader_id === currentMember.id || r.cells.timothy_id === currentMember.id;
-  };
+  const canEditReport = hasPermission("edit_cell_report");
+  const canDeleteReport = hasPermission("delete_cell_report");
+  const canSubmitNewReport =
+    hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
+  const showActions = canEditReport || canDeleteReport;
+  const columnCount = showActions ? 6 : 5;
 
-  const canEditReport = (r: any) => {
-    return hasPermission("edit_cell_report");
-  };
+  const attendance = (r: CellReportRow) => r.participants_count + r.visitors_count;
 
-  const canDeleteReport = () => {
-    return hasPermission("delete_cell_report");
-  };
-
-  const canSubmitNewReport = () => {
-    return hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
-  };
-
-  const reportHasActions = (r: any) => canEditReport(r) || canDeleteReport();
-  const anyReportHasActions = filteredReports.some((r: any) => reportHasActions(r));
-
-  const getStreetLine = (cell: any) => {
-    if (!cell) return "";
-    const parts = [cell.street, cell.number].filter(Boolean).join(" ");
-    return [parts, cell.complement].filter(Boolean).join(" - ");
-  };
-
-  const ActionButtons = ({ r }: { r: any }) => (
+  const ActionButtons = ({ r }: { r: CellReportRow }) => (
     <div className="flex items-center gap-1">
-      {canEditReport(r) && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}>
+      {canEditReport && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)} aria-label="Editar relatório">
           <Pencil className="w-3.5 h-3.5" />
         </Button>
       )}
-      {canDeleteReport() && (
+      {canDeleteReport && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Excluir relatório">
               <Trash2 className="w-3.5 h-3.5 text-destructive" />
             </Button>
           </AlertDialogTrigger>
@@ -116,56 +92,60 @@ const CellReports = () => {
     </div>
   );
 
-  const StatusBadge = ({ r }: { r: any }) =>
+  const StatusBadge = ({ r }: { r: CellReportRow }) =>
     r.was_held ? (
       <Badge className="bg-green-500 hover:bg-green-600">Realizada</Badge>
     ) : (
-      <Badge variant="destructive" title={r.reason_not_held}>Não Realizada</Badge>
+      <Badge variant="destructive" title={r.reason_not_held ?? undefined}>Não Realizada</Badge>
     );
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
-    if (filteredReports.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</p>;
+    if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os relatórios</p>;
+    if (reports.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</p>;
 
     return (
-      <div className="divide-y divide-border">
-        {filteredReports.map((r: any) => (
-          <div key={r.id} className="px-4 py-4 space-y-3">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm">{r.cells?.leader?.name || "Célula sem líder"}</p>
-                {(getStreetLine(r.cells) || r.cells?.neighborhood) && (
-                  <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
-                    {getStreetLine(r.cells) && <p>{getStreetLine(r.cells)}</p>}
-                    {r.cells?.neighborhood && <p>{r.cells.neighborhood}</p>}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
-                </p>
+      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+        {reports.map((r) => {
+          const streetLine = formatStreetLine(cellOfReport(r));
+          return (
+            <div key={r.id} className="px-4 py-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm">{r.cell_leader_name || "Célula sem líder"}</p>
+                  {(streetLine || r.cell_neighborhood) && (
+                    <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                      {streetLine && <p>{streetLine}</p>}
+                      {r.cell_neighborhood && <p>{r.cell_neighborhood}</p>}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })} · {r.time?.substring(0, 5) || "—"}
+                  </p>
+                </div>
+                {showActions && <ActionButtons r={r} />}
               </div>
-              {reportHasActions(r) && <ActionButtons r={r} />}
-            </div>
 
-            {/* Status + attendance */}
-            <div className="flex items-center justify-between">
-              <StatusBadge r={r} />
-              {r.was_held && (
-                <span className="text-sm font-medium text-foreground">
-                  {(r.cell_report_participants?.[0]?.count || 0) + (r.visitors?.length || 0)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
-                </span>
+              {/* Status + attendance */}
+              <div className="flex items-center justify-between">
+                <StatusBadge r={r} />
+                {r.was_held && (
+                  <span className="text-sm font-medium text-foreground">
+                    {attendance(r)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Theme */}
+              {r.theme && (
+                <p className="text-xs text-muted-foreground">
+                  Tema: <span className="text-foreground">{r.theme}</span>
+                </p>
               )}
             </div>
-
-            {/* Theme */}
-            {r.theme && (
-              <p className="text-xs text-muted-foreground">
-                Tema: <span className="text-foreground">{r.theme}</span>
-              </p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -181,7 +161,7 @@ const CellReports = () => {
             </h1>
             <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
-          {canSubmitNewReport() && (
+          {canSubmitNewReport && (
             <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório
@@ -191,12 +171,16 @@ const CellReports = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Buscar por líder ou tema..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-              </div>
-              <Badge variant="secondary">{filteredReports.length}</Badge>
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por líder ou tema..."
+                aria-label="Buscar relatórios"
+                value={list.searchInput}
+                onChange={(e) => list.setSearchInput(e.target.value)}
+                maxLength={100}
+                className="pl-10"
+              />
             </div>
           </CardHeader>
 
@@ -212,53 +196,67 @@ const CellReports = () => {
                     <TableHead>Tema</TableHead>
                     <TableHead className="text-center">Presenças</TableHead>
                     <TableHead>Status</TableHead>
-                    {anyReportHasActions && <TableHead className="w-24">Ações</TableHead>}
+                    {showActions && <TableHead className="w-24">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : filteredReports.length === 0 ? (
-                    <TableRow><TableCell colSpan={anyReportHasActions ? 6 : 5} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  ) : isError ? (
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar os relatórios</TableCell></TableRow>
+                  ) : reports.length === 0 ? (
+                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
                   ) : (
-                    filteredReports.map((r: any) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col leading-tight">
-                            <span>{r.cells?.leader?.name || "Célula sem líder"}</span>
-                            {getStreetLine(r.cells) && (
-                              <span className="text-xs font-normal text-muted-foreground">{getStreetLine(r.cells)}</span>
-                            )}
-                            {r.cells?.neighborhood && (
-                              <span className="text-xs font-normal text-muted-foreground">{r.cells.neighborhood}</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span>{format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })}</span>
-                            <span className="text-xs text-muted-foreground">{r.time?.substring(0, 5) || "—"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="truncate max-w-[200px] block" title={r.theme}>{r.theme || "—"}</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {r.was_held ? (
-                            <div className="flex flex-col items-center justify-center text-xs">
-                              <span className="font-medium text-sm">{(r.cell_report_participants?.[0]?.count || 0) + (r.visitors?.length || 0)}</span>
-                              <span className="text-muted-foreground text-[10px]">Total</span>
+                    reports.map((r) => {
+                      const streetLine = formatStreetLine(cellOfReport(r));
+                      return (
+                        <TableRow key={r.id} className={isPlaceholderData ? "opacity-60" : undefined}>
+                          <TableCell className="font-medium">
+                            <div className="flex flex-col leading-tight">
+                              <span>{r.cell_leader_name || "Célula sem líder"}</span>
+                              {streetLine && <span className="text-xs font-normal text-muted-foreground">{streetLine}</span>}
+                              {r.cell_neighborhood && (
+                                <span className="text-xs font-normal text-muted-foreground">{r.cell_neighborhood}</span>
+                              )}
                             </div>
-                          ) : <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell><StatusBadge r={r} /></TableCell>
-                        {anyReportHasActions && <TableCell>{reportHasActions(r) && <ActionButtons r={r} />}</TableCell>}
-                      </TableRow>
-                    ))
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span>{format(parseISO(r.date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                              <span className="text-xs text-muted-foreground">{r.time?.substring(0, 5) || "—"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="truncate max-w-[200px] block" title={r.theme ?? undefined}>{r.theme || "—"}</span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {r.was_held ? (
+                              <div className="flex flex-col items-center justify-center text-xs">
+                                <span className="font-medium text-sm">{attendance(r)}</span>
+                                <span className="text-muted-foreground text-[10px]">Total</span>
+                              </div>
+                            ) : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell><StatusBadge r={r} /></TableCell>
+                          {showActions && <TableCell><ActionButtons r={r} /></TableCell>}
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
             </CardContent>
+          )}
+
+          {!isLoading && !isError && (
+            <ListPagination
+              page={list.params.page}
+              pageSize={list.params.pageSize}
+              total={total}
+              itemLabel={["relatório", "relatórios"]}
+              onPageChange={list.setPage}
+              onPageSizeChange={list.setPageSize}
+            />
           )}
         </Card>
 

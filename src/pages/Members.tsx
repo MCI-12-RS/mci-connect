@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,9 +16,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
-import { DEFAULT_PAGE_SIZE, lastPage, parsePage, parsePageSize } from "@/lib/pagination";
 import type { MemberRow } from "@/lib/members/fields";
 
 type Member = MemberRow;
@@ -33,12 +31,7 @@ const formatPhone = (value?: string | null): string => {
 };
 
 const Members = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const page = parsePage(searchParams.get("page"));
-  const pageSize = parsePageSize(searchParams.get("size"));
-  const search = searchParams.get("q") ?? "";
-  const [searchInput, setSearchInput] = useState(search);
-  const debouncedSearch = useDebouncedValue(searchInput.trim(), 300);
+  const list = useListSearchParams();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -47,50 +40,11 @@ const Members = () => {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  // Página, tamanho e busca ficam na URL; os valores padrão não aparecem nela.
-  const updateParams = (changes: { page?: number; size?: number; q?: string }) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (changes.page !== undefined) {
-          if (changes.page > 1) next.set("page", String(changes.page));
-          else next.delete("page");
-        }
-        if (changes.size !== undefined) {
-          if (changes.size !== DEFAULT_PAGE_SIZE) next.set("size", String(changes.size));
-          else next.delete("size");
-        }
-        if (changes.q !== undefined) {
-          if (changes.q) next.set("q", changes.q);
-          else next.delete("q");
-        }
-        return next;
-      },
-      { replace: true },
-    );
-  };
-
-  // Mudar a busca volta para a página 1.
-  useEffect(() => {
-    if (debouncedSearch !== search) updateParams({ q: debouncedSearch, page: 1 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
-
-  // A URL mudou por fora (link do menu, botão voltar): o campo acompanha.
-  useEffect(() => {
-    if (search !== debouncedSearch) setSearchInput(search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
-  const { data, isLoading, isError, isPlaceholderData } = useMembersList({ page, pageSize, search });
+  const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
 
-  // Página além do fim (ex.: depois de uma exclusão): vai para a última.
-  useEffect(() => {
-    if (data && page > lastPage(data.total, pageSize)) updateParams({ page: lastPage(data.total, pageSize) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, page, pageSize]);
+  useClampPage(list, { data, isPlaceholderData });
 
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
@@ -240,8 +194,8 @@ const Members = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por nome, e-mail ou CPF..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+                  value={list.searchInput}
+                  onChange={(e) => list.setSearchInput(e.target.value)}
                   maxLength={100}
                   className="pl-10"
                 />
@@ -336,12 +290,12 @@ const Members = () => {
 
           {!isLoading && !isError && (
             <ListPagination
-              page={page}
-              pageSize={pageSize}
+              page={list.params.page}
+              pageSize={list.params.pageSize}
               total={total}
               itemLabel={["membro", "membros"]}
-              onPageChange={(next) => updateParams({ page: next })}
-              onPageSizeChange={(size) => updateParams({ size, page: 1 })}
+              onPageChange={list.setPage}
+              onPageSizeChange={list.setPageSize}
             />
           )}
         </Card>
