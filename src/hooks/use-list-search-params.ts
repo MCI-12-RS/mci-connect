@@ -73,12 +73,22 @@ export function useListSearchParams(): ListSearchState {
   return { params: { page, pageSize, search }, searchInput, setSearchInput, setPage, setPageSize };
 }
 
+/** Os campos do resultado do `useQuery` da lista que o `useClampPage` usa. */
+export interface ListQueryState {
+  data?: { total: number };
+  isPlaceholderData: boolean;
+}
+
 /**
  * Página além do fim (ex.: depois de uma exclusão, ou um link antigo): vai
- * para a última. `total` é o da lista carregada; `undefined` enquanto carrega.
+ * para a última. Só decide com o total da consulta atual. Enquanto carrega, ou
+ * enquanto mostra a página anterior (`keepPreviousData`), não mexe: o total
+ * antigo pode ser de outra busca (ex.: voltar no navegador de `?q=ana` para
+ * `?page=5` levaria para a página 1).
  */
-export function useClampPage({ params, setPage }: ListSearchState, total: number | undefined): void {
+export function useClampPage({ params, setPage }: ListSearchState, { data, isPlaceholderData }: ListQueryState): void {
   const { page, pageSize } = params;
+  const total = isPlaceholderData ? undefined : data?.total;
   useEffect(() => {
     if (total === undefined) return;
     const last = lastPage(total, pageSize);

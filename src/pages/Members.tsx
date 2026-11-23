@@ -44,7 +44,7 @@ const Members = () => {
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
 
-  useClampPage(list, data?.total);
+  useClampPage(list, { data, isPlaceholderData });
 
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;

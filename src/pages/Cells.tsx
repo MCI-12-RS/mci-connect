@@ -36,7 +36,7 @@ const Cells = () => {
   const cells = data?.rows ?? [];
   const total = data?.total ?? 0;
 
-  useClampPage(list, data?.total);
+  useClampPage(list, { data, isPlaceholderData });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
