@@ -20,6 +20,8 @@ export interface FakeResponse {
   data?: unknown;
   count?: number | null;
   error?: FakeError | null;
+  /** A resposta só chega quando esta promessa resolver (para ver o estado de carregamento). */
+  until?: PromiseLike<unknown>;
 }
 
 export interface FakeResult {
@@ -100,7 +102,9 @@ abstract class FakeBuilder implements PromiseLike<FakeResult> {
     onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve(this.result()).then(onfulfilled, onrejected);
+    const { until } = this.response;
+    const result = until ? Promise.resolve(until).then(() => this.result()) : Promise.resolve(this.result());
+    return result.then(onfulfilled, onrejected);
   }
 }
 
