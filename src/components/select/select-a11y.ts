@@ -1,4 +1,4 @@
-import type { AriaLiveMessages, GroupBase } from "react-select";
+import type { AriaLiveMessages, GroupBase, OptionsOrGroups } from "react-select";
 import type { SelectOption } from "@/lib/selectors";
 
 // Itens de ação dos seletores paginados (E1.08, RN-07) e os anúncios do
@@ -24,14 +24,40 @@ export function isActionOption(option: SelectOption): boolean {
 
 export const LOADING_LABEL = "Carregando…";
 export const NO_RESULTS_LABEL = "Nenhum resultado";
+export const LOAD_FAILED_LABEL = "Não foi possível carregar as opções";
 
-/** Quantas opções o menu mostra, para o leitor de tela (sem contar o item de ação). */
-export function resultsMessage(count: number): string {
-  return count === 1 ? "1 resultado disponível" : `${count} resultados disponíveis`;
+/** O complemento do anúncio com o texto buscado: ` para a busca "ma"`, ou nada sem busca. */
+function searchSuffix(search: string): string {
+  return search ? ` para a busca "${search}"` : "";
 }
 
-function position(list: readonly unknown[], item: unknown): string {
-  return list.length ? `${list.indexOf(item) + 1} de ${list.length}` : "";
+/**
+ * Quantas opções o menu mostra, para o leitor de tela (sem contar o item de
+ * ação). Com falha, diz que não carregou, e não "0 resultados".
+ */
+export function resultsMessage(count: number, { failed = false } = {}): string {
+  const results = count === 1 ? "1 resultado disponível" : `${count} resultados disponíveis`;
+  if (!failed) return results;
+  return count ? `Não foi possível carregar mais opções. ${results}` : LOAD_FAILED_LABEL;
+}
+
+/**
+ * O anúncio do menu vazio. O react-select não anuncia nada quando não há
+ * opções, então o seletor o coloca na própria região de status.
+ */
+export function noResultsMessage(label: string, search: string): string {
+  return `${label}${searchSuffix(search)}.`;
+}
+
+/** Uma opção que se escolhe: nem grupo, nem item de ação. */
+function isChoice(option: SelectOption | GroupBase<SelectOption>): option is SelectOption {
+  return "value" in option && !isActionOption(option);
+}
+
+/** "2 de 20": a posição entre as opções que se escolhem (sem o item de ação). */
+function position(list: OptionsOrGroups<SelectOption, GroupBase<SelectOption>>, item: SelectOption): string {
+  const items = list.filter(isChoice);
+  return items.length ? `${items.indexOf(item) + 1} de ${items.length}` : "";
 }
 
 /**
@@ -77,9 +103,10 @@ export const SELECT_ARIA_MESSAGES: AriaLiveMessages<SelectOption, boolean, Group
   onFocus: ({ context, focused, options, label = "", selectValue, isSelected, isAppleDevice }) => {
     if (context === "value" && selectValue) return `Selecionado ${label} em foco, ${position(selectValue, focused)}.`;
     if (context === "menu" && isAppleDevice) {
+      if (isActionOption(focused)) return `${label}.`;
       return `${label}${isSelected ? ", selecionada" : ""}, ${position(options, focused)}.`;
     }
     return "";
   },
-  onFilter: ({ inputValue, resultsMessage: results }) => `${results}${inputValue ? ` para a busca "${inputValue}"` : ""}.`,
+  onFilter: ({ inputValue, resultsMessage: results }) => `${results}${searchSuffix(inputValue)}.`,
 };

@@ -335,7 +335,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
                 value={form.spouse_id || null}
                 onChange={(v) => update("spouse_id", v)}
                 excludeId={member?.id}
-                placeholder="Buscar cônjuge..."
+                placeholder="Buscar cônjuge…"
               />
             </div>
           )}
@@ -386,7 +386,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
                     value={form.leader_id || null}
                     onChange={(v) => update("leader_id", v)}
                     excludeId={member?.id}
-                    placeholder="Buscar líder..."
+                    placeholder="Buscar líder…"
                   />
                 </div>
               )}

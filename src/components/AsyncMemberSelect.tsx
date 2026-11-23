@@ -26,7 +26,7 @@ const AsyncMemberSelect = ({
   value,
   onChange,
   excludeId,
-  placeholder = "Buscar membro...",
+  placeholder = "Buscar membro…",
   activeOnly = false,
   inputId,
 }: AsyncMemberSelectProps) => {
@@ -57,6 +57,7 @@ const AsyncMemberSelect = ({
         onChange(option?.value ?? null);
       }}
       placeholder={placeholder}
+      noResultsLabel="Nenhum membro encontrado"
       isClearable
     />
   );

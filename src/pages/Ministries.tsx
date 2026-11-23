@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronDown, ChevronRight, Heart, Loader2, Users } from "lucide-react";
 import { useMinistryTree, type MinistryTreeNode } from "@/hooks/use-ministry-tree";
 import { formatCount } from "@/lib/format";
-import { directDisciplesLabel, getLevelLabel, ministryNodeKey, ministryNodeParentIds } from "@/lib/ministries/tree";
+import {
+  directDisciplesLabel,
+  getLevelLabel,
+  isNumericLevelLabel,
+  ministryNodeKey,
+  ministryNodeParentIds,
+} from "@/lib/ministries/tree";
 import { cn } from "@/lib/utils";
 
 // Árvore de ministérios (E1.08, RN-10): abrir a tela é uma chamada (as raízes)
@@ -16,6 +22,7 @@ import { cn } from "@/lib/utils";
 const LOADING_MESSAGE = "Carregando…";
 // Linhas exibidas enquanto as raízes carregam.
 const ROOT_PLACEHOLDERS = 4;
+const SPINNER = "h-4 w-4 animate-spin motion-reduce:animate-none";
 
 // Linha do nó. O recuo de cada nível vem da lista aninhada (`NESTED_LIST`),
 // menor no celular para não espremer os nomes.
@@ -33,19 +40,26 @@ const RetryLine = ({ message, onRetry, className }: RetryLineProps) => (
     <span role="alert" className="text-destructive">
       {message}
     </span>
-    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+    <Button type="button" variant="outline" onClick={onRetry}>
       Tentar novamente
     </Button>
   </div>
 );
 
-/** Nomes do casal; o coração é decorativo e o leitor de tela ouve "e". */
+/**
+ * Nomes do casal; o coração é decorativo e o leitor de tela ouve "e". O
+ * coração vai junto do 1º nome, para não ficar sozinho numa linha.
+ */
 const CoupleNames = ({ node }: { node: MinistryTreeNode }) => (
-  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 font-medium text-foreground">
-    <span className="break-words">{node.member_name}</span>
+  <span className="flex min-w-0 flex-auto flex-wrap items-center gap-x-1.5 font-medium text-foreground sm:flex-1">
+    <span className="break-words">
+      {node.member_name}
+      {node.spouse_name && (
+        <Heart className="ml-1.5 inline h-3.5 w-3.5 align-[-0.125em] text-destructive/60" aria-hidden="true" />
+      )}
+    </span>
     {node.spouse_name && (
       <>
-        <Heart className="h-3.5 w-3.5 shrink-0 text-destructive/60" aria-hidden="true" />
         <span className="sr-only"> e </span>
         <span className="break-words">{node.spouse_name}</span>
       </>
@@ -63,13 +77,23 @@ const NodeCounts = ({ node }: { node: MinistryTreeNode }) => (
       </span>
     )}
     <Badge variant={node.g12_level === 0 ? "default" : "outline"} className="text-xs">
+      {isNumericLevelLabel(node.g12_level) && <span className="sr-only">nível </span>}
       {getLevelLabel(node.g12_level)}
     </Badge>
   </span>
 );
 
+/** Nomes e contagens: no celular, a contagem e o nível descem para baixo dos nomes longos. */
+const NodeDetails = ({ node }: { node: MinistryTreeNode }) => (
+  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 sm:flex-nowrap">
+    <CoupleNames node={node} />
+    <NodeCounts node={node} />
+  </span>
+);
+
 const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
   const [expanded, setExpanded] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const hasChildren = node.direct_disciples > 0;
   // Uma chamada por nó aberto; recolher e reabrir usa o cache.
   const children = useMinistryTree(ministryNodeParentIds(node), { enabled: hasChildren && expanded });
@@ -82,8 +106,7 @@ const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
           <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
             <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
           </span>
-          <CoupleNames node={node} />
-          <NodeCounts node={node} />
+          <NodeDetails node={node} />
         </div>
       </li>
     );
@@ -92,6 +115,7 @@ const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
   return (
     <li>
       <button
+        ref={buttonRef}
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((open) => !open)}
@@ -102,15 +126,14 @@ const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true">
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className={SPINNER} />
           ) : expanded ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
         </span>
-        <CoupleNames node={node} />
-        <NodeCounts node={node} />
+        <NodeDetails node={node} />
       </button>
       {expanded && (
         <div className={NESTED_LIST} aria-busy={loading}>
@@ -121,7 +144,11 @@ const TreeNode = ({ node }: { node: MinistryTreeNode }) => {
           ) : children.isError ? (
             <RetryLine
               message="Não foi possível carregar os discípulos."
-              onRetry={() => void children.refetch()}
+              onRetry={() => {
+                // A linha do erro some enquanto carrega: o foco volta para o nó.
+                buttonRef.current?.focus();
+                void children.refetch();
+              }}
               className="px-2 py-2 sm:px-4"
             />
           ) : (
@@ -150,6 +177,8 @@ const RootsLoading = () => (
 
 const Ministries = () => {
   const roots = useMinistryTree(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const isEmpty = roots.data?.length === 0;
 
   let content;
   // Também ao tentar de novo depois de um erro: a consulta segue com erro até responder.
@@ -159,12 +188,23 @@ const Ministries = () => {
     content = (
       <RetryLine
         message="Não foi possível carregar a árvore."
-        onRetry={() => void roots.refetch()}
+        onRetry={() => {
+          // A linha do erro some enquanto carrega: o foco vai para o título da tela.
+          headingRef.current?.focus();
+          void roots.refetch();
+        }}
         className="justify-center py-12"
       />
     );
-  } else if (roots.data.length === 0) {
-    content = <p className="py-12 text-center text-muted-foreground">Nenhum pastor para exibir.</p>;
+  } else if (isEmpty) {
+    content = (
+      <div className="space-y-1 px-4 py-12 text-center">
+        <p className="text-muted-foreground">Nenhum pastor visível para você.</p>
+        <p className="text-sm text-muted-foreground">
+          Por enquanto, a árvore começa pelos pastores. As pessoas do seu ministério aparecem em Membros.
+        </p>
+      </div>
+    );
   } else {
     content = (
       <ul className="divide-y divide-border/30">
@@ -179,8 +219,15 @@ const Ministries = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Ministérios</h1>
-          <p className="text-muted-foreground text-sm">Árvore hierárquica G12 — clique para expandir</p>
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold focus:outline-none md:text-3xl">
+            Ministérios
+          </h1>
+          {!isEmpty && (
+            <p className="text-sm text-muted-foreground">
+              Toque ou clique num nome para ver os discípulos. O número ao lado de cada nome é o total de discípulos
+              diretos.
+            </p>
+          )}
         </div>
 
         <Card>

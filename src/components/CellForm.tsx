@@ -153,7 +153,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             inputId="leader_id"
             value={form.leader_id}
             onChange={(v) => update("leader_id", v || "")}
-            placeholder="Buscar líder..."
+            placeholder="Buscar líder…"
           />
         </div>
 
@@ -163,7 +163,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             inputId="timothy_id"
             value={form.timothy_id || null}
             onChange={(v) => update("timothy_id", v)}
-            placeholder="Buscar timóteo..."
+            placeholder="Buscar timóteo…"
           />
         </div>
 
@@ -173,7 +173,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             inputId="host_id"
             value={form.host_id || null}
             onChange={(v) => update("host_id", v)}
-            placeholder="Buscar anfitrião..."
+            placeholder="Buscar anfitrião…"
           />
         </div>
 

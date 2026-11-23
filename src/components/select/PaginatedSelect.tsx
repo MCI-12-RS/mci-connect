@@ -3,11 +3,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   type KeyboardEvent,
   type MutableRefObject,
+  type Ref,
   type SyntheticEvent,
+  type TouchEvent,
 } from "react";
 import Select, {
   components,
@@ -24,15 +27,18 @@ import Select, {
 import { Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SelectOption } from "@/lib/selectors";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { OptionsPagination, SelectSearch } from "@/hooks/use-paginated-select";
 import { selectStyles } from "./select-styles";
 import {
+  LOAD_FAILED_LABEL,
   LOAD_MORE_OPTION,
   LOADING_LABEL,
   NO_RESULTS_LABEL,
   RETRY_OPTION,
   SELECT_ARIA_MESSAGES,
   isActionOption,
+  noResultsMessage,
   resultsMessage,
 } from "./select-a11y";
 
@@ -48,6 +54,10 @@ import {
 
 /** O foco numa das últimas N opções já pede a próxima página. */
 const PREFETCH_DISTANCE = 3;
+
+/** Altura máxima do menu: menor no celular, para caber com o teclado aberto. */
+const MENU_MAX_HEIGHT = 300;
+const MOBILE_MENU_MAX_HEIGHT = 240;
 
 interface PaginatedMenuContextValue {
   pagination: OptionsPagination;
@@ -102,18 +112,18 @@ function ActionOption({ data, innerProps, innerRef, isFocused }: PaginatedOption
       tabIndex={-1}
       onClick={() => runAction(data)}
       className={cn(
-        "flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 px-3 py-2 hover:bg-accent hover:text-accent-foreground",
-        isFocused ? "bg-accent text-accent-foreground" : "text-primary",
+        "flex min-h-11 cursor-pointer flex-wrap items-center gap-x-2 px-3 py-2 hover:bg-accent hover:text-foreground",
+        isFocused ? "bg-accent text-foreground" : "text-primary",
       )}
     >
       {data === RETRY_OPTION ? (
         <>
-          <span className={cn(!isFocused && "text-destructive")}>Não foi possível carregar as opções.</span>
+          <span className={cn(!isFocused && "text-destructive")}>{LOAD_FAILED_LABEL}.</span>
           <span className="font-medium underline underline-offset-4">Tentar novamente</span>
         </>
       ) : loadingMore ? (
         <>
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           {LOADING_LABEL}
         </>
       ) : (
@@ -199,6 +209,11 @@ const SELECT_COMPONENTS: SelectComponentsConfig<SelectOption, boolean, GroupBase
   MultiValueRemove,
 };
 
+/** O que o seletor expõe por `focusRef`: levar o foco ao campo de busca. */
+export interface PaginatedSelectHandle {
+  focus: () => void;
+}
+
 export interface PaginatedSelectProps<IsMulti extends boolean> {
   /** Id do campo de busca, para o `<Label htmlFor>`. */
   inputId?: string;
@@ -208,9 +223,20 @@ export interface PaginatedSelectProps<IsMulti extends boolean> {
   value: PropsValue<SelectOption>;
   onChange: (value: OnChangeValue<SelectOption, IsMulti>) => void;
   placeholder: string;
+  /** Texto do menu sem resultados (ex.: "Nenhum membro encontrado"). */
+  noResultsLabel?: string;
   isDisabled?: boolean;
+  /** Botão de limpar a escolha. Padrão: sem (no múltiplo, cada escolhido tem o seu "×"). */
   isClearable?: boolean;
+  /**
+   * Recebe o `field.ref` do react-hook-form: quando a validação falha, o foco
+   * vem para o seletor. (Uma prop, e não `forwardRef`, para o componente
+   * continuar genérico no `IsMulti`.)
+   */
+  focusRef?: Ref<PaginatedSelectHandle>;
   "aria-invalid"?: boolean;
+  /** Id da mensagem de erro do campo. */
+  "aria-errormessage"?: string;
 }
 
 export function PaginatedSelect<IsMulti extends boolean = false>({
@@ -221,14 +247,20 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   value,
   onChange,
   placeholder,
+  noResultsLabel = NO_RESULTS_LABEL,
   isDisabled,
-  isClearable,
+  isClearable = false,
+  focusRef,
   "aria-invalid": ariaInvalid,
+  "aria-errormessage": ariaErrorMessage,
 }: PaginatedSelectProps<IsMulti>) {
   const selectRef = useRef<SelectInstance<SelectOption, IsMulti, GroupBase<SelectOption>>>(null);
   const focusedAction = useRef<SelectOption | null>(null);
   const styles = useMemo(() => selectStyles<SelectOption, IsMulti>(), []);
+  const isMobile = useIsMobile();
   const { options, isLoading, isError, hasNextPage, isFetchingNextPage, loadMore, retry } = pagination;
+
+  useImperativeHandle(focusRef, () => ({ focus: () => selectRef.current?.focus() }), []);
 
   // Com erro, o item de tentar de novo; havendo mais páginas, o de carregar
   // mais (que vira "Carregando…" e mantém o foco enquanto a página chega).
@@ -256,7 +288,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   // o teclado na captura do `document`, antes do react-select). Com o menu
   // aberto, o Esc é interceptado antes (na captura do `window`) e só fecha o
   // menu, sem perder o que já foi preenchido no formulário.
-  const { isMenuOpen } = search;
+  const { isMenuOpen, term } = search;
   useEffect(() => {
     if (!isMenuOpen) return;
     const closeMenuOnEscape = (event: globalThis.KeyboardEvent) => {
@@ -269,6 +301,44 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
     window.addEventListener("keydown", closeMenuOnEscape, true);
     return () => window.removeEventListener("keydown", closeMenuOnEscape, true);
   }, [isMenuOpen]);
+
+  // O menu abre com "Carregando…" e é posicionado nesse tamanho; quando a 1ª
+  // página chega, ele cresce e pode ficar cortado no fim do diálogo (no
+  // celular, só umas 2 opções apareciam). Aí ele é trazido para a vista.
+  const awaitingFirstPage = useRef(false);
+  useEffect(() => {
+    if (!isMenuOpen) {
+      awaitingFirstPage.current = false;
+    } else if (isLoading) {
+      awaitingFirstPage.current = true;
+    } else if (awaitingFirstPage.current) {
+      awaitingFirstPage.current = false;
+      selectRef.current?.menuListRef?.scrollIntoView({ block: "nearest" });
+    }
+  }, [isMenuOpen, isLoading]);
+
+  // Um toque no campo de busca que abre o menu: o react-select dá o foco e abre
+  // o menu no `touchend` (como no resto do controle), mas, só no campo, não
+  // cancela os eventos de mouse que o navegador emite depois do toque. Quando
+  // o menu rola o diálogo para aparecer inteiro, esse `mousedown` caía em outro
+  // elemento e fechava o menu na hora. O cancelamento vem depois do tratamento
+  // do react-select (que ignora toques já cancelados). Com o menu já aberto, o
+  // toque segue normal (por exemplo, para mover o cursor no texto).
+  const touchOpensMenu = useRef(false);
+  const handleTouchEndCapture = (event: TouchEvent<HTMLDivElement>) => {
+    const input = selectRef.current?.inputRef;
+    const menuOpenWithFocus = document.activeElement === input && isMenuOpen;
+    touchOpensMenu.current = !!input && event.target === input && !menuOpenWithFocus;
+  };
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (touchOpensMenu.current) event.preventDefault();
+    touchOpensMenu.current = false;
+  };
+
+  // O react-select não anuncia o menu vazio: o anúncio vai numa região de
+  // status própria, que só tem texto enquanto o menu aberto está vazio.
+  const isEmpty = isMenuOpen && !isLoading && !isError && options.length === 0;
+  const emptyStatus = isEmpty ? noResultsMessage(noResultsLabel, term.trim()) : "";
 
   // Enter e espaço num item de ação executam a ação, sem passar pela escolha
   // de opção do react-select (que não escolhe itens desativados).
@@ -283,43 +353,59 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
 
   return (
     <PaginatedMenuContext.Provider value={menuContext}>
-      <Select<SelectOption, IsMulti>
-        ref={selectRef}
-        inputId={inputId}
-        isMulti={isMulti}
-        options={menuOptions}
-        value={value}
-        onChange={(next) => onChange(next)}
-        inputValue={search.inputValue}
-        onInputChange={(text, meta) => {
-          // Na escolha múltipla, a busca continua depois de cada escolha, para
-          // escolher outras opções do mesmo resultado.
-          if (isMulti && meta.action === "set-value") return;
-          search.setInputValue(text);
-        }}
-        onMenuOpen={() => search.setMenuOpen(true)}
-        onMenuClose={() => search.setMenuOpen(false)}
-        onMenuScrollToBottom={loadMore}
-        // O padrão desliga a captura da rolagem em telas de toque, e aí o fim
-        // da rolagem não seria percebido no celular.
-        captureMenuScroll
-        filterOption={null}
-        isOptionDisabled={isActionOption}
-        closeMenuOnSelect={!isMulti}
-        isLoading={isLoading}
-        isDisabled={isDisabled}
-        isClearable={isClearable}
-        placeholder={placeholder}
-        loadingMessage={() => LOADING_LABEL}
-        noOptionsMessage={() => NO_RESULTS_LABEL}
-        screenReaderStatus={({ count }) => resultsMessage(action ? count - 1 : count)}
-        ariaLiveMessages={SELECT_ARIA_MESSAGES}
-        aria-invalid={ariaInvalid}
-        components={SELECT_COMPONENTS}
-        styles={styles}
-        onKeyDown={handleKeyDown}
-        className="text-base md:text-sm"
-      />
+      <div onTouchEndCapture={handleTouchEndCapture} onTouchEnd={handleTouchEnd}>
+        <Select<SelectOption, IsMulti>
+          ref={selectRef}
+          inputId={inputId}
+          isMulti={isMulti}
+          options={menuOptions}
+          value={value}
+          onChange={(next) => onChange(next)}
+          inputValue={search.inputValue}
+          onInputChange={(text, meta) => {
+            // Na escolha múltipla, o menu, o foco e o texto da busca ficam depois
+            // de cada escolha (também no toque, com `blurInputOnSelect` desligado),
+            // para escolher outras opções do mesmo resultado.
+            if (isMulti && meta.action === "set-value") return;
+            search.setInputValue(text);
+          }}
+          onMenuOpen={() => search.setMenuOpen(true)}
+          onMenuClose={() => search.setMenuOpen(false)}
+          onMenuScrollToBottom={loadMore}
+          // O padrão desliga a captura da rolagem em telas de toque, e aí o fim
+          // da rolagem não seria percebido no celular.
+          captureMenuScroll
+          // O padrão desliga em celulares, e aí o menu abria cortado no fim do diálogo.
+          menuShouldScrollIntoView
+          maxMenuHeight={isMobile ? MOBILE_MENU_MAX_HEIGHT : MENU_MAX_HEIGHT}
+          filterOption={null}
+          isOptionDisabled={isActionOption}
+          closeMenuOnSelect={!isMulti}
+          // No toque, o padrão tira o foco a cada escolha (fecha o teclado). Na
+          // escolha única continua assim; na múltipla, o foco fica.
+          blurInputOnSelect={isMulti ? false : undefined}
+          // O Tab só sai do campo: com texto digitado, ele escolhia a opção em
+          // foco e trocava o valor sem querer.
+          tabSelectsValue={false}
+          isLoading={isLoading}
+          isDisabled={isDisabled}
+          isClearable={isClearable}
+          placeholder={placeholder}
+          loadingMessage={() => LOADING_LABEL}
+          noOptionsMessage={() => noResultsLabel}
+          screenReaderStatus={({ count }) => resultsMessage(action ? count - 1 : count, { failed: isError })}
+          ariaLiveMessages={SELECT_ARIA_MESSAGES}
+          aria-invalid={ariaInvalid}
+          aria-errormessage={ariaErrorMessage}
+          components={SELECT_COMPONENTS}
+          styles={styles}
+          onKeyDown={handleKeyDown}
+          className="text-base md:text-sm"
+        />
+      </div>
+      <span role="status" className="sr-only">
+        {emptyStatus}
+      </span>
     </PaginatedMenuContext.Provider>
   );
 }

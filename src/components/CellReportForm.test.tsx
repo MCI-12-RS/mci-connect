@@ -16,6 +16,7 @@ vi.mock("@/integrations/supabase/client", async () => {
 });
 
 const PARTICIPANTS = "Participantes (Membros)";
+const CELL = "Célula *";
 
 const cell: CellSummary = {
   id: "c1",
@@ -89,8 +90,13 @@ describe("CellReportForm: participantes (RN-06, RN-07)", () => {
     fireEvent.click(await screen.findByRole("option", { name: "Maria Mendes" }));
     expect(screen.getByLabelText("Remover Maria Mendes")).toBeInTheDocument();
 
-    // Num aparelho de toque, escolher tira o foco do campo: o usuário volta a ele e digita.
-    act(() => input.focus());
+    // Mesmo num aparelho de toque (o jsdom é um), o foco e o menu ficam: dá
+    // para escolher o próximo do mesmo resultado ou já digitar outra busca.
+    expect(input).toHaveFocus();
+    expect(screen.getByRole("option", { name: "Marta Moura" })).toBeInTheDocument();
+    // Cada escolhido tem o seu "×": a escolha múltipla não tem o Limpar seleção.
+    expect(screen.queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
+
     fireEvent.change(input, { target: { value: "jo" } });
 
     expect(await screen.findByRole("option", { name: "João Jesus" })).toBeInTheDocument();
@@ -109,6 +115,30 @@ describe("CellReportForm: participantes (RN-06, RN-07)", () => {
 
     expect(screen.getByLabelText("Remover Maria Mendes")).toBeInTheDocument();
     expect(screen.getByLabelText("Remover João Jesus")).toBeInTheDocument();
+  });
+
+  it("Dada uma busca escolhendo participantes, então o texto da busca continua depois da escolha", async () => {
+    respondWith(
+      { data: [{ id: "m1", name: "Maria Mendes" }] },
+      {
+        data: [
+          { id: "m1", name: "Maria Mendes" },
+          { id: "m2", name: "Marta Moura" },
+        ],
+      },
+    );
+    render(<CellReportForm initialCell={cell} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const input = screen.getByLabelText(PARTICIPANTS);
+    openMenu(input);
+    await screen.findByRole("option", { name: "Maria Mendes" });
+    fireEvent.change(input, { target: { value: "ma" } });
+    await screen.findByRole("option", { name: "Marta Moura" });
+
+    fireEvent.click(screen.getByRole("option", { name: "Maria Mendes" }));
+
+    expect(input).toHaveValue("ma");
+    expect(input).toHaveFocus();
+    expect(screen.getByRole("option", { name: "Marta Moura" })).toBeInTheDocument();
   });
 
   it("Dado um relatório em edição, então os participantes salvos aparecem com o nome, lidos da view de participantes", async () => {
@@ -148,5 +178,45 @@ describe("CellReportForm: participantes (RN-06, RN-07)", () => {
 
     await waitFor(() => expect(fakeQueries()).toHaveLength(2));
     expect(screen.getByLabelText("Remover Maria Mendes")).toBeInTheDocument();
+  });
+});
+
+describe("CellReportForm: célula obrigatória", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => resetFakeSupabase());
+
+  it("Dado um relatório novo sem célula, quando salva, então o foco vai ao seletor de célula, que aponta a mensagem de erro", async () => {
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const cellInput = screen.getByLabelText(CELL);
+    expect(cellInput).toHaveAttribute("aria-invalid", "false");
+    expect(cellInput).not.toHaveAttribute("aria-errormessage");
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(cellInput).toHaveFocus());
+    expect(cellInput).toHaveAttribute("aria-invalid", "true");
+    const messageId = cellInput.getAttribute("aria-errormessage") ?? "";
+    expect(document.getElementById(messageId)).toHaveTextContent("Selecione uma célula");
+    // Os participantes não têm erro.
+    expect(screen.getByLabelText(PARTICIPANTS)).toHaveAttribute("aria-invalid", "false");
+    // Nada foi gravado.
+    expect(fakeQueries()).toHaveLength(0);
+  });
+
+  it("Dado um seletor de célula aberto sem resultado, então o menu diz Nenhuma célula encontrada", async () => {
+    respondWith({ data: [] });
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const cellInput = screen.getByLabelText(CELL);
+    expect(screen.getByText("Buscar por líder, rua ou bairro…")).toBeInTheDocument();
+
+    openMenu(cellInput);
+
+    expect(await screen.findByText("Nenhuma célula encontrada")).toBeInTheDocument();
+    // A região de status do seletor de célula anuncia o vazio; a dos participantes fica muda.
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toEqual([
+      "Nenhuma célula encontrada.",
+      "",
+    ]);
   });
 });

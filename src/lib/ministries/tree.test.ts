@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { directDisciplesLabel, getLevelLabel, ministryNodeKey, ministryNodeParentIds } from "./tree";
+import { directDisciplesLabel, getLevelLabel, isNumericLevelLabel, ministryNodeKey, ministryNodeParentIds } from "./tree";
 
 describe("ministryNodeKey (RN-10)", () => {
   it("casal: principal e cônjuge", () => {
@@ -37,6 +37,18 @@ describe("getLevelLabel", () => {
     [7, "Nível 7"],
   ])("nível %i → %s", (level, label) => {
     expect(getLevelLabel(level)).toBe(label);
+  });
+});
+
+describe("isNumericLevelLabel", () => {
+  it.each([
+    [0, false],
+    [1, true],
+    [2, true],
+    [3, true],
+    [4, false],
+  ])("nível %i → %s", (level, numeric) => {
+    expect(isNumericLevelLabel(level)).toBe(numeric);
   });
 });
 

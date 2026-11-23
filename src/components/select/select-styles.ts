@@ -1,5 +1,8 @@
 import type { GroupBase, StylesConfig } from "react-select";
 
+/** Abaixo de 768 px (o `md` do Tailwind): opções com alvo de toque de 44 px. */
+const MOBILE = "@media (max-width: 767px)";
+
 /**
  * Estilos dos seletores do react-select com os tokens do tema (claro e
  * escuro): controle no formato do `Input` do shadcn, foco visível e menu com
@@ -7,12 +10,18 @@ import type { GroupBase, StylesConfig } from "react-select";
  */
 export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Option, IsMulti, GroupBase<Option>> {
   return {
+    // Desativado, como o `Input`: meio apagado e com o cursor de proibido. O
+    // react-select desliga os eventos do ponteiro no contêiner; aqui eles
+    // voltam só nele (para o cursor) e continuam desligados no controle.
+    container: (base, state) => (state.isDisabled ? { ...base, pointerEvents: "auto", cursor: "not-allowed" } : base),
     control: (base, state) => ({
       ...base,
       backgroundColor: "transparent",
       borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))",
       boxShadow: state.isFocused ? "0 0 0 1px hsl(var(--ring))" : "none",
       minHeight: "40px",
+      opacity: state.isDisabled ? 0.5 : 1,
+      pointerEvents: state.isDisabled ? "none" : undefined,
       "&:hover": { borderColor: state.isFocused ? "hsl(var(--ring))" : "hsl(var(--input))" },
     }),
     placeholder: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),
@@ -27,25 +36,41 @@ export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Op
       border: "1px solid hsl(var(--border))",
       zIndex: 50,
     }),
+    // Ao ser trazido para a vista, o menu leva junto a margem e a borda de baixo.
+    menuList: (base) => ({ ...base, scrollMarginBottom: 12 }),
+    // O texto fica com a cor do tema também em foco: o branco sobre o `accent`
+    // não tem contraste suficiente.
     option: (base, state) => ({
       ...base,
+      display: "flex",
+      alignItems: "center",
       backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
-      color: state.isFocused ? "hsl(var(--accent-foreground))" : "hsl(var(--foreground))",
+      color: "hsl(var(--foreground))",
+      fontWeight: state.isSelected ? 600 : 400,
       cursor: "pointer",
+      "&:active": { backgroundColor: "hsl(var(--accent))" },
+      [MOBILE]: { minHeight: 44 },
     }),
     loadingMessage: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),
     noOptionsMessage: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),
+    // Nomes longos quebram a linha dentro do chip, em vez de alargar o formulário.
     multiValue: (base) => ({
       ...base,
-      backgroundColor: "hsl(var(--secondary))",
+      maxWidth: "100%",
+      backgroundColor: "hsl(var(--muted))",
     }),
     multiValueLabel: (base) => ({
       ...base,
-      color: "hsl(var(--secondary-foreground))",
+      color: "hsl(var(--foreground))",
+      whiteSpace: "normal",
+      overflowWrap: "anywhere",
     }),
     multiValueRemove: (base) => ({
       ...base,
-      color: "hsl(var(--secondary-foreground))",
+      minWidth: 32,
+      justifyContent: "center",
+      color: "hsl(var(--foreground))",
+      "&:hover": { backgroundColor: "hsl(var(--destructive))", color: "hsl(var(--destructive-foreground))" },
     }),
   };
 }

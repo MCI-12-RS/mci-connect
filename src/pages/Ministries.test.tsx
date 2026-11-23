@@ -71,6 +71,7 @@ async function settle() {
 }
 
 const nodeButton = (name: RegExp) => screen.getByRole("button", { name });
+const HINT = /Toque ou clique num nome para ver os discípulos/;
 const rpcCalls = () => fakeRpcs().map((call) => [call.fn, call.args]);
 
 describe("Ministérios (RN-10)", () => {
@@ -91,6 +92,7 @@ describe("Ministérios (RN-10)", () => {
     expect(fakeQueries()).toHaveLength(0);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(nodeButton(/Paulo Pastor/)).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText(HINT)).toBeInTheDocument();
   });
 
   it("Dado um casal, então mostra os dois nomes, a contagem de discípulos diretos e o nível", async () => {
@@ -131,6 +133,9 @@ describe("Ministérios (RN-10)", () => {
     ]);
     expect(nodeButton(/Paulo Pastor/)).toHaveAttribute("aria-expanded", "true");
     expect(nodeButton(/André Alves/)).toBeInTheDocument();
+    // O nível só com número é lido como "nível 12"; "Pastor(a)" se explica sozinho.
+    expect(nodeButton(/André Alves/)).toHaveAccessibleName(/nível 12$/);
+    expect(nodeButton(/Paulo Pastor/)).toHaveAccessibleName(/diretos Pastor\(a\)$/);
     // Bruno é folha: aparece sem botão.
     expect(screen.getByText("Bruno Borges")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Bruno Borges/ })).not.toBeInTheDocument();
@@ -192,13 +197,17 @@ describe("Ministérios (RN-10)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("Dado nenhum pastor visível, então mostra Nenhum pastor para exibir.", async () => {
+  it("Dado nenhum pastor visível, então explica que a árvore começa pelos pastores e aponta Membros, sem a dica de expandir", async () => {
     respondToRpc("ministry_tree_nodes", { data: [] });
 
     renderMinistries();
     await settle();
 
-    expect(screen.getByText("Nenhum pastor para exibir.")).toBeInTheDocument();
+    expect(screen.getByText("Nenhum pastor visível para você.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Por enquanto, a árvore começa pelos pastores. As pessoas do seu ministério aparecem em Membros."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -211,10 +220,14 @@ describe("Ministérios (RN-10)", () => {
     expect(screen.queryByText("Paulo Pastor")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    // O botão some enquanto carrega: o foco vai para o título, e não para o body.
+    const heading = screen.getByRole("heading", { name: "Ministérios" });
+    expect(heading).toHaveFocus();
     await settle();
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(nodeButton(/Paulo Pastor/)).toBeInTheDocument();
+    expect(heading).toHaveFocus();
     expect(fakeRpcs().every((call) => call.args === undefined)).toBe(true);
   });
 
@@ -231,10 +244,13 @@ describe("Ministérios (RN-10)", () => {
     expect(nodeButton(/Silas Pastor/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    // O botão some enquanto carrega: o foco volta para o nó, e não para o body.
+    expect(nodeButton(/Paulo Pastor/)).toHaveFocus();
     await settle();
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(nodeButton(/André Alves/)).toBeInTheDocument();
+    expect(nodeButton(/Paulo Pastor/)).toHaveFocus();
     const childCalls = fakeRpcs().filter((call) => call.args !== undefined);
     expect(childCalls.every((call) => JSON.stringify(call.args) === JSON.stringify({ _parent_ids: ["p1", "p2"] }))).toBe(
       true,

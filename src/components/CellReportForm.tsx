@@ -14,7 +14,7 @@ import { useCellReportParticipants } from "@/hooks/use-cell-report-participants"
 import { useCellOptions, toCellOption } from "@/hooks/use-cell-options";
 import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
-import { PaginatedSelect } from "@/components/select/PaginatedSelect";
+import { FormPaginatedSelect } from "@/components/select/FormPaginatedSelect";
 import { format, setDay, isFuture, subWeeks } from "date-fns";
 import type { CellSummary } from "@/lib/cells/fields";
 import { formatCellLabel } from "@/lib/cells/labels";
@@ -209,20 +209,22 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      {/* min-w-0: dentro do grid do diálogo, um nome longo não alarga o formulário. */}
+      <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="cell_id"
-            render={({ field, fieldState }) => {
+            render={({ field }) => {
               const selected = knownCell ?? selectedCell;
               const selectedOption: SelectOption | null =
                 field.value && selected ? { value: field.value, label: formatCellLabel(selected) } : null;
               return (
                 <FormItem className="col-span-1 md:col-span-2">
                   <FormLabel htmlFor={cellInputId}>Célula *</FormLabel>
-                  <PaginatedSelect
+                  <FormPaginatedSelect
                     inputId={cellInputId}
+                    focusRef={field.ref}
                     search={cellSearch}
                     pagination={cellPagination}
                     value={selectedOption}
@@ -231,8 +233,8 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                       field.onChange(option?.value ?? "");
                     }}
                     isDisabled={!!report || !!initialCell}
-                    placeholder="Buscar célula por líder, endereço ou bairro..."
-                    aria-invalid={!!fieldState.error}
+                    placeholder="Buscar por líder, rua ou bairro…"
+                    noResultsLabel="Nenhuma célula encontrada"
                   />
                   <FormMessage />
                 </FormItem>
@@ -328,12 +330,13 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
             <FormField
               control={form.control}
               name="participant_ids"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel htmlFor={participantsInputId}>Participantes (Membros)</FormLabel>
-                  <PaginatedSelect
+                  <FormPaginatedSelect
                     isMulti
                     inputId={participantsInputId}
+                    focusRef={field.ref}
                     search={participantSearch}
                     pagination={participantPagination}
                     value={participants}
@@ -341,7 +344,8 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                       setParticipants([...selected]);
                       form.setValue("participant_ids", selected.map((s) => s.value));
                     }}
-                    placeholder="Selecione os membros..."
+                    placeholder="Buscar membros…"
+                    noResultsLabel="Nenhum membro encontrado"
                   />
                   <FormMessage />
                 </FormItem>

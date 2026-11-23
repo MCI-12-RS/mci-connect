@@ -30,6 +30,14 @@ export function getLevelLabel(level: number): string {
   return `Nível ${level}`;
 }
 
+/**
+ * O rótulo do nível é só um número (12, 144, 1.728): o leitor de tela precisa
+ * ouvir "nível" antes. "Pastor(a)" e "Nível N" já se explicam.
+ */
+export function isNumericLevelLabel(level: number): boolean {
+  return level >= 1 && level <= 3;
+}
+
 /** Texto da contagem do nó para o leitor de tela: "1 discípulo direto", "1.234 discípulos diretos". */
 export function directDisciplesLabel(count: number): string {
   return count === 1 ? "1 discípulo direto" : `${formatCount(count)} discípulos diretos`;

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { createQueryWrapper } from "@/test/query-wrapper";
-import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import AsyncMemberSelect from "./AsyncMemberSelect";
 
 // Seletor de membro com busca e paginação no servidor (E1.08, RN-07), pelo
@@ -23,17 +23,22 @@ const members = (count: number, start = 0) =>
   });
 const failure = { error: { code: "08006", message: "connection failure" } };
 
-function renderSelect() {
+function renderSelect(value: string | null = null) {
   const onChange = vi.fn();
   render(
     <>
       <label htmlFor="spouse">{LABEL}</label>
-      <AsyncMemberSelect inputId="spouse" value={null} onChange={onChange} excludeId="m-self" />
+      <AsyncMemberSelect inputId="spouse" value={value} onChange={onChange} excludeId="m-self" />
     </>,
     { wrapper: createQueryWrapper() },
   );
   return { onChange, input: screen.getByLabelText(LABEL) };
 }
+
+/** O que o react-select anuncia sobre os resultados (região "log" do leitor de tela). */
+const announcedResults = () => document.getElementById("aria-results")?.textContent;
+/** O anúncio do menu vazio, na região de status do seletor. */
+const emptyStatus = () => screen.getByRole("status").textContent;
 
 function openMenu(input: HTMLElement) {
   fireEvent.focus(input);
@@ -184,14 +189,33 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
     expect(screen.queryByText("Carregando…")).not.toBeInTheDocument();
   });
 
-  it("Dada uma busca sem resultado, então o menu mostra Nenhum resultado, sem Carregar mais", async () => {
-    respondWith({ data: [] });
+  it("Dada uma busca sem resultado, então o menu mostra Nenhum membro encontrado, sem Carregar mais, e o leitor de tela ouve o vazio com a busca", async () => {
+    respondWith({ data: [] }, { data: [] });
+    const { input } = renderSelect();
+    // Fechado, a região de status fica muda.
+    expect(emptyStatus()).toBe("");
+
+    openMenu(input);
+
+    expect(await screen.findByText("Nenhum membro encontrado")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Carregar mais" })).not.toBeInTheDocument();
+    expect(emptyStatus()).toBe("Nenhum membro encontrado.");
+
+    fireEvent.change(input, { target: { value: "zz" } });
+
+    await waitFor(() => expect(emptyStatus()).toBe('Nenhum membro encontrado para a busca "zz".'));
+    expect(fakeQueries()).toHaveLength(2);
+  });
+
+  it("Dadas opções no menu, então a região de status do vazio fica muda e o react-select anuncia o total sem o item de ação", async () => {
+    respondWith({ data: members(21) });
     const { input } = renderSelect();
 
     openMenu(input);
 
-    expect(await screen.findByText("Nenhum resultado")).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Carregar mais" })).not.toBeInTheDocument();
+    await waitFor(() => expect(memberOptions()).toHaveLength(20));
+    expect(emptyStatus()).toBe("");
+    expect(announcedResults()).toBe("20 resultados disponíveis.");
   });
 
   it("Dada uma falha na primeira página, então mostra o erro com Tentar novamente, que refaz a consulta do início", async () => {
@@ -202,6 +226,9 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
     const retry = await screen.findByRole("option", { name: /Tentar novamente/ });
     expect(within(retry).getByText("Não foi possível carregar as opções.")).toBeInTheDocument();
     expect(memberOptions()).toHaveLength(0);
+    // O leitor de tela ouve a falha, e não "0 resultados"; o vazio fica mudo.
+    expect(announcedResults()).toBe("Não foi possível carregar as opções.");
+    expect(emptyStatus()).toBe("");
 
     fireEvent.click(retry);
 
@@ -220,6 +247,7 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
 
     await screen.findByRole("option", { name: /Tentar novamente/ });
     expect(memberOptions()).toHaveLength(20);
+    expect(announcedResults()).toBe("Não foi possível carregar mais opções. 20 resultados disponíveis.");
 
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect(input).toHaveAttribute(
@@ -241,6 +269,72 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
     fireEvent.click(screen.getByRole("option", { name: "Membro 001" }));
 
     expect(onChange).toHaveBeenCalledWith("m001");
+  });
+
+  it("Dado um texto digitado e uma opção em foco, quando aperta Tab, então nada é escolhido", async () => {
+    respondWith({ data: members(3) }, { data: [{ id: "x1", name: "Marta Moura" }] });
+    const { input, onChange } = renderSelect();
+    openMenu(input);
+    await waitFor(() => expect(memberOptions()).toHaveLength(3));
+    fireEvent.change(input, { target: { value: "ma" } });
+    await screen.findByRole("option", { name: "Marta Moura" });
+    expect(input).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "Marta Moura" }).id);
+
+    fireEvent.keyDown(input, { key: "Tab" });
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("Dado um toque no campo de busca, quando ele abre o menu, então os eventos de mouse do toque são cancelados; com o menu aberto, o toque segue normal", async () => {
+    respondWith({ data: members(3) });
+    const { input } = renderSelect();
+
+    // `fireEvent` devolve false quando o evento foi cancelado (preventDefault).
+    expect(fireEvent.touchEnd(input)).toBe(false);
+
+    expect(input).toHaveFocus();
+    await waitFor(() => expect(memberOptions()).toHaveLength(3));
+    // Já aberto e em foco: o toque não é cancelado (para mover o cursor no texto).
+    expect(fireEvent.touchEnd(input)).toBe(true);
+    expect(memberOptions()).toHaveLength(3);
+  });
+
+  it("Dado um membro já escolhido, então a escolha única tem o botão Limpar seleção", async () => {
+    respondToRpc("member_names", { data: [{ id: "m001", name: "Membro 001" }] });
+
+    renderSelect("m001");
+
+    expect(await screen.findByText("Membro 001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Limpar seleção" })).toBeInTheDocument();
+  });
+});
+
+describe("PaginatedSelect: menu trazido para a vista", () => {
+  beforeEach(() => resetFakeSupabase());
+  afterEach(() => vi.restoreAllMocks());
+
+  it("Dado o menu aberto carregando, quando a 1ª página chega, então o menu é rolado para a vista, uma vez", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    respondWith({ data: members(21), until: gate });
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { input } = renderSelect();
+    openMenu(input);
+    await screen.findByText("Carregando…");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    release();
+
+    await waitFor(() => expect(memberOptions()).toHaveLength(20));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByRole("listbox"));
+
+    // Andar pelas opções não rola o menu para a vista de novo.
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });
 
