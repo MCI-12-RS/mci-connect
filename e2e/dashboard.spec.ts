@@ -72,6 +72,9 @@ async function login(page: Page, { email, password }: { email: string; password:
   await page.locator('button[type="submit"]').click();
 }
 
+/** Um número como a tela exibe, com o separador de milhar do pt-BR: 1530 → "1.530". */
+const shownCount = (value: number | string) => Number(value).toLocaleString("pt-BR");
+
 /** "2026-11-22" → "22/11". */
 const dayMonth = (isoDate: string) => `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}`;
 
@@ -111,10 +114,10 @@ test.describe("Dashboard (RN-08, RN-09)", () => {
     await expect(page.getByRole("heading", { name: weekLabel })).toBeVisible();
 
     for (const [title, field] of Object.entries({ ...WEEK_CARDS, ...GENERAL_CARDS })) {
-      await expect(cardValue(page, title), title).toHaveText(String(summary[field]));
+      await expect(cardValue(page, title), title).toHaveText(shownCount(summary[field]));
     }
     for (const row of cellsByType) {
-      await expect(cardValue(page, `Células ${row.cell_type}`)).toHaveText(String(row.total));
+      await expect(cardValue(page, `Células ${row.cell_type}`)).toHaveText(shownCount(row.total));
     }
 
     if (ranking.length > 0) {
@@ -122,12 +125,13 @@ test.describe("Dashboard (RN-08, RN-09)", () => {
       await expect(rows).toHaveCount(ranking.length);
       const expected = ranking.map((row) => [
         row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name,
-        String(row.male_cells),
-        String(row.female_cells),
-        String(row.total_cells),
+        shownCount(row.male_cells),
+        shownCount(row.female_cells),
+        shownCount(row.total_cells),
       ]);
+      // O casal é o cabeçalho da linha (`th`); os números ficam nos `td`.
       const shown = await rows.evaluateAll((trs) =>
-        trs.map((tr) => Array.from(tr.querySelectorAll("td"), (td) => td.textContent?.trim() ?? "")),
+        trs.map((tr) => Array.from(tr.querySelectorAll("th, td"), (cell) => cell.textContent?.trim() ?? "")),
       );
       expect(shown).toEqual(expected);
     }

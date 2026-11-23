@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCount } from "@/lib/format";
 import { PAGE_SIZES, lastPage } from "@/lib/pagination";
 
 interface ListPaginationProps {
@@ -21,7 +22,7 @@ const ListPagination = ({ page, pageSize, total, itemLabel, onPageChange, onPage
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-4 py-3">
       <p className="text-sm text-muted-foreground">
-        {total.toLocaleString("pt-BR")} {total === 1 ? itemLabel[0] : itemLabel[1]}
+        {formatCount(total)} {total === 1 ? itemLabel[0] : itemLabel[1]}
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <div className="flex items-center gap-2">

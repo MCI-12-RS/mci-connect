@@ -48,6 +48,7 @@ const cellsByType = [
 ];
 
 const ranking = [
+  { couple_key: "d|e", name: "Davi", spouse_name: "Eva", male_cells: 1200, female_cells: 34, total_cells: 1234 },
   { couple_key: "a|b", name: "Bruno", spouse_name: "Ana", male_cells: 3, female_cells: 4, total_cells: 7 },
   { couple_key: "c", name: "Carla", spouse_name: null, male_cells: 0, female_cells: 0, total_cells: 0 },
 ];
@@ -64,11 +65,14 @@ async function settle() {
   await act(() => vi.advanceTimersByTimeAsync(60_000));
 }
 
+/** Um número como a tela exibe, com o separador de milhar do pt-BR ("7", "1.530"). */
+const SHOWN_NUMBER = /^\d{1,3}(\.\d{3})*$/;
+
 /** O valor exibido no card (o `Card` do shadcn) com esse título. */
 function cardValue(title: string) {
   const card = screen.getByRole("heading", { name: title }).closest<HTMLElement>("div.rounded-lg");
   if (!card) throw new Error(`Card "${title}" não encontrado`);
-  return within(card).getByText(/^\d+$/).textContent;
+  return within(card).getByText(SHOWN_NUMBER).textContent;
 }
 
 describe("Dashboard (RN-02, RN-08, RN-09)", () => {
@@ -88,7 +92,28 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
 
     expect(screen.getByRole("heading", { name: "Total de Membros" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Relatórios Enviados" })).toBeInTheDocument();
-    expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(SHOWN_NUMBER)).not.toBeInTheDocument();
+  });
+
+  it("Dado o dashboard carregando, então cada área ocupada anuncia o carregamento ao leitor de tela, e o anúncio some quando os dados chegam", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] });
+    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+
+    const { container } = renderDashboard();
+
+    // Esta Semana, Geral (membros), tipos de célula e Células por G12.
+    const statuses = screen.getAllByRole("status");
+    expect(statuses.map((status) => status.textContent)).toEqual(Array(4).fill("Carregando…"));
+    for (const status of statuses) {
+      expect(status).toHaveClass("sr-only");
+      expect(status.closest('[aria-busy="true"]')).not.toBeNull();
+    }
+
+    await settle();
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   it("Dadas as três RPCs, quando carrega, então faz só as três chamadas e mostra os números e a semana delas, sem somar nada", async () => {
@@ -111,18 +136,25 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
     expect(cardValue("Células sem Relatório")).toBe("6");
     expect(cardValue("Visitantes em Células")).toBe("17");
     expect(cardValue("Células Não Realizadas")).toBe("2");
-    expect(cardValue("Total de Membros")).toBe("1530");
-    expect(cardValue("Membros Ativos")).toBe("1402");
+    expect(cardValue("Total de Membros")).toBe("1.530");
+    expect(cardValue("Membros Ativos")).toBe("1.402");
     expect(cardValue("Membros Inativos")).toBe("128");
-    expect(cardValue("Batizados")).toBe("1011");
+    expect(cardValue("Batizados")).toBe("1.011");
     expect(cardValue("Não Batizados")).toBe("519");
     expect(cardValue("Sem Liderança")).toBe("5");
     expect(cardValue("Sem Vínculo Celular")).toBe("213");
     expect(cardValue("Células Discipulado")).toBe("450");
     expect(cardValue("Células Evangelística")).toBe("750");
 
+    // O casal é o cabeçalho da linha; os números saem com o separador de milhar.
     const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
-    expect(rows.map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent))).toEqual([
+    expect(
+      rows.map((row) => [
+        within(row).getByRole("rowheader").textContent,
+        ...within(row).getAllByRole("cell").map((cell) => cell.textContent),
+      ]),
+    ).toEqual([
+      ["Davi & Eva", "1.200", "34", "1.234"],
       ["Bruno & Ana", "3", "4", "7"],
       ["Carla", "0", "0", "0"],
     ]);
@@ -187,8 +219,12 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
     renderDashboard();
     await settle();
 
-    // Esta Semana, Geral e Células por G12: uma mensagem em cada.
+    // Esta Semana, Geral e Células por G12: uma mensagem em cada, anunciada
+    // ao leitor de tela e dentro de um card (o fundo branco dá o contraste).
     expect(screen.getAllByText("Erro ao carregar o dashboard.")).toHaveLength(3);
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.map((alert) => alert.textContent)).toEqual(Array(3).fill("Erro ao carregar o dashboard."));
+    for (const alert of alerts) expect(alert.closest("div.rounded-lg")).not.toBeNull();
   });
 
   it("Dados sem células e sem casais G12, então os cards por tipo e o ranking ficam ocultos", async () => {
@@ -199,7 +235,7 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
     renderDashboard();
     await settle();
 
-    expect(cardValue("Total de Membros")).toBe("1530");
+    expect(cardValue("Total de Membros")).toBe("1.530");
     expect(screen.queryByText(/^Células (Discipulado|Evangelística)/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Células por G12" })).not.toBeInTheDocument();
   });
@@ -243,7 +279,7 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
 
     expect(screen.getByText("Meu Ministério")).toBeInTheDocument();
     expect(screen.getByText("Visão do seu ministério")).toBeInTheDocument();
-    expect(cardValue("Total de Membros")).toBe("1530");
+    expect(cardValue("Total de Membros")).toBe("1.530");
   });
 
   it("Dado um usuário com view_dashboard, então mostra a visão geral da igreja, sem o selo", async () => {

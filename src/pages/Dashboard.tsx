@@ -29,12 +29,14 @@ import {
 } from "@/hooks/use-dashboard";
 import { formatWeekRange } from "@/lib/dashboard/week";
 import { isPermissionDenied } from "@/lib/errors";
+import { formatCount } from "@/lib/format";
 
 // Todos os números vêm prontos das RPCs do dashboard (E1.08, RN-02 e RN-08);
 // a tela só exibe. Sem permissão no banco, mostra o acesso negado (RN-09).
 
 const ACCESS_DENIED_MESSAGE = "Você não tem acesso ao dashboard.";
 const LOAD_ERROR_MESSAGE = "Erro ao carregar o dashboard.";
+const LOADING_MESSAGE = "Carregando…";
 
 const CARD_GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4";
 
@@ -69,7 +71,21 @@ const GENERAL_CARDS: readonly SummaryCardSpec[] = [
   { title: "Sem Vínculo Celular", field: "members_without_cell_link", icon: Link2Off, color: "text-orange-500" },
 ];
 
-const LoadError = () => <p className="text-center py-8 text-destructive">{LOAD_ERROR_MESSAGE}</p>;
+// No card (fundo branco), e não direto no fundo da página, para o vermelho ter contraste (WCAG 1.4.3).
+const LoadError = () => (
+  <Card>
+    <CardContent className="p-6 text-center text-destructive">
+      <p role="alert">{LOAD_ERROR_MESSAGE}</p>
+    </CardContent>
+  </Card>
+);
+
+/** Anuncia o carregamento ao leitor de tela; fica dentro da área com `aria-busy`. */
+const LoadingStatus = () => (
+  <span role="status" className="sr-only">
+    {LOADING_MESSAGE}
+  </span>
+);
 
 interface StatCardProps {
   /** Sem título ou sem valor (carregando), mostra um placeholder no lugar. */
@@ -90,7 +106,11 @@ const StatCard = ({ title, value, icon: Icon, color }: StatCardProps) => (
       <Icon className={`w-5 h-5 ${color}`} aria-hidden="true" />
     </CardHeader>
     <CardContent>
-      {value === undefined ? <Skeleton className="h-9 w-16" /> : <div className="text-3xl font-bold">{value}</div>}
+      {value === undefined ? (
+        <Skeleton className="h-9 w-16" />
+      ) : (
+        <div className="text-3xl font-bold">{formatCount(value)}</div>
+      )}
     </CardContent>
   </Card>
 );
@@ -106,6 +126,7 @@ const SummaryCards = ({ cards, summary }: SummaryCardsProps) => (
     {cards.map((card) => (
       <StatCard key={card.field} title={card.title} value={summary?.[card.field]} icon={card.icon} color={card.color} />
     ))}
+    {!summary && <LoadingStatus />}
   </div>
 );
 
@@ -117,6 +138,7 @@ const CellsByTypeCards = ({ rows }: { rows: DashboardCellsByType[] | undefined }
         {Array.from({ length: CELL_TYPE_PLACEHOLDERS }, (_, i) => (
           <StatCard key={i} icon={Church} color="text-secondary" />
         ))}
+        <LoadingStatus />
       </div>
     );
   }
@@ -136,25 +158,33 @@ const CellsByTypeCards = ({ rows }: { rows: DashboardCellsByType[] | undefined }
   );
 };
 
+// Espaçamento menor no celular, para a coluna Total (a da ordenação) caber sem rolar.
+const RANKING_CELL = "px-2 sm:px-4 py-3";
+const RANKING_HEADER = `${RANKING_CELL} font-medium text-muted-foreground`;
+// Ícone do cabeçalho só a partir do `sm`; no celular, fica só o texto.
+const RANKING_HEADER_ICON = "hidden sm:inline-block w-4 h-4";
+// `min-w-8 px-2`: um círculo para poucos dígitos, que alarga para "1.234".
+const RANKING_BADGE = "inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full font-bold text-sm";
+
 const G12RankingTable = ({ rows }: { rows: DashboardG12Couple[] }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b">
-          <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">
+          <th scope="col" className={`${RANKING_HEADER} text-left`}>
             G12 (Casal)
           </th>
-          <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+          <th scope="col" className={RANKING_HEADER}>
             <span className="flex items-center gap-1 justify-center">
-              <User className="w-4 h-4 text-blue-500" aria-hidden="true" /> Homens
+              <User className={`${RANKING_HEADER_ICON} text-blue-500`} aria-hidden="true" /> Homens
             </span>
           </th>
-          <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">
+          <th scope="col" className={RANKING_HEADER}>
             <span className="flex items-center gap-1 justify-center">
-              <User className="w-4 h-4 text-pink-500" aria-hidden="true" /> Mulheres
+              <User className={`${RANKING_HEADER_ICON} text-pink-500`} aria-hidden="true" /> Mulheres
             </span>
           </th>
-          <th scope="col" className="px-4 py-3 font-medium text-muted-foreground text-center">
+          <th scope="col" className={`${RANKING_HEADER} text-center`}>
             Total
           </th>
         </tr>
@@ -162,18 +192,20 @@ const G12RankingTable = ({ rows }: { rows: DashboardG12Couple[] }) => (
       <tbody>
         {rows.map((row, idx) => (
           <tr key={row.couple_key} className={idx % 2 === 0 ? "bg-muted/30" : ""}>
-            <td className="px-4 py-3 font-medium">{row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name}</td>
-            <td className="px-4 py-3 text-center">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-sm">
-                {row.male_cells}
+            <th scope="row" className={`${RANKING_CELL} text-left font-medium`}>
+              {row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name}
+            </th>
+            <td className={`${RANKING_CELL} text-center`}>
+              <span className={`${RANKING_BADGE} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`}>
+                {formatCount(row.male_cells)}
               </span>
             </td>
-            <td className="px-4 py-3 text-center">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 font-bold text-sm">
-                {row.female_cells}
+            <td className={`${RANKING_CELL} text-center`}>
+              <span className={`${RANKING_BADGE} bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300`}>
+                {formatCount(row.female_cells)}
               </span>
             </td>
-            <td className="px-4 py-3 text-center font-semibold">{row.total_cells}</td>
+            <td className={`${RANKING_CELL} text-center font-semibold`}>{formatCount(row.total_cells)}</td>
           </tr>
         ))}
       </tbody>
@@ -186,7 +218,10 @@ interface G12RankingSectionProps {
   failed: boolean;
 }
 
-/** "Células por G12": tabela do ranking, que rola na horizontal no celular; sem casais, fica oculta. */
+/**
+ * "Células por G12": tabela do ranking, que cabe no celular e só rola na
+ * horizontal se não couber (nomes longos em 320 px); sem casais, fica oculta.
+ */
 const G12RankingSection = ({ rows, failed }: G12RankingSectionProps) => {
   if (rows?.length === 0) return null;
 
@@ -208,6 +243,7 @@ const G12RankingSection = ({ rows, failed }: G12RankingSectionProps) => {
           {Array.from({ length: G12_RANKING_PLACEHOLDERS }, (_, i) => (
             <Skeleton key={i} className="h-8 w-full" />
           ))}
+          <LoadingStatus />
         </CardContent>
       </Card>
     );
