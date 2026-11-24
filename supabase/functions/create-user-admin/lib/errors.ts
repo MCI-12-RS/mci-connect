@@ -129,8 +129,8 @@ export function insertErrorToHttp(error: DbError): HttpError {
     case '22008': return new HttpError(400, 'Algum campo tem um formato inválido.')
     case '42501': return forbidden()
     default:
-      // Sem `details`: ele pode trazer valores digitados (e-mail, CPF).
-      console.error('create-user-admin: falha ao inserir membro', error.code, error.message)
+      // Só o código: `details` e algumas mensagens trazem valores digitados (e-mail, CPF).
+      console.error('create-user-admin: falha ao inserir membro', error.code)
       return new HttpError(400, SAVE_FAILED_MESSAGE)
   }
 }
@@ -144,6 +144,7 @@ export function authErrorToHttp(error: AuthApiError): HttpError {
   if (error.code === 'email_address_invalid' || error.code === 'validation_failed') {
     return new HttpError(400, 'E-mail inválido.')
   }
-  console.error('create-user-admin: falha ao criar a conta de acesso', error.code, error.status, error.message)
+  // Sem a mensagem: o Auth repete nela o e-mail informado.
+  console.error('create-user-admin: falha ao criar a conta de acesso', error.code, error.status)
   return new HttpError(400, 'Não foi possível criar o acesso.')
 }

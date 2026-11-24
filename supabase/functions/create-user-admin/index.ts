@@ -181,7 +181,7 @@ async function checkDeletedMatches(asCaller: SupabaseClient, input: CreateMember
   const { data, error } = await asCaller.rpc('find_deleted_member_matches', deletedMatchesParams(input.memberRow))
   if (error) {
     if (error.code === '42501') throw forbidden()
-    console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code, error.message)
+    console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code)
     throw serverError()
   }
   const refusal = deletedMatchesRefusal(toDeletedMatches(data), input.confirmDeletedMatches)
@@ -219,7 +219,7 @@ async function undoAccount(admin: SupabaseClient, authUserId: string): Promise<v
 /** Id do membro gravado. Os dados são lidos pela members_view, com a máscara (E1.08, PR 5). */
 async function createdMemberId(admin: SupabaseClient, authUserId: string): Promise<string | null> {
   const { data, error } = await admin.from('members').select('id').eq('auth_user_id', authUserId).maybeSingle()
-  if (error) console.error('create-user-admin: membro gravado, mas a releitura falhou', error.code, error.message)
+  if (error) console.error('create-user-admin: membro gravado, mas a releitura falhou', error.code)
   return data?.id ?? null
 }
 
