@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import CellReportForm from "@/components/CellReportForm";
 import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
+import CellReportSheet from "@/components/CellReportSheet";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import { CellDeletedBadge, HeldStatusBadge } from "@/components/StatusBadges";
 import ListPagination from "@/components/ListPagination";
@@ -13,14 +15,17 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Trash2, ClipboardList } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, ClipboardList, Eye, ChevronRight } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellReportsList } from "@/hooks/use-cell-reports-list";
+import { useCellReport } from "@/hooks/use-cell-report";
 import { useReturnFocus } from "@/hooks/use-return-focus";
+import { useSearchParam } from "@/hooks/use-search-param";
 import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
+import { REPORT_PARAM, reportSheetState } from "@/lib/cell-reports/report-sheet";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
 
@@ -29,8 +34,9 @@ const CellReports = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<CellReportRow | null>(null);
   const [deletingReport, setDeletingReport] = useState<CellReportDeletionTarget | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, permissionsLoaded } = useAuth();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, isPlaceholderData } = useCellReportsList(list.params);
   const reports = data?.rows ?? [];
@@ -50,6 +56,8 @@ const CellReports = () => {
   const handleClose = () => { setFormOpen(false); setEditingReport(null); };
 
   const canEditReport = hasPermission("edit_cell_report");
+  // "Ver relatório" fica no lugar do "Editar", para quem edita relatórios (P-DEL-19).
+  const canViewReport = canEditReport;
   const canDeleteReport = hasPermission("delete_cell_report");
   const canSubmitNewReport =
     hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
@@ -60,6 +68,38 @@ const CellReports = () => {
 
   // O relatório de célula excluída não é editado (RN-11): sem "Editar"; "Excluir relatório" continua.
   const canEditRow = (r: CellReportRow) => canEditReport && r.cell_deleted !== true;
+  // Em vez dele, a consulta "Ver relatório" (T7). As demais linhas não mudam (PO-UX-3).
+  const canViewRow = (r: CellReportRow) => canViewReport && r.cell_deleted === true;
+
+  // A consulta abre por `?report=<id>`, que fica na URL ao recarregar (UX-27). O
+  // parâmetro só vale para relatório de célula excluída e para quem pode
+  // consultar; nos demais casos, sai da URL.
+  const [reportParam, setReportParam] = useSearchParam(REPORT_PARAM);
+  // O painel lê o relatório junto com a página (a mesma consulta, uma vez só) e
+  // só aparece quando a página decide.
+  const reportToRead = permissionsLoaded && canViewReport ? reportParam : null;
+  const reportQuery = useCellReport(reportToRead);
+  const sheetState = reportSheetState({
+    reportId: reportParam,
+    permissionsLoaded,
+    canView: canViewReport,
+    detail: reportQuery.data,
+    knownCellDeleted: reports.some((r) => r.id === reportParam && r.cell_deleted === true),
+    failed: reportQuery.isError,
+  });
+  useEffect(() => {
+    if (sheetState === "dismiss") setReportParam(null);
+  }, [sheetState, setReportParam]);
+  // O relatório sumiu (excluído no meio tempo): a lista recarrega sem ele.
+  const reportMissing = reportQuery.data === null;
+  useEffect(() => {
+    if (reportMissing) void queryClient.invalidateQueries({ queryKey: ["cell_reports", "list"] });
+  }, [reportMissing, queryClient]);
+
+  const openReport = (r: CellReportRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setReportParam(r.id);
+  };
 
   const startDeletion = (r: CellReportRow, opener: HTMLElement | null) => {
     returnFocus.setOpener(opener);
@@ -91,6 +131,17 @@ const CellReports = () => {
   const renderDesktopActions = (r: CellReportRow) => (
     <div className="flex items-center gap-1">
       {renderEditButton(r, "h-8 w-8")}
+      {canViewRow(r) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={CELL_REPORT_DELETION_TEXTS.viewReportLabel(...rowLabel(r))}
+          onClick={(e) => openReport(r, e.currentTarget)}
+        >
+          <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+        </Button>
+      )}
       {canDeleteReport && (
         <Button
           variant="ghost"
@@ -133,6 +184,47 @@ const CellReports = () => {
     />
   );
 
+  // As partes do card do celular, só com `span`: no card de célula excluída,
+  // elas ficam dentro do botão "Ver relatório" (T7), que não aceita `div` nem `p`.
+
+  const renderCardSummary = (r: CellReportRow) => {
+    const streetLine = formatStreetLine(cellOfReport(r));
+    return (
+      <>
+        <span className="block font-semibold text-sm">{r.cell_leader_name || "Célula sem líder"}</span>
+        {r.cell_deleted === true && <span className="mt-1 block">{cellDeletedBadge}</span>}
+        {(streetLine || r.cell_neighborhood) && (
+          <span className="block text-xs text-muted-foreground mt-0.5 leading-tight">
+            {streetLine && <span className="block">{streetLine}</span>}
+            {r.cell_neighborhood && <span className="block">{r.cell_neighborhood}</span>}
+          </span>
+        )}
+        <span className="block text-xs text-muted-foreground mt-0.5">
+          {formatReportDate(r.date)} · {r.time?.substring(0, 5) || "—"}
+        </span>
+      </>
+    );
+  };
+
+  /** Situação e presenças. */
+  const renderCardStatus = (r: CellReportRow) => (
+    <span className="flex items-center justify-between">
+      {renderHeldBadge(r)}
+      {r.was_held && (
+        <span className="text-sm font-medium text-foreground">
+          {attendance(r)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
+        </span>
+      )}
+    </span>
+  );
+
+  const renderCardTheme = (r: CellReportRow) =>
+    r.theme && (
+      <span className="block text-xs text-muted-foreground">
+        Tema: <span className="text-foreground">{r.theme}</span>
+      </span>
+    );
+
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os relatórios</p>;
@@ -140,47 +232,36 @@ const CellReports = () => {
 
     return (
       <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
-        {reports.map((r) => {
-          const streetLine = formatStreetLine(cellOfReport(r));
-          return (
+        {reports.map((r) =>
+          canViewRow(r) ? (
+            // O corpo do card abre a consulta (T7); o "⋯" fica ao lado, nunca dentro dele.
+            <div key={r.id} className="flex items-start gap-2 px-4 py-4">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={CELL_REPORT_DELETION_TEXTS.viewReportLabel(...rowLabel(r))}
+                onClick={(e) => openReport(r, e.currentTarget)}
+              >
+                <span className="min-w-0 flex-1 space-y-3">
+                  <span className="block">{renderCardSummary(r)}</span>
+                  {renderCardStatus(r)}
+                  {renderCardTheme(r)}
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+              {rowActions(r).length > 0 && renderMobileActions(r)}
+            </div>
+          ) : (
             <div key={r.id} className="px-4 py-4 space-y-3">
-              {/* Header */}
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm">{r.cell_leader_name || "Célula sem líder"}</p>
-                  {r.cell_deleted === true && <div className="mt-1">{cellDeletedBadge}</div>}
-                  {(streetLine || r.cell_neighborhood) && (
-                    <div className="text-xs text-muted-foreground mt-0.5 leading-tight">
-                      {streetLine && <p>{streetLine}</p>}
-                      {r.cell_neighborhood && <p>{r.cell_neighborhood}</p>}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatReportDate(r.date)} · {r.time?.substring(0, 5) || "—"}
-                  </p>
-                </div>
+                <div className="min-w-0 flex-1">{renderCardSummary(r)}</div>
                 {showActions && renderMobileActions(r)}
               </div>
-
-              {/* Status + attendance */}
-              <div className="flex items-center justify-between">
-                {renderHeldBadge(r)}
-                {r.was_held && (
-                  <span className="text-sm font-medium text-foreground">
-                    {attendance(r)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
-                  </span>
-                )}
-              </div>
-
-              {/* Theme */}
-              {r.theme && (
-                <p className="text-xs text-muted-foreground">
-                  Tema: <span className="text-foreground">{r.theme}</span>
-                </p>
-              )}
+              {renderCardStatus(r)}
+              {renderCardTheme(r)}
             </div>
-          );
-        })}
+          ),
+        )}
       </div>
     );
   };
@@ -322,6 +403,14 @@ const CellReports = () => {
             <CellReportForm report={editingReport} onClose={handleClose} />
           </DialogContent>
         </Dialog>
+
+        <CellReportSheet
+          reportId={reportToRead}
+          open={sheetState === "open"}
+          onClose={() => setReportParam(null)}
+          onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          canSeeDeletedCells={hasPermission("manage_roles")}
+        />
 
         {deletingReport && (
           <CellReportDeletionFlow

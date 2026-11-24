@@ -19,11 +19,12 @@ vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
 
-const auth = vi.hoisted(() => ({ permissions: new Set<string>() }));
+const auth = vi.hoisted(() => ({ permissions: new Set<string>(), permissionsLoaded: true }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "u-self" },
     isSystem: false,
+    permissionsLoaded: auth.permissionsLoaded,
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
 }));
