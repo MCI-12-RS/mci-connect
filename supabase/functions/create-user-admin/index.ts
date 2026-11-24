@@ -6,18 +6,38 @@
 // - sem `assign_role` (ou `manage_roles`), o membro só recebe o perfil padrão.
 //   Com elas, não é possível atribuir um perfil com permissões que quem chama
 //   não tem;
-// - erros do banco e do Auth viram mensagens genéricas, sem detalhes internos;
+// - erros do banco e do Auth viram mensagens genéricas, sem detalhes internos.
+//   As recusas de regra do banco (`app_error`) saem com a mensagem, o `code` e o
+//   campo, nunca com o DETAIL cru (lib/errors.ts);
 // - o membro é gravado com a sessão de quem chama, então o RLS de `members` vale
 //   e a auditoria registra o autor;
 // - se a gravação do membro falhar, a conta de acesso recém-criada é removida;
 // - a resposta traz só o id do membro criado (`{ member: { id } }`), nunca a
 //   linha inteira (E1.08, PR 5).
 //
+// Cadastro com dados de um membro excluído (E2.01, RN-18): antes de criar a
+// conta, a função consulta `find_deleted_member_matches` com a sessão de quem
+// chama e responde 409 (`deleted_account_email` ou `deleted_matches`, com
+// `matches`). "Cadastrar mesmo assim" é `confirmDeletedMatches: true`, que não
+// vale para o e-mail da conta de um excluído (lib/deleted-matches.ts).
+//
+// Corpo: `{ email, password, memberData, confirmDeletedMatches? }`.
+//
 // A verificação do JWT é feita aqui dentro (auth.getUser), e não no gateway
 // (`verify_jwt` no config.toml), porque ela funciona tanto com as chaves antigas
 // quanto com as chaves novas (publishable/secret) do Supabase.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
+import {
+  authErrorToHttp,
+  forbidden,
+  HttpError,
+  insertErrorToHttp,
+  isRecord,
+  serverError,
+  unauthenticated,
+} from './lib/errors.ts'
+import { deletedMatchesParams, deletedMatchesRefusal, toDeletedMatches } from './lib/deleted-matches.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,46 +53,20 @@ const MEMBER_FIELDS = [
   'neighborhood', 'city', 'state', 'zip_code', 'role_id',
 ] as const
 
-class HttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(message)
-  }
-}
-
-// Traduz erros do Postgres/PostgREST sem expor nomes de constraints ou valores.
-function insertErrorToHttp(error: { code?: string; message?: string }): HttpError {
-  switch (error.code) {
-    case '23505': return new HttpError(409, 'Já existe um membro com este e-mail, CPF ou celular.')
-    case '23503': return new HttpError(400, 'Líder, cônjuge ou função informados não existem.')
-    case '23514': return new HttpError(400, 'Algum campo tem um valor inválido.')
-    case '22P02':
-    case '22007':
-    case '22008': return new HttpError(400, 'Algum campo tem um formato inválido.')
-    case '42501': return new HttpError(403, 'Você não tem permissão para cadastrar membros.')
-    default:
-      // Sem `details`: ele pode trazer valores digitados (e-mail, CPF).
-      console.error('create-user-admin: falha ao inserir membro', error.code, error.message)
-      return new HttpError(400, 'Não foi possível salvar o cadastro.')
-  }
-}
-
-function authErrorToHttp(error: { code?: string; message?: string; status?: number }): HttpError {
-  if (error.code === 'email_exists' || error.code === 'user_already_exists') {
-    return new HttpError(409, 'Já existe uma conta de acesso com este e-mail.')
-  }
-  if (error.code === 'weak_password') return new HttpError(400, 'A senha não atende aos requisitos mínimos.')
-  if (error.code === 'email_address_invalid' || error.code === 'validation_failed') {
-    return new HttpError(400, 'E-mail inválido.')
-  }
-  console.error('create-user-admin: falha ao criar a conta de acesso', error)
-  return new HttpError(400, 'Não foi possível criar o acesso.')
-}
-
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     status,
   })
+
+/** O pedido já conferido: e-mail, senha, linha de `members` e a confirmação do aviso de excluído. */
+interface CreateMemberInput {
+  email: string
+  password: string
+  name: string
+  memberRow: Record<string, unknown>
+  confirmDeletedMatches: boolean
+}
 
 async function hasPermission(admin: SupabaseClient, userId: string, permission: string): Promise<boolean> {
   const { data, error } = await admin.rpc('user_has_permission', { _user_id: userId, _permission: permission })
@@ -88,6 +82,51 @@ async function rolePermissions(admin: SupabaseClient, roleId: string): Promise<S
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// ---------------------------------------------------------------------------
+// Passos, na ordem em que rodam. O E2.04 (DT-11) acrescenta "tentativa
+// repetida" e "ensaio" entre readInput/resolveRole e checkDeletedMatches.
+// ---------------------------------------------------------------------------
+
+/** 1. Quem está chamando (JWT). */
+async function authenticate(admin: SupabaseClient, req: Request): Promise<{ callerId: string; token: string }> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!token) throw unauthenticated()
+  const { data: { user }, error } = await admin.auth.getUser(token)
+  if (error || !user) throw unauthenticated()
+  return { callerId: user.id, token }
+}
+
+/** 2. Permissão para cadastrar membros, antes de qualquer outra consulta. */
+async function requireCreateMember(admin: SupabaseClient, callerId: string): Promise<void> {
+  if (!(await hasPermission(admin, callerId, 'create_member'))) throw forbidden()
+}
+
+/** 3. Entrada: corpo, lista branca de colunas e a confirmação do aviso. */
+async function readInput(req: Request): Promise<CreateMemberInput> {
+  const raw: unknown = await req.json().catch(() => null)
+  const body: Record<string, unknown> = isRecord(raw) ? raw : {}
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+  const input: unknown = body.memberData ?? {}
+  if (!isRecord(input)) throw new HttpError(400, 'Dados do membro inválidos.')
+  if (!email || !password) throw new HttpError(400, 'E-mail e senha são obrigatórios.')
+  if (typeof input.name !== 'string' || !input.name.trim()) throw new HttpError(400, 'O nome é obrigatório.')
+
+  const memberRow: Record<string, unknown> = {}
+  for (const field of MEMBER_FIELDS) {
+    if (field in input) memberRow[field] = input[field]
+  }
+  memberRow.email = email
+  return {
+    email,
+    password,
+    name: input.name,
+    memberRow,
+    confirmDeletedMatches: body.confirmDeletedMatches === true,
+  }
+}
+
+/** 4. Função do membro novo: a padrão, ou uma que quem chama pode atribuir. */
 async function resolveRole(
   admin: SupabaseClient,
   callerId: string,
@@ -116,7 +155,7 @@ async function resolveRole(
   const canAssign = (await hasPermission(admin, callerId, 'assign_role'))
     || (await hasPermission(admin, callerId, 'manage_roles'))
   if (!canAssign) {
-    throw new HttpError(403, 'Você não tem permissão para definir a função do membro.')
+    throw forbidden('Você não tem permissão para definir a função do membro.')
   }
 
   const { data: callerMember, error: callerError } = await admin
@@ -128,9 +167,68 @@ async function resolveRole(
     callerMember?.role_id ? rolePermissions(admin, callerMember.role_id) : Promise.resolve(new Set<string>()),
   ])
   if ([...target].some((permission) => !own.has(permission))) {
-    throw new HttpError(403, 'Você não pode atribuir uma função com mais permissões do que a sua.')
+    throw forbidden('Você não pode atribuir uma função com mais permissões do que a sua.')
   }
   return roleId
+}
+
+/**
+ * 5. Aviso de cadastro excluído (E2.01, RN-18), com a sessão de quem chama: o
+ * banco devolve nome, id e data só para o administrador que veria o excluído
+ * (DA-8). Recusa com 409 antes de existir qualquer conta.
+ */
+async function checkDeletedMatches(asCaller: SupabaseClient, input: CreateMemberInput): Promise<void> {
+  const { data, error } = await asCaller.rpc('find_deleted_member_matches', deletedMatchesParams(input.memberRow))
+  if (error) {
+    if (error.code === '42501') throw forbidden()
+    console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code)
+    throw serverError()
+  }
+  const refusal = deletedMatchesRefusal(toDeletedMatches(data), input.confirmDeletedMatches)
+  if (refusal) throw refusal
+}
+
+/** 6. Conta de acesso. Devolve o id da conta criada. */
+async function createAccount(admin: SupabaseClient, input: CreateMemberInput): Promise<string> {
+  const { data, error } = await admin.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { name: input.name },
+  })
+  if (error || !data.user) {
+    throw error ? authErrorToHttp(error) : new HttpError(400, 'Não foi possível criar o acesso.')
+  }
+  return data.user.id
+}
+
+/** 7. Cadastro do membro com a sessão de quem chamou (RLS, triggers e autor na Auditoria). */
+async function insertMember(asCaller: SupabaseClient, memberRow: Record<string, unknown>, authUserId: string): Promise<void> {
+  const { error } = await asCaller.from('members').insert({ ...memberRow, auth_user_id: authUserId })
+  if (error) throw insertErrorToHttp(error)
+}
+
+/**
+ * 8. Desfaz a conta criada nesta chamada quando o cadastro falha. Nunca lança:
+ * a resposta de erro original precisa sair, e a conta órfã fica no log.
+ */
+async function undoAccount(admin: SupabaseClient, authUserId: string): Promise<void> {
+  try {
+    const { error } = await admin.auth.admin.deleteUser(authUserId)
+    if (error) {
+      console.error('create-user-admin: rollback falhou, conta de acesso órfã', authUserId, error.code, error.status)
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.name : 'unknown'
+    console.error('create-user-admin: rollback falhou, conta de acesso órfã', authUserId, reason)
+  }
+}
+
+/** Id do membro gravado. Os dados são lidos pela members_view, com a máscara (E1.08, PR 5). */
+async function createdMemberId(admin: SupabaseClient, authUserId: string): Promise<string | null> {
+  const { data, error } = await admin.from('members').select('id').eq('auth_user_id', authUserId).maybeSingle()
+  if (error) console.error('create-user-admin: membro gravado, mas a releitura falhou', error.code)
+  return data?.id ?? null
 }
 
 serve(async (req) => {
@@ -144,77 +242,31 @@ serve(async (req) => {
   let createdUserId: string | null = null
 
   try {
-    // 1. Quem está chamando
-    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
-    if (!token) throw new HttpError(401, 'Não autenticado.')
-    const { data: { user: caller }, error: callerError } = await admin.auth.getUser(token)
-    if (callerError || !caller) throw new HttpError(401, 'Não autenticado.')
+    const { callerId, token } = await authenticate(admin, req)
+    await requireCreateMember(admin, callerId)
+    const input = await readInput(req)
+    input.memberRow.role_id = await resolveRole(admin, callerId, input.memberRow.role_id)
 
-    // 2. Permissão para cadastrar membros
-    if (!(await hasPermission(admin, caller.id, 'create_member'))) {
-      throw new HttpError(403, 'Você não tem permissão para cadastrar membros.')
-    }
-
-    // 3. Entrada
-    const body = await req.json().catch(() => null)
-    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
-    const password = typeof body?.password === 'string' ? body.password : ''
-    const rawInput = body?.memberData ?? {}
-    if (typeof rawInput !== 'object' || Array.isArray(rawInput)) {
-      throw new HttpError(400, 'Dados do membro inválidos.')
-    }
-    const input = rawInput as Record<string, unknown>
-    if (!email || !password) throw new HttpError(400, 'E-mail e senha são obrigatórios.')
-    if (typeof input.name !== 'string' || !input.name.trim()) throw new HttpError(400, 'O nome é obrigatório.')
-
-    const memberRow: Record<string, unknown> = {}
-    for (const field of MEMBER_FIELDS) {
-      if (field in input) memberRow[field] = input[field]
-    }
-    memberRow.email = email
-    memberRow.role_id = await resolveRole(admin, caller.id, memberRow.role_id)
-
-    // 4. Conta de acesso
-    const { data: authData, error: authError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name: input.name },
-    })
-    if (authError || !authData.user) {
-      throw authError ? authErrorToHttp(authError) : new HttpError(400, 'Não foi possível criar o acesso.')
-    }
-    createdUserId = authData.user.id
-
-    // 5. Cadastro do membro com a sessão de quem chamou (RLS + autor na auditoria)
     const asCaller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false },
     })
-    const { error: insertError } = await asCaller
-      .from('members')
-      .insert({ ...memberRow, auth_user_id: createdUserId })
-    if (insertError) throw insertErrorToHttp(insertError)
+    await checkDeletedMatches(asCaller, input)
+
+    createdUserId = await createAccount(admin, input)
+    await insertMember(asCaller, input.memberRow, createdUserId)
 
     // O membro foi gravado: a partir daqui a conta de acesso não deve ser desfeita.
     const authUserId = createdUserId
     createdUserId = null
 
-    // Devolve só o id: os dados do membro são lidos pela members_view, com a
-    // máscara de dados sensíveis (E1.08, PR 5).
-    const { data: member, error: readError } = await admin
-      .from('members').select('id').eq('auth_user_id', authUserId).maybeSingle()
-    if (readError) console.error('create-user-admin: membro gravado, mas a releitura falhou', readError)
-    return json({ member: member ? { id: member.id } : null }, 200)
+    const memberId = await createdMemberId(admin, authUserId)
+    return json({ member: memberId ? { id: memberId } : null }, 200)
   } catch (error) {
-    if (createdUserId) {
-      const { error: rollbackError } = await admin.auth.admin.deleteUser(createdUserId)
-      if (rollbackError) {
-        console.error('create-user-admin: rollback falhou, conta de acesso órfã', createdUserId, rollbackError.message)
-      }
-    }
-    if (error instanceof HttpError) return json({ error: error.message }, error.status)
+    if (createdUserId) await undoAccount(admin, createdUserId)
+    if (error instanceof HttpError) return json(error.body(), error.status)
     console.error('create-user-admin: erro inesperado', error)
-    return json({ error: 'Erro inesperado ao cadastrar o membro.' }, 500)
+    const unexpected = serverError()
+    return json(unexpected.body(), unexpected.status)
   }
 })
