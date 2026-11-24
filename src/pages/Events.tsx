@@ -17,6 +17,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Navigate } from "react-router-dom";
+import { formatDateTimeInBrasilia } from "@/lib/format";
 
 type EventRow = {
   id: string;
@@ -53,11 +54,11 @@ const ENTITY_LABELS: Record<string, string> = {
   auth: "Autenticação",
 };
 
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+/** "10/11/2026, 14:32", sempre no horário de Brasília, qualquer que seja o fuso do navegador. */
+const formatDateTime = (iso: string) => {
+  const when = formatDateTimeInBrasilia(iso);
+  return when ? `${when.date}, ${when.time}` : "—";
+};
 
 const Events = () => {
   const { hasPermission, permissionsLoaded } = useAuth();

@@ -1,4 +1,4 @@
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { formatCount, formatDateTimeInBrasilia, formatList } from "./format";
 
 describe("formatCount", () => {
@@ -30,7 +30,9 @@ describe("formatList", () => {
 describe("formatDateTimeInBrasilia", () => {
   const originalTz = process.env.TZ;
   afterEach(() => {
-    process.env.TZ = originalTz;
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+    vi.resetModules();
   });
 
   it("converte o instante do banco para o horário de Brasília (UX-15)", () => {
@@ -42,11 +44,19 @@ describe("formatDateTimeInBrasilia", () => {
     expect(formatDateTimeInBrasilia("2026-11-11T03:00:00Z")).toEqual({ date: "11/11/2026", time: "00:00" });
   });
 
-  it("não depende do fuso do navegador", () => {
-    process.env.TZ = "Asia/Tokyo";
-    expect(formatDateTimeInBrasilia("2026-11-10T17:32:00Z")).toEqual({ date: "10/11/2026", time: "14:32" });
-    process.env.TZ = "America/Los_Angeles";
-    expect(formatDateTimeInBrasilia("2026-11-10T17:32:00Z")).toEqual({ date: "10/11/2026", time: "14:32" });
+  // O formatador é criado na carga do módulo: o fuso muda antes de carregá-lo de novo.
+  // 11/11/2026 02:30 UTC: 23:30 de 10/11 em Brasília, 11:30 de 11/11 em Tóquio e 18:30 de 10/11 em Los Angeles.
+  it.each([
+    ["Asia/Tokyo", [11, 11]],
+    ["America/Los_Angeles", [10, 18]],
+  ])("não depende do fuso do navegador (%s)", async (tz, [localDay, localHour]) => {
+    process.env.TZ = tz;
+    vi.resetModules();
+    const { formatDateTimeInBrasilia: format } = await import("./format");
+    // Sanidade: o relógio local está mesmo em outro fuso.
+    const local = new Date("2026-11-11T02:30:00Z");
+    expect([local.getDate(), local.getHours()]).toEqual([localDay, localHour]);
+    expect(format("2026-11-11T02:30:00Z")).toEqual({ date: "10/11/2026", time: "23:30" });
   });
 
   it("valor vazio ou que não é data volta nulo", () => {
