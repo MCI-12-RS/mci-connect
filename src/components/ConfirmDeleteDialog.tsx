@@ -51,7 +51,7 @@ export interface ConfirmDeleteContentProps {
  * nele na queda de conexão e na recusa (UX-06). O clique não faz nada nesse
  * meio tempo: o botão fica sem `onClick`.
  */
-const UNAVAILABLE_WHILE_SAVING = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
+export const UNAVAILABLE_WHILE_SAVING = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 /**
  * Corpo da confirmação de exclusão (T2): título, consequências em tópicos,

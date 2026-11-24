@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MemberForm from "@/components/MemberForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { isNavItemActive } from "@/lib/navigation";
 
 const AppSidebar = () => {
   const navigate = useNavigate();
@@ -41,11 +42,13 @@ const AppSidebar = () => {
 
       <nav className="flex-1 px-3 space-y-1">
         {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          // Também nas sub-rotas: /cell-reports/deleted acende "Relatórios" (UX-18).
+          const isActive = isNavItemActive(location.pathname, item.path);
           return (
             <button
               key={item.path}
               onClick={() => handleNavigate(item.path)}
+              aria-current={isActive ? "page" : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${isActive
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"

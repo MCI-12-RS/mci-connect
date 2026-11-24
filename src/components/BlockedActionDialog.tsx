@@ -73,13 +73,15 @@ export function BlockedActionContent({ title, children, action, actionRef, focus
 export interface BlockedActionDialogProps extends Omit<BlockedActionContentProps, "actionRef" | "focusTitle"> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Ao fechar, leva o foco a quem abriu o diálogo (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
  * Diálogo de bloqueio (padrão P3, E2.01 T3 e T6, Escolas T16). O foco vai
  * para a ação que resolve ou, sem ela, para "Fechar".
  */
-export function BlockedActionDialog({ open, onOpenChange, ...content }: BlockedActionDialogProps) {
+export function BlockedActionDialog({ open, onOpenChange, onCloseAutoFocus, ...content }: BlockedActionDialogProps) {
   const actionRef = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -89,6 +91,7 @@ export function BlockedActionDialog({ open, onOpenChange, ...content }: BlockedA
           event.preventDefault();
           actionRef.current.focus();
         }}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <BlockedActionContent {...content} actionRef={actionRef} />
       </LongAlertDialogContent>

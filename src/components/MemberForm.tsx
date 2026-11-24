@@ -15,6 +15,7 @@ import { AlertCircle, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
+import type { PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
 import { toMemberWritePayload, type MemberRow } from "@/lib/members/fields";
 import { DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
@@ -29,6 +30,11 @@ const FAKE_EMAIL_DOMAIN = "@mci12fakemail.com";
 interface MemberFormProps {
   member: Member | null;
   onClose: () => void;
+  /**
+   * "Definir líder" depois de restaurar um cadastro sem líder (E2.01, T5 e
+   * UX-22): abre com "Tem Liderança?" ligado e o foco no campo Líder.
+   */
+  defineLeader?: boolean;
 }
 
 const BRAZILIAN_STATES = [
@@ -135,7 +141,7 @@ const RoleField = ({ roles, loadError, value, canAssign, onChange }: RoleFieldPr
   );
 };
 
-const MemberForm = ({ member, onClose }: MemberFormProps) => {
+const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { hasPermission, isSystem } = useAuth();
@@ -192,7 +198,16 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   // cada abertura; quem trocar de membro sem desmontar precisa passar `key`).
   // Preenchidos depois, num efeito, mudariam o valor dos Selects quando as
   // opções ainda não existem, e o Radix apagaria o valor.
-  const [form, setForm] = useState<MemberInsert>(() => (member ? { ...member } : EMPTY_FORM));
+  const [form, setForm] = useState<MemberInsert>(() => {
+    if (!member) return EMPTY_FORM;
+    return defineLeader ? { ...member, has_leadership: true } : { ...member };
+  });
+
+  // "Definir líder": o foco vai para o campo Líder, que já abre visível.
+  const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
+  useEffect(() => {
+    if (defineLeader) leaderSelectRef.current?.focus();
+  }, [defineLeader]);
 
   const [password, setPassword] = useState("");
   // O cadastro foi excluído (ou saiu do escopo) enquanto era editado.
@@ -466,6 +481,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
                   <Label htmlFor="leader">Líder</Label>
                   <AsyncMemberSelect
                     inputId="leader"
+                    focusRef={leaderSelectRef}
                     value={form.leader_id || null}
                     onChange={(v) => update("leader_id", v)}
                     excludeId={member?.id}

@@ -10,8 +10,9 @@ import { useCell } from "@/hooks/use-cell";
 import { CELL_DELETION_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 // Formulários abertos a partir de um id (os itens do bloqueio da exclusão de
-// membro, E2.01 T3). Leem o registro na view e mostram o formulário de
-// sempre; fechar ou salvar volta para a lista.
+// membro, E2.01 T3, e o "Definir líder" depois de restaurar um membro, T5).
+// Leem o registro na view e mostram o formulário de sempre; fechar ou salvar
+// volta para a lista.
 
 const DIALOG_CONTENT = "max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full";
 
@@ -59,8 +60,14 @@ interface EditByIdDialogProps {
   onCloseAutoFocus?: (event: Event) => void;
 }
 
+interface EditMemberDialogProps extends EditByIdDialogProps {
+  memberId: string;
+  /** "Definir líder" (E2.01, T5): "Tem Liderança?" ligado e o foco no campo Líder. */
+  defineLeader?: boolean;
+}
+
 /** "Editar Membro" de um membro pelo id. */
-export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus }: EditByIdDialogProps & { memberId: string }) {
+export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus, defineLeader = false }: EditMemberDialogProps) {
   const { data: member, isPending, isError, refetch } = useMember(memberId);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -69,7 +76,7 @@ export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus }: EditBy
           <DialogTitle>Editar Membro</DialogTitle>
         </DialogHeader>
         {member ? (
-          <MemberForm member={member} onClose={onClose} />
+          <MemberForm member={member} onClose={onClose} defineLeader={defineLeader} />
         ) : (
           <LoadState
             isPending={isPending}

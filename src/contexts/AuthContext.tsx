@@ -12,6 +12,12 @@ interface AuthContextType {
   permissions: string[];
   isSystem: boolean;
   loading: boolean;
+  /**
+   * As permissões do usuário logado já chegaram (ou não há sessão). Antes
+   * disso, `hasPermission` responde `false` para tudo: uma tela protegida por
+   * permissão espera, em vez de dizer que o usuário não tem acesso.
+   */
+  permissionsLoaded: boolean;
   signIn: (login: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   hasPermission: (...permissions: string[]) => boolean;
@@ -26,35 +32,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isSystem, setIsSystem] = useState(false);
   const [loading, setLoading] = useState(true);
+  // De quem são as permissões carregadas: a renovação do token recarrega as do
+  // mesmo usuário sem voltar a "carregando".
+  const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
 
   const loadMemberData = async (userId: string) => {
-    // Pela members_view: o próprio cadastro vem sem máscara.
-    const { data: memberData } = await supabase
-      .from("members_view")
-      .select(MEMBER_ROW_SELECT)
-      .eq("auth_user_id", userId)
-      .maybeSingle();
+    try {
+      // Pela members_view: o próprio cadastro vem sem máscara.
+      const { data: memberData } = await supabase
+        .from("members_view")
+        .select(MEMBER_ROW_SELECT)
+        .eq("auth_user_id", userId)
+        .maybeSingle();
 
-    setMember(memberData);
+      setMember(memberData);
 
-    if (memberData?.role_id) {
-      const [{ data: perms }, { data: role }] = await Promise.all([
-        supabase
-          .from("role_permissions")
-          .select("permission")
-          .eq("role_id", memberData.role_id),
-        supabase
-          .from("roles")
-          .select("is_system")
-          .eq("id", memberData.role_id)
-          .maybeSingle()
-      ]);
+      if (memberData?.role_id) {
+        const [{ data: perms }, { data: role }] = await Promise.all([
+          supabase
+            .from("role_permissions")
+            .select("permission")
+            .eq("role_id", memberData.role_id),
+          supabase
+            .from("roles")
+            .select("is_system")
+            .eq("id", memberData.role_id)
+            .maybeSingle()
+        ]);
 
-      setPermissions(perms?.map((p) => p.permission) || []);
-      setIsSystem(role?.is_system || false);
-    } else {
-      setPermissions([]);
-      setIsSystem(false);
+        setPermissions(perms?.map((p) => p.permission) || []);
+        setIsSystem(role?.is_system || false);
+      } else {
+        setPermissions([]);
+        setIsSystem(false);
+      }
+    } finally {
+      setPermissionsUserId(userId);
     }
   };
 
@@ -132,8 +145,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return perms.some((p) => permissions.includes(p));
   };
 
+  const permissionsLoaded = !loading && (!user || permissionsUserId === user.id);
+
   return (
-    <AuthContext.Provider value={{ session, user, member, permissions, isSystem, loading, signIn, signOut, hasPermission }}>
+    <AuthContext.Provider
+      value={{ session, user, member, permissions, isSystem, loading, permissionsLoaded, signIn, signOut, hasPermission }}
+    >
       {children}
     </AuthContext.Provider>
   );

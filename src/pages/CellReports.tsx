@@ -4,15 +4,15 @@ import AppLayout from "@/components/AppLayout";
 import CellReportForm from "@/components/CellReportForm";
 import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
-import StatusBadge from "@/components/StatusBadge";
+import { CellDeletedBadge, HeldStatusBadge } from "@/components/StatusBadges";
 import ListPagination from "@/components/ListPagination";
+import DeletedListButton from "@/components/DeletedListButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Trash2, ClipboardList, Ban } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, ClipboardList } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellReportsList } from "@/hooks/use-cell-reports-list";
@@ -21,7 +21,7 @@ import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
-import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
 
 const CellReports = () => {
   const list = useListSearchParams();
@@ -118,18 +118,19 @@ const CellReports = () => {
   );
 
   /** "Célula excluída" (T7, P6): ícone e texto, nunca só a cor (UX-25). */
-  const cellDeletedBadge = (
-    <StatusBadge tone="muted" icon={Ban} className="w-fit">
-      {CELL_REPORT_DELETION_TEXTS.cellDeleted}
-    </StatusBadge>
-  );
+  const cellDeletedBadge = <CellDeletedBadge />;
 
-  const renderHeldBadge = (r: CellReportRow) =>
-    r.was_held ? (
-      <Badge className="bg-green-500 hover:bg-green-600">Realizada</Badge>
-    ) : (
-      <Badge variant="destructive" title={r.reason_not_held ?? undefined}>Não Realizada</Badge>
-    );
+  const renderHeldBadge = (r: CellReportRow) => <HeldStatusBadge held={r.was_held === true} reason={r.reason_not_held} />;
+
+  // "Excluídos": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
+  const deletedButton = hasPermission("manage_roles") && (
+    <DeletedListButton
+      to="/cell-reports/deleted"
+      text={DELETED_LIST_TEXTS.cellReports.button}
+      label={DELETED_LIST_TEXTS.cellReports.buttonLabel}
+      isMobile={isMobile}
+    />
+  );
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
@@ -187,24 +188,32 @@ const CellReports = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <ClipboardList className="w-7 h-7 md:w-8 md:h-8 text-primary" />
-              Relatórios de Células
-            </h1>
-            <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                <ClipboardList className="w-7 h-7 md:w-8 md:h-8 text-primary shrink-0" />
+                Relatórios de Células
+              </h1>
+              <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
+            </div>
+            {isMobile && deletedButton}
           </div>
-          {canSubmitNewReport && (
-            <Button
-              onClick={(e) => {
-                returnFocus.setOpener(e.currentTarget);
-                setFormOpen(true);
-              }}
-              className="w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Relatório
-            </Button>
+          {(canSubmitNewReport || (!isMobile && deletedButton)) && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!isMobile && deletedButton}
+              {canSubmitNewReport && (
+                <Button
+                  onClick={(e) => {
+                    returnFocus.setOpener(e.currentTarget);
+                    setFormOpen(true);
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Relatório
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

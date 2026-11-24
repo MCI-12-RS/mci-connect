@@ -5,6 +5,11 @@ export interface ReturnFocus {
   setOpener: (element: HTMLElement | null) => void;
   /** Vai no `onCloseAutoFocus` do conteúdo do diálogo (`AlertDialogContent`, `DialogContent`). */
   onCloseAutoFocus: (event: Event) => void;
+  /**
+   * Ação sem diálogo (o "Restaurar" de uma célula): o botão continua com o
+   * foco e, se sair da página quando a lista recarregar, o foco vai para a busca.
+   */
+  trackFocus: (element: HTMLElement | null) => void;
 }
 
 /**
@@ -45,6 +50,11 @@ export function useReturnFocus(searchRef: RefObject<HTMLElement>, listData: unkn
     [searchRef],
   );
 
+  const trackFocus = useCallback((element: HTMLElement | null) => {
+    opener.current = null;
+    returnedTo.current = element;
+  }, []);
+
   useEffect(() => {
     const target = returnedTo.current;
     if (!target || target.isConnected) return;
@@ -54,5 +64,5 @@ export function useReturnFocus(searchRef: RefObject<HTMLElement>, listData: unkn
     if (active === null || active === document.body) searchRef.current?.focus();
   }, [listData, searchRef]);
 
-  return { setOpener, onCloseAutoFocus };
+  return { setOpener, onCloseAutoFocus, trackFocus };
 }
