@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Info } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
+import { useSaveCellReport, type SaveCellReportResult } from "@/hooks/use-save-cell-report";
 import { useCellOptions, toCellOption } from "@/hooks/use-cell-options";
 import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
@@ -20,7 +22,15 @@ import type { CellSummary } from "@/lib/cells/fields";
 import { formatCellLabel } from "@/lib/cells/labels";
 import { weekdayIndex } from "@/lib/cells/weekdays";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
-import { toParticipantOptions } from "@/lib/cell-reports/participants";
+import {
+  finalParticipantIds,
+  keptParticipantsLine,
+  markDeletedChoice,
+  splitSavedParticipants,
+  type KeptParticipant,
+} from "@/lib/cell-reports/participants";
+import { CELL_REPORT_FORM_TEXTS, toReportWrite } from "@/lib/cell-reports/report-form";
+import { CELL_REPORT_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
 import type { SelectOption } from "@/lib/selectors";
 
 const reportSchema = z.object({
@@ -37,6 +47,13 @@ const reportSchema = z.object({
 });
 
 type ReportFormValues = z.infer<typeof reportSchema>;
+
+/** Aviso no topo do formulário depois de uma gravação recusada. */
+type FormNotice =
+  /** O relatório não existe mais ou foi excluído (DT-19): "Fechar" recarrega a lista. */
+  | { kind: "gone" }
+  /** Regra que o formulário não resolve, como a célula excluída (UX-28, UX-30). */
+  | { kind: "blocked"; message: string };
 
 interface CellReportFormProps {
   /** Relatório em edição: a linha da cell_reports_view. */
@@ -58,6 +75,7 @@ const calculateCellDate = (meetingDay: string) => {
 const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const saveMutation = useSaveCellReport();
   const cellInputId = useId();
   const participantsInputId = useId();
 
@@ -86,6 +104,23 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   });
   const participantPagination = useOptionsPagination(memberOptionsQuery, toMemberOption);
   const [participants, setParticipants] = useState<SelectOption[]>([]);
+  // Participantes de cadastro excluído: fora do seletor e sem mudança (RN-13).
+  // `null` enquanto os participantes salvos de um relatório em edição carregam.
+  const [kept, setKept] = useState<KeptParticipant[] | null>(report ? null : []);
+  // Participantes excluídos entre a escolha e o envio, marcados no chip (UX-30).
+  const [flaggedIds, setFlaggedIds] = useState<string[]>([]);
+
+  // O relatório a atualizar: o da edição ou o criado numa tentativa cujos
+  // participantes falharam. Assim, a nova tentativa não cria outro.
+  const [savedReportId, setSavedReportId] = useState<string | null>(report?.id ?? null);
+  // O relatório foi gravado e os participantes não (são duas chamadas até o E2.11).
+  const [participantsUnsaved, setParticipantsUnsaved] = useState(false);
+  const [notice, setNotice] = useState<FormNotice | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus();
+  }, [notice]);
 
   const form = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
@@ -103,8 +138,9 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     },
   });
 
-  // Na edição, os participantes salvos, com o nome.
-  const { data: savedParticipants } = useCellReportParticipants(report?.id);
+  // Na edição, os participantes salvos, com o nome e se o cadastro foi excluído.
+  const savedParticipantsQuery = useCellReportParticipants(report?.id);
+  const savedParticipants = savedParticipantsQuery.data;
 
   // Uma vez por relatório: uma nova leitura (por exemplo, ao voltar para a
   // janela) não desfaz o que já foi mudado no formulário.
@@ -112,8 +148,10 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   useEffect(() => {
     if (!savedParticipants || !report?.id || loadedParticipantsOf.current === report.id) return;
     loadedParticipantsOf.current = report.id;
-    setParticipants(toParticipantOptions(savedParticipants));
-    form.setValue("participant_ids", savedParticipants.map((p) => p.member_id));
+    const { editable, kept: keptParticipants } = splitSavedParticipants(savedParticipants);
+    setParticipants(editable);
+    setKept(keptParticipants);
+    form.setValue("participant_ids", editable.map((p) => p.value));
   }, [savedParticipants, report?.id, form]);
 
   const cellIdValue = form.watch("cell_id");
@@ -129,88 +167,98 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     if (suggestedTime) form.setValue("time", suggestedTime.substring(0, 5));
   }, [cellIdValue, suggestedDay, suggestedTime, form]);
 
-  const saveMutation = useMutation({
-    mutationFn: async (values: ReportFormValues) => {
-      const visitorsArray = values.visitors
-        ? values.visitors.split(",").map((v) => v.trim()).filter((v) => v.length > 0)
-        : [];
+  const showSaveError = (message: string) =>
+    toast({ variant: "destructive", title: CELL_REPORT_FORM_TEXTS.failedTitle, description: message });
 
-      const reportData = {
-        cell_id: values.cell_id,
-        date: values.date,
-        time: values.time,
-        was_held: values.was_held,
-        reason_not_held: values.was_held ? null : values.reason_not_held,
-        theme: values.was_held ? values.theme : null,
-        observations: values.was_held ? values.observations : null,
-        visitors: values.was_held ? visitorsArray : [],
-        offering: values.was_held ? values.offering : 0,
-      };
-
-      let newReportId = report?.id;
-
-      if (report?.id) {
-        const { error } = await supabase
-          .from("cell_reports")
-          .update(reportData)
-          .eq("id", report.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("cell_reports")
-          .insert([reportData])
-          .select("id")
-          .single();
-        if (error) throw error;
-        newReportId = data.id;
-      }
-
-      // Sync participants
-      if (values.was_held) {
-        if (report?.id) {
-          await supabase.from("cell_report_participants").delete().eq("report_id", report.id);
-        }
-        if (values.participant_ids.length > 0) {
-          const participantsToInsert = values.participant_ids.map((memberId) => ({
-            report_id: newReportId,
-            member_id: memberId,
-          }));
-          const { error: pError } = await supabase
-            .from("cell_report_participants")
-            .insert(participantsToInsert);
-          if (pError) throw pError;
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
-      toast({ title: "Relatório salvo com sucesso" });
+  /** Fecha com o toast, ou mostra a falha sem perder o que foi digitado. */
+  const handleSaveResult = (result: SaveCellReportResult) => {
+    if (result.kind === "saved") {
+      toast({ title: CELL_REPORT_FORM_TEXTS.saved });
       onClose();
-    },
-    onError: (error) => {
-      const msg = error?.message || "";
-      let friendly = msg;
-      if (msg.includes("Já existe um relatório para esta célula nesta semana")) {
-        friendly = "Já existe um relatório dessa célula nesta semana (domingo a sábado).";
-      } else if (msg.includes("dentro da semana atual")) {
-        friendly = "A data do relatório precisa estar dentro da semana atual (de domingo a sábado).";
+      return;
+    }
+    setSavedReportId(result.reportId);
+    if (result.step === "participants") setParticipantsUnsaved(true);
+    const { failure } = result;
+    if (failure.kind === "gone") {
+      setNotice({ kind: "gone" });
+      return;
+    }
+    if (failure.kind === "blocked") {
+      setNotice({ kind: "blocked", message: failure.message });
+      return;
+    }
+    if (failure.kind === "participants") {
+      // O membro excluído no meio tempo fica marcado e com ✕, para ser retirado (UX-30).
+      const { memberId } = failure;
+      if (memberId) {
+        setParticipants((current) => markDeletedChoice(current, memberId));
+        setFlaggedIds((current) => (current.includes(memberId) ? current : [...current, memberId]));
       }
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: friendly,
-      });
-    },
-  });
+      form.setError("participant_ids", { message: failure.message }, { shouldFocus: true });
+    } else {
+      showSaveError(failure.message);
+    }
+  };
 
   const onSubmit = (values: ReportFormValues) => {
-    saveMutation.mutate(values);
+    setNotice(null);
+    saveMutation.mutate(
+      {
+        reportId: savedReportId,
+        report: toReportWrite(values),
+        // Sem reunião, os participantes ficam como estão.
+        participantIds: values.was_held ? finalParticipantIds(values.participant_ids, kept ?? []) : null,
+      },
+      // O hook não lança; uma falha fora do previsto pede para tentar de novo.
+      { onSuccess: handleSaveResult, onError: () => showSaveError(CELL_REPORT_FORM_TEXTS.failed) },
+    );
   };
+
+  /** Escolha no seletor: os marcados que saíram levam junto a mensagem do campo. */
+  const handleParticipantsChange = (selected: readonly SelectOption[]) => {
+    setParticipants([...selected]);
+    form.setValue("participant_ids", selected.map((s) => s.value));
+    if (flaggedIds.length > 0 && !selected.some((s) => flaggedIds.includes(s.value))) {
+      setFlaggedIds([]);
+      form.clearErrors("participant_ids");
+    }
+  };
+
+  /** "Fechar" do aviso de relatório excluído: volta para a lista, recarregada. */
+  const closeGone = () => {
+    void queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
+    onClose();
+  };
+
+  // Na edição, salvar com os participantes ainda carregando apagaria os que não chegaram.
+  const participantsPending = wasHeldValue && kept === null;
+  const keptLine = keptParticipantsLine(kept ?? []);
 
   return (
     <Form {...form}>
       {/* min-w-0: dentro do grid do diálogo, um nome longo não alarga o formulário. */}
       <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-6">
+        {notice && (
+          <Alert ref={noticeRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription className="space-y-3">
+              <p>{notice.kind === "gone" ? CELL_REPORT_DELETION_TEXTS.deletedWhileEditing : notice.message}</p>
+              {notice.kind === "gone" && (
+                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeGone}>
+                  {DELETION_TEXTS.close}
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+        {participantsUnsaved && !notice && (
+          <Alert>
+            <Info className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription>{CELL_REPORT_FORM_TEXTS.participantsNotSaved}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -340,14 +388,28 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                     search={participantSearch}
                     pagination={participantPagination}
                     value={participants}
-                    onChange={(selected) => {
-                      setParticipants([...selected]);
-                      form.setValue("participant_ids", selected.map((s) => s.value));
-                    }}
+                    onChange={handleParticipantsChange}
                     placeholder="Buscar membros…"
                     noResultsLabel="Nenhum membro encontrado"
                   />
                   <FormMessage />
+                  {keptLine && <p className="text-sm text-muted-foreground">{keptLine}</p>}
+                  {savedParticipantsQuery.isError && kept === null && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                      <AlertDescription className="space-y-3">
+                        <p>{CELL_REPORT_FORM_TEXTS.participantsLoadFailed}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 md:h-9"
+                          onClick={() => void savedParticipantsQuery.refetch()}
+                        >
+                          {DELETION_TEXTS.tryAgain}
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </FormItem>
               )}
             />
@@ -409,7 +471,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
           <Button type="button" variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={saveMutation.isPending}>
+          <Button type="submit" disabled={saveMutation.isPending || participantsPending || notice?.kind === "gone"}>
             {saveMutation.isPending ? "Salvando..." : "Salvar"}
           </Button>
         </div>

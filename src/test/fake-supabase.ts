@@ -1,6 +1,6 @@
 // Cliente do Supabase falso para os testes de hooks e telas (sem rede). Cada
 // `from(tabela)` ou `rpc(função, argumentos)` cria uma consulta que registra as
-// chamadas encadeadas (select, update, ilike, order, range, in, eq, neq, single…) e, quando
+// chamadas encadeadas (select, insert, update, ilike, order, range, in, eq, neq, single…) e, quando
 // aguardada, responde com a próxima resposta da fila (uma fila só, na ordem em
 // que as consultas forem criadas). Uma RPC com fila própria (`respondToRpc`)
 // usa essa fila antes da geral.
@@ -50,6 +50,9 @@ abstract class FakeBuilder implements PromiseLike<FakeResult> {
 
   select(...args: unknown[]): this {
     return this.record("select", args);
+  }
+  insert(...args: unknown[]): this {
+    return this.record("insert", args);
   }
   update(...args: unknown[]): this {
     return this.record("update", args);
