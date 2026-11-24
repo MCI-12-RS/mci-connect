@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { APP_ERROR_HINT } from "@/lib/errors";
-import { classifyWriteError, parseDeletionCheck } from "./outcome";
+import { classifyWriteError, parseDeletionCheck, refreshesList } from "./outcome";
 
 // O que a tela faz com a resposta de uma exclusão (E2.01, "Estados", UX-11,
 // UX-24 e UX-39) e com a pré-checagem (AQ-1, DT-11).
@@ -92,5 +92,19 @@ describe("parseDeletionCheck", () => {
     for (const value of [null, "ok", [], {}, { can_delete: "false" }, { can_delete: false }, { can_delete: false, code: "x" }]) {
       expect(parseDeletionCheck(value)).toBeNull();
     }
+  });
+});
+
+describe("refreshesList", () => {
+  it("a lista recarrega quando a gravação valeu ou o registro já tinha sumido (UX-07, UX-24)", () => {
+    expect(refreshesList({ kind: "done" })).toBe(true);
+    expect(refreshesList({ kind: "gone", message: "Esta célula não existe ou já foi excluída." })).toBe(true);
+  });
+
+  it("nas demais falhas, a lista fica como está", () => {
+    expect(refreshesList({ kind: "forbidden" })).toBe(false);
+    expect(refreshesList({ kind: "network" })).toBe(false);
+    expect(refreshesList({ kind: "unexpected" })).toBe(false);
+    expect(refreshesList({ kind: "refused", refusal: { code: "x", message: "m", detail: {} } })).toBe(false);
   });
 });

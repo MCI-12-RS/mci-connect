@@ -9,6 +9,9 @@
 // Os marcados "derivado" seguem um texto do spec para outra entidade e não
 // estão escritos nele; os marcados "não está no spec" foram criados aqui.
 
+/** Marca de uma pessoa cujo cadastro foi excluído, ao lado do nome. */
+const PERSON_DELETED = "(cadastro excluído)";
+
 /** Comuns às três entidades. */
 export const DELETION_TEXTS = {
   cancel: "Cancelar",
@@ -107,8 +110,9 @@ export const CELL_DELETION_TEXTS = {
   /** Item do menu "⋯" e botão de confirmar. */
   deleteAction: "Excluir célula",
   confirmTitle: (leader: string) => `Excluir a célula de ${leader}?`,
-  /** Linha que identifica a célula: "{Dia}, {hora} · {endereço}". */
-  summary: (day: string, time: string, address: string) => `${day}, ${time} · ${address}`,
+  /** Linha que identifica a célula: "{Dia}, {hora} · {endereço}". O que estiver vazio fica de fora. */
+  summary: (day: string, time: string, address: string) =>
+    [[day, time].filter(Boolean).join(", "), address].filter(Boolean).join(" · "),
   consequences: [
     "A célula sai das listas e dos totais.",
     "Os relatórios dela continuam no histórico.",
@@ -166,6 +170,10 @@ export const CELL_REPORT_DELETION_TEXTS = {
   /** Participantes excluídos na edição do relatório (T8). */
   deletedParticipants: (names: string) => `Continuam no relatório (cadastros excluídos): ${names}.`,
   participantRemoval: "Não é possível retirar um participante cujo cadastro foi excluído.",
+  /** Participante excluído entre a escolha e o envio (T8, UX-30): mensagem embaixo do campo. */
+  chosenDeleted: "Este membro foi excluído e não pode ser escolhido.",
+  /** Marca no chip desse participante (T8, UX-30). */
+  chosenDeletedMark: PERSON_DELETED,
 } as const;
 
 /** Relatórios: restauração (T6). */
@@ -189,7 +197,7 @@ export const DELETED_LIST_TEXTS = {
   authorNotRecorded: "Autor não registrado",
   /** Coluna "Excluído por", no desktop. */
   authorNotRecordedShort: "Não registrado",
-  personDeleted: "(cadastro excluído)",
+  personDeleted: PERSON_DELETED,
   weekTaken: "Já há outro relatório desta célula na mesma semana.",
   members: {
     button: "Excluídos",

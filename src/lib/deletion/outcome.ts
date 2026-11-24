@@ -25,6 +25,14 @@ export type WriteFailure =
   /** Qualquer outra falha (técnica): o diálogo fica aberto e pede para tentar de novo (RN-20). */
   | { kind: "unexpected" };
 
+/** Resultado de uma gravação do fluxo (excluir, inativar): feita, ou a falha já classificada. */
+export type WriteResult = { kind: "done" } | WriteFailure;
+
+/** A lista recarrega quando a gravação valeu ou quando o registro já tinha sumido (UX-07, UX-24). */
+export function refreshesList(result: WriteResult): boolean {
+  return result.kind === "done" || result.kind === "gone";
+}
+
 /** A recusa diz que o registro não existe, já foi excluído ou não é visível? */
 export function isGone(refusal: AppError): boolean {
   return refusal.code === NOT_FOUND_OR_DELETED;

@@ -3,13 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   classifyWriteError,
   parseDeletionCheck,
+  refreshesList,
   type DeletionCheck,
-  type WriteFailure,
+  type WriteResult,
 } from "@/lib/deletion/outcome";
 import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 /** Resultado de uma gravação do fluxo de exclusão: feita, ou a falha já classificada. */
-export type MemberWriteResult = { kind: "done" } | WriteFailure;
+export type MemberWriteResult = WriteResult;
 
 /**
  * Recarrega o que muda quando um cadastro sai das listas ou fica inativo: a
@@ -24,9 +25,6 @@ export function useRefreshMemberData() {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
     ]);
 }
-
-/** Recarrega a lista quando a gravação valeu ou quando o cadastro já tinha sumido. */
-const changesList = (result: MemberWriteResult) => result.kind === "done" || result.kind === "gone";
 
 /**
  * Pré-checagem da exclusão (E2.01, AQ-1 e UXD-2): o que impede excluir o
@@ -63,7 +61,7 @@ export function useDeleteMember() {
       return error ? classifyWriteError(error) : { kind: "done" };
     },
     onSuccess: async (result) => {
-      if (changesList(result)) await refresh();
+      if (refreshesList(result)) await refresh();
     },
   });
 }
@@ -87,7 +85,7 @@ export function useMarkMemberInactive() {
       return { kind: "done" };
     },
     onSuccess: async (result) => {
-      if (changesList(result)) await refresh();
+      if (refreshesList(result)) await refresh();
     },
   });
 }

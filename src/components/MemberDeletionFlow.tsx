@@ -7,12 +7,12 @@ import { BlockedActionContent } from "@/components/BlockedActionDialog";
 import { EditCellDialog, EditMemberDialog } from "@/components/EditRecordDialogs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useDialogWrite } from "@/hooks/use-dialog-write";
 import {
   useDeleteMember,
   useMarkMemberInactive,
   useMemberDeletionCheck,
   useRefreshMemberData,
-  type MemberWriteResult,
 } from "@/hooks/use-member-deletion";
 import { buildBlockerGroups, memberLinksFromRefusal, type BlockerGroup } from "@/lib/deletion/blockers";
 import { DELETION_TEXTS, MEMBER_DELETION_TEXTS, MEMBER_LINKS_TEXTS } from "@/lib/deletion/texts";
@@ -29,14 +29,6 @@ interface MemberDeletionFlowProps {
   member: MemberDeletionTarget;
   /** Fim do fluxo: a tela volta para a lista. */
   onClose: () => void;
-}
-
-/** Textos e reação de cada gravação do diálogo (excluir ou inativar). */
-interface ResultHandlers {
-  doneText: string;
-  networkText: string;
-  unexpectedText: string;
-  onRefused: (refusal: AppError) => void;
 }
 
 /** Depois do bloqueio, o fluxo pode abrir o formulário do discípulo ou da célula (T3). */
@@ -107,9 +99,7 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
   const refresh = useRefreshMemberData();
   const [step, setStep] = useState<Step>({ kind: "dialog" });
   const [serverRefusal, setServerRefusal] = useState<AppError | null>(null);
-  const [sendError, setSendError] = useState<string | null>(null);
-  // Um toque duplo, antes de o botão desabilitar, não faz duas chamadas (UX-06).
-  const sending = useRef(false);
+  const write = useDialogWrite(onClose);
 
   const canEditMember = hasPermission("edit_member");
   const canEditCell = hasPermission("edit_cell");
@@ -130,65 +120,23 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
     onClose();
   }, [goneMessage, toast, refresh, onClose]);
 
-  /** Fecha, avisa ou mostra a falha no diálogo, conforme o resultado da gravação. */
-  const handleResult = (result: MemberWriteResult, handlers: ResultHandlers) => {
-    switch (result.kind) {
-      case "done":
-        toast({ title: handlers.doneText });
-        onClose();
-        return;
-      case "gone":
-        toast({ title: result.message });
-        onClose();
-        return;
-      case "forbidden":
-        toast({ variant: "destructive", title: DELETION_TEXTS.permissionDenied });
-        onClose();
-        return;
-      case "refused":
-        handlers.onRefused(result.refusal);
-        return;
-      case "network":
-        setSendError(handlers.networkText);
-        return;
-      case "unexpected":
-        setSendError(handlers.unexpectedText);
-    }
-  };
-
-  /** Uma gravação por vez; uma falha inesperada (que não veio classificada) pede para tentar de novo. */
-  const send = (run: () => Promise<void>, failedText: string) => {
-    if (sending.current) return;
-    sending.current = true;
-    setSendError(null);
-    void run()
-      .catch(() => setSendError(failedText))
-      .finally(() => {
-        sending.current = false;
-      });
-  };
-
   const handleDelete = () =>
-    send(async () => {
-      handleResult(await deletion.mutateAsync(member.id), {
-        doneText: MEMBER_DELETION_TEXTS.deleted,
-        networkText: DELETION_TEXTS.deleteNetworkError,
-        unexpectedText: DELETION_TEXTS.deleteFailed,
-        // A recusa do servidor troca o conteúdo para o bloqueio (UX-11).
-        onRefused: setServerRefusal,
-      });
-    }, DELETION_TEXTS.deleteFailed);
+    write.send(() => deletion.mutateAsync(member.id), {
+      doneText: MEMBER_DELETION_TEXTS.deleted,
+      networkText: DELETION_TEXTS.deleteNetworkError,
+      unexpectedText: DELETION_TEXTS.deleteFailed,
+      // A recusa do servidor troca o conteúdo para o bloqueio (UX-11).
+      onRefused: setServerRefusal,
+    });
 
   const handleInactivate = () =>
-    send(async () => {
-      handleResult(await inactivation.mutateAsync(member.id), {
-        doneText: MEMBER_DELETION_TEXTS.inactivated,
-        networkText: MEMBER_DELETION_TEXTS.inactivateNetworkError,
-        unexpectedText: MEMBER_DELETION_TEXTS.inactivateFailed,
-        // Uma regra que recuse o PATCH aparece no aviso do próprio diálogo.
-        onRefused: (refusalFromServer) => setSendError(refusalFromServer.message),
-      });
-    }, MEMBER_DELETION_TEXTS.inactivateFailed);
+    write.send(() => inactivation.mutateAsync(member.id), {
+      doneText: MEMBER_DELETION_TEXTS.inactivated,
+      networkText: MEMBER_DELETION_TEXTS.inactivateNetworkError,
+      unexpectedText: MEMBER_DELETION_TEXTS.inactivateFailed,
+      // Uma regra que recuse o PATCH aparece no aviso do próprio diálogo.
+      onRefused: (refusalFromServer) => write.setError(refusalFromServer.message),
+    });
 
   if (step.kind === "member") return <EditMemberDialog memberId={step.id} onClose={onClose} />;
   if (step.kind === "cell") return <EditCellDialog cellId={step.id} onClose={onClose} />;
@@ -240,7 +188,7 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
                 ? { text: MEMBER_DELETION_TEXTS.checking, actionLabel: MEMBER_DELETION_TEXTS.checkingAction }
                 : null
             }
-            error={sendError}
+            error={write.error}
           />
         )}
       </LongAlertDialogContent>
