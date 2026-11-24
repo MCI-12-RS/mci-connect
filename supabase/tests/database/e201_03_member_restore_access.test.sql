@@ -32,7 +32,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(134);
+SELECT plan(143);
 
 CREATE FUNCTION pg_temp.u(_n int) RETURNS uuid LANGUAGE sql IMMUTABLE AS
 $$ SELECT ('a2010300-0000-0000-0000-' || lpad(_n::text, 12, '0'))::uuid $$;
@@ -267,6 +267,40 @@ SELECT is((SELECT count(*)::int FROM private.member_access_suspensions WHERE mem
 SELECT ok(pg_temp.val(5, 'SELECT count(*) FROM public.members_view')::int > 0
           AND pg_temp.val(5, 'SELECT count(*) FROM public.roles')::int > 0,
   'RN-16 f: Ana volta a ler (mesmas permissões)');
+
+-- ===========================================================================
+-- 1b. RN-20: falha no bloqueio ou no desbloqueio do acesso — 9
+-- ===========================================================================
+-- A falha é simulada por um trigger temporário na tabela das suspensões.
+CREATE FUNCTION public.e201_qa_fail_suspension() RETURNS trigger LANGUAGE plpgsql AS
+$$ BEGIN RAISE EXCEPTION 'falha simulada no acesso (teste E2.01)'; END $$;
+CREATE TRIGGER e201_qa_fail_suspension BEFORE INSERT ON private.member_access_suspensions
+  FOR EACH ROW EXECUTE FUNCTION public.e201_qa_fail_suspension();
+SELECT is(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(16))) ->> 'state', 'P0001',
+  'RN-20: se o bloqueio do acesso falha, a exclusão de Ana falha');
+SELECT is((pg_temp.mem(16)).deleted_at, NULL, 'RN-20: Ana não fica excluída');
+SELECT is((SELECT row(encrypted_password::text, banned_until)::text FROM auth.users WHERE id = pg_temp.u(5)),
+  (SELECT row(encrypted_password, banned_until)::text FROM ana_auth0),
+  'RN-20: a conta de Ana fica como estava (nada pela metade)');
+SELECT is((SELECT count(*)::int FROM public.events WHERE entity_id = pg_temp.m(16) AND action = 'delete'), 1,
+  'RN-20: só o evento da exclusão anterior (o da tentativa foi desfeito junto)');
+DROP TRIGGER e201_qa_fail_suspension ON private.member_access_suspensions;
+
+SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(16)))), '00000',
+  'RN-20: sem a falha, AD exclui Ana');
+CREATE TRIGGER e201_qa_fail_suspension BEFORE DELETE ON private.member_access_suspensions
+  FOR EACH ROW EXECUTE FUNCTION public.e201_qa_fail_suspension();
+SELECT is(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(16))) ->> 'state', 'P0001',
+  'RN-20: se o desbloqueio do acesso falha, a restauração de Ana falha');
+SELECT ok((pg_temp.mem(16)).deleted_at IS NOT NULL
+          AND (SELECT encrypted_password = '' AND banned_until IS NOT NULL FROM auth.users WHERE id = pg_temp.u(5)),
+  'RN-20: Ana continua excluída e bloqueada (nunca não excluída sem acesso, nem excluída com acesso)');
+DROP TRIGGER e201_qa_fail_suspension ON private.member_access_suspensions;
+SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(16)))), '00000',
+  'RN-20: sem a falha, AD restaura Ana');
+SELECT is((SELECT row(encrypted_password::text, banned_until)::text FROM auth.users WHERE id = pg_temp.u(5)),
+  (SELECT row(encrypted_password, banned_until)::text FROM ana_auth0),
+  'RN-16 f: e a conta volta como estava');
 
 -- ===========================================================================
 -- 2. RN-14/RN-16 f: banimento anterior e membro sem conta — 6
