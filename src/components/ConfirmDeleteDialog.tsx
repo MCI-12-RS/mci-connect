@@ -34,15 +34,24 @@ export interface ConfirmDeleteContentProps {
   /** Botão destrutivo, com verbo e objeto: "Excluir cadastro". */
   confirmLabel: string;
   onConfirm: () => void;
-  /** Exclusão em andamento: "Excluindo…", e os botões ficam desabilitados (UX-06). */
+  /** Exclusão em andamento: "Excluindo…", e os botões ficam indisponíveis (UX-06). */
   deleting?: boolean;
-  /** Outra gravação do diálogo em andamento (o atalho de inativar): os botões ficam desabilitados. */
+  /** Outra gravação do diálogo em andamento (o atalho de inativar): os botões ficam indisponíveis. */
   busy?: boolean;
-  /** Pré-checagem em andamento: `Skeleton`, o texto e o botão desabilitado (UX-08). */
+  /** Pré-checagem em andamento: `Skeleton`, o texto e o botão indisponível (UX-08). */
   checking?: { text: string; actionLabel: string } | null;
   /** Falha no envio (por exemplo, a conexão), num `Alert` acima dos botões. */
   error?: string | null;
 }
+
+/**
+ * Botões que gravam ("Excluir…", "Marcar como inativo") enquanto uma gravação
+ * corre ou a pré-checagem não termina: `aria-disabled`, e não `disabled`, para
+ * o foco ficar no botão tocado (o `disabled` o largaria no `body`) e continuar
+ * nele na queda de conexão e na recusa (UX-06). O clique não faz nada nesse
+ * meio tempo: o botão fica sem `onClick`.
+ */
+const UNAVAILABLE_WHILE_SAVING = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 /**
  * Corpo da confirmação de exclusão (T2): título, consequências em tópicos,
@@ -63,6 +72,7 @@ export function ConfirmDeleteContent({
   error = null,
 }: ConfirmDeleteContentProps) {
   const locked = deleting || busy;
+  const confirmUnavailable = !!checking || locked;
 
   let confirmText = confirmLabel;
   if (checking) confirmText = checking.actionLabel;
@@ -104,9 +114,9 @@ export function ConfirmDeleteContent({
               <Button
                 type="button"
                 variant="outline"
-                className="h-auto min-h-11 whitespace-normal md:min-h-9"
-                disabled={locked}
-                onClick={hint.action.onClick}
+                className={cn("h-auto min-h-11 whitespace-normal md:min-h-9", UNAVAILABLE_WHILE_SAVING)}
+                aria-disabled={locked || undefined}
+                onClick={locked ? undefined : hint.action.onClick}
               >
                 {hint.action.label}
               </Button>
@@ -118,7 +128,7 @@ export function ConfirmDeleteContent({
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="text-foreground">{error}</AlertDescription>
         </Alert>
       )}
 
@@ -129,9 +139,9 @@ export function ConfirmDeleteContent({
         <Button
           type="button"
           variant="destructive"
-          className={DIALOG_FOOTER_BUTTON}
-          disabled={!!checking || locked}
-          onClick={onConfirm}
+          className={cn(DIALOG_FOOTER_BUTTON, UNAVAILABLE_WHILE_SAVING)}
+          aria-disabled={confirmUnavailable || undefined}
+          onClick={confirmUnavailable ? undefined : onConfirm}
         >
           {confirmText}
         </Button>
@@ -143,13 +153,15 @@ export function ConfirmDeleteContent({
 export interface ConfirmDeleteDialogProps extends ConfirmDeleteContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Ao fechar, leva o foco a quem abriu o diálogo (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
  * Confirmação de exclusão (T2, padrões P8 e P9). Não fecha enquanto exclui:
  * quem chama fecha no sucesso e troca o conteúdo nas recusas.
  */
-export function ConfirmDeleteDialog({ open, onOpenChange, ...content }: ConfirmDeleteDialogProps) {
+export function ConfirmDeleteDialog({ open, onOpenChange, onCloseAutoFocus, ...content }: ConfirmDeleteDialogProps) {
   const locked = content.deleting || content.busy;
   const handleOpenChange = (next: boolean) => {
     if (!next && locked) return;
@@ -157,7 +169,7 @@ export function ConfirmDeleteDialog({ open, onOpenChange, ...content }: ConfirmD
   };
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <LongAlertDialogContent>
+      <LongAlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <ConfirmDeleteContent {...content} />
       </LongAlertDialogContent>
     </AlertDialog>

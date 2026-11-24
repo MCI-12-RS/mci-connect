@@ -94,7 +94,8 @@ describe("MemberDeletionFlow", () => {
 
     expect(screen.getByRole("heading", { name: "Excluir Bruno Almeida?" })).toBeInTheDocument();
     expect(screen.getByText("Verificando se o cadastro pode ser excluído…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Verificando…" })).toBeDisabled();
+    // Indisponível sem largar o foco: aria-disabled, e não disabled (UX-06).
+    expect(screen.getByRole("button", { name: "Verificando…" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus();
     expect(fakeRpcs()[0]).toMatchObject({ fn: "check_member_deletion", args: { _member_id: "b1" } });
 
@@ -104,7 +105,7 @@ describe("MemberDeletionFlow", () => {
     });
 
     const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByRole("button", { name: "Excluir cadastro" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Excluir cadastro" })).not.toHaveAttribute("aria-disabled");
     expect(within(dialog).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       "O cadastro sai das listas, dos totais e do dashboard.",
       "A pessoa perde o acesso ao sistema.",
@@ -118,7 +119,7 @@ describe("MemberDeletionFlow", () => {
   it("Se a verificação falhar, a confirmação abre normalmente (UX-08)", async () => {
     respondToRpc("check_member_deletion", { error: { code: "", message: "TypeError: Failed to fetch" } });
     renderFlow();
-    expect(await screen.findByRole("button", { name: "Excluir cadastro" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Excluir cadastro" })).not.toHaveAttribute("aria-disabled");
   });
 
   it("Com ligações, abre o bloqueio sem passar pela confirmação, com 5 por grupo, 'e mais N' e as marcações (UX-08, UX-09)", async () => {
@@ -175,8 +176,11 @@ describe("MemberDeletionFlow", () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
 
-    expect(await screen.findByRole("button", { name: "Excluindo…" })).toBeDisabled();
+    const deleting = await screen.findByRole("button", { name: "Excluindo…" });
+    expect(deleting).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    // Indisponível, o toque no botão não chama de novo.
+    fireEvent.click(deleting);
     expect(deleteCalls()).toHaveLength(1);
     expect(deleteCalls()[0].args).toEqual({ _member_id: "b1" });
 
@@ -239,9 +243,61 @@ describe("MemberDeletionFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Excluir cadastro" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
-    expect(screen.getByRole("button", { name: "Excluir cadastro" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Excluir cadastro" })).not.toHaveAttribute("aria-disabled");
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("alertdialog")).not.toHaveTextContent("Failed to fetch");
+  });
+
+  it("UX-06: 'Excluir cadastro' tocado fica com o foco durante 'Excluindo…' e continua com ele na queda de conexão", async () => {
+    await openConfirmation();
+    let release: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => (release = resolve));
+    respondToRpc("delete_member", { error: { code: "", message: "TypeError: Failed to fetch" }, until: arrived });
+
+    const confirm = screen.getByRole("button", { name: "Excluir cadastro" });
+    act(() => confirm.focus());
+    fireEvent.click(confirm);
+
+    const deleting = await screen.findByRole("button", { name: "Excluindo…" });
+    expect(deleting).toHaveAttribute("aria-disabled", "true");
+    expect(deleting).toHaveFocus();
+
+    await act(async () => {
+      release();
+      await arrived;
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
+    expect(confirm).toHaveTextContent("Excluir cadastro");
+    expect(confirm).toHaveFocus();
+  });
+
+  it("UX-06: 'Marcar como inativo' tocado fica com o foco enquanto grava e continua com ele na queda de conexão", async () => {
+    auth.permissions = new Set(["delete_member", "edit_member"]);
+    const onClose = await openConfirmation();
+    let release: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => (release = resolve));
+    respondWith({ error: { code: "", message: "TypeError: Failed to fetch" }, until: arrived });
+
+    const inactivate = screen.getByRole("button", { name: "Marcar como inativo" });
+    act(() => inactivate.focus());
+    fireEvent.click(inactivate);
+
+    await waitFor(() => expect(inactivate).toHaveAttribute("aria-disabled", "true"));
+    expect(inactivate).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Excluir cadastro" })).toHaveAttribute("aria-disabled", "true");
+
+    await act(async () => {
+      release();
+      await arrived;
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível marcar como inativo. Verifique a conexão e tente de novo.",
+    );
+    expect(inactivate).not.toHaveAttribute("aria-disabled");
+    expect(inactivate).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("O aviso de inativar só aparece para membro ativo, e o botão só com edit_member (UX-05)", async () => {

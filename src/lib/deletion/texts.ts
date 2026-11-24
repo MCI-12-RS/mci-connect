@@ -28,10 +28,16 @@ export const DELETION_TEXTS = {
   restoreNetworkError: "Não foi possível restaurar. Verifique a conexão e tente de novo.",
 } as const;
 
+// Os rótulos dos botões de ícone das linhas (`actionsLabel`, `deleteLabel`,
+// `editLabel`…) trazem o item, porque cada linha repete o mesmo ícone (T1 e
+// Acessibilidade).
+
 /** Membros: exclusão (T1, T2), atalho de inativar e corrida na edição (DT-19). */
 export const MEMBER_DELETION_TEXTS = {
   actionsLabel: (name: string) => `Ações de ${name}`,
   deleteLabel: (name: string) => `Excluir ${name}`,
+  /** Derivado do "Excluir {Nome}": o ícone "Editar" da linha. */
+  editLabel: (name: string) => `Editar ${name}`,
   /** Item do menu "⋯" e botão de confirmar. */
   deleteAction: "Excluir cadastro",
   confirmTitle: (name: string) => `Excluir ${name}?`,
@@ -107,6 +113,10 @@ export const MEMBER_RESTORE_TEXTS = {
 export const CELL_DELETION_TEXTS = {
   actionsLabel: (leader: string) => `Ações da célula de ${leader}`,
   deleteLabel: (leader: string) => `Excluir a célula de ${leader}`,
+  /** Derivado do "Excluir a célula de {Líder}": o ícone "Editar" da linha. */
+  editLabel: (leader: string) => `Editar a célula de ${leader}`,
+  /** Derivado do "Excluir a célula de {Líder}": o ícone "Novo relatório" da linha. */
+  newReportLabel: (leader: string) => `Novo relatório da célula de ${leader}`,
   /** Item do menu "⋯" e botão de confirmar. */
   deleteAction: "Excluir célula",
   confirmTitle: (leader: string) => `Excluir a célula de ${leader}?`,
@@ -149,8 +159,12 @@ export const CELL_RESTORE_TEXTS = {
 
 /** Relatórios: exclusão (T1, T2), "Célula excluída" (T7) e formulário (T8). */
 export const CELL_REPORT_DELETION_TEXTS = {
-  actionsLabel: (date: string) => `Ações do relatório de ${date}`,
-  deleteLabel: (date: string) => `Excluir o relatório de ${date}`,
+  // O spec diz "do relatório de {data}"; o líder entra porque muitas células
+  // se reúnem no mesmo dia, e o rótulo só com a data se repetiria na lista.
+  actionsLabel: (date: string, leader: string) => `Ações do relatório de ${date} da célula de ${leader}`,
+  deleteLabel: (date: string, leader: string) => `Excluir o relatório de ${date} da célula de ${leader}`,
+  /** Derivado do "Excluir o relatório…": o ícone "Editar" da linha. */
+  editLabel: (date: string, leader: string) => `Editar o relatório de ${date} da célula de ${leader}`,
   /** Item do menu "⋯" e botão de confirmar. */
   deleteAction: "Excluir relatório",
   confirmTitle: (date: string, leader: string) => `Excluir o relatório de ${date} da célula de ${leader}?`,

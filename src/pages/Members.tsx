@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
@@ -16,6 +16,7 @@ import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
 import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
@@ -44,10 +45,15 @@ const Members = () => {
 
   useClampPage(list, { data, isPlaceholderData });
 
+  // Ao fechar um diálogo, o foco volta a quem o abriu ou, se o membro saiu da lista, à busca.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const returnFocus = useReturnFocus(searchRef, data);
+
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
 
-  const handleEdit = (member: Member) => {
+  const handleEdit = (member: Member, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
     setEditingMember(member);
     setFormOpen(true);
   };
@@ -72,11 +78,15 @@ const Members = () => {
   // Ninguém exclui o próprio cadastro (RN-03); o banco também recusa.
   const canDelete = (m: Member) => hasPermission("delete_member") && !isSelf(m);
 
-  const startDeletion = (m: Member) =>
+  const startDeletion = (m: Member, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
     setDeletingMember({ id: m.id, name: memberName(m), isActive: m.is_active === true });
+  };
 
   const rowActions = (m: Member): RowAction[] =>
-    canDelete(m) ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: () => startDeletion(m) }] : [];
+    canDelete(m)
+      ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(m, trigger) }]
+      : [];
 
   const LevelBadge = ({ m }: { m: Member }) => {
     if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
@@ -102,14 +112,20 @@ const Members = () => {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{m.name}</p>
+                <p className="font-semibold text-sm break-words">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {canEdit(m) && (
-                  <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Editar ${memberName(m)}`} onClick={() => handleEdit(m)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11"
+                    aria-label={MEMBER_DELETION_TEXTS.editLabel(memberName(m))}
+                    onClick={(e) => handleEdit(m, e.currentTarget)}
+                  >
                     <Pencil className="w-4 h-4" aria-hidden="true" />
                   </Button>
                 )}
@@ -152,7 +168,13 @@ const Members = () => {
             <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
           </div>
           {hasPermission("create_member") && (
-            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                returnFocus.setOpener(e.currentTarget);
+                setFormOpen(true);
+              }}
+              className="w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Novo Membro
             </Button>
@@ -165,7 +187,9 @@ const Members = () => {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
+                  ref={searchRef}
                   placeholder="Buscar por nome, e-mail ou CPF..."
+                  aria-label="Buscar membros"
                   value={list.searchInput}
                   onChange={(e) => list.setSearchInput(e.target.value)}
                   maxLength={100}
@@ -244,7 +268,12 @@ const Members = () => {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               {canEdit(m) && (
-                                <Button variant="ghost" size="icon" aria-label={`Editar ${memberName(m)}`} onClick={() => handleEdit(m)}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={MEMBER_DELETION_TEXTS.editLabel(memberName(m))}
+                                  onClick={(e) => handleEdit(m, e.currentTarget)}
+                                >
                                   <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </Button>
                               )}
@@ -253,7 +282,7 @@ const Members = () => {
                                   variant="ghost"
                                   size="icon"
                                   aria-label={MEMBER_DELETION_TEXTS.deleteLabel(memberName(m))}
-                                  onClick={() => startDeletion(m)}
+                                  onClick={(e) => startDeletion(m, e.currentTarget)}
                                 >
                                   <Trash2 className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                                 </Button>
@@ -282,7 +311,10 @@ const Members = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>{editingMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
             </DialogHeader>
@@ -291,7 +323,12 @@ const Members = () => {
         </Dialog>
 
         {deletingMember && (
-          <MemberDeletionFlow key={deletingMember.id} member={deletingMember} onClose={() => setDeletingMember(null)} />
+          <MemberDeletionFlow
+            key={deletingMember.id}
+            member={deletingMember}
+            onClose={() => setDeletingMember(null)}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
         )}
       </div>
     </AppLayout>

@@ -40,7 +40,7 @@ function LoadState({ isPending, isError, isMissing, missingText, errorText, onRe
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
-        <AlertDescription className="space-y-3">
+        <AlertDescription className="space-y-3 text-foreground">
           <p>{errorText}</p>
           <Button type="button" variant="outline" className="h-11 md:h-9" onClick={onRetry}>
             {DELETION_TEXTS.tryAgain}
@@ -55,14 +55,16 @@ function LoadState({ isPending, isError, isMissing, missingText, errorText, onRe
 
 interface EditByIdDialogProps {
   onClose: () => void;
+  /** Ao fechar, leva o foco a quem abriu o fluxo (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** "Editar Membro" de um membro pelo id. */
-export function EditMemberDialog({ memberId, onClose }: EditByIdDialogProps & { memberId: string }) {
+export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus }: EditByIdDialogProps & { memberId: string }) {
   const { data: member, isPending, isError, refetch } = useMember(memberId);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined}>
+      <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Editar Membro</DialogTitle>
         </DialogHeader>
@@ -84,11 +86,11 @@ export function EditMemberDialog({ memberId, onClose }: EditByIdDialogProps & { 
 }
 
 /** "Editar Célula" de uma célula pelo id. */
-export function EditCellDialog({ cellId, onClose }: EditByIdDialogProps & { cellId: string }) {
+export function EditCellDialog({ cellId, onClose, onCloseAutoFocus }: EditByIdDialogProps & { cellId: string }) {
   const { data: cell, isPending, isError, refetch } = useCell(cellId);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined}>
+      <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Editar Célula</DialogTitle>
         </DialogHeader>

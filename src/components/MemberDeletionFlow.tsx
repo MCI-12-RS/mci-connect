@@ -29,6 +29,8 @@ interface MemberDeletionFlowProps {
   member: MemberDeletionTarget;
   /** Fim do fluxo: a tela volta para a lista. */
   onClose: () => void;
+  /** Quando o último diálogo do fluxo fecha, leva o foco a quem o abriu (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Depois do bloqueio, o fluxo pode abrir o formulário do discípulo ou da célula (T3). */
@@ -90,7 +92,7 @@ function MemberLinksList({ groups, canOpenMember, canOpenCell, onOpenMember, onO
  * exclui pela RPC. Do bloqueio, abre o cadastro do discípulo ou a célula a
  * reatribuir. Monte com `key` do membro: cada abertura começa do zero.
  */
-const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
+const MemberDeletionFlow = ({ member, onClose, onCloseAutoFocus }: MemberDeletionFlowProps) => {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const check = useMemberDeletionCheck(member.id);
@@ -98,6 +100,13 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
   const inactivation = useMarkMemberInactive();
   const refresh = useRefreshMemberData();
   const [step, setStep] = useState<Step>({ kind: "dialog" });
+  // Do bloqueio, o diálogo dá lugar ao formulário: o foco fica nele, e é o
+  // formulário que o devolve a quem abriu o fluxo, quando fechar.
+  const formOpened = useRef(false);
+  const openForm = (next: Step) => {
+    formOpened.current = true;
+    setStep(next);
+  };
   const [serverRefusal, setServerRefusal] = useState<AppError | null>(null);
   const write = useDialogWrite(onClose);
 
@@ -138,8 +147,12 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
       onRefused: (refusalFromServer) => write.setError(refusalFromServer.message),
     });
 
-  if (step.kind === "member") return <EditMemberDialog memberId={step.id} onClose={onClose} />;
-  if (step.kind === "cell") return <EditCellDialog cellId={step.id} onClose={onClose} />;
+  if (step.kind === "member") {
+    return <EditMemberDialog memberId={step.id} onClose={onClose} onCloseAutoFocus={onCloseAutoFocus} />;
+  }
+  if (step.kind === "cell") {
+    return <EditCellDialog cellId={step.id} onClose={onClose} onCloseAutoFocus={onCloseAutoFocus} />;
+  }
 
   const links = refusal ? memberLinksFromRefusal(refusal) : null;
 
@@ -150,7 +163,12 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
         if (!open && !busy) onClose();
       }}
     >
-      <LongAlertDialogContent>
+      <LongAlertDialogContent
+        onCloseAutoFocus={(event) => {
+          if (formOpened.current) event.preventDefault();
+          else onCloseAutoFocus?.(event);
+        }}
+      >
         {refusal ? (
           <BlockedActionContent title={MEMBER_LINKS_TEXTS.blockedTitle(member.name)} focusTitle>
             {links ? (
@@ -158,8 +176,8 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
                 groups={buildBlockerGroups(links)}
                 canOpenMember={canEditMember}
                 canOpenCell={canEditCell}
-                onOpenMember={(id) => setStep({ kind: "member", id })}
-                onOpenCell={(id) => setStep({ kind: "cell", id })}
+                onOpenMember={(id) => openForm({ kind: "member", id })}
+                onOpenCell={(id) => openForm({ kind: "cell", id })}
               />
             ) : (
               <p>{refusal.message}</p>

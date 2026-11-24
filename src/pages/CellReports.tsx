@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellReportForm from "@/components/CellReportForm";
@@ -16,6 +16,7 @@ import { Plus, Search, Pencil, Trash2, ClipboardList, Ban } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellReportsList } from "@/hooks/use-cell-reports-list";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
@@ -36,7 +37,15 @@ const CellReports = () => {
 
   useClampPage(list, { data, isPlaceholderData });
 
-  const handleEdit = (report: CellReportRow) => { setEditingReport(report); setFormOpen(true); };
+  // Ao fechar um diálogo, o foco volta a quem o abriu ou, se o relatório saiu da lista, à busca.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const returnFocus = useReturnFocus(searchRef, data);
+
+  const handleEdit = (report: CellReportRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setEditingReport(report);
+    setFormOpen(true);
+  };
   const handleClose = () => { setFormOpen(false); setEditingReport(null); };
 
   const canEditReport = hasPermission("edit_cell_report");
@@ -51,14 +60,29 @@ const CellReports = () => {
   // O relatório de célula excluída não é editado (RN-11): sem "Editar"; "Excluir relatório" continua.
   const canEditRow = (r: CellReportRow) => canEditReport && r.cell_deleted !== true;
 
-  const startDeletion = (r: CellReportRow) => setDeletingReport(toCellReportDeletionTarget(r));
+  const startDeletion = (r: CellReportRow, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setDeletingReport(toCellReportDeletionTarget(r));
+  };
+
+  /** A data e o líder nos rótulos da linha: muitas células se reúnem no mesmo dia. */
+  const rowLabel = (r: CellReportRow) => {
+    const { date, leaderName } = toCellReportDeletionTarget(r);
+    return [date, leaderName] as const;
+  };
 
   // Funções que devolvem JSX, e não componentes: um componente declarado aqui
   // dentro seria recriado a cada render, e o botão que abriu o diálogo perderia o foco.
 
   const renderEditButton = (r: CellReportRow, buttonClass: string) =>
     canEditRow(r) && (
-      <Button variant="ghost" size="icon" className={buttonClass} onClick={() => handleEdit(r)} aria-label="Editar relatório">
+      <Button
+        variant="ghost"
+        size="icon"
+        className={buttonClass}
+        onClick={(e) => handleEdit(r, e.currentTarget)}
+        aria-label={CELL_REPORT_DELETION_TEXTS.editLabel(...rowLabel(r))}
+      >
         <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
       </Button>
     );
@@ -71,8 +95,8 @@ const CellReports = () => {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          aria-label={CELL_REPORT_DELETION_TEXTS.deleteLabel(formatReportDate(r.date))}
-          onClick={() => startDeletion(r)}
+          aria-label={CELL_REPORT_DELETION_TEXTS.deleteLabel(...rowLabel(r))}
+          onClick={(e) => startDeletion(r, e.currentTarget)}
         >
           <Trash2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
         </Button>
@@ -83,13 +107,13 @@ const CellReports = () => {
   /** No celular, "Excluir relatório" fica no menu "⋯" do card (T1, P8). */
   const rowActions = (r: CellReportRow): RowAction[] =>
     canDeleteReport
-      ? [{ label: CELL_REPORT_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: () => startDeletion(r) }]
+      ? [{ label: CELL_REPORT_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(r, trigger) }]
       : [];
 
   const renderMobileActions = (r: CellReportRow) => (
     <div className="flex items-center gap-2 shrink-0">
       {renderEditButton(r, "h-11 w-11")}
-      <RowActionsMenu label={CELL_REPORT_DELETION_TEXTS.actionsLabel(formatReportDate(r.date))} actions={rowActions(r)} />
+      <RowActionsMenu label={CELL_REPORT_DELETION_TEXTS.actionsLabel(...rowLabel(r))} actions={rowActions(r)} />
     </div>
   );
 
@@ -171,7 +195,13 @@ const CellReports = () => {
             <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
           </div>
           {canSubmitNewReport && (
-            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                returnFocus.setOpener(e.currentTarget);
+                setFormOpen(true);
+              }}
+              className="w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Novo Relatório
             </Button>
@@ -183,6 +213,7 @@ const CellReports = () => {
             <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 placeholder="Buscar por líder ou tema..."
                 aria-label="Buscar relatórios"
                 value={list.searchInput}
@@ -271,7 +302,10 @@ const CellReports = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>{editingReport ? "Editar Relatório" : "Novo Relatório de Célula"}</DialogTitle>
             </DialogHeader>
@@ -280,7 +314,12 @@ const CellReports = () => {
         </Dialog>
 
         {deletingReport && (
-          <CellReportDeletionFlow key={deletingReport.id} report={deletingReport} onClose={() => setDeletingReport(null)} />
+          <CellReportDeletionFlow
+            key={deletingReport.id}
+            report={deletingReport}
+            onClose={() => setDeletingReport(null)}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
         )}
       </div>
     </AppLayout>

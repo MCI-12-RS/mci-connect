@@ -59,10 +59,10 @@ describe("CellReportDeletionFlow: envio da exclusão", () => {
     ]);
     expect(dialog).not.toHaveTextContent(/não pode ser desfeita/i);
     expect(within(dialog).queryByRole("button", { name: /Marcar como inativ/ })).not.toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Excluir relatório" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Excluir relatório" })).not.toHaveAttribute("aria-disabled");
   });
 
-  it("UX-06: durante a exclusão, 'Excluindo…', os dois botões desabilitados, um duplo toque faz uma chamada só e Esc não fecha", async () => {
+  it("UX-06: durante a exclusão, 'Excluindo…', os dois botões indisponíveis, um duplo toque faz uma chamada só e Esc não fecha", async () => {
     const { onClose } = renderFlow();
     let release: () => void = () => {};
     const arrived = new Promise<void>((resolve) => (release = resolve));
@@ -72,8 +72,11 @@ describe("CellReportDeletionFlow: envio da exclusão", () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
 
-    expect(await screen.findByRole("button", { name: "Excluindo…" })).toBeDisabled();
+    const deleting = await screen.findByRole("button", { name: "Excluindo…" });
+    expect(deleting).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    // Indisponível, o toque não chama de novo.
+    fireEvent.click(deleting);
     fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
     expect(deleteCalls()).toHaveLength(1);
@@ -125,7 +128,7 @@ describe("CellReportDeletionFlow: envio da exclusão", () => {
     fireEvent.click(screen.getByRole("button", { name: "Excluir relatório" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
-    expect(screen.getByRole("button", { name: "Excluir relatório" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Excluir relatório" })).not.toHaveAttribute("aria-disabled");
     expect(onClose).not.toHaveBeenCalled();
   });
 });

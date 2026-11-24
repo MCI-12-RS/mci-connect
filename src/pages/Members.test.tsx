@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
@@ -139,5 +139,74 @@ describe("Membros: ação Excluir", () => {
     await screen.findByText("Bruno Almeida");
     expect(screen.queryByRole("button", { name: /^Ações de/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Editar Bruno Almeida" })).toHaveClass("h-11", "w-11");
+  });
+});
+
+// O Switch do MemberForm mede o tamanho com ResizeObserver (o jsdom não tem).
+class NoopResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+/** Deixa rodar os `setTimeout` do Radix, que devolve o foco depois de desmontar o diálogo. */
+const flushFocusReturn = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 20)));
+
+describe("Membros: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2.4.3)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set(["delete_member", "edit_member"]);
+    setWidth(1280);
+  });
+
+  afterEach(() => setWidth(originalWidth));
+
+  it("Desktop: o cadastro aberto pelo bloqueio fica com o foco e, ao fechar, devolve o foco ao ícone 'Excluir' da linha (T3)", async () => {
+    renderMembers();
+    const trash = await screen.findByRole("button", { name: "Excluir Bruno Almeida" });
+    respondToRpc("check_member_deletion", {
+      data: {
+        can_delete: false,
+        code: "member_has_links",
+        message: "Não é possível excluir Bruno Almeida.",
+        member_id: "b1",
+        member_name: "Bruno Almeida",
+        disciples_total: 1,
+        disciples: [{ id: "d1", name: "Ana", is_active: true }],
+        cells_total: 0,
+        cells: [],
+      },
+    });
+    act(() => trash.focus());
+    fireEvent.click(trash);
+    const blocked = await screen.findByRole("alertdialog");
+
+    // O cadastro de Ana, da members_view, e as funções do formulário.
+    respondWith({ data: { id: "d1", name: "Ana", is_active: true, sensitive_visible: false } }, { data: [] });
+    fireEvent.click(await within(blocked).findByRole("button", { name: "Abrir o cadastro de Ana" }));
+    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
+    await within(form).findByLabelText("Nome *");
+    await flushFocusReturn();
+    // O bloqueio fechou, mas o foco não volta para a lista: fica no formulário.
+    expect(form).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(trash).toHaveFocus());
+  });
+
+  it("Desktop: 'Cancelar' no formulário aberto pelo 'Editar' devolve o foco a esse ícone, que traz o nome", async () => {
+    renderMembers();
+    const edit = await screen.findByRole("button", { name: "Editar Bruno Almeida" });
+    respondWith({ data: [] });
+    act(() => edit.focus());
+    fireEvent.click(edit);
+    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
+
+    fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(edit).toHaveFocus());
   });
 });

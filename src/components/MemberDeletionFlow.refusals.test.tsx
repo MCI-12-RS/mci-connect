@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
+import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
 import MemberDeletionFlow, { type MemberDeletionTarget } from "./MemberDeletionFlow";
 
 // Exclusão de membro (E2.01, T2 e T3): as recusas do servidor que o
@@ -147,15 +147,19 @@ describe("MemberDeletionFlow: envio e lista (UX-06, UX-07, UX-24)", () => {
     auth.permissions = new Set(["delete_member", "edit_member"]);
   });
 
-  it("UX-06: enquanto exclui, Esc não fecha o diálogo e 'Marcar como inativo' fica desabilitado", async () => {
+  it("UX-06: enquanto exclui, Esc não fecha o diálogo e 'Marcar como inativo' fica indisponível", async () => {
     const { onClose } = await openConfirmation();
     let release: () => void = () => {};
     const arrived = new Promise<void>((resolve) => (release = resolve));
     respondToRpc("delete_member", { data: null, until: arrived });
 
     fireEvent.click(screen.getByRole("button", { name: "Excluir cadastro" }));
-    expect(await screen.findByRole("button", { name: "Excluindo…" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Marcar como inativo" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Excluindo…" })).toHaveAttribute("aria-disabled", "true");
+    const inactivate = screen.getByRole("button", { name: "Marcar como inativo" });
+    expect(inactivate).toHaveAttribute("aria-disabled", "true");
+    // Indisponível, o toque não grava a situação.
+    fireEvent.click(inactivate);
+    expect(fakeQueries().some((query) => query.table === "members")).toBe(false);
     fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
 

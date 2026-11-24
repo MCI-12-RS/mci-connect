@@ -10,6 +10,8 @@ interface CellDeletionFlowProps {
   cell: CellDeletionTarget;
   /** Fim do fluxo: a tela volta para a lista. */
   onClose: () => void;
+  /** Ao fechar, leva o foco a quem abriu o fluxo (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -17,7 +19,7 @@ interface CellDeletionFlowProps {
  * endereço, o atalho "Marcar como inativa" para a célula ativa e a exclusão
  * pela RPC. Monte com `key` da célula: cada abertura começa do zero.
  */
-const CellDeletionFlow = ({ cell, onClose }: CellDeletionFlowProps) => {
+const CellDeletionFlow = ({ cell, onClose, onCloseAutoFocus }: CellDeletionFlowProps) => {
   const { hasPermission } = useAuth();
   const deletion = useDeleteCell();
   const inactivation = useMarkCellInactive();
@@ -48,6 +50,7 @@ const CellDeletionFlow = ({ cell, onClose }: CellDeletionFlowProps) => {
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      onCloseAutoFocus={onCloseAutoFocus}
       title={CELL_DELETION_TEXTS.confirmTitle(cell.leaderName)}
       summary={cell.summary}
       consequences={CELL_DELETION_TEXTS.consequences}

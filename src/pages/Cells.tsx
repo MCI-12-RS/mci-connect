@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
@@ -16,6 +16,7 @@ import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
@@ -37,9 +38,21 @@ const Cells = () => {
 
   useClampPage(list, { data, isPlaceholderData });
 
-  const handleEdit = (cell: CellRow) => { setEditingCell(cell); setFormOpen(true); };
+  // Ao fechar um diálogo, o foco volta a quem o abriu ou, se a célula saiu da lista, à busca.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const returnFocus = useReturnFocus(searchRef, data);
+
+  const handleEdit = (cell: CellRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setEditingCell(cell);
+    setFormOpen(true);
+  };
   const handleClose = () => { setFormOpen(false); setEditingCell(null); };
-  const handleOpenReport = (cell: CellRow) => { setSelectedCellForReport(cell); setReportFormOpen(true); };
+  const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setSelectedCellForReport(cell);
+    setReportFormOpen(true);
+  };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
   const isOwnCell = (c: CellRow) => !!currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
@@ -55,7 +68,10 @@ const Cells = () => {
   const anyCellHasActions = cells.some(cellHasActions);
   const columnCount = anyCellHasActions ? 7 : 6;
 
-  const startDeletion = (c: CellRow) => setDeletingCell(toCellDeletionTarget(c));
+  const startDeletion = (c: CellRow, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setDeletingCell(toCellDeletionTarget(c));
+  };
 
   // Funções que devolvem JSX, e não componentes: um componente declarado aqui
   // dentro seria recriado a cada render, e o botão que abriu o diálogo perderia o foco.
@@ -64,12 +80,25 @@ const Cells = () => {
   const renderFrequentActions = (c: CellRow, buttonClass: string) => (
     <>
       {canSubmitReport(c) && (
-        <Button variant="ghost" size="icon" className={buttonClass} onClick={() => handleOpenReport(c)} title="Novo Relatório" aria-label="Novo relatório">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={buttonClass}
+          onClick={(e) => handleOpenReport(c, e.currentTarget)}
+          title="Novo Relatório"
+          aria-label={CELL_DELETION_TEXTS.newReportLabel(leaderLabel(c.leader_name))}
+        >
           <FilePlus className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
         </Button>
       )}
       {canEditCell && (
-        <Button variant="ghost" size="icon" className={buttonClass} onClick={() => handleEdit(c)} aria-label="Editar célula">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={buttonClass}
+          onClick={(e) => handleEdit(c, e.currentTarget)}
+          aria-label={CELL_DELETION_TEXTS.editLabel(leaderLabel(c.leader_name))}
+        >
           <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
         </Button>
       )}
@@ -85,7 +114,7 @@ const Cells = () => {
           size="icon"
           className="h-8 w-8"
           aria-label={CELL_DELETION_TEXTS.deleteLabel(leaderLabel(c.leader_name))}
-          onClick={() => startDeletion(c)}
+          onClick={(e) => startDeletion(c, e.currentTarget)}
         >
           <Trash2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
         </Button>
@@ -95,7 +124,9 @@ const Cells = () => {
 
   /** No celular, "Excluir célula" fica no menu "⋯" do card (T1, P8). */
   const rowActions = (c: CellRow): RowAction[] =>
-    canDeleteCell ? [{ label: CELL_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: () => startDeletion(c) }] : [];
+    canDeleteCell
+      ? [{ label: CELL_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(c, trigger) }]
+      : [];
 
   const renderMobileActions = (c: CellRow) => (
     <div className="flex items-center gap-2 shrink-0">
@@ -133,7 +164,7 @@ const Cells = () => {
             </div>
 
             {/* Footer: badges + schedule */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{c.type}</Badge>
                 <Badge variant={c.is_active ? "default" : "secondary"}>
@@ -166,7 +197,13 @@ const Cells = () => {
             <p className="text-muted-foreground text-sm">Gerenciar células</p>
           </div>
           {hasPermission("create_cell") && (
-            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                returnFocus.setOpener(e.currentTarget);
+                setFormOpen(true);
+              }}
+              className="w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Nova Célula
             </Button>
@@ -178,6 +215,7 @@ const Cells = () => {
             <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 placeholder="Líder, timóteo, anfitrião, rua ou bairro..."
                 aria-label="Buscar células"
                 value={list.searchInput}
@@ -257,7 +295,10 @@ const Cells = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
@@ -266,7 +307,10 @@ const Cells = () => {
         </Dialog>
 
         <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>Novo Relatório de Célula</DialogTitle>
             </DialogHeader>
@@ -275,7 +319,12 @@ const Cells = () => {
         </Dialog>
 
         {deletingCell && (
-          <CellDeletionFlow key={deletingCell.id} cell={deletingCell} onClose={() => setDeletingCell(null)} />
+          <CellDeletionFlow
+            key={deletingCell.id}
+            cell={deletingCell}
+            onClose={() => setDeletingCell(null)}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
         )}
       </div>
     </AppLayout>

@@ -330,6 +330,47 @@ test("UX-01 (360×800): em Membros, 'Excluir' fica só no '⋯' do card, e 'Edit
   expect(hScroll).toBeLessThanOrEqual(360);
 });
 
+test("Acessibilidade (WCAG 2.4.3, AD): ao fechar a confirmação, o foco volta ao '⋯' no celular e ao ícone 'Excluir' no desktop; o cadastro aberto pelo bloqueio fica com o foco e o devolve ao ícone", async ({
+  page,
+}) => {
+  await login(page, env.admin);
+
+  // Celular, pelo toque: "Cancelar" devolve o foco ao "⋯" do card.
+  await page.setViewportSize({ width: 360, height: 800 });
+  await openList(page, "/members", `${NAME} Otto`);
+  const menu = page.getByRole("button", { name: `Ações de ${NAME} Otto Vaz` });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Excluir cadastro" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeFocused();
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(menu).toBeFocused();
+
+  // Celular, pelo teclado: Enter no "⋯", Enter no item e Esc na confirmação.
+  await menu.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Excluir cadastro" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(menu).toBeFocused();
+
+  // Desktop: do bloqueio de Gil, o cadastro de Ivo abre com o foco e, ao fechar, o devolve ao ícone da linha.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openList(page, "/members", GIL);
+  const trash = page.getByRole("button", { name: `Excluir ${GIL}`, exact: true });
+  await trash.click();
+  await dialog.getByRole("button", { name: `Abrir o cadastro de ${NAME} Ivo Reis` }).click();
+  const memberForm = page.getByRole("dialog", { name: "Editar Membro" });
+  await expect(memberForm.getByLabel("Nome *")).toHaveValue(`${NAME} Ivo Reis`);
+  await expect.poll(() => memberForm.evaluate((form) => form.contains(document.activeElement))).toBe(true);
+  await memberForm.getByRole("button", { name: "Cancelar" }).click();
+  await expect(memberForm).toBeHidden();
+  await expect(trash).toBeFocused();
+  expect(deletedAt(member(1))).toBe("");
+});
+
 test("UX-05 (AD): 'Marcar como inativo' grava só a situação de Nina, fecha com 'Cadastro marcado como inativo.' e não exclui; inativa, a confirmação não traz mais o aviso", async ({
   page,
 }) => {

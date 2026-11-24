@@ -42,6 +42,16 @@ const CELL_GONE = {
   },
 };
 
+/** Recusa de regra no atalho de inativar: aparece no aviso do diálogo. */
+const CELL_REFUSED = {
+  error: {
+    code: "22023",
+    message: "Esta célula foi excluída e não recebe relatórios.",
+    details: '{"code": "cell_deleted", "cell_id": "c1"}',
+    hint: "app_error",
+  },
+};
+
 function renderFlow(cell: CellDeletionTarget = carlos) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -78,7 +88,7 @@ describe("CellDeletionFlow: envio da exclusão", () => {
       "Os relatórios dela continuam no histórico.",
       "Um administrador pode restaurá-la depois.",
     ]);
-    expect(within(dialog).getByRole("button", { name: "Excluir célula" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Excluir célula" })).not.toHaveAttribute("aria-disabled");
   });
 
   it("Fora do envio, Esc fecha a confirmação sem chamar a exclusão (referência para o UX-06)", () => {
@@ -88,7 +98,7 @@ describe("CellDeletionFlow: envio da exclusão", () => {
     expect(deleteCalls()).toHaveLength(0);
   });
 
-  it("UX-06: durante a exclusão, o diálogo fica aberto com 'Excluindo…', os botões desabilitados, um duplo toque faz uma chamada só e Esc não fecha", async () => {
+  it("UX-06: durante a exclusão, o diálogo fica aberto com 'Excluindo…', os botões indisponíveis, um duplo toque faz uma chamada só e Esc não fecha", async () => {
     const { onClose } = renderFlow();
     const { arrived, release } = deferred();
     respondToRpc("delete_cell", { data: null, until: arrived });
@@ -97,9 +107,15 @@ describe("CellDeletionFlow: envio da exclusão", () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
 
-    expect(await screen.findByRole("button", { name: "Excluindo…" })).toBeDisabled();
+    const deleting = await screen.findByRole("button", { name: "Excluindo…" });
+    expect(deleting).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Marcar como inativa" })).toBeDisabled();
+    const inactivate = screen.getByRole("button", { name: "Marcar como inativa" });
+    expect(inactivate).toHaveAttribute("aria-disabled", "true");
+    // Indisponíveis, os toques não gravam nada.
+    fireEvent.click(deleting);
+    fireEvent.click(inactivate);
+    expect(fakeQueries()).toHaveLength(0);
     fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
@@ -152,10 +168,33 @@ describe("CellDeletionFlow: envio da exclusão", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Excluir célula" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
-    expect(screen.getByRole("button", { name: "Excluir célula" })).toBeEnabled();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
+    // O texto fica na cor do texto (contraste, UX-38); o vermelho fica na borda e no ícone.
+    expect(within(alert).getByText(/Não foi possível excluir/)).toHaveClass("text-foreground");
+    expect(screen.getByRole("button", { name: "Excluir célula" })).not.toHaveAttribute("aria-disabled");
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("alertdialog")).not.toHaveTextContent("Failed to fetch");
+  });
+
+  it("UX-06: o botão tocado fica com o foco durante 'Excluindo…' e continua com ele depois da queda de conexão", async () => {
+    renderFlow();
+    const { arrived, release } = deferred();
+    respondToRpc("delete_cell", { error: { code: "", message: "TypeError: Failed to fetch" }, until: arrived });
+
+    const confirm = screen.getByRole("button", { name: "Excluir célula" });
+    act(() => confirm.focus());
+    fireEvent.click(confirm);
+
+    expect(await screen.findByRole("button", { name: "Excluindo…" })).toHaveFocus();
+
+    await act(async () => {
+      release();
+      await arrived;
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível excluir. Verifique a conexão e tente de novo.");
+    expect(screen.getByRole("button", { name: "Excluir célula" })).toHaveFocus();
   });
 
   it("RN-20 e UX-39: uma falha técnica (40P01) pede para tentar de novo, sem a mensagem técnica, e a nova tentativa chama de novo", async () => {
@@ -205,5 +244,28 @@ describe("CellDeletionFlow: atalho 'Marcar como inativa' (UX-05)", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith({ title: "Esta célula não existe ou já foi excluída." });
+  });
+
+  it("UX-06: 'Marcar como inativa' tocado fica com o foco enquanto grava e continua com ele na recusa, que aparece no diálogo", async () => {
+    const { onClose } = renderFlow();
+    const { arrived, release } = deferred();
+    respondWith({ ...CELL_REFUSED, until: arrived });
+
+    const inactivate = screen.getByRole("button", { name: "Marcar como inativa" });
+    act(() => inactivate.focus());
+    fireEvent.click(inactivate);
+
+    await waitFor(() => expect(inactivate).toHaveAttribute("aria-disabled", "true"));
+    expect(inactivate).toHaveFocus();
+
+    await act(async () => {
+      release();
+      await arrived;
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Esta célula foi excluída e não recebe relatórios.");
+    expect(inactivate).not.toHaveAttribute("aria-disabled");
+    expect(inactivate).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

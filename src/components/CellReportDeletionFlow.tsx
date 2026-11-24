@@ -8,6 +8,8 @@ interface CellReportDeletionFlowProps {
   report: CellReportDeletionTarget;
   /** Fim do fluxo: a tela volta para a lista. */
   onClose: () => void;
+  /** Ao fechar, leva o foco a quem abriu o fluxo (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -15,7 +17,7 @@ interface CellReportDeletionFlowProps {
  * exclusão pela RPC. Monte com `key` do relatório: cada abertura começa do
  * zero.
  */
-const CellReportDeletionFlow = ({ report, onClose }: CellReportDeletionFlowProps) => {
+const CellReportDeletionFlow = ({ report, onClose, onCloseAutoFocus }: CellReportDeletionFlowProps) => {
   const deletion = useDeleteCellReport();
   const write = useDialogWrite(onClose);
 
@@ -34,6 +36,7 @@ const CellReportDeletionFlow = ({ report, onClose }: CellReportDeletionFlowProps
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      onCloseAutoFocus={onCloseAutoFocus}
       title={CELL_REPORT_DELETION_TEXTS.confirmTitle(report.date, report.leaderName)}
       consequences={CELL_REPORT_DELETION_TEXTS.consequences}
       confirmLabel={CELL_REPORT_DELETION_TEXTS.deleteAction}

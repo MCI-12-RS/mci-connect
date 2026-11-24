@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
@@ -83,14 +83,16 @@ describe("Relatórios: ação Excluir e célula excluída", () => {
     renderReports();
     await screen.findByText("Rui Prado");
     expect(screen.getAllByText("Célula excluída")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Editar relatório" })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Excluir o relatório de 12/11/2026" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Excluir o relatório de 19/11/2026" })).toBeInTheDocument();
+    // Os rótulos trazem a data e o líder: muitas células se reúnem no mesmo dia.
+    expect(screen.getAllByRole("button", { name: /^Editar o relatório/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Editar o relatório de 19/11/2026 da célula de Carlos Lima" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excluir o relatório de 12/11/2026 da célula de Rui Prado" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excluir o relatório de 19/11/2026 da célula de Carlos Lima" })).toBeInTheDocument();
   });
 
   it("Desktop: a confirmação traz a data e o líder, sem o aviso de inativar, e exclui pela RPC (UX-02, UX-04, UX-07)", async () => {
     renderReports();
-    const button = await screen.findByRole("button", { name: "Excluir o relatório de 19/11/2026" });
+    const button = await screen.findByRole("button", { name: "Excluir o relatório de 19/11/2026 da célula de Carlos Lima" });
     expect(button.querySelector("svg")).toHaveClass("text-muted-foreground");
     fireEvent.click(button);
 
@@ -118,10 +120,10 @@ describe("Relatórios: ação Excluir e célula excluída", () => {
   it("Celular: 'Excluir relatório' fica no '⋯'; o relatório de célula excluída mostra o badge e não tem 'Editar' (UX-01, UX-25)", async () => {
     setWidth(360);
     renderReports();
-    const menu = await screen.findByRole("button", { name: "Ações do relatório de 12/11/2026" });
+    const menu = await screen.findByRole("button", { name: "Ações do relatório de 12/11/2026 da célula de Rui Prado" });
     expect(menu).toHaveClass("h-11", "w-11");
     expect(screen.getByText("Célula excluída")).toBeInTheDocument();
-    const edits = screen.getAllByRole("button", { name: "Editar relatório" });
+    const edits = screen.getAllByRole("button", { name: /^Editar o relatório/ });
     expect(edits).toHaveLength(1);
     expect(edits[0]).toHaveClass("h-11", "w-11");
     expect(screen.queryByRole("button", { name: /^Excluir/ })).not.toBeInTheDocument();
@@ -132,5 +134,71 @@ describe("Relatórios: ação Excluir e célula excluída", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Excluir o relatório de 12/11/2026 da célula de Rui Prado?" }),
     ).toBeInTheDocument();
+  });
+});
+
+// O Select e o Checkbox do CellReportForm medem o tamanho com ResizeObserver (o jsdom não tem).
+class NoopResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+describe("Relatórios: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2.4.3)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.permissions = new Set(["delete_cell_report", "edit_cell_report"]);
+    setWidth(1280);
+  });
+
+  afterEach(() => setWidth(originalWidth));
+
+  it("Celular: 'Cancelar' na confirmação devolve o foco ao '⋯' do card, que abriu o menu", async () => {
+    setWidth(360);
+    renderReports();
+    const menu = await screen.findByRole("button", { name: "Ações do relatório de 19/11/2026 da célula de Carlos Lima" });
+    fireEvent.keyDown(menu, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Excluir relatório" }));
+    const dialog = await screen.findByRole("alertdialog");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(menu).toHaveFocus());
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("Desktop: depois de excluir, o relatório sai da lista e o foco vai para a busca", async () => {
+    renderReports();
+    const trash = await screen.findByRole("button", { name: "Excluir o relatório de 19/11/2026 da célula de Carlos Lima" });
+    act(() => trash.focus());
+    fireEvent.click(trash);
+    const dialog = await screen.findByRole("alertdialog");
+    respondToRpc("delete_cell_report", {});
+    // A lista recarregada, só com o relatório de Rui.
+    respondWith({ data: [rows[1]], count: 1 }, { data: [{ id: "r2", participants_count: 3 }] });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Excluir relatório" }));
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Buscar relatórios" })).toHaveFocus());
+    expect(trash).not.toBeInTheDocument();
+    expect(screen.getByText("Rui Prado")).toBeInTheDocument();
+  });
+
+  it("Desktop: 'Cancelar' no formulário aberto pelo 'Editar' devolve o foco a esse ícone, que traz a data e o líder", async () => {
+    renderReports();
+    const edit = await screen.findByRole("button", { name: "Editar o relatório de 19/11/2026 da célula de Carlos Lima" });
+    // Os participantes salvos do relatório.
+    respondWith({ data: [] });
+    act(() => edit.focus());
+    fireEvent.click(edit);
+    const form = await screen.findByRole("dialog", { name: "Editar Relatório" });
+
+    fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(edit).toHaveFocus());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
