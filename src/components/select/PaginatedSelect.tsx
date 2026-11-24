@@ -50,9 +50,10 @@ import {
 //   - ao rolar até o fim (roda do mouse ou toque);
 //   - quando o foco (setas ou mouse) chega a uma das últimas opções;
 //   - pelo item "Carregar mais", no fim do menu (clique, toque, Enter ou espaço).
-// O estado das páginas chega aos componentes do menu por contexto: o objeto
-// `components` é fixo, para o menu não ser remontado (e perder a rolagem) a
-// cada render.
+// O estado das páginas chega aos componentes do menu por contexto (e, pelo
+// mesmo contexto, o texto que descreve o campo chega ao campo de busca): o
+// objeto `components` é fixo, para o menu não ser remontado (e perder a
+// rolagem) a cada render.
 
 /** O foco numa das últimas N opções já pede a próxima página. */
 const PREFETCH_DISTANCE = 3;
@@ -71,6 +72,8 @@ interface PaginatedMenuContextValue {
   /** Põe a opção em foco no menu, como o mouse faz nas opções comuns. */
   hoverOption: (option: SelectOption) => void;
   focusInput: () => void;
+  /** Id do texto que a tela liga ao campo de busca (`aria-describedby`). */
+  descriptionId: string | undefined;
 }
 
 const PaginatedMenuContext = createContext<PaginatedMenuContextValue | null>(null);
@@ -189,17 +192,23 @@ function ClearIndicator({ clearValue }: ClearIndicatorProps<SelectOption, boolea
  * menu); dentro de um Dialog do Radix, uma remoção enquanto o foco está no
  * `body` (entre o blur e o foco do próximo campo) faz o diálogo puxar o foco
  * para si, e o Tab não chegava ao campo seguinte. Com o campo inválido, a
- * mensagem de erro também entra no `aria-describedby`.
+ * mensagem de erro também entra no `aria-describedby`, junto com o texto que a
+ * tela liga ao campo.
  */
 function DeferredBlurInput(props: InputProps<SelectOption, boolean, GroupBase<SelectOption>>) {
   const { onBlur } = props;
+  const { descriptionId } = usePaginatedMenu();
   const timer = useRef<number>();
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const invalid = props["aria-invalid"] === true || props["aria-invalid"] === "true";
   return (
     <components.Input
       {...props}
-      aria-describedby={describedByWithError(props["aria-describedby"], invalid ? props["aria-errormessage"] : undefined)}
+      aria-describedby={describedByWithError(
+        props["aria-describedby"],
+        invalid ? props["aria-errormessage"] : undefined,
+        descriptionId,
+      )}
       onBlur={(event) => {
         const input = event.currentTarget;
         timer.current = window.setTimeout(() => {
@@ -262,6 +271,8 @@ export interface PaginatedSelectProps<IsMulti extends boolean> {
   "aria-invalid"?: boolean;
   /** Id da mensagem de erro do campo. */
   "aria-errormessage"?: string;
+  /** Id de um texto que descreve o campo (por exemplo, quem continua no relatório fora do seletor). */
+  "aria-describedby"?: string;
 }
 
 export function PaginatedSelect<IsMulti extends boolean = false>({
@@ -278,6 +289,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   focusRef,
   "aria-invalid": ariaInvalid,
   "aria-errormessage": ariaErrorMessage,
+  "aria-describedby": descriptionId,
 }: PaginatedSelectProps<IsMulti>) {
   const selectRef = useRef<SelectInstance<SelectOption, IsMulti, GroupBase<SelectOption>>>(null);
   const focusedAction = useRef<SelectOption | null>(null);
@@ -309,8 +321,8 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   // no AsyncMemberSelect.test.tsx acusa se uma atualização o quebrar.
   const hoverOption = useCallback((option: SelectOption) => selectRef.current?.onOptionHover(option), []);
   const menuContext = useMemo(
-    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput }),
-    [pagination, prefetchValues, runAction, hoverOption, focusInput],
+    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput, descriptionId }),
+    [pagination, prefetchValues, runAction, hoverOption, focusInput, descriptionId],
   );
 
   // Dentro de um Dialog do Radix, o Esc fecharia o diálogo inteiro (ele escuta

@@ -1,5 +1,7 @@
-// Participantes no formulário de relatório (E1.08, PR 2 e PR 4).
+// Participantes no formulário de relatório (E1.08, PR 2 e PR 4; E2.01, RN-13).
 import type { ReportParticipant } from "@/lib/cell-reports/fields";
+import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { formatList } from "@/lib/format";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
 import type { SelectOption } from "@/lib/selectors";
 
@@ -11,4 +13,57 @@ import type { SelectOption } from "@/lib/selectors";
  */
 export function toParticipantOptions(saved: readonly ReportParticipant[]): SelectOption[] {
   return saved.map((p) => ({ value: p.member_id, label: p.member_name || UNNAMED_MEMBER_LABEL }));
+}
+
+/** Participante de cadastro excluído que continua no relatório (RN-13). */
+export interface KeptParticipant {
+  id: string;
+  name: string;
+}
+
+export interface SavedParticipants {
+  /** Os que o formulário mostra no seletor e deixa retirar: cadastros não excluídos. */
+  editable: SelectOption[];
+  /** Os de cadastro excluído: ficam fora do seletor, sem ✕, e continuam no relatório (UXD-8). */
+  kept: KeptParticipant[];
+}
+
+/**
+ * Separa os participantes salvos de um relatório: os de cadastro excluído
+ * (`member_deleted`) não voltam ao seletor, porque não podem ser escolhidos de
+ * novo (RN-06) nem retirados (RN-13). Mantém a ordem em que vieram.
+ */
+export function splitSavedParticipants(saved: readonly ReportParticipant[]): SavedParticipants {
+  const editable = toParticipantOptions(saved.filter((p) => p.member_deleted !== true));
+  const kept = saved
+    .filter((p) => p.member_deleted === true)
+    .map((p) => ({ id: p.member_id, name: p.member_name || UNNAMED_MEMBER_LABEL }));
+  return { editable, kept };
+}
+
+/**
+ * O conjunto final de participantes para `set_cell_report_participants`: os
+ * escolhidos no seletor mais os de cadastro excluído, sem mudança e sem
+ * repetição (RN-13, DT-15). Quem falta na lista é retirado do relatório.
+ */
+export function finalParticipantIds(chosenIds: readonly string[], kept: readonly KeptParticipant[]): string[] {
+  return [...new Set([...chosenIds, ...kept.map((p) => p.id)])];
+}
+
+/** "Continuam no relatório (cadastros excluídos): {nomes}."; `null` sem nenhum. */
+export function keptParticipantsLine(kept: readonly KeptParticipant[]): string | null {
+  if (kept.length === 0) return null;
+  return CELL_REPORT_DELETION_TEXTS.deletedParticipants(formatList(kept.map((p) => p.name)));
+}
+
+/**
+ * Marca "(cadastro excluído)" no participante que foi excluído entre a escolha
+ * e o envio (UX-30). Ele continua escolhido, com ✕, para ser retirado. Marcar
+ * de novo não repete a marca.
+ */
+export function markDeletedChoice(options: readonly SelectOption[], memberId: string): SelectOption[] {
+  const mark = CELL_REPORT_DELETION_TEXTS.chosenDeletedMark;
+  return options.map((option) =>
+    option.value === memberId && !option.label.endsWith(mark) ? { ...option, label: `${option.label} ${mark}` } : option,
+  );
 }

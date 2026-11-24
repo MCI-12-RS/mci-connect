@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
 import CellReportForm from "@/components/CellReportForm";
+import CellDeletionFlow from "@/components/CellDeletionFlow";
+import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,15 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
+import { useReturnFocus } from "@/hooks/use-return-focus";
 import { formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
+import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
+import { CELL_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 const Cells = () => {
   const list = useListSearchParams();
@@ -27,9 +28,8 @@ const Cells = () => {
   const [editingCell, setEditingCell] = useState<CellRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
+  const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
   const { hasPermission, member: currentMember } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
   const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
@@ -38,25 +38,21 @@ const Cells = () => {
 
   useClampPage(list, { data, isPlaceholderData });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("cells").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cells"] });
-      // Os relatórios da célula são excluídos junto.
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
-      toast({ title: "Célula excluída com sucesso" });
-    },
-    onError: () => {
-      toast({ variant: "destructive", title: "Erro ao excluir célula" });
-    },
-  });
+  // Ao fechar um diálogo, o foco volta a quem o abriu ou, se a célula saiu da lista, à busca.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const returnFocus = useReturnFocus(searchRef, data);
 
-  const handleEdit = (cell: CellRow) => { setEditingCell(cell); setFormOpen(true); };
+  const handleEdit = (cell: CellRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setEditingCell(cell);
+    setFormOpen(true);
+  };
   const handleClose = () => { setFormOpen(false); setEditingCell(null); };
-  const handleOpenReport = (cell: CellRow) => { setSelectedCellForReport(cell); setReportFormOpen(true); };
+  const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setSelectedCellForReport(cell);
+    setReportFormOpen(true);
+  };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
   const isOwnCell = (c: CellRow) => !!currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
@@ -64,42 +60,78 @@ const Cells = () => {
   const canSubmitReport = (c: CellRow) =>
     hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c));
 
-  const cellHasActions = (c: CellRow) => canSubmitReport(c) || hasPermission("edit_cell") || hasPermission("delete_cell");
+  const canEditCell = hasPermission("edit_cell");
+  const canDeleteCell = hasPermission("delete_cell");
+
+  const cellHasActions = (c: CellRow) => canSubmitReport(c) || canEditCell || canDeleteCell;
 
   const anyCellHasActions = cells.some(cellHasActions);
   const columnCount = anyCellHasActions ? 7 : 6;
 
-  const ActionButtons = ({ c }: { c: CellRow }) => (
-    <div className="flex items-center gap-1">
+  const startDeletion = (c: CellRow, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setDeletingCell(toCellDeletionTarget(c));
+  };
+
+  // Funções que devolvem JSX, e não componentes: um componente declarado aqui
+  // dentro seria recriado a cada render, e o botão que abriu o diálogo perderia o foco.
+
+  /** "Novo relatório" e "Editar": fora do menu "⋯" no celular, com 44×44 px (UXD-4). */
+  const renderFrequentActions = (c: CellRow, buttonClass: string) => (
+    <>
       {canSubmitReport(c) && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenReport(c)} title="Novo Relatório" aria-label="Novo relatório">
-          <FilePlus className="w-3.5 h-3.5 text-primary" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className={buttonClass}
+          onClick={(e) => handleOpenReport(c, e.currentTarget)}
+          title="Novo Relatório"
+          aria-label={CELL_DELETION_TEXTS.newReportLabel(leaderLabel(c.leader_name))}
+        >
+          <FilePlus className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
         </Button>
       )}
-      {hasPermission("edit_cell") && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(c)} aria-label="Editar célula">
-          <Pencil className="w-3.5 h-3.5" />
+      {canEditCell && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={buttonClass}
+          onClick={(e) => handleEdit(c, e.currentTarget)}
+          aria-label={CELL_DELETION_TEXTS.editLabel(leaderLabel(c.leader_name))}
+        >
+          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
         </Button>
       )}
-      {hasPermission("delete_cell") && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Excluir célula">
-              <Trash2 className="w-3.5 h-3.5 text-destructive" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-              <AlertDialogDescription>Tem certeza que deseja excluir esta célula?</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => deleteMutation.mutate(c.id)}>Excluir</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+    </>
+  );
+
+  const renderDesktopActions = (c: CellRow) => (
+    <div className="flex items-center gap-1">
+      {renderFrequentActions(c, "h-8 w-8")}
+      {canDeleteCell && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={CELL_DELETION_TEXTS.deleteLabel(leaderLabel(c.leader_name))}
+          onClick={(e) => startDeletion(c, e.currentTarget)}
+        >
+          <Trash2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+        </Button>
       )}
+    </div>
+  );
+
+  /** No celular, "Excluir célula" fica no menu "⋯" do card (T1, P8). */
+  const rowActions = (c: CellRow): RowAction[] =>
+    canDeleteCell
+      ? [{ label: CELL_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(c, trigger) }]
+      : [];
+
+  const renderMobileActions = (c: CellRow) => (
+    <div className="flex items-center gap-2 shrink-0">
+      {renderFrequentActions(c, "h-11 w-11")}
+      <RowActionsMenu label={CELL_DELETION_TEXTS.actionsLabel(leaderLabel(c.leader_name))} actions={rowActions(c)} />
     </div>
   );
 
@@ -113,12 +145,12 @@ const Cells = () => {
         {cells.map((c) => (
           <div key={c.id} className="px-4 py-4 space-y-3">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{c.leader_name || "Sem líder"}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">G12: {formatG12Label(c)}</p>
               </div>
-              {cellHasActions(c) && <ActionButtons c={c} />}
+              {cellHasActions(c) && renderMobileActions(c)}
             </div>
 
             {/* Team */}
@@ -132,7 +164,7 @@ const Cells = () => {
             </div>
 
             {/* Footer: badges + schedule */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{c.type}</Badge>
                 <Badge variant={c.is_active ? "default" : "secondary"}>
@@ -165,7 +197,13 @@ const Cells = () => {
             <p className="text-muted-foreground text-sm">Gerenciar células</p>
           </div>
           {hasPermission("create_cell") && (
-            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                returnFocus.setOpener(e.currentTarget);
+                setFormOpen(true);
+              }}
+              className="w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Nova Célula
             </Button>
@@ -177,6 +215,7 @@ const Cells = () => {
             <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 placeholder="Líder, timóteo, anfitrião, rua ou bairro..."
                 aria-label="Buscar células"
                 value={list.searchInput}
@@ -234,7 +273,7 @@ const Cells = () => {
                         <TableCell>
                           <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Ativa" : "Inativa"}</Badge>
                         </TableCell>
-                        {anyCellHasActions && <TableCell>{cellHasActions(c) && <ActionButtons c={c} />}</TableCell>}
+                        {anyCellHasActions && <TableCell>{cellHasActions(c) && renderDesktopActions(c)}</TableCell>}
                       </TableRow>
                     ))
                   )}
@@ -256,7 +295,10 @@ const Cells = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
@@ -265,13 +307,25 @@ const Cells = () => {
         </Dialog>
 
         <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>Novo Relatório de Célula</DialogTitle>
             </DialogHeader>
             {reportFormOpen && <CellReportForm initialCell={selectedCellForReport} onClose={handleCloseReport} />}
           </DialogContent>
         </Dialog>
+
+        {deletingCell && (
+          <CellDeletionFlow
+            key={deletingCell.id}
+            cell={deletingCell}
+            onClose={() => setDeletingCell(null)}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
+        )}
       </div>
     </AppLayout>
   );

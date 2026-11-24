@@ -15,3 +15,11 @@ export function weekdayIndex(day: string | null | undefined): number | null {
   const index = WEEKDAYS.findIndex((weekday) => weekday === day);
   return index === -1 ? null : index;
 }
+
+/**
+ * O dia no meio de uma frase, em minúsculas ("Timóteo na célula de Carlos,
+ * quarta, 20:00"). Um valor desconhecido volta como veio.
+ */
+export function weekdayInSentence(day: string): string {
+  return weekdayIndex(day) === null ? day : day.toLocaleLowerCase("pt-BR");
+}

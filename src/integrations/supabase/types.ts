@@ -1412,6 +1412,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      viewer_can_insert_cell: { Args: never; Returns: boolean }
+      viewer_can_insert_cell_report: {
+        Args: { _cell_id: string }
+        Returns: boolean
+      }
+      viewer_can_insert_cell_report_participant: {
+        Args: { _report_id: string }
+        Returns: boolean
+      }
       viewer_covers_role: { Args: { _role_id: string }; Returns: boolean }
       viewer_has: {
         Args: { _permission: Database["public"]["Enums"]["permission_action"] }

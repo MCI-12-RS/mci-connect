@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCellLabel, formatG12Label, formatStreetLine } from "./labels";
+import { formatCellLabel, formatG12Label, formatMeetingTime, formatShortAddress, formatStreetLine } from "./labels";
 
 describe("formatCellLabel", () => {
   it("líder, rua, número e bairro", () => {
@@ -41,5 +41,32 @@ describe("formatG12Label", () => {
     expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 0 })).toBe("Pastores");
     expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 2 })).toBe("—");
     expect(formatG12Label({ g12_leader_name: null, leader_g12_level: null })).toBe("—");
+  });
+});
+
+describe("formatMeetingTime", () => {
+  it("horas e minutos do horário do banco", () => {
+    expect(formatMeetingTime("20:00:00")).toBe("20:00");
+    expect(formatMeetingTime("19:30")).toBe("19:30");
+  });
+
+  it("sem horário, vazio", () => {
+    expect(formatMeetingTime(null)).toBe("");
+    expect(formatMeetingTime(undefined)).toBe("");
+  });
+});
+
+describe("formatShortAddress", () => {
+  it("rua e número, como nos cards", () => {
+    expect(formatShortAddress({ street: "Rua das Flores", number: "120", neighborhood: "Centro" })).toBe("Rua das Flores, 120");
+  });
+
+  it("sem número, 's/n'", () => {
+    expect(formatShortAddress({ street: "Rua das Flores", number: null })).toBe("Rua das Flores, s/n");
+  });
+
+  it("sem rua, o bairro; sem os dois, vazio", () => {
+    expect(formatShortAddress({ street: "", number: "10", neighborhood: "Centro" })).toBe("Centro");
+    expect(formatShortAddress({})).toBe("");
   });
 });

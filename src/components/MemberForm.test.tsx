@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
 import type { MemberRow } from "@/lib/members/fields";
@@ -103,7 +105,7 @@ describe("MemberForm: campo Função", () => {
     const trigger = await screen.findByRole("combobox", { name: ROLE });
     expect(trigger).toHaveTextContent("Líder");
 
-    respondWith({});
+    respondWith({ data: [{ id: "m1" }] });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -140,5 +142,72 @@ describe("MemberForm: campo Função", () => {
     await waitFor(() => expect(screen.getByLabelText("Função")).toHaveValue("Líder"));
     expect(screen.getByLabelText("Função")).toBeDisabled();
     expect(screen.queryByRole("combobox", { name: /Função/ })).not.toBeInTheDocument();
+  });
+});
+
+// Edição de um cadastro excluído no meio tempo (E2.01, DT-19): o PATCH volta
+// sem linha e sem erro. O formulário avisa, não fecha e não diz que salvou.
+describe("MemberForm: cadastro excluído durante a edição", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.permissions = new Set(["assign_role"]);
+  });
+
+  it("Dado um PATCH que volta com a linha, então pede só o id de volta (sem coluna sensível no RETURNING)", async () => {
+    respondWith({ data: roles });
+    const onClose = vi.fn();
+    render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    respondWith({ data: [{ id: "m1" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const save = fakeQueries().find((query) => query.table === "members");
+    expect(save?.calls).toContainEqual(["select", "id"]);
+  });
+
+  it("Dado um PATCH que volta sem linha, então mostra o aviso, não fecha e o Fechar volta para a lista", async () => {
+    respondWith({ data: roles });
+    const onClose = vi.fn();
+    render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    respondWith({ data: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Este cadastro não existe ou já foi excluído. As alterações não foram salvas.");
+    expect(alert).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("Dado um PATCH que volta sem linha, então a lista de Membros recarrega já, e 'Cancelar' volta para ela atualizada", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    respondWith({ data: roles });
+    const onClose = vi.fn();
+    render(<MemberForm member={member} onClose={onClose} />, { wrapper });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    respondWith({ data: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const alert = await screen.findByRole("alert");
+    // O texto fica na cor do texto (contraste, UX-38); o vermelho fica na borda e no ícone.
+    expect(within(alert).getByText(/As alterações não foram salvas/).parentElement).toHaveClass("text-foreground");
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([["members", "list"]]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,6 +18,7 @@ const row = (id: string, visitors_count = 0): CellReportPageRow => ({
   cell_number: "10",
   cell_complement: null,
   cell_neighborhood: "Centro",
+  cell_deleted: false,
 });
 
 describe("lista de relatórios", () => {

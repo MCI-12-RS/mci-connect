@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMemberAddress } from "@/hooks/use-member-address";
 import { Database } from "@/integrations/supabase/types";
@@ -14,9 +16,13 @@ import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 import { applyHostAddress } from "@/lib/cells/host-address";
 import type { CellRow } from "@/lib/cells/fields";
 import { WEEKDAYS } from "@/lib/cells/weekdays";
+import { CELL_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
 
 type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
 type CellField = keyof CellInsert;
+
+/** "gone": a edição não voltou com a linha, porque a célula foi excluída no meio tempo (E2.01, DT-19). */
+type SaveResult = "saved" | "gone";
 
 interface CellFormProps {
   /** Célula em edição: a linha da cells_view. */
@@ -75,6 +81,13 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   const isEditing = !!cell;
   
   const [form, setForm] = useState<CellInsert>(DEFAULT_FORM);
+  // A célula foi excluída (ou saiu do escopo) enquanto era editada.
+  const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
+  const deletedAlertRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (deletedWhileEditing) deletedAlertRef.current?.focus();
+  }, [deletedWhileEditing]);
 
   useEffect(() => {
     if (cell) {
@@ -108,17 +121,25 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   }, [hostAddressError, toast]);
 
   const mutation = useMutation({
-    mutationFn: async (data: CellInsert) => {
+    mutationFn: async (data: CellInsert): Promise<SaveResult> => {
       const payload = toCellInsertPayload(data);
       if (isEditing && cell) {
-        const { error } = await supabase.from("cells").update(payload).eq("id", cell.id);
+        // Sem linha de volta, a célula não existe mais ou foi excluída (DT-19).
+        const { data: saved, error } = await supabase.from("cells").update(payload).eq("id", cell.id).select("id");
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("cells").insert(payload);
-        if (error) throw error;
+        return saved?.length ? "saved" : "gone";
       }
+      const { error } = await supabase.from("cells").insert(payload);
+      if (error) throw error;
+      return "saved";
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result === "gone") {
+        setDeletedWhileEditing(true);
+        // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem a célula.
+        queryClient.invalidateQueries({ queryKey: ["cells", "list"] });
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["cells"] });
       // A lista de relatórios mostra o líder e o endereço atuais da célula.
       queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
@@ -143,8 +164,26 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  /** "Fechar" do aviso de célula excluída: volta para a lista, recarregada. */
+  const closeDeleted = () => {
+    queryClient.invalidateQueries({ queryKey: ["cells"] });
+    onClose();
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {deletedWhileEditing && (
+        <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="space-y-3 text-foreground">
+            <p>{CELL_DELETION_TEXTS.deletedWhileEditing}</p>
+            <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeDeleted}>
+              {DELETION_TEXTS.close}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
         <div className="space-y-2">
@@ -264,7 +303,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         <Button type="button" variant="outline" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
           {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Célula"}
         </Button>
       </div>

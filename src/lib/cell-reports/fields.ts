@@ -15,7 +15,7 @@ export type ReportParticipantViewRow = Database["public"]["Views"]["cell_report_
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const CELL_REPORT_ROW_SELECT =
-  "id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, visitors_count, cell_leader_name, cell_street, cell_number, cell_complement, cell_neighborhood";
+  "id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, visitors_count, cell_leader_name, cell_street, cell_number, cell_complement, cell_neighborhood, cell_deleted";
 
 export type CellReportPageRow = Pick<
   CellReportViewRow,
@@ -35,6 +35,7 @@ export type CellReportPageRow = Pick<
   | "cell_number"
   | "cell_complement"
   | "cell_neighborhood"
+  | "cell_deleted"
 >;
 
 /** Linha da lista de Relatórios, já com o número de participantes. */
@@ -50,10 +51,13 @@ export function withParticipantCounts(rows: CellReportPageRow[], counts: Partici
   return rows.map((row) => ({ ...row, participants_count: byId.get(row.id) ?? 0 }));
 }
 
-/** Participantes de um relatório, com o nome (RN-06). */
-export const REPORT_PARTICIPANT_SELECT = "member_id, member_name";
+/**
+ * Participantes de um relatório, com o nome (E1.08, RN-06) e se o cadastro
+ * foi excluído (E2.01, AQ-5).
+ */
+export const REPORT_PARTICIPANT_SELECT = "member_id, member_name, member_deleted";
 
-export type ReportParticipant = Pick<ReportParticipantViewRow, "member_id" | "member_name">;
+export type ReportParticipant = Pick<ReportParticipantViewRow, "member_id" | "member_name" | "member_deleted">;
 
 export type ReportCellParts = Pick<
   CellReportViewRow,

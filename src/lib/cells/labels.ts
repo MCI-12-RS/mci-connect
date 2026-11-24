@@ -41,3 +41,23 @@ export function formatG12Label(cell: G12LabelParts): string {
   if (cell.g12_leader_name) return cell.g12_leader_name;
   return cell.leader_g12_level === 0 ? "Pastores" : "—";
 }
+
+export interface AddressParts {
+  street?: string | null;
+  number?: string | null;
+  neighborhood?: string | null;
+}
+
+/** "20:00" a partir do `time` do banco ("20:00:00"); vazio sem horário. */
+export function formatMeetingTime(time: string | null | undefined): string {
+  return time ? time.substring(0, 5) : "";
+}
+
+/**
+ * Endereço curto da célula, como nos cards: "Rua das Flores, 120" ("s/n" sem
+ * número). Sem rua, o bairro; sem os dois, vazio.
+ */
+export function formatShortAddress(address: AddressParts): string {
+  if (address.street) return `${address.street}, ${address.number || "s/n"}`;
+  return address.neighborhood ?? "";
+}

@@ -114,4 +114,9 @@ describe("describedByWithError", () => {
     expect(describedByWithError(undefined, "cell-message")).toBe("cell-message");
     expect(describedByWithError(undefined, undefined)).toBeUndefined();
   });
+
+  it("o texto que a tela liga ao campo entra entre o do react-select e o erro", () => {
+    expect(describedByWithError("rs-placeholder", "cell-message", "kept-line")).toBe("rs-placeholder kept-line cell-message");
+    expect(describedByWithError(undefined, undefined, "kept-line")).toBe("kept-line");
+  });
 });

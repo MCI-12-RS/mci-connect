@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
+import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
+import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,14 +11,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
-import type { MemberRow } from "@/lib/members/fields";
+import { useReturnFocus } from "@/hooks/use-return-focus";
+import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
+import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 type Member = MemberRow;
 
@@ -35,9 +35,8 @@ const Members = () => {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [deletingMember, setDeletingMember] = useState<MemberDeletionTarget | null>(null);
   const { hasPermission, user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
   const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
@@ -46,24 +45,15 @@ const Members = () => {
 
   useClampPage(list, { data, isPlaceholderData });
 
+  // Ao fechar um diálogo, o foco volta a quem o abriu ou, se o membro saiu da lista, à busca.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const returnFocus = useReturnFocus(searchRef, data);
+
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("members").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["members"] });
-      toast({ title: "Membro excluído com sucesso" });
-    },
-    onError: () => {
-      toast({ variant: "destructive", title: "Erro ao excluir membro" });
-    },
-  });
-
-  const handleEdit = (member: Member) => {
+  const handleEdit = (member: Member, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
     setEditingMember(member);
     setFormOpen(true);
   };
@@ -82,27 +72,21 @@ const Members = () => {
   const canDeleteAny = hasPermission("delete_member");
   const showActions = canEditAny || canDeleteAny;
 
-  const DeleteButton = ({ member }: { member: Member }) => (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Trash2 className="w-4 h-4 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja excluir {member.name}? Esta ação não pode ser desfeita.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => deleteMutation.mutate(member.id)}>Excluir</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+  const memberName = (m: Member) => m.name || UNNAMED_MEMBER_LABEL;
+  const isSelf = (m: Member) => !!user && m.auth_user_id === user.id;
+  const canEdit = (m: Member) => hasPermission("edit_member") || (hasPermission("edit_own_data") && isSelf(m));
+  // Ninguém exclui o próprio cadastro (RN-03); o banco também recusa.
+  const canDelete = (m: Member) => hasPermission("delete_member") && !isSelf(m);
+
+  const startDeletion = (m: Member, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setDeletingMember({ id: m.id, name: memberName(m), isActive: m.is_active === true });
+  };
+
+  const rowActions = (m: Member): RowAction[] =>
+    canDelete(m)
+      ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(m, trigger) }]
+      : [];
 
   const LevelBadge = ({ m }: { m: Member }) => {
     if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
@@ -128,21 +112,25 @@ const Members = () => {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{m.name}</p>
+                <p className="font-semibold text-sm break-words">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
-              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
-                <div className="flex items-center shrink-0">
-                  {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {hasPermission("delete_member") && <DeleteButton member={m} />}
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {canEdit(m) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11"
+                    aria-label={MEMBER_DELETION_TEXTS.editLabel(memberName(m))}
+                    onClick={(e) => handleEdit(m, e.currentTarget)}
+                  >
+                    <Pencil className="w-4 h-4" aria-hidden="true" />
+                  </Button>
+                )}
+                <RowActionsMenu label={MEMBER_DELETION_TEXTS.actionsLabel(memberName(m))} actions={rowActions(m)} />
+              </div>
             </div>
 
             {/* Info row */}
@@ -180,7 +168,13 @@ const Members = () => {
             <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
           </div>
           {hasPermission("create_member") && (
-            <Button onClick={() => setFormOpen(true)} className="w-full sm:w-auto">
+            <Button
+              onClick={(e) => {
+                returnFocus.setOpener(e.currentTarget);
+                setFormOpen(true);
+              }}
+              className="w-full sm:w-auto"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Novo Membro
             </Button>
@@ -193,7 +187,9 @@ const Members = () => {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
+                  ref={searchRef}
                   placeholder="Buscar por nome, e-mail ou CPF..."
+                  aria-label="Buscar membros"
                   value={list.searchInput}
                   onChange={(e) => list.setSearchInput(e.target.value)}
                   maxLength={100}
@@ -271,12 +267,26 @@ const Members = () => {
                         {showActions && (
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                                <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
-                                  <Pencil className="w-4 h-4" />
+                              {canEdit(m) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={MEMBER_DELETION_TEXTS.editLabel(memberName(m))}
+                                  onClick={(e) => handleEdit(m, e.currentTarget)}
+                                >
+                                  <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </Button>
                               )}
-                              {hasPermission("delete_member") && <DeleteButton member={m} />}
+                              {canDelete(m) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={MEMBER_DELETION_TEXTS.deleteLabel(memberName(m))}
+                                  onClick={(e) => startDeletion(m, e.currentTarget)}
+                                >
+                                  <Trash2 className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}
@@ -301,13 +311,25 @@ const Members = () => {
         </Card>
 
         <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <DialogContent
+            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          >
             <DialogHeader>
               <DialogTitle>{editingMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
             </DialogHeader>
             <MemberForm member={editingMember} onClose={handleClose} />
           </DialogContent>
         </Dialog>
+
+        {deletingMember && (
+          <MemberDeletionFlow
+            key={deletingMember.id}
+            member={deletingMember}
+            onClose={() => setDeletingMember(null)}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
+        )}
       </div>
     </AppLayout>
   );
