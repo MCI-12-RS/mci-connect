@@ -121,13 +121,14 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
 
   // O cadastro já não existe para quem exclui: avisa sem erro e recarrega a lista (UX-24).
   const goneMessage = precheck?.kind === "gone" ? precheck.message : null;
+  const goneHandled = useRef(false);
   useEffect(() => {
-    if (!goneMessage) return;
+    if (!goneMessage || goneHandled.current) return;
+    goneHandled.current = true;
     toast({ title: goneMessage });
     void refresh();
     onClose();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goneMessage]);
+  }, [goneMessage, toast, refresh, onClose]);
 
   /** Fecha, avisa ou mostra a falha no diálogo, conforme o resultado da gravação. */
   const handleResult = (result: MemberWriteResult, handlers: ResultHandlers) => {
@@ -155,13 +156,16 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
     }
   };
 
-  const send = (run: () => Promise<void>) => {
+  /** Uma gravação por vez; uma falha inesperada (que não veio classificada) pede para tentar de novo. */
+  const send = (run: () => Promise<void>, failedText: string) => {
     if (sending.current) return;
     sending.current = true;
     setSendError(null);
-    void run().finally(() => {
-      sending.current = false;
-    });
+    void run()
+      .catch(() => setSendError(failedText))
+      .finally(() => {
+        sending.current = false;
+      });
   };
 
   const handleDelete = () =>
@@ -173,7 +177,7 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
         // A recusa do servidor troca o conteúdo para o bloqueio (UX-11).
         onRefused: setServerRefusal,
       });
-    });
+    }, DELETION_TEXTS.deleteFailed);
 
   const handleInactivate = () =>
     send(async () => {
@@ -184,7 +188,7 @@ const MemberDeletionFlow = ({ member, onClose }: MemberDeletionFlowProps) => {
         // Uma regra que recuse o PATCH aparece no aviso do próprio diálogo.
         onRefused: (refusalFromServer) => setSendError(refusalFromServer.message),
       });
-    });
+    }, MEMBER_DELETION_TEXTS.inactivateFailed);
 
   if (step.kind === "member") return <EditMemberDialog memberId={step.id} onClose={onClose} />;
   if (step.kind === "cell") return <EditCellDialog cellId={step.id} onClose={onClose} />;
