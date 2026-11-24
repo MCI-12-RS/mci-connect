@@ -28,13 +28,16 @@
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Os números absolutos usam uma persona cujo escopo é só a massa deste
 -- arquivo; as que veem a igreja toda são conferidas por paridade e diferença.
+-- As listas de excluídos são comparadas só nos ids da massa: a base pode ter
+-- excluídos de fora (a própria massa cria alguns, com ids f2010500…, para
+-- provar isso), e o escopo deles não é deste arquivo.
 -- Rodar com: supabase test db
 
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(124);
+SELECT plan(126);
 
 CREATE FUNCTION pg_temp.u(_n int) RETURNS uuid LANGUAGE sql IMMUTABLE AS
 $$ SELECT ('a2010500-0000-0000-0000-' || lpad(_n::text, 12, '0'))::uuid $$;
@@ -161,16 +164,19 @@ BEGIN
     '{}'::text[], _who || ': nenhum membro, célula ou relatório excluído (nem participante de relatório excluído) aparece');
 END $$;
 
--- Views de excluídos com o mesmo escopo das principais (RN-15).
+-- Views de excluídos com o mesmo escopo das principais (RN-15). Do lado da
+-- view, só os ids da massa (excluídos ou não): um registro não excluído da
+-- massa que aparecesse na lista ainda falha, e os excluídos de fora da massa
+-- (outros testes, outra massa na mesma base) não entram na conta.
 CREATE FUNCTION pg_temp.deleted_scope(_n int, _who text) RETURNS SETOF text LANGUAGE plpgsql AS $$
 BEGIN
-  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.members_deleted_view'),
+  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.members_deleted_view WHERE id::text LIKE ''c2010500%'''),
                  pg_temp.scope_if_undeleted(_n, 'public.members_view', 'members'),
                  _who || ': members_deleted_view = excluídos que a members_view mostraria');
-  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.cells_deleted_view'),
+  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.cells_deleted_view WHERE id::text LIKE ''d2010500%'''),
                  pg_temp.scope_if_undeleted(_n, 'public.cells_view', 'cells'),
                  _who || ': cells_deleted_view = excluídas que a cells_view mostraria');
-  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.cell_reports_deleted_view'),
+  RETURN NEXT is(pg_temp.ids(_n, 'SELECT id::text FROM public.cell_reports_deleted_view WHERE id::text LIKE ''e2010500%'''),
                  pg_temp.scope_if_undeleted(_n, 'public.cell_reports_view', 'cell_reports'),
                  _who || ': cell_reports_deleted_view = excluídos que a cell_reports_view mostraria');
 END $$;
@@ -337,11 +343,45 @@ SELECT x.what, pg_temp.code(pg_temp.try(30, x.sql)) AS code
     ('m27', format('SELECT public.delete_member(%L)', pg_temp.m(27)))
   ) AS x(what, sql);
 
+-- Excluídos de fora da massa (ids f2010500…), pela API e na mesma transação:
+-- dois membros, duas células e um relatório excluídos, mais um relatório (não
+-- excluído) de célula excluída. Simulam uma base que já tem excluídos; as
+-- exclusões seguem a ordem do ORDER BY (relatório, células, membros).
+INSERT INTO public.members (id, name, gender, has_leadership, is_active) VALUES
+  ('f2010500-0000-0000-0000-000000000001', 'Alheio Excluído E201-05', 'M', false, true),
+  ('f2010500-0000-0000-0000-000000000002', 'Alheia Líder E201-05',    'F', false, true);
+INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time) VALUES
+  ('f2010500-0000-0000-0000-000000000011', 'f2010500-0000-0000-0000-000000000002',
+   'f2010500-0000-0000-0000-000000000002', 'Evangelística', 'Domingo', '00:00'),
+  ('f2010500-0000-0000-0000-000000000012', 'f2010500-0000-0000-0000-000000000002',
+   'f2010500-0000-0000-0000-000000000002', 'Discipulado', 'Domingo', '00:00');
+INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
+  ('f2010500-0000-0000-0000-000000000021', 'f2010500-0000-0000-0000-000000000011', pg_temp.ws(), '00:00', 'Alheio excluído', true),
+  ('f2010500-0000-0000-0000-000000000022', 'f2010500-0000-0000-0000-000000000012', pg_temp.ws(), '00:00', 'Alheio de célula excluída', true);
+INSERT INTO pg_temp.del_log
+SELECT x.what, pg_temp.code(pg_temp.try(30, x.sql))
+  FROM (VALUES
+    (1, 'alheio r21', $q$SELECT public.delete_cell_report('f2010500-0000-0000-0000-000000000021')$q$),
+    (2, 'alheio c11', $q$SELECT public.delete_cell('f2010500-0000-0000-0000-000000000011')$q$),
+    (3, 'alheio c12', $q$SELECT public.delete_cell('f2010500-0000-0000-0000-000000000012')$q$),
+    (4, 'alheio m1',  $q$SELECT public.delete_member('f2010500-0000-0000-0000-000000000001')$q$),
+    (5, 'alheio m2',  $q$SELECT public.delete_member('f2010500-0000-0000-0000-000000000002')$q$)
+  ) AS x(ord, what, sql) ORDER BY x.ord;
+
 -- ===========================================================================
--- 0. Preparação conferida — 1
+-- 0. Preparação conferida — 3
 -- ===========================================================================
 SELECT is((SELECT string_agg(what || '=' || code, ',' ORDER BY what) FROM del_log WHERE code <> '00000'), NULL,
   'massa: todas as exclusões da preparação foram aceitas pela API');
+SELECT is(pg_temp.ids(11, $q$SELECT id::text FROM public.members_deleted_view WHERE id::text LIKE 'f2010500%'
+                       UNION ALL SELECT id::text FROM public.cells_deleted_view WHERE id::text LIKE 'f2010500%'
+                       UNION ALL SELECT id::text FROM public.cell_reports_deleted_view WHERE id::text LIKE 'f2010500%'$q$),
+  ARRAY['f2010500-0000-0000-0000-000000000001', 'f2010500-0000-0000-0000-000000000002',
+        'f2010500-0000-0000-0000-000000000011', 'f2010500-0000-0000-0000-000000000012',
+        'f2010500-0000-0000-0000-000000000021'],
+  'massa: os excluídos de fora da massa aparecem nas listas de excluídos do AD + view_members');
+SELECT is(pg_temp.val(11, $q$SELECT count(*) FROM public.cell_reports_view WHERE id = 'f2010500-0000-0000-0000-000000000022' AND cell_deleted$q$), '1',
+  'massa: e o relatório de fora da massa, de célula excluída, continua na cell_reports_view');
 
 -- ===========================================================================
 -- 1. Paridade do E1.08 com excluídos na massa (9 personas × 5) — 45
@@ -399,7 +439,7 @@ SELECT is(pg_temp.ids(15, 'SELECT id::text FROM public.cells_deleted_view'), ARR
   'RN-15: AD sem leitura vê só a própria célula excluída (ramo do líder)');
 SELECT is(pg_temp.ids(15, 'SELECT id::text FROM public.members_deleted_view'), '{}'::text[],
   'RN-15: e nenhum membro excluído (vê só o próprio cadastro)');
-SELECT ok(cardinality(pg_temp.ids(11, 'SELECT id::text FROM public.members_deleted_view')) = 5,
+SELECT ok(cardinality(pg_temp.ids(11, $q$SELECT id::text FROM public.members_deleted_view WHERE id::text LIKE 'c2010500%'$q$)) = 5,
   'RN-15: AD + view_members vê os 5 membros excluídos da massa');
 SELECT is(pg_temp.ids(3, 'SELECT id::text FROM public.members_deleted_view'), '{}'::text[],
   'RN-15: sem manage_roles (P3), members_deleted_view vazia');

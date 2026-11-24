@@ -239,18 +239,22 @@ SET LOCAL session_replication_role = origin;
 --   - membros com vínculo celular (MEM-14): líder, timóteo ou anfitrião de
 --     qualquer célula, ou participante de relatório nos últimos 30 dias;
 --   - último relatório de cada célula, visível ou não (RN-08 d).
+-- Desde o E2.01 (RN-08, RN-12), célula excluída não dá vínculo, e relatório
+-- excluído não conta como participação nem como último relatório. A massa
+-- deste arquivo não tem excluídos, mas a base pode ter.
 -- ---------------------------------------------------------------------------
 CREATE TEMP TABLE linked_members AS
-SELECT leader_id AS member_id FROM public.cells WHERE leader_id IS NOT NULL
-UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL
-UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL
+SELECT leader_id AS member_id FROM public.cells WHERE leader_id IS NOT NULL AND deleted_at IS NULL
+UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND deleted_at IS NULL
+UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND deleted_at IS NULL
 UNION SELECT p.member_id
         FROM public.cell_report_participants p
         JOIN public.cell_reports r ON r.id = p.report_id
-       WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30;
+       WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30
+         AND r.deleted_at IS NULL;
 
 CREATE TEMP TABLE cell_last_report AS
-SELECT cell_id, max(date) AS last_date FROM public.cell_reports GROUP BY cell_id;
+SELECT cell_id, max(date) AS last_date FROM public.cell_reports WHERE deleted_at IS NULL GROUP BY cell_id;
 
 GRANT SELECT ON pg_temp.linked_members, pg_temp.cell_last_report TO authenticated;
 
@@ -821,15 +825,16 @@ SET LOCAL session_replication_role = origin;
 -- Os conjuntos da paridade, recalculados com o volume.
 TRUNCATE pg_temp.linked_members, pg_temp.cell_last_report;
 INSERT INTO pg_temp.linked_members
-SELECT leader_id FROM public.cells WHERE leader_id IS NOT NULL
-UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL
-UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL
+SELECT leader_id FROM public.cells WHERE leader_id IS NOT NULL AND deleted_at IS NULL
+UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND deleted_at IS NULL
+UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND deleted_at IS NULL
 UNION SELECT p.member_id
         FROM public.cell_report_participants p
         JOIN public.cell_reports r ON r.id = p.report_id
-       WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30;
+       WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30
+         AND r.deleted_at IS NULL;
 INSERT INTO pg_temp.cell_last_report
-SELECT cell_id, max(date) FROM public.cell_reports GROUP BY cell_id;
+SELECT cell_id, max(date) FROM public.cell_reports WHERE deleted_at IS NULL GROUP BY cell_id;
 
 SELECT pg_temp.login(1);
 SET LOCAL ROLE authenticated;

@@ -343,8 +343,10 @@ SELECT is(pg_temp.val(1, format($$SELECT string_agg(name, ',' ORDER BY deleted_a
                                  WHERE id IN (%L, %L, %L, %L)$$, pg_temp.m(21), pg_temp.m(25), pg_temp.m(26), pg_temp.m(42))),
   'Fábio Freitas,Zeno Zanella,Sara Souza,Davi Duarte',
   'RN-15: ordem da exclusão mais recente para a mais antiga (deleted_at DESC, id)');
+-- Só os ids da massa: a base pode ter outros excluídos com "Sara" no nome.
 SELECT is(pg_temp.val(1, $$SELECT string_agg(name, ',') FROM public.members_deleted_view
-                          WHERE search_text LIKE '%' || public.search_normalize('sara') || '%'$$),
+                          WHERE search_text LIKE '%' || public.search_normalize('sara') || '%'
+                            AND id::text LIKE 'c2010300%'$$),
   'Sara Souza', 'RN-15: a lista tem busca (mesmos campos da lista principal)');
 SELECT is(pg_temp.val(1, format('SELECT email FROM public.members_deleted_view WHERE id = %L', pg_temp.m(25))), NULL,
   'RN-15: sem dado sensível cadastrado, o campo vem nulo');
