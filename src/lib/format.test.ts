@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatCount, formatList } from "./format";
+import { afterEach, describe, it, expect } from "vitest";
+import { formatCount, formatDateTimeInBrasilia, formatList } from "./format";
 
 describe("formatCount", () => {
   it("abaixo de mil, sai sem separador", () => {
@@ -24,5 +24,34 @@ describe("formatList", () => {
   it("dois itens com 'e'; três ou mais com vírgulas e 'e' no último", () => {
     expect(formatList(["Ana", "Bruno"])).toBe("Ana e Bruno");
     expect(formatList(["Ana", "Bruno", "Sara"])).toBe("Ana, Bruno e Sara");
+  });
+});
+
+describe("formatDateTimeInBrasilia", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it("converte o instante do banco para o horário de Brasília (UX-15)", () => {
+    expect(formatDateTimeInBrasilia("2026-11-10T17:32:00.123456+00:00")).toEqual({ date: "10/11/2026", time: "14:32" });
+  });
+
+  it("muda de dia quando, em Brasília, ainda é a véspera", () => {
+    expect(formatDateTimeInBrasilia("2026-11-11T02:30:00+00:00")).toEqual({ date: "10/11/2026", time: "23:30" });
+    expect(formatDateTimeInBrasilia("2026-11-11T03:00:00Z")).toEqual({ date: "11/11/2026", time: "00:00" });
+  });
+
+  it("não depende do fuso do navegador", () => {
+    process.env.TZ = "Asia/Tokyo";
+    expect(formatDateTimeInBrasilia("2026-11-10T17:32:00Z")).toEqual({ date: "10/11/2026", time: "14:32" });
+    process.env.TZ = "America/Los_Angeles";
+    expect(formatDateTimeInBrasilia("2026-11-10T17:32:00Z")).toEqual({ date: "10/11/2026", time: "14:32" });
+  });
+
+  it("valor vazio ou que não é data volta nulo", () => {
+    expect(formatDateTimeInBrasilia(null)).toBeNull();
+    expect(formatDateTimeInBrasilia("")).toBeNull();
+    expect(formatDateTimeInBrasilia("ontem")).toBeNull();
   });
 });
