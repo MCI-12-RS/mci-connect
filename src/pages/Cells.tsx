@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
 import CellReportForm from "@/components/CellReportForm";
 import CellDeletionFlow from "@/components/CellDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
+import DeletedListButton from "@/components/DeletedListButton";
+import { CellStatusBadge } from "@/components/StatusBadges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -20,7 +23,7 @@ import { useReturnFocus } from "@/hooks/use-return-focus";
 import { formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
-import { CELL_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
 
 const Cells = () => {
   const list = useListSearchParams();
@@ -67,6 +70,17 @@ const Cells = () => {
 
   const anyCellHasActions = cells.some(cellHasActions);
   const columnCount = anyCellHasActions ? 7 : 6;
+
+  // "Excluídas": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
+  const deletedButton = hasPermission("manage_roles") && (
+    <DeletedListButton
+      to="/cells/deleted"
+      text={DELETED_LIST_TEXTS.cells.button}
+      label={DELETED_LIST_TEXTS.cells.buttonLabel}
+      isMobile={isMobile}
+    />
+  );
+  const canCreate = hasPermission("create_cell");
 
   const startDeletion = (c: CellRow, opener: HTMLElement | null) => {
     returnFocus.setOpener(opener);
@@ -167,9 +181,7 @@ const Cells = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{c.type}</Badge>
-                <Badge variant={c.is_active ? "default" : "secondary"}>
-                  {c.is_active ? "Ativa" : "Inativa"}
-                </Badge>
+                <CellStatusBadge active={c.is_active === true} />
               </div>
               <span className="text-xs text-muted-foreground">
                 {c.meeting_day} · {c.meeting_time?.substring(0, 5) || "—"}
@@ -192,21 +204,29 @@ const Cells = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Células</h1>
-            <p className="text-muted-foreground text-sm">Gerenciar células</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold">Células</h1>
+              <p className="text-muted-foreground text-sm">Gerenciar células</p>
+            </div>
+            {isMobile && deletedButton}
           </div>
-          {hasPermission("create_cell") && (
-            <Button
-              onClick={(e) => {
-                returnFocus.setOpener(e.currentTarget);
-                setFormOpen(true);
-              }}
-              className="w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Célula
-            </Button>
+          {(canCreate || (!isMobile && deletedButton)) && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!isMobile && deletedButton}
+              {canCreate && (
+                <Button
+                  onClick={(e) => {
+                    returnFocus.setOpener(e.currentTarget);
+                    setFormOpen(true);
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Célula
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -239,7 +259,7 @@ const Cells = () => {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
                     <TableHead>Status</TableHead>
-                    {anyCellHasActions && <TableHead className="w-24">Ações</TableHead>}
+                    {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,9 +291,9 @@ const Cells = () => {
                         <TableCell><Badge variant="outline">{c.type}</Badge></TableCell>
                         <TableCell className="text-sm">{c.meeting_day} às {c.meeting_time?.substring(0, 5) || "—"}</TableCell>
                         <TableCell>
-                          <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Ativa" : "Inativa"}</Badge>
+                          <CellStatusBadge active={c.is_active === true} />
                         </TableCell>
-                        {anyCellHasActions && <TableCell>{cellHasActions(c) && renderDesktopActions(c)}</TableCell>}
+                        {anyCellHasActions && <ActionsCell>{cellHasActions(c) && renderDesktopActions(c)}</ActionsCell>}
                       </TableRow>
                     ))
                   )}

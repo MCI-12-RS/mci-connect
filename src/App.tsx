@@ -7,10 +7,13 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
+import MembersDeleted from "./pages/MembersDeleted";
 import Roles from "./pages/Roles";
 import Ministries from "./pages/Ministries";
 import Cells from "./pages/Cells";
+import CellsDeleted from "./pages/CellsDeleted";
 import CellReports from "./pages/CellReports";
+import CellReportsDeleted from "./pages/CellReportsDeleted";
 import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 
@@ -41,10 +44,13 @@ const App = () => (
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+            <Route path="/members/deleted" element={<ProtectedRoute><MembersDeleted /></ProtectedRoute>} />
             <Route path="/roles" element={<ProtectedRoute><Roles /></ProtectedRoute>} />
             <Route path="/ministries" element={<ProtectedRoute><Ministries /></ProtectedRoute>} />
             <Route path="/cells" element={<ProtectedRoute><Cells /></ProtectedRoute>} />
+            <Route path="/cells/deleted" element={<ProtectedRoute><CellsDeleted /></ProtectedRoute>} />
             <Route path="/cell-reports" element={<ProtectedRoute><CellReports /></ProtectedRoute>} />
+            <Route path="/cell-reports/deleted" element={<ProtectedRoute><CellReportsDeleted /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -352,6 +352,11 @@ test("Acessibilidade (WCAG 2.4.3, AD): ao fechar a confirmação, o foco volta a
   await expect(page.getByRole("menuitem", { name: "Excluir cadastro" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeFocused();
+  // O Esc vai na confirmação já carregada (depois do "Verificando…"). Pressionado
+  // no mesmo instante em que o diálogo monta, antes da renderização em que o
+  // Radix o registra como a camada do topo, o Esc é ignorado; nenhuma pessoa
+  // tecla tão rápido, mas o teste teclava e falhava às vezes (QA, E2.01 PR 3).
+  await expect(dialog.getByRole("button", { name: "Excluir cadastro" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(menu).toBeFocused();

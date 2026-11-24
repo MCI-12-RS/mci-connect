@@ -26,6 +26,8 @@ export const DELETION_TEXTS = {
   /** Não está no spec: falha que não é de conexão nem de regra (RN-20, "pede para tentar de novo"). */
   deleteFailed: "Não foi possível excluir. Tente de novo.",
   restoreNetworkError: "Não foi possível restaurar. Verifique a conexão e tente de novo.",
+  /** Não está no spec: falha que não é de conexão nem de regra, na restauração (derivado de `deleteFailed`). */
+  restoreFailed: "Não foi possível restaurar. Tente de novo.",
 } as const;
 
 // Os rótulos dos botões de ícone das linhas (`actionsLabel`, `deleteLabel`,
@@ -89,6 +91,8 @@ export const MEMBER_RESTORE_TEXTS = {
   restoreLabel: (name: string) => `Restaurar ${name}`,
   confirmTitle: (name: string) => `Restaurar o cadastro de ${name}?`,
   backWithRole: (role: string) => `O cadastro volta às listas e aos totais, com os mesmos dados e a função ${role}.`,
+  /** Não está no spec: o cadastro sem função e sem conta de acesso volta sem função (DA-2). */
+  backWithoutRole: "O cadastro volta às listas e aos totais, com os mesmos dados.",
   backWithAccess: "A pessoa volta a entrar no sistema com a mesma senha.",
   spouseNotBack: "O vínculo de cônjuge não volta. Se havia, refaça-o no cadastro.",
   backWithoutLeader: (leader: string) => `Volta sem líder, porque o líder anterior (${leader}) foi excluído.`,
@@ -147,6 +151,8 @@ export const CELL_DELETION_TEXTS = {
 /** Células: restauração (T6). */
 export const CELL_RESTORE_TEXTS = {
   restoreLabel: (leader: string) => `Restaurar a célula de ${leader}`,
+  /** Não está no spec: o nome do botão enquanto restaura, com o texto visível "Restaurando…" (WCAG 2.5.3). */
+  restoringLabel: (leader: string) => `Restaurando a célula de ${leader}…`,
   restored: "Célula restaurada.",
   notDeleted: "Esta célula não está excluída.",
   refusedTitle: (leader: string) => `Não é possível restaurar a célula de ${leader}`,
@@ -192,10 +198,14 @@ export const CELL_REPORT_DELETION_TEXTS = {
 
 /** Relatórios: restauração (T6). */
 export const CELL_REPORT_RESTORE_TEXTS = {
-  restoreLabel: (date: string) => `Restaurar o relatório de ${date}`,
+  // O spec diz "o relatório de {data}"; o líder entra pela mesma razão do
+  // `CELL_REPORT_DELETION_TEXTS`: só com a data, o rótulo se repetiria na lista.
+  restoreLabel: (date: string, leader: string) => `Restaurar o relatório de ${date} da célula de ${leader}`,
+  /** Não está no spec: o nome do botão enquanto restaura, com o texto visível "Restaurando…" (WCAG 2.5.3). */
+  restoringLabel: (date: string, leader: string) => `Restaurando o relatório de ${date} da célula de ${leader}…`,
   restored: "Relatório restaurado.",
   notDeleted: "Este relatório não está excluído.",
-  refusedTitle: (date: string) => `Não é possível restaurar o relatório de ${date}`,
+  refusedTitle: (date: string, leader: string) => `Não é possível restaurar o relatório de ${date} da célula de ${leader}`,
   weekTaken: "Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.",
   /** Ação do bloqueio: abre `/cell-reports?q={Líder}`. */
   seeCellReports: "Ver relatórios da célula",
@@ -211,8 +221,18 @@ export const DELETED_LIST_TEXTS = {
   authorNotRecorded: "Autor não registrado",
   /** Coluna "Excluído por", no desktop. */
   authorNotRecordedShort: "Não registrado",
+  /** Coluna "Excluído em", no desktop (wireframe da T4): "10/11/2026 14:32". */
+  deletedAtShort: (date: string, time: string) => `${date} ${time}`,
   personDeleted: PERSON_DELETED,
   weekTaken: "Já há outro relatório desta célula na mesma semana.",
+  /** Do wireframe da T4: uma pessoa e o papel dela no card ("Líder: Gil Souza"). */
+  personLine: (role: string, name: string) => `${role}: ${name}`,
+  /** Do wireframe da T4: o membro excluído que não tinha líder. */
+  noLeader: "Sem líder",
+  /** Do wireframe da T4: o tema do relatório no card. */
+  themeLine: (theme: string) => `Tema: ${theme}`,
+  /** Não está no spec: cabeçalho, só para leitor de tela, da coluna do "Restaurar" no desktop. */
+  actionsColumn: "Ações",
   members: {
     button: "Excluídos",
     buttonLabel: "Ver membros excluídos",
@@ -224,6 +244,12 @@ export const DELETED_LIST_TEXTS = {
     noResults: "Nenhum cadastro excluído encontrado para esta busca.",
     loadFailed: "Não foi possível carregar os cadastros excluídos.",
     countLabel: ["cadastro excluído", "cadastros excluídos"],
+    /** O mesmo da lista de Membros (T4: "o mesmo placeholder da lista principal"). */
+    searchPlaceholder: "Buscar por nome, e-mail ou CPF...",
+    /** Não está no spec: rótulo do campo de busca para leitor de tela. */
+    searchLabel: "Buscar membros excluídos",
+    /** Colunas no desktop (T4). */
+    columns: { name: "Nome", leader: "Líder", status: "Situação", deletedAt: "Excluído em", deletedBy: "Excluído por" },
   },
   cells: {
     button: "Excluídas",
@@ -239,6 +265,19 @@ export const DELETED_LIST_TEXTS = {
     loadFailed: "Não foi possível carregar as células excluídas.",
     countLabel: ["célula excluída", "células excluídas"],
     itemTitle: (leader: string) => `Célula de ${leader}`,
+    /** O mesmo da lista de Células. */
+    searchPlaceholder: "Líder, timóteo, anfitrião, rua ou bairro...",
+    /** Não está no spec: rótulo do campo de busca para leitor de tela. */
+    searchLabel: "Buscar células excluídas",
+    /** Colunas no desktop (T4). */
+    columns: {
+      leader: "Líder",
+      schedule: "Dia / Hora",
+      type: "Tipo",
+      neighborhood: "Bairro",
+      deletedAt: "Excluída em",
+      deletedBy: "Excluída por",
+    },
   },
   cellReports: {
     button: "Excluídos",
@@ -254,5 +293,18 @@ export const DELETED_LIST_TEXTS = {
     loadFailed: "Não foi possível carregar os relatórios excluídos.",
     countLabel: ["relatório excluído", "relatórios excluídos"],
     itemTitle: (date: string) => `Relatório de ${date}`,
+    /** O mesmo da lista de Relatórios. */
+    searchPlaceholder: "Buscar por líder ou tema...",
+    /** Não está no spec: rótulo do campo de busca para leitor de tela. */
+    searchLabel: "Buscar relatórios excluídos",
+    /** Colunas no desktop (T4). */
+    columns: {
+      cell: "Célula (Líder)",
+      dateTime: "Data / Hora",
+      status: "Situação",
+      theme: "Tema",
+      deletedAt: "Excluído em",
+      deletedBy: "Excluído por",
+    },
   },
 } as const;

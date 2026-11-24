@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { DEFAULT_PAGE_SIZE, lastPage, parsePage, parsePageSize } from "@/lib/pagination";
 import type { ListParams } from "@/lib/list-query";
@@ -23,6 +23,9 @@ export interface ListSearchState {
  */
 export function useListSearchParams(): ListSearchState {
   const [searchParams, setSearchParams] = useSearchParams();
+  // O estado da navegação (por exemplo, para onde o "← Membros" da lista de
+  // excluídos volta, E2.01 UX-19) continua depois de mudar a busca ou a página.
+  const { state: navigationState } = useLocation();
   const page = parsePage(searchParams.get("page"));
   const pageSize = parsePageSize(searchParams.get("size"));
   const search = searchParams.get("q") ?? "";
@@ -48,10 +51,10 @@ export function useListSearchParams(): ListSearchState {
           }
           return next;
         },
-        { replace: true },
+        { replace: true, state: navigationState },
       );
     },
-    [setSearchParams],
+    [setSearchParams, navigationState],
   );
 
   // Mudar a busca volta para a página 1. Só reage à digitação: a URL mudando

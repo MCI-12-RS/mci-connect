@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { PaginatedSelect } from "@/components/select/PaginatedSelect";
+import { useState, type Ref } from "react";
+import { PaginatedSelect, type PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
 import { useMemberName, useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
@@ -15,6 +15,8 @@ interface AsyncMemberSelectProps {
   activeOnly?: boolean;
   /** Id do campo de busca, para o `<Label htmlFor>`. */
   inputId?: string;
+  /** Leva o foco ao campo de busca (por exemplo, o Líder em "Definir líder", E2.01 T5). */
+  focusRef?: Ref<PaginatedSelectHandle>;
 }
 
 /**
@@ -29,6 +31,7 @@ const AsyncMemberSelect = ({
   placeholder = "Buscar membro…",
   activeOnly = false,
   inputId,
+  focusRef,
 }: AsyncMemberSelectProps) => {
   const search = useSelectSearch();
   const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen });
@@ -49,6 +52,7 @@ const AsyncMemberSelect = ({
   return (
     <PaginatedSelect
       inputId={inputId}
+      focusRef={focusRef}
       search={search}
       pagination={pagination}
       value={selected}

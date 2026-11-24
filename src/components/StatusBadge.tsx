@@ -22,14 +22,16 @@ export interface StatusBadgeProps {
   /** O estado, em texto: "Célula excluída". */
   children: ReactNode;
   className?: string;
+  /** Detalhe ao passar o mouse (por exemplo, o motivo de "Não realizada"). */
+  title?: string;
 }
 
 /**
  * Badge de estado com contraste (padrão P6 do E2.01 e de Escolas): ícone e
  * texto, nunca só a cor.
  */
-const StatusBadge = ({ tone, icon: Icon, children, className }: StatusBadgeProps) => (
-  <span className={cn(badgeVariants({ variant: "outline" }), "gap-1 text-foreground", TONES[tone], className)}>
+const StatusBadge = ({ tone, icon: Icon, children, className, title }: StatusBadgeProps) => (
+  <span className={cn(badgeVariants({ variant: "outline" }), "gap-1 text-foreground", TONES[tone], className)} title={title}>
     <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
     {children}
   </span>

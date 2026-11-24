@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
 import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
+import DeletedListButton from "@/components/DeletedListButton";
+import { MemberStatusBadge, NoLeadershipBadge } from "@/components/StatusBadges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -18,7 +21,7 @@ import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-param
 import { useMembersList } from "@/hooks/use-members-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
-import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { DELETED_LIST_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 type Member = MemberRow;
 
@@ -90,9 +93,20 @@ const Members = () => {
 
   const LevelBadge = ({ m }: { m: Member }) => {
     if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
-    if (!m.leader_id) return <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600">Sem Liderança</Badge>;
+    if (!m.leader_id) return <NoLeadershipBadge />;
     return <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>;
   };
+
+  // "Excluídos": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
+  const deletedButton = hasPermission("manage_roles") && (
+    <DeletedListButton
+      to="/members/deleted"
+      text={DELETED_LIST_TEXTS.members.button}
+      label={DELETED_LIST_TEXTS.members.buttonLabel}
+      isMobile={isMobile}
+    />
+  );
+  const canCreate = hasPermission("create_member");
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
@@ -137,9 +151,7 @@ const Members = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <LevelBadge m={m} />
-                <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
-                  {m.is_active ? "Ativo" : "Inativo"}
-                </Badge>
+                <MemberStatusBadge active={m.is_active === true} />
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{m.total_disciples} disc.</span>
@@ -163,21 +175,29 @@ const Members = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
-            <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
+              <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
+            </div>
+            {isMobile && deletedButton}
           </div>
-          {hasPermission("create_member") && (
-            <Button
-              onClick={(e) => {
-                returnFocus.setOpener(e.currentTarget);
-                setFormOpen(true);
-              }}
-              className="w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Membro
-            </Button>
+          {(canCreate || (!isMobile && deletedButton)) && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!isMobile && deletedButton}
+              {canCreate && (
+                <Button
+                  onClick={(e) => {
+                    returnFocus.setOpener(e.currentTarget);
+                    setFormOpen(true);
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Membro
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -214,7 +234,7 @@ const Members = () => {
                     <TableHead>Ministério</TableHead>
                     <TableHead>Líder</TableHead>
                     <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="w-24">Ações</TableHead>}
+                    {showActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -260,12 +280,10 @@ const Members = () => {
                         </TableCell>
                         <TableCell className="text-sm">{m.leader_name || "—"}</TableCell>
                         <TableCell>
-                          <Badge variant={m.is_active ? "default" : "secondary"} className={m.is_active ? "bg-success" : ""}>
-                            {m.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
+                          <MemberStatusBadge active={m.is_active === true} />
                         </TableCell>
                         {showActions && (
-                          <TableCell>
+                          <ActionsCell>
                             <div className="flex items-center gap-1">
                               {canEdit(m) && (
                                 <Button
@@ -288,7 +306,7 @@ const Members = () => {
                                 </Button>
                               )}
                             </div>
-                          </TableCell>
+                          </ActionsCell>
                         )}
                       </TableRow>
                     ))
