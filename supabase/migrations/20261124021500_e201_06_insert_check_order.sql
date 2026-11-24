@@ -2,12 +2,12 @@
 -- Ver docs/specs/e2-01-exclusao-logica.md no repositório apps-mci ("Triggers
 -- (última barreira)", "Políticas de RLS", DT-10 e DT-27).
 --
--- No INSERT, o WITH CHECK da política de INSERT só é avaliado depois de todos
--- os triggers BEFORE. Esta migration faz a permissão de inserir ser a primeira
--- conferência em members, cells, cell_reports e cell_report_participants:
--- quem não pode inserir recebe 42501 ("Você não tem permissão para esta
--- ação.") antes de qualquer regra de negócio dos triggers, e quem pode
--- continua recebendo as mesmas recusas de regra de antes.
+-- A permissão de inserir passa a ser a primeira conferência no INSERT de
+-- members, cells, cell_reports e cell_report_participants (42501, "Você não
+-- tem permissão para esta ação."). Quem pode inserir continua recebendo as
+-- mesmas recusas de regra de antes. A política de INSERT continua valendo: o
+-- trigger só antecipa a mesma conferência para antes dos outros triggers
+-- BEFORE. Não retire o trigger achando que repete a política.
 --
 -- 1. anon perde INSERT, UPDATE, DELETE e TRUNCATE nas quatro tabelas. Nada
 --    grava como anon (o front grava com a sessão do usuário, e as Edge

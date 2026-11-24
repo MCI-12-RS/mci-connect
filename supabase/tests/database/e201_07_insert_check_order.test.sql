@@ -2,18 +2,17 @@
 -- Spec: docs/specs/e2-01-exclusao-logica.md (repositório apps-mci), "Triggers
 -- (última barreira)", "Políticas de RLS", DT-10 e DT-27.
 --
--- No INSERT, o WITH CHECK da política só é avaliado depois dos triggers
--- BEFORE. A permissão de inserir passa a ser a primeira conferência:
+-- A permissão de inserir é a primeira conferência no INSERT:
 --   - members: regra 1 de enforce_member_write_rules (aa_);
 --   - cells, cell_reports e cell_report_participants: trigger
 --     a0_check_insert_permission, com a mesma função da política de INSERT;
 --   - anon: sem INSERT, UPDATE, DELETE e TRUNCATE nas quatro tabelas.
 --
 -- Cobre, com registros excluídos na massa:
---   - sem a permissão, 42501 antes de qualquer recusa de regra dos triggers
---     (inclusive os de semana de cell_reports);
---   - submit_own_cell_report: a célula excluída de outra pessoa dá 42501; a
---     própria dá cell_deleted;
+--   - sem a permissão, 42501 (ordem das conferências), também nos casos das
+--     RN-06, RN-07, RN-11, RN-18 e da semana de cell_reports;
+--   - submit_own_cell_report: a célula de outra pessoa dá 42501; a própria,
+--     a recusa de regra;
 --   - participantes: a função repete o efeito do RLS que a política antiga
 --     tinha (matriz pessoa × relatório comparada com a expressão antiga, sob o
 --     RLS de quem grava);
@@ -250,13 +249,13 @@ SELECT ok(r ->> 'state' = '42501' AND r ->> 'message' LIKE 'permission denied fo
 -- ===========================================================================
 -- Sem create_member: 42501 antes de qualquer regra.
 SELECT is(pg_temp.code(2, pg_temp.ins_member('Nova Pessoa', 'xavier.e20107@teste.invalid')), '42501',
-  'sem create_member: e-mail da conta de um excluído → 42501 (permissão antes da regra)');
+  'sem create_member: caso da RN-18 → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_member('Nova Pessoa', 'XAVIER.E20107@teste.invalid')), '42501',
-  'sem create_member: o mesmo e-mail em maiúsculas → 42501');
+  'sem create_member: caso da RN-18, e-mail em maiúsculas → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_member('Nova Pessoa', NULL, pg_temp.m(11))), '42501',
-  'sem create_member: líder excluído → 42501 (permissão antes da regra)');
+  'sem create_member: caso da RN-06 (líder) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_member('Nova Pessoa', NULL, NULL, pg_temp.m(11))), '42501',
-  'sem create_member: cônjuge excluído → 42501 (permissão antes da regra)');
+  'sem create_member: caso da RN-06 (cônjuge) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.try('authenticated', 2, pg_temp.ins_member('Nova Pessoa', NULL, NULL, NULL, pg_temp.u(2))) ->> 'message',
   'Você não tem permissão para esta ação.',
   'sem create_member: a regra 1 vem antes da regra 2 (conta de acesso)');
@@ -287,7 +286,7 @@ SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_member('Sergio Service E
 -- 4. cells — 5 verificações
 -- ===========================================================================
 SELECT is(pg_temp.code(2, pg_temp.ins_cell(pg_temp.m(11))), '42501',
-  'sem create_cell: líder excluído → 42501 (permissão antes da regra)');
+  'sem create_cell: caso da RN-06 (líder) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(10, pg_temp.ins_cell(pg_temp.m(11))), '42501',
   'membro excluído: INSERT de célula → 42501');
 SELECT is(pg_temp.code(4, pg_temp.ins_cell(pg_temp.m(11))), 'deleted_member_chosen',
@@ -304,21 +303,21 @@ SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_cell(pg_temp.m(31))),
 -- ===========================================================================
 -- Sem permissão de lançar (Nilo): 42501 antes dos triggers aa_ e de semana.
 SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(3))), '42501',
-  'sem permissão de lançar: célula excluída → 42501 (permissão antes da regra)');
+  'sem permissão de lançar: caso da RN-06 (célula) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(5))), '42501',
-  'sem permissão de lançar: semana já ocupada → 42501, antes do trigger de semana única');
+  'sem permissão de lançar: caso da semana única → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(4), public.sp_today() - 14)), '42501',
-  'sem permissão de lançar: data de outra semana → 42501, antes do trigger de semana atual');
+  'sem permissão de lançar: caso da semana atual → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(3))), '42501',
-  'edit_own_data sem ser líder ou timóteo: célula excluída de outra pessoa → 42501');
+  'edit_own_data sem ser líder ou timóteo: caso da RN-06 (célula de outra pessoa) → 42501');
 
 -- submit_own_cell_report (Yara).
 SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(3))), '42501',
-  'submit_own_cell_report: célula excluída de outra pessoa → 42501');
+  'submit_own_cell_report: caso da RN-06 (célula de outra pessoa) → 42501');
 SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(1))), 'cell_deleted',
   'submit_own_cell_report: a própria célula excluída → cell_deleted (quem tem direito recebe a regra)');
 SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(4))), '42501',
-  'submit_own_cell_report: célula de outra pessoa, com relatório na semana → 42501, antes do trigger de semana única');
+  'submit_own_cell_report: célula de outra pessoa, caso da semana única → 42501 (ordem das conferências)');
 SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_report(pg_temp.c(6))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'submit_own_cell_report: relatório válido da própria célula funciona');
@@ -347,11 +346,11 @@ SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_report(pg_temp.c(1), pub
 -- ===========================================================================
 -- Sem permissão (Nilo).
 SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(1), pg_temp.m(40))), '42501',
-  'sem permissão: relatório excluído → 42501 (permissão antes da regra)');
+  'sem permissão: caso da RN-07 (relatório) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(2), pg_temp.m(40))), '42501',
-  'sem permissão: relatório de célula excluída → 42501 (permissão antes da regra)');
+  'sem permissão: caso da RN-11 (relatório) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(11))), '42501',
-  'sem permissão: membro excluído → 42501 (permissão antes da regra)');
+  'sem permissão: caso da RN-06 (participante) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(40)) || ' ON CONFLICT DO NOTHING'), '42501',
   'sem permissão: par que já existe, com ON CONFLICT DO NOTHING → 42501 (como antes: o RLS confere a linha proposta)');
 
@@ -457,17 +456,17 @@ SELECT is(pg_temp.report_cell_mismatches(), '{}'::text[],
 -- ===========================================================================
 SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.cell_reports SET theme = %L WHERE id = %L', 'x', pg_temp.r(2))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem edit_cell_report: PATCH no relatório de célula excluída volta com 0 linhas, sem report_cell_deleted');
+  'sem edit_cell_report: PATCH no caso da RN-11 volta com 0 linhas e sem erro');
 SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.cells SET leader_id = %L WHERE id = %L', pg_temp.m(11), pg_temp.c(4))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem edit_cell: trocar o líder por um excluído volta com 0 linhas, sem deleted_member_chosen');
+  'sem edit_cell: PATCH no caso da RN-06 (líder) volta com 0 linhas e sem erro');
 SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.members SET leader_id = %L WHERE id = %L', pg_temp.m(11), pg_temp.m(40))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem edit_member: trocar o líder de outra pessoa por um excluído volta com 0 linhas, sem deleted_member_chosen');
+  'sem edit_member: PATCH de outra pessoa no caso da RN-06 (líder) volta com 0 linhas e sem erro');
 SELECT is(pg_temp.try('authenticated', 2, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
                                                  pg_temp.r(7), pg_temp.m(12))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem permissão: retirar um participante excluído volta com 0 linhas, sem deleted_participant_removal');
+  'sem permissão: DELETE no caso da RN-13 volta com 0 linhas e sem erro');
 -- Com a permissão, a regra continua.
 SELECT is(pg_temp.code(6, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
                                  pg_temp.r(7), pg_temp.m(12))),
