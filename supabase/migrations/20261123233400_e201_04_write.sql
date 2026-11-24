@@ -1518,6 +1518,9 @@ $$;
 -- INVOKER: valem as políticas de INSERT e DELETE de participantes, e o trigger
 -- aa_enforce_participant_rules recusa retirar um excluído, incluir um excluído
 -- novo e mexer em relatório excluído ou de célula excluída. O E2.11 absorve.
+-- Retiradas e inclusões são feitas uma a uma, em ordem de member_id: o trigger
+-- trava cada membro com FOR KEY SHARE, e a ordem de id evita ciclo de espera
+-- com o FOR UPDATE de delete_member (DT-09).
 CREATE OR REPLACE FUNCTION public.set_cell_report_participants(_report_id uuid, _member_ids uuid[])
 RETURNS void
 LANGUAGE plpgsql
@@ -1526,11 +1529,13 @@ SET search_path = public
 AS $$
 DECLARE
   _ids uuid[];
+  _step record;
 BEGIN
   _ids := ARRAY(
     SELECT DISTINCT x
       FROM unnest(coalesce(_member_ids, '{}'::uuid[])) AS x
      WHERE x IS NOT NULL
+     ORDER BY x
   );
 
   IF cardinality(_ids) > 1000 THEN
@@ -1551,19 +1556,38 @@ BEGIN
       HINT    = 'app_error';
   END IF;
 
-  DELETE FROM public.cell_report_participants p
-   WHERE p.report_id = _report_id
-     AND NOT (p.member_id = ANY (_ids));
-
-  -- ON CONFLICT sem alvo (ver spec, "Participantes do relatório").
-  INSERT INTO public.cell_report_participants (report_id, member_id)
-  SELECT _report_id, x
-    FROM unnest(_ids) AS x
-   WHERE NOT EXISTS (
-     SELECT 1 FROM public.cell_report_participants p
-      WHERE p.report_id = _report_id AND p.member_id = x
-   )
-  ON CONFLICT DO NOTHING;
+  FOR _step IN
+    SELECT d.member_id, false AS is_insert
+      FROM public.cell_report_participants d
+     WHERE d.report_id = _report_id
+       AND NOT (d.member_id = ANY (_ids))
+    UNION ALL
+    SELECT x, true
+      FROM unnest(_ids) AS x
+     WHERE NOT EXISTS (
+       SELECT 1 FROM public.cell_report_participants p
+        WHERE p.report_id = _report_id AND p.member_id = x
+     )
+    ORDER BY 1
+  LOOP
+    IF _step.is_insert THEN
+      -- ON CONFLICT sem alvo (ver spec, "Participantes do relatório").
+      INSERT INTO public.cell_report_participants (report_id, member_id)
+      VALUES (_report_id, _step.member_id)
+      ON CONFLICT DO NOTHING;
+    ELSE
+      DELETE FROM public.cell_report_participants p
+       WHERE p.report_id = _report_id
+         AND p.member_id = _step.member_id;
+      -- A linha continua visível e não foi apagada: falta a política de DELETE.
+      IF NOT FOUND AND EXISTS (
+        SELECT 1 FROM public.cell_report_participants p
+         WHERE p.report_id = _report_id AND p.member_id = _step.member_id
+      ) THEN
+        RAISE EXCEPTION 'Você não tem permissão para esta ação.' USING ERRCODE = '42501';
+      END IF;
+    END IF;
+  END LOOP;
 END;
 $$;
 
