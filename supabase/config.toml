@@ -10,3 +10,16 @@ verify_jwt = false
 # só com a chave pública (que não é um JWT). Será substituída no passo E1.04.
 [functions.get-user-email]
 verify_jwt = false
+
+# Login por e-mail, celular ou CPF (E1.04). A tela chama a função antes do
+# login, só com a chave pública (que não é um JWT).
+[functions.sign-in]
+verify_jwt = false
+
+# Só para a stack local (E1.04, DT-13). A configuração do Auth de produção é
+# feita pela Management API, no roteiro de implantação, e conferida pelo
+# "Deploy: banco". Nunca use `supabase config push`: este arquivo não tem as
+# demais opções de produção e as sobrescreveria.
+# Limite de /verify por IP: alto aqui para os testes locais de login em rajada.
+[auth.rate_limit]
+token_verifications = 1000
