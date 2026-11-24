@@ -244,6 +244,54 @@ export const CELL_REPORT_RESTORE_TEXTS = {
   seeCellReports: "Ver relatórios da célula",
 } as const;
 
+/** Os dados que combinaram com um cadastro excluído (RN-18), como entram nas frases: "com este celular e este CPF". */
+const MATCHED_FIELD_PHRASES = { email: "este e-mail", mobile: "este celular", cpf: "este CPF" } as const;
+
+/**
+ * Cadastro de membro novo com o e-mail, o celular ou o CPF de um membro
+ * excluído (T9, RN-18). `fields` é a frase dos dados que combinaram, montada
+ * com `fieldPhrases` ("este e-mail", "este celular e este CPF").
+ */
+export const DELETED_MATCHES_TEXTS = {
+  fieldPhrases: MATCHED_FIELD_PHRASES,
+  /** Não está no spec: a correspondência que não disse qual dado combinou. */
+  anyField: "estes dados",
+  // Administrador (os cadastros que ele veria na lista Excluídos, DA-8).
+  adminTitle: (count: number) =>
+    count === 1 ? "Há um cadastro excluído com estes dados" : `Há ${count} cadastros excluídos com estes dados`,
+  /**
+   * "Já existe um cadastro excluído com este e-mail: Bruno, excluído em 10/11/2026.".
+   * Derivados: mais de um dado do mesmo cadastro ("com este e-mail e este CPF")
+   * e a correspondência sem data ("…: Bruno.").
+   */
+  adminMatch: (fields: string, name: string, date: string | null) =>
+    date
+      ? `Já existe um cadastro excluído com ${fields}: ${name}, excluído em ${date}.`
+      : `Já existe um cadastro excluído com ${fields}: ${name}.`,
+  restore: (name: string) => `Restaurar ${name}`,
+  explanation: "Ao restaurar, o cadastro volta como estava e abre para você conferir. O que você digitou aqui não é gravado.",
+  accountEmailHint: "Para cadastrar outra pessoa, volte e use outro e-mail.",
+  // Quem não é administrador, e o administrador para os cadastros que ele não vê (DA-8).
+  /**
+   * "Há um cadastro excluído com este celular" (CPF; "com este celular e este
+   * CPF") e, com cadastros diferentes, "Há cadastros excluídos com este celular
+   * e este CPF". Derivados: os com o e-mail sem conta ("com este e-mail") e o
+   * plural com um dado só ("Há cadastros excluídos com este celular").
+   */
+  othersTitle: (fields: string, several: boolean) =>
+    several ? `Há cadastros excluídos com ${fields}` : `Há um cadastro excluído com ${fields}`,
+  othersText:
+    "Se for a mesma pessoa, peça a um administrador para restaurá-lo. Se for outra pessoa, você pode cadastrar mesmo assim.",
+  /** E-mail da conta de um excluído, para quem não o vê: erro embaixo do campo E-mail, sem diálogo (UXD-9). */
+  accountEmailError: "Este e-mail pertence a um cadastro excluído. Peça a um administrador para restaurá-lo ou use outro e-mail.",
+  registerAnyway: "Cadastrar mesmo assim",
+  /** O "Salvando…" da tabela Estados, no botão "Cadastrar mesmo assim". */
+  registering: "Salvando…",
+  backToForm: "Voltar ao formulário",
+  /** O `Alert` do formulário depois de restaurar (UX-32). */
+  restoredFromForm: (name: string) => `Cadastro de ${name} restaurado. Confira os dados e, se precisar, altere e salve.`,
+} as const;
+
 /** Listas de excluídos (T4, P7). */
 export const DELETED_LIST_TEXTS = {
   subtitle: "Restaure o que foi excluído por engano. Os excluídos mais recentes aparecem primeiro.",

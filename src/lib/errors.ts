@@ -111,3 +111,20 @@ export function isNetworkError(error: unknown): boolean {
 export function retryOnceOnNetworkError(failureCount: number, error: unknown): boolean {
   return failureCount < 1 && isNetworkError(error);
 }
+
+/**
+ * O corpo JSON da resposta de erro de uma Edge Function. O supabase-js guarda
+ * a `Response` em `error.context` (`FunctionsHttpError`). `null` se não houver
+ * resposta (queda de conexão) ou se o corpo não for JSON.
+ */
+export async function readFunctionErrorBody(error: unknown): Promise<unknown> {
+  if (!(error instanceof Error) || !("context" in error)) return null;
+  const { context } = error;
+  if (!(context instanceof Response)) return null;
+  try {
+    const body: unknown = await context.json();
+    return body;
+  } catch {
+    return null;
+  }
+}

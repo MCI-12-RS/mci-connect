@@ -5,6 +5,7 @@ import {
   isNetworkError,
   isPermissionDenied,
   parseAppError,
+  readFunctionErrorBody,
   retryOnceOnNetworkError,
   retryUnlessPermissionDenied,
   toAppError,
@@ -150,5 +151,22 @@ describe("retryOnceOnNetworkError", () => {
     expect(retryOnceOnNetworkError(0, otherError)).toBe(false);
     expect(retryOnceOnNetworkError(0, { code: "XX000", message: "falhou" })).toBe(false);
     expect(retryOnceOnNetworkError(0, { message: "<html>502 Bad Gateway</html>" })).toBe(false);
+  });
+});
+
+describe("readFunctionErrorBody (corpo do erro de uma Edge Function)", () => {
+  /** O erro do supabase-js: um `Error` com a `Response` em `context`. */
+  const functionError = (context: unknown) => Object.assign(new Error("Edge Function returned a non-2xx status code"), { context });
+
+  it("lê o JSON da resposta", async () => {
+    const response = new Response(JSON.stringify({ error: "Falhou", code: "x" }), { status: 409 });
+    await expect(readFunctionErrorBody(functionError(response))).resolves.toEqual({ error: "Falhou", code: "x" });
+  });
+
+  it("null sem resposta, com corpo que não é JSON ou com outro erro", async () => {
+    await expect(readFunctionErrorBody(functionError(new Response("<html>", { status: 500 })))).resolves.toBeNull();
+    await expect(readFunctionErrorBody(functionError(undefined))).resolves.toBeNull();
+    await expect(readFunctionErrorBody(new Error("x"))).resolves.toBeNull();
+    await expect(readFunctionErrorBody({ context: "x" })).resolves.toBeNull();
   });
 });
