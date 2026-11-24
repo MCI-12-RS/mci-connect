@@ -75,6 +75,9 @@ abstract class FakeBuilder implements PromiseLike<FakeResult> {
   range(...args: unknown[]): this {
     return this.record("range", args);
   }
+  limit(...args: unknown[]): this {
+    return this.record("limit", args);
+  }
   maybeSingle(...args: unknown[]): this {
     return this.record("maybeSingle", args);
   }
