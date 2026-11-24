@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,14 +10,19 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Key } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 import { toMemberWritePayload, type MemberRow } from "@/lib/members/fields";
+import { DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 type Member = MemberRow;
 type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
+
+/** "gone": a edição não voltou com a linha, porque o cadastro foi excluído no meio tempo (E2.01, DT-19). */
+type SaveResult = "saved" | "gone";
 
 const FAKE_EMAIL_DOMAIN = "@mci12fakemail.com";
 
@@ -190,6 +195,13 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   const [form, setForm] = useState<MemberInsert>(() => (member ? { ...member } : EMPTY_FORM));
 
   const [password, setPassword] = useState("");
+  // O cadastro foi excluído (ou saiu do escopo) enquanto era editado.
+  const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
+  const deletedAlertRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (deletedWhileEditing) deletedAlertRef.current?.focus();
+  }, [deletedWhileEditing]);
 
   // Auto-select default role for new members
   useEffect(() => {
@@ -199,7 +211,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
   }, [isEditing, defaultRoleId, form.role_id]);
 
   const mutation = useMutation({
-    mutationFn: async (data: MemberInsert) => {
+    mutationFn: async (data: MemberInsert): Promise<SaveResult> => {
       // E-mail em branco: na edição, mantém o atual (o fictício, se for o caso);
       // no cadastro, gera um fictício, porque o Auth exige e-mail.
       let email: string | undefined = data.email?.trim() || undefined;
@@ -244,15 +256,20 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
           throw new Error(detail?.error ?? error.message);
         }
         if (result.error) throw new Error(result.error);
-        return result;
+        return "saved";
       }
 
-      if (isEditing && member) {
-        const { error } = await supabase.from("members").update(payload).eq("id", member.id);
-        if (error) throw error;
-      }
+      // Só o id de volta: pedir coluna sensível no RETURNING dá 42501 (E1.08, PR 5).
+      // Sem linha, o cadastro não existe mais ou foi excluído (DT-19).
+      const { data: saved, error } = await supabase.from("members").update(payload).eq("id", member.id).select("id");
+      if (error) throw error;
+      return saved?.length ? "saved" : "gone";
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result === "gone") {
+        setDeletedWhileEditing(true);
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["members"] });
       toast({ title: isEditing ? "Membro atualizado com sucesso" : "Membro criado com sucesso" });
       onClose();
@@ -304,8 +321,26 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
 
   const isFakeEmail = form.email?.endsWith(FAKE_EMAIL_DOMAIN);
 
+  /** "Fechar" do aviso de cadastro excluído: volta para a lista, recarregada. */
+  const closeDeleted = () => {
+    queryClient.invalidateQueries({ queryKey: ["members"] });
+    onClose();
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {deletedWhileEditing && (
+        <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="space-y-3">
+            <p>{MEMBER_DELETION_TEXTS.deletedWhileEditing}</p>
+            <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeDeleted}>
+              {DELETION_TEXTS.close}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Personal Data */}
       <div>
         <h3 className="text-lg font-semibold mb-3">Dados Pessoais</h3>
@@ -538,7 +573,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
         <Button type="button" variant="outline" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={mutation.isPending}>
+        <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
           {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
         </Button>
       </div>

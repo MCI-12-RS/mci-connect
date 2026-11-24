@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
+import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
+import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,14 +11,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
-import type { MemberRow } from "@/lib/members/fields";
+import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
+import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 
 type Member = MemberRow;
 
@@ -35,9 +34,8 @@ const Members = () => {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [deletingMember, setDeletingMember] = useState<MemberDeletionTarget | null>(null);
   const { hasPermission, user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
   const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
@@ -48,20 +46,6 @@ const Members = () => {
 
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("members").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["members"] });
-      toast({ title: "Membro excluído com sucesso" });
-    },
-    onError: () => {
-      toast({ variant: "destructive", title: "Erro ao excluir membro" });
-    },
-  });
 
   const handleEdit = (member: Member) => {
     setEditingMember(member);
@@ -82,27 +66,17 @@ const Members = () => {
   const canDeleteAny = hasPermission("delete_member");
   const showActions = canEditAny || canDeleteAny;
 
-  const DeleteButton = ({ member }: { member: Member }) => (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Trash2 className="w-4 h-4 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tem certeza que deseja excluir {member.name}? Esta ação não pode ser desfeita.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => deleteMutation.mutate(member.id)}>Excluir</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+  const memberName = (m: Member) => m.name || UNNAMED_MEMBER_LABEL;
+  const isSelf = (m: Member) => !!user && m.auth_user_id === user.id;
+  const canEdit = (m: Member) => hasPermission("edit_member") || (hasPermission("edit_own_data") && isSelf(m));
+  // Ninguém exclui o próprio cadastro (RN-03); o banco também recusa.
+  const canDelete = (m: Member) => hasPermission("delete_member") && !isSelf(m);
+
+  const startDeletion = (m: Member) =>
+    setDeletingMember({ id: m.id, name: memberName(m), isActive: m.is_active === true });
+
+  const rowActions = (m: Member): RowAction[] =>
+    canDelete(m) ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: () => startDeletion(m) }] : [];
 
   const LevelBadge = ({ m }: { m: Member }) => {
     if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
@@ -133,16 +107,14 @@ const Members = () => {
                   {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
-              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id) || hasPermission("delete_member")) && (
-                <div className="flex items-center shrink-0">
-                  {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleEdit(m)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  )}
-                  {hasPermission("delete_member") && <DeleteButton member={m} />}
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {canEdit(m) && (
+                  <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Editar ${memberName(m)}`} onClick={() => handleEdit(m)}>
+                    <Pencil className="w-4 h-4" aria-hidden="true" />
+                  </Button>
+                )}
+                <RowActionsMenu label={MEMBER_DELETION_TEXTS.actionsLabel(memberName(m))} actions={rowActions(m)} />
+              </div>
             </div>
 
             {/* Info row */}
@@ -271,12 +243,21 @@ const Members = () => {
                         {showActions && (
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {(hasPermission("edit_member") || (hasPermission("edit_own_data") && m.auth_user_id === user?.id)) && (
-                                <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}>
-                                  <Pencil className="w-4 h-4" />
+                              {canEdit(m) && (
+                                <Button variant="ghost" size="icon" aria-label={`Editar ${memberName(m)}`} onClick={() => handleEdit(m)}>
+                                  <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </Button>
                               )}
-                              {hasPermission("delete_member") && <DeleteButton member={m} />}
+                              {canDelete(m) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={MEMBER_DELETION_TEXTS.deleteLabel(memberName(m))}
+                                  onClick={() => startDeletion(m)}
+                                >
+                                  <Trash2 className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}
@@ -308,6 +289,10 @@ const Members = () => {
             <MemberForm member={editingMember} onClose={handleClose} />
           </DialogContent>
         </Dialog>
+
+        {deletingMember && (
+          <MemberDeletionFlow key={deletingMember.id} member={deletingMember} onClose={() => setDeletingMember(null)} />
+        )}
       </div>
     </AppLayout>
   );
