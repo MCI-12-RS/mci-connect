@@ -79,6 +79,10 @@ const CellReports = () => {
   // só aparece quando a página decide.
   const reportToRead = permissionsLoaded && canViewReport ? reportParam : null;
   const reportQuery = useCellReport(reportToRead);
+  // O relatório para o qual o painel está aberto: ao ler de novo ("Tentar de
+  // novo"), a consulta volta a carregar sem o erro, e num link direto nada
+  // mais manteria o painel aberto (QA-E201-PR4-1).
+  const [openReportId, setOpenReportId] = useState<string | null>(null);
   const sheetState = reportSheetState({
     reportId: reportParam,
     permissionsLoaded,
@@ -86,7 +90,10 @@ const CellReports = () => {
     detail: reportQuery.data,
     knownCellDeleted: reports.some((r) => r.id === reportParam && r.cell_deleted === true),
     failed: reportQuery.isError,
+    alreadyOpen: reportParam !== null && reportParam === openReportId,
   });
+  const nextOpenReportId = sheetState === "open" ? reportParam : null;
+  if (nextOpenReportId !== openReportId) setOpenReportId(nextOpenReportId);
   useEffect(() => {
     if (sheetState === "dismiss") setReportParam(null);
   }, [sheetState, setReportParam]);

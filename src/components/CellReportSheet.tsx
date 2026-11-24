@@ -58,7 +58,7 @@ const Loading = () => (
   </div>
 );
 
-const LoadError = ({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) => (
+const LoadError = ({ onRetry }: { onRetry: () => void }) => (
   <>
     <SheetHeader className="pr-12 text-left">
       <SheetTitle>{TEXTS.title}</SheetTitle>
@@ -67,7 +67,7 @@ const LoadError = ({ retrying, onRetry }: { retrying: boolean; onRetry: () => vo
       <AlertCircle className="h-4 w-4" aria-hidden="true" />
       <AlertDescription className="space-y-3 text-foreground">
         <p>{TEXTS.loadFailed}</p>
-        <Button type="button" variant="outline" className="h-11 md:h-9" disabled={retrying} onClick={onRetry}>
+        <Button type="button" variant="outline" className="h-11 md:h-9" onClick={onRetry}>
           {TEXTS.tryAgain}
         </Button>
       </AlertDescription>
@@ -173,6 +173,10 @@ const CellReportSheet = ({ reportId, open = reportId !== null, onClose, onCloseA
   if (reportId !== null && reportId !== shownId) setShownId(reportId);
   const query = useCellReport(shownId, { enabled: reportId !== null });
   const contentRef = useRef<HTMLDivElement>(null);
+  // O erro em que a pessoa tocou "Tentar de novo". O carregando aparece no
+  // toque: a consulta só avisa depois que voltou a carregar, e até lá o erro
+  // antigo e o botão continuariam na tela. Uma nova falha é outro erro.
+  const [retriedError, setRetriedError] = useState<unknown>(null);
 
   let body: ReactNode;
   // Só o relatório carregado e o "não existe" têm descrição (o Radix avisa se ela faltar).
@@ -181,8 +185,14 @@ const CellReportSheet = ({ reportId, open = reportId !== null, onClose, onCloseA
     body = <ReportDetails view={toReportSheetView(query.data)} canSeeDeletedCells={canSeeDeletedCells} />;
   } else if (query.data === null) {
     body = <NotFound />;
-  } else if (query.isError) {
-    body = <LoadError retrying={query.isFetching} onRetry={() => void query.refetch()} />;
+  } else if (query.isError && query.error !== retriedError) {
+    // O "Tentar de novo" sai da tela: o foco passa para o painel antes, para não cair no `body`.
+    const retry = () => {
+      setRetriedError(query.error);
+      contentRef.current?.focus();
+      void query.refetch();
+    };
+    body = <LoadError onRetry={retry} />;
     hasDescription = false;
   } else {
     body = <Loading />;

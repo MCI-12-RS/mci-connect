@@ -36,6 +36,7 @@ describe("reportSheetState: o ?report=<id> da URL (Navegação e rotas, PO-UX-3)
     detail: undefined,
     knownCellDeleted: false,
     failed: false,
+    alreadyOpen: false,
     ...overrides,
   });
 
@@ -64,6 +65,15 @@ describe("reportSheetState: o ?report=<id> da URL (Navegação e rotas, PO-UX-3)
   it("link direto ou recarregar: espera a leitura fechado, sem piscar; se ela falhar, abre com 'Tentar de novo'", () => {
     expect(reportSheetState(input({}))).toBe("closed");
     expect(reportSheetState(input({ failed: true }))).toBe("open");
+  });
+
+  it("já aberto para o relatório (QA-E201-PR4-1): continua aberto enquanto lê de novo, até o resultado", () => {
+    // "Tentar de novo" num link direto: a leitura volta a carregar, sem o erro.
+    expect(reportSheetState(input({ alreadyOpen: true }))).toBe("open");
+    // O resultado ainda decide: relatório de célula não excluída sai da URL.
+    expect(reportSheetState(input({ alreadyOpen: true, detail: detail({ cell_deleted: false }) }))).toBe("dismiss");
+    expect(reportSheetState(input({ alreadyOpen: true, canView: false }))).toBe("dismiss");
+    expect(reportSheetState(input({ alreadyOpen: true, reportId: null }))).toBe("closed");
   });
 
   it("relatório de célula não excluída: ignorado e sai da URL (a consulta é só desse relatório neste passo)", () => {

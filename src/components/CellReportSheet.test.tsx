@@ -207,9 +207,34 @@ describe("CellReportSheet: relatório de célula excluída", () => {
     expect(alert).toHaveTextContent("Não foi possível carregar o relatório.");
     expect(alert).not.toHaveTextContent("falhou");
 
-    respondWith({ data: report() }, { data: [ANA] });
+    let release: () => void = () => {};
+    const until = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    respondWith({ data: report(), until }, { data: [ANA], until });
     fireEvent.click(within(alert).getByRole("button", { name: "Tentar de novo" }));
+    // O carregando aparece no toque, e o botão sai da tela: o foco fica no painel (QA-E201-PR4-1).
+    expect(dialog).toHaveTextContent("Carregando o relatório…");
+    expect(within(dialog).queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
+    expect(dialog).toHaveFocus();
+
+    release();
     expect(await screen.findByRole("dialog", { name: "Relatório de 19/11/2026" })).toBeInTheDocument();
+    expect(fakeQueries()).toHaveLength(4);
+  });
+
+  it("Erro de novo: 'Tentar de novo' que falha outra vez volta a mostrar o erro e o botão", async () => {
+    respondWith({ data: report() }, { error: { code: "XX000", message: "falhou" } });
+    renderSheet();
+    const dialog = await screen.findByRole("dialog", { name: "Relatório" });
+    const retry = await within(dialog).findByRole("button", { name: "Tentar de novo" });
+
+    respondWith({ data: report() }, { error: { code: "XX000", message: "falhou de novo" } });
+    fireEvent.click(retry);
+    expect(dialog).toHaveTextContent("Carregando o relatório…");
+
+    expect(await within(dialog).findByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Não foi possível carregar o relatório.");
     expect(fakeQueries()).toHaveLength(4);
   });
 

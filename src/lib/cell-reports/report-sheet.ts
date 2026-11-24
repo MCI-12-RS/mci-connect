@@ -43,6 +43,11 @@ export interface ReportSheetInput {
   knownCellDeleted: boolean;
   /** A leitura do relatório falhou. */
   failed: boolean;
+  /**
+   * O painel já está aberto para este relatório. Ele continua aberto enquanto
+   * lê de novo: no "Tentar de novo", a leitura volta a carregar, sem o erro.
+   */
+  alreadyOpen: boolean;
 }
 
 /**
@@ -56,6 +61,9 @@ export interface ReportSheetInput {
  * seguida faria o painel piscar e levaria o foco para a busca. Se a leitura
  * falhar, ele abre com "Tentar de novo".
  *
+ * Uma vez aberto para um relatório, o painel só fecha pela pessoa ou quando
+ * o parâmetro sai da URL (QA-E201-PR4-1): ler de novo não o fecha.
+ *
  * O relatório que não vem (excluído no meio tempo, fora do escopo ou um id
  * que não existe) abre o painel com "Este relatório não existe ou já foi
  * excluído.": a tela não sabe dizer de qual caso se trata.
@@ -67,11 +75,12 @@ export function reportSheetState({
   detail,
   knownCellDeleted,
   failed,
+  alreadyOpen,
 }: ReportSheetInput): ReportSheetState {
   if (!reportId || !permissionsLoaded) return "closed";
   if (!canView) return "dismiss";
   if (detail) return detail.report.cell_deleted === true ? "open" : "dismiss";
-  if (detail === null || knownCellDeleted || failed) return "open";
+  if (detail === null || knownCellDeleted || failed || alreadyOpen) return "open";
   return "closed";
 }
 
