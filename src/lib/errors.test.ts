@@ -5,6 +5,7 @@ import {
   isNetworkError,
   isPermissionDenied,
   parseAppError,
+  retryOnceOnNetworkError,
   retryUnlessPermissionDenied,
   toAppError,
 } from "./errors";
@@ -134,5 +135,20 @@ describe("isNetworkError", () => {
     expect(isNetworkError(new TypeError("Cannot read properties of undefined"))).toBe(false);
     expect(isNetworkError(null)).toBe(false);
     expect(isNetworkError("TypeError: Failed to fetch")).toBe(false);
+  });
+});
+
+describe("retryOnceOnNetworkError", () => {
+  const offline = { code: "", message: "TypeError: Failed to fetch", details: "", hint: "" };
+
+  it("Dada uma queda de conexão, então tenta de novo uma vez só", () => {
+    expect([0, 1, 2].map((failures) => retryOnceOnNetworkError(failures, offline))).toEqual([true, false, false]);
+  });
+
+  it("Dada uma resposta de erro do servidor, então não tenta de novo", () => {
+    expect(retryOnceOnNetworkError(0, denied)).toBe(false);
+    expect(retryOnceOnNetworkError(0, otherError)).toBe(false);
+    expect(retryOnceOnNetworkError(0, { code: "XX000", message: "falhou" })).toBe(false);
+    expect(retryOnceOnNetworkError(0, { message: "<html>502 Bad Gateway</html>" })).toBe(false);
   });
 });
