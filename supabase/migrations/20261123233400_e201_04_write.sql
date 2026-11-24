@@ -27,16 +27,21 @@
 --   1. relatório (cell_reports);
 --   2. célula (cells);
 --   3. membros: o alvo, o cônjuge e quem exclui, em ordem de id
---      (_del_lock_members); nos triggers, as pessoas escolhidas, em ordem de id;
+--      (_del_lock_members; quem exclui com FOR KEY SHARE); nos triggers, as
+--      pessoas escolhidas, em ordem de id;
 --   4. trava consultiva (célula, semana) (_del_lock_cell_week);
 --   5. linhas atualizadas pelos triggers: ancestrais (totais), auth.users e
 --      sessões, suspensão e eventos.
--- As RPCs de exclusão usam FOR UPDATE; os triggers usam FOR KEY SHARE na linha
--- referenciada. Os dois conflitam: "escolher" e "excluir" a mesma pessoa ou
--- célula nunca passam juntos (RN-20, DT-08). Em READ COMMITTED, cada comando
--- PL/pgSQL tira um snapshot novo, então as checagens feitas depois da trava
--- enxergam o que a outra transação acabou de gravar. Os índices únicos ficam
--- como última garantia.
+-- As RPCs de exclusão usam FOR UPDATE no registro excluído (na de membro,
+-- também no cônjuge); os triggers usam FOR KEY SHARE na linha referenciada. Os
+-- dois conflitam: "escolher" e "excluir" a mesma pessoa ou célula nunca passam
+-- juntos (RN-20, DT-08). Quem exclui um membro leva FOR KEY SHARE: conflita com
+-- o FOR UPDATE que outra exclusão pega nele quando ele é o alvo (DT-21), mas
+-- não com os totais que outra exclusão grava nos ancestrais, o que evita o
+-- ciclo de espera quando quem exclui é ancestral do alvo. Em READ COMMITTED,
+-- cada comando PL/pgSQL tira um snapshot novo, então as checagens feitas depois
+-- da trava enxergam o que a outra transação acabou de gravar. Os índices únicos
+-- ficam como última garantia.
 --
 -- Pode rodar de novo sem erro: só CREATE OR REPLACE, DROP TRIGGER IF EXISTS
 -- antes de cada CREATE TRIGGER, e grants.
@@ -61,10 +66,16 @@ BEGIN
 END;
 $$;
 
--- Trava com FOR UPDATE, em ordem de id, o alvo, o cônjuge atual dele e quem
--- exclui (DT-09, DT-21). Relê o cônjuge depois da trava e repete se ele mudou
--- na espera (no máximo 5 vezes; depois disso, o UPDATE do cônjuge pelo trigger
--- de cônjuge trava a linha de qualquer forma).
+-- Trava, em ordem de id, o alvo e o cônjuge atual dele com FOR UPDATE, e quem
+-- exclui com FOR KEY SHARE (DT-09, DT-21). Para quem exclui, FOR KEY SHARE
+-- basta: conflita com o FOR UPDATE de outra exclusão que o tenha como alvo
+-- (RN-03), mas não com os totais que outra exclusão grava nos ancestrais (com
+-- FOR UPDATE, duas exclusões do mesmo alvo esperavam uma pela outra quando
+-- quem exclui era ancestral dele). Um id com dois papéis (quem exclui é o
+-- próprio alvo ou o cônjuge dele) leva o modo mais forte. Relê o cônjuge
+-- depois da trava e repete se ele mudou na espera (no máximo 5 vezes; depois
+-- disso, o UPDATE do cônjuge pelo trigger de cônjuge trava a linha de qualquer
+-- forma).
 CREATE OR REPLACE FUNCTION public._del_lock_members(_target uuid, _actor uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -75,19 +86,25 @@ DECLARE
   _spouse uuid;
   _locked_spouse uuid;
   _id uuid;
+  _exclusive boolean;
   _attempt int := 0;
 BEGIN
   LOOP
     _attempt := _attempt + 1;
     SELECT m.spouse_id INTO _spouse FROM public.members m WHERE m.id = _target;
 
-    FOR _id IN
-      SELECT DISTINCT x
-        FROM unnest(ARRAY[_target, _spouse, _actor]) AS x
-       WHERE x IS NOT NULL
-       ORDER BY x
+    FOR _id, _exclusive IN
+      SELECT x.id, bool_or(x.exclusive)
+        FROM (VALUES (_target, true), (_spouse, true), (_actor, false)) AS x(id, exclusive)
+       WHERE x.id IS NOT NULL
+       GROUP BY x.id
+       ORDER BY x.id
     LOOP
-      PERFORM 1 FROM public.members m WHERE m.id = _id FOR UPDATE;
+      IF _exclusive THEN
+        PERFORM 1 FROM public.members m WHERE m.id = _id FOR UPDATE;
+      ELSE
+        PERFORM 1 FROM public.members m WHERE m.id = _id FOR KEY SHARE;
+      END IF;
     END LOOP;
 
     SELECT m.spouse_id INTO _locked_spouse FROM public.members m WHERE m.id = _target;
