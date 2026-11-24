@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { BlockedActionDialog } from "@/components/BlockedActionDialog";
+import { ActionsCell } from "@/components/ActionsColumn";
 import { DeletedListBody, DeletedListPage, RestoreButton } from "@/components/DeletedListLayout";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -12,8 +13,8 @@ import { useReturnFocus } from "@/hooks/use-return-focus";
 import { CELL_ROLE_LABELS } from "@/lib/cells/roles";
 import {
   cellDayTime,
-  cellPeople,
   cellScheduleLine,
+  deletedCellHelpers,
   deletionInfo,
   personName,
   withDeletedMark,
@@ -24,11 +25,14 @@ import { CELL_RESTORE_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
 
 const TEXTS = DELETED_LIST_TEXTS.cells;
 
-/** O timóteo e o anfitrião excluídos, com o papel: "Anfitrião: Quintino Reis (cadastro excluído)". */
+/**
+ * O timóteo e o anfitrião excluídos, com o papel: "Anfitrião: Quintino Reis
+ * (cadastro excluído)". Quem é o próprio líder não se repete.
+ */
 function deletedHelpers(cell: DeletedCellRow): string[] {
-  return cellPeople(cell)
-    .filter((person) => person.role !== "leader" && person.deleted)
-    .map((person) => DELETED_LIST_TEXTS.personLine(CELL_ROLE_LABELS[person.role], withDeletedMark(person.name, true)));
+  return deletedCellHelpers(cell).map((person) =>
+    DELETED_LIST_TEXTS.personLine(CELL_ROLE_LABELS[person.role], withDeletedMark(person.name, true)),
+  );
 }
 
 /** A lista em si: só é montada para quem tem `manage_roles` (UX-17). */
@@ -61,6 +65,7 @@ const CellsDeletedList = () => {
   const renderRestore = (cell: DeletedCellRow) => (
     <RestoreButton
       label={CELL_RESTORE_TEXTS.restoreLabel(leaderOf(cell))}
+      restoringLabel={CELL_RESTORE_TEXTS.restoringLabel(leaderOf(cell))}
       restoring={restore.isRestoring(cell.id)}
       onRestore={(button) => restore.restore(cell, button)}
     />
@@ -111,7 +116,7 @@ const CellsDeletedList = () => {
         <TableCell className="text-sm">{cell.neighborhood || "—"}</TableCell>
         <TableCell className="text-sm whitespace-nowrap">{info.deletedAtShort}</TableCell>
         <TableCell className="text-sm">{info.deletedByShort}</TableCell>
-        <TableCell className="text-right">{renderRestore(cell)}</TableCell>
+        <ActionsCell>{renderRestore(cell)}</ActionsCell>
       </TableRow>
     );
   };
@@ -135,8 +140,8 @@ const CellsDeletedList = () => {
             <TableHead>{TEXTS.columns.schedule}</TableHead>
             <TableHead>{TEXTS.columns.type}</TableHead>
             <TableHead>{TEXTS.columns.neighborhood}</TableHead>
-            <TableHead>{TEXTS.columns.deletedAt}</TableHead>
-            <TableHead>{TEXTS.columns.deletedBy}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedAt}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedBy}</TableHead>
           </>
         }
         renderRow={renderRow}

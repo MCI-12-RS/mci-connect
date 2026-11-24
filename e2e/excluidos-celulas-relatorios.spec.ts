@@ -233,7 +233,7 @@ test("UX-16: abaixo de 768 px, cards de célula e de relatório com 'Célula de 
   await expect(reportCard).toContainText(`Relatório de ${reportDate(R_RACE)} · 18:00`);
   await expect(reportCard).toContainText("Tema: QA3 Exc Cel tema retrasado");
   await expect(reportCard).toContainText("Excluído em 20/11/2026 às 00:00");
-  button = reportCard.getByRole("button", { name: `Restaurar o relatório de ${reportDate(R_RACE)}` });
+  button = reportCard.getByRole("button", { name: `Restaurar o relatório de ${reportDate(R_RACE)} da célula de ${ZECA}` });
   await expect(button).toHaveText("Restaurar");
   expect((await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(43.5);
 
@@ -329,8 +329,8 @@ test("RN-17 e UX-23 (AD, 360 px): R desta semana, com S lançado depois, é recu
   await expect(card).toContainText("Já há outro relatório desta célula na mesma semana.");
 
   const requests = trackRestRequests(page);
-  await card.getByRole("button", { name: `Restaurar o relatório de ${date}` }).click();
-  const dialog = page.getByRole("alertdialog", { name: `Não é possível restaurar o relatório de ${date}` });
+  await card.getByRole("button", { name: `Restaurar o relatório de ${date} da célula de ${ZECA}` }).click();
+  const dialog = page.getByRole("alertdialog", { name: `Não é possível restaurar o relatório de ${date} da célula de ${ZECA}` });
   await expect(dialog).toContainText("Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.");
   const action = dialog.getByRole("button", { name: "Ver relatórios da célula" });
   await expect(action).toBeFocused();
@@ -361,8 +361,8 @@ test("RN-17 (AD): R e S de duas semanas atrás, com S lançado depois de a lista
      VALUES (${lit(S_RACE)}, ${lit(cell(4))}, public.week_start(public.sp_today()) - 13, '18:00', '${NAME} tema S retrasado', true);
      COMMIT;`,
   );
-  await page.getByRole("button", { name: `Restaurar o relatório de ${date}` }).click();
-  const dialog = page.getByRole("alertdialog", { name: `Não é possível restaurar o relatório de ${date}` });
+  await page.getByRole("button", { name: `Restaurar o relatório de ${date} da célula de ${ZECA}` }).click();
+  const dialog = page.getByRole("alertdialog", { name: `Não é possível restaurar o relatório de ${date} da célula de ${ZECA}` });
   await expect(dialog).toContainText("Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.");
   await expect(dialog.getByRole("button", { name: "Ver relatórios da célula" })).toBeFocused();
   expect(isDeleted("cell_reports", R_RACE)).toBe("true");
@@ -375,10 +375,10 @@ test("RN-17 (AD): R, de uma semana que já passou e sem outro relatório nela, v
   const date = reportDate(R_LAST);
   await login(page, env.admin);
   await openDeleted(page, "/cell-reports/deleted", ZECA);
-  await page.getByRole("button", { name: `Restaurar o relatório de ${date}` }).click();
+  await page.getByRole("button", { name: `Restaurar o relatório de ${date} da célula de ${ZECA}` }).click();
 
   await expect(toast(page, "Relatório restaurado.")).toBeVisible();
-  await expect(page.getByRole("button", { name: `Restaurar o relatório de ${date}` })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Restaurar o relatório de ${date} da célula de ${ZECA}` })).toHaveCount(0);
   expect(isDeleted("cell_reports", R_LAST)).toBe("false");
   await openList(page, "/cell-reports", ZECA);
   await expect(page.locator("main").getByText(date).first()).toBeVisible();
@@ -395,9 +395,12 @@ test("UX-21 (AD): só o botão do item fica 'Restaurando…' e indisponível; no
   // Página 2, com um item só: restaurado, a lista volta para a página 1.
   let release = await holdRpc(page, "restore_cell_report");
   const oldest = reportDate(pagReport(1));
-  const only = page.getByRole("button", { name: `Restaurar o relatório de ${oldest}` });
+  // Pela linha: enquanto restaura, o nome do botão vira "Restaurando…" (WCAG 2.5.3).
+  const only = page.locator("tbody tr").filter({ hasText: oldest }).getByRole("button");
+  await expect(only).toHaveAccessibleName(`Restaurar o relatório de ${oldest} da célula de ${PAULO}`);
   await only.click();
   await expect(only).toHaveText("Restaurando…");
+  await expect(only).toHaveAccessibleName(`Restaurando o relatório de ${oldest} da célula de ${PAULO}…`);
   await expect(only).toHaveAttribute("aria-disabled", "true");
   release();
   await expect(toast(page, "Relatório restaurado.")).toBeVisible();
@@ -410,9 +413,11 @@ test("UX-21 (AD): só o botão do item fica 'Restaurando…' e indisponível; no
   // Página 1: enquanto um restaura, os outros continuam livres.
   release = await holdRpc(page, "restore_cell_report");
   const newest = reportDate(pagReport(11));
-  const target = page.getByRole("button", { name: `Restaurar o relatório de ${newest}` });
+  const target = page.locator("tbody tr").filter({ hasText: newest }).getByRole("button");
+  await expect(target).toHaveAccessibleName(`Restaurar o relatório de ${newest} da célula de ${PAULO}`);
   await target.click();
   await expect(target).toHaveText("Restaurando…");
+  await expect(target).toHaveAccessibleName(`Restaurando o relatório de ${newest} da célula de ${PAULO}…`);
   await expect(target).toHaveAttribute("aria-disabled", "true");
   const others = page.locator("tbody tr").filter({ hasNotText: newest }).getByRole("button");
   await expect(others).toHaveCount(9);
@@ -421,7 +426,7 @@ test("UX-21 (AD): só o botão do item fica 'Restaurando…' e indisponível; no
     await expect(button).not.toHaveAttribute("aria-disabled");
   }
   release();
-  await expect(page.getByRole("button", { name: `Restaurar o relatório de ${newest}` })).toHaveCount(0);
+  await expect(page.locator("tbody tr").filter({ hasText: newest })).toHaveCount(0);
   await expect(page.locator("tbody tr")).toHaveCount(9);
   await expect(page.getByText("9 relatórios excluídos")).toBeVisible();
   await page.unroute("**/rest/v1/rpc/restore_cell_report");
@@ -488,7 +493,7 @@ test("UX-40 (320 px): nas listas de células e relatórios excluídos e nos bloq
   await openDeleted(page, "/cell-reports/deleted", NAME);
   await expect(page.locator("main li").first()).toBeVisible();
   await expectNoButtonOverflow(page, page.locator("main"), "relatórios excluídos");
-  await page.getByRole("button", { name: `Restaurar o relatório de ${reportDate(R_TAKEN)}` }).click();
+  await page.getByRole("button", { name: `Restaurar o relatório de ${reportDate(R_TAKEN)} da célula de ${ZECA}` }).click();
   dialog = page.getByRole("alertdialog");
   await expect(dialog.getByRole("button", { name: "Ver relatórios da célula" })).toBeVisible();
   await expectNoButtonOverflow(page, dialog, "bloqueio do relatório");

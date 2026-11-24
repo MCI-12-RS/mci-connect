@@ -32,9 +32,13 @@ export type DeletedMemberRow = Pick<
   | "deleted_by_name"
 >;
 
-/** Células excluídas: dia, horário, tipo, bairro e as pessoas da célula, com quem foi excluído (RN-17). */
+/**
+ * Células excluídas: dia, horário, tipo, bairro e as pessoas da célula, com
+ * quem foi excluído (RN-17). Os ids dizem quando o timóteo ou o anfitrião é o
+ * próprio líder.
+ */
 export const DELETED_CELL_SELECT =
-  "id, type, meeting_day, meeting_time, neighborhood, leader_name, leader_deleted, timothy_name, timothy_deleted, host_name, host_deleted, deleted_at, deleted_by_name";
+  "id, type, meeting_day, meeting_time, neighborhood, leader_id, leader_name, leader_deleted, timothy_id, timothy_name, timothy_deleted, host_id, host_name, host_deleted, deleted_at, deleted_by_name";
 
 export type DeletedCellRow = Pick<
   Views["cells_deleted_view"]["Row"],
@@ -43,10 +47,13 @@ export type DeletedCellRow = Pick<
   | "meeting_day"
   | "meeting_time"
   | "neighborhood"
+  | "leader_id"
   | "leader_name"
   | "leader_deleted"
+  | "timothy_id"
   | "timothy_name"
   | "timothy_deleted"
+  | "host_id"
   | "host_name"
   | "host_deleted"
   | "deleted_at"
@@ -118,22 +125,35 @@ export function personName(name: string | null | undefined): string {
 /** Uma pessoa da célula excluída, no papel dela. */
 export interface CellPerson {
   role: CellRole;
+  id: string | null;
   name: string;
   deleted: boolean;
 }
 
 /** Líder, timóteo e anfitrião da célula, nessa ordem (a da DA-5). Quem não está na célula fica de fora. */
 export function cellPeople(cell: DeletedCellRow): CellPerson[] {
-  const byRole: Readonly<Record<CellRole, { name: string | null; deleted: boolean | null }>> = {
-    leader: { name: cell.leader_name, deleted: cell.leader_deleted },
-    timothy: { name: cell.timothy_name, deleted: cell.timothy_deleted },
-    host: { name: cell.host_name, deleted: cell.host_deleted },
+  const byRole: Readonly<Record<CellRole, { id: string | null; name: string | null; deleted: boolean | null }>> = {
+    leader: { id: cell.leader_id, name: cell.leader_name, deleted: cell.leader_deleted },
+    timothy: { id: cell.timothy_id, name: cell.timothy_name, deleted: cell.timothy_deleted },
+    host: { id: cell.host_id, name: cell.host_name, deleted: cell.host_deleted },
   };
   return CELL_ROLES.filter((role) => byRole[role].name !== null || byRole[role].deleted === true).map((role) => ({
     role,
+    id: byRole[role].id,
     name: personName(byRole[role].name),
     deleted: byRole[role].deleted === true,
   }));
+}
+
+/**
+ * O timóteo e o anfitrião excluídos, que o card e a linha mostram com o papel
+ * (aviso antecipado, AQ-3). Quem é a mesma pessoa do líder fica de fora: o
+ * líder já aparece no título, com a marca "(cadastro excluído)".
+ */
+export function deletedCellHelpers(cell: DeletedCellRow): CellPerson[] {
+  return cellPeople(cell).filter(
+    (person) => person.role !== "leader" && person.deleted && (person.id === null || person.id !== cell.leader_id),
+  );
 }
 
 /** "Quarta · 20:00" (coluna "Dia / Hora"): o que estiver vazio fica de fora. */

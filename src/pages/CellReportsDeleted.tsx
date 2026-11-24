@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { BlockedActionDialog } from "@/components/BlockedActionDialog";
+import { ActionsCell } from "@/components/ActionsColumn";
 import { DeletedListBody, DeletedListPage, RestoreButton } from "@/components/DeletedListLayout";
 import { CellDeletedBadge, HeldStatusBadge } from "@/components/StatusBadges";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
@@ -50,12 +51,14 @@ const CellReportsDeletedList = () => {
   const searchRef = useRef<HTMLInputElement>(null);
   const returnFocus = useReturnFocus(searchRef, query.data);
 
+  const leaderOf = (report: DeletedCellReportRow) => personName(report.cell_leader_name);
+
   const restore = useOneTapRestore<DeletedCellReportRow>(
     {
       rowId: (report) => report.id,
       restore: (id) => restoreReport.mutateAsync(id),
       doneText: CELL_REPORT_RESTORE_TEXTS.restored,
-      refusedTitle: (report) => CELL_REPORT_RESTORE_TEXTS.refusedTitle(reportDateLabel(report)),
+      refusedTitle: (report) => CELL_REPORT_RESTORE_TEXTS.refusedTitle(reportDateLabel(report), leaderOf(report)),
       anticipatedBlock: cellReportRestoreBlock,
       blockFromRefusal: (report, refusal) => restoreBlockFromRefusal(refusal, report.cell_leader_name),
     },
@@ -64,7 +67,8 @@ const CellReportsDeletedList = () => {
 
   const renderRestore = (report: DeletedCellReportRow) => (
     <RestoreButton
-      label={CELL_REPORT_RESTORE_TEXTS.restoreLabel(reportDateLabel(report))}
+      label={CELL_REPORT_RESTORE_TEXTS.restoreLabel(reportDateLabel(report), leaderOf(report))}
+      restoringLabel={CELL_REPORT_RESTORE_TEXTS.restoringLabel(reportDateLabel(report), leaderOf(report))}
       restoring={restore.isRestoring(report.id)}
       onRestore={(button) => restore.restore(report, button)}
     />
@@ -75,7 +79,7 @@ const CellReportsDeletedList = () => {
     return (
       <>
         <p className="font-semibold text-sm break-words">
-          {DELETED_LIST_TEXTS.cells.itemTitle(personName(report.cell_leader_name))}
+          {DELETED_LIST_TEXTS.cells.itemTitle(leaderOf(report))}
         </p>
         {report.cell_deleted === true && <CellDeletedBadge />}
         <p className="text-xs text-muted-foreground">{reportTitleLine(report)}</p>
@@ -99,7 +103,7 @@ const CellReportsDeletedList = () => {
       <TableRow key={report.id} className={className}>
         <TableCell>
           <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium break-words">{personName(report.cell_leader_name)}</span>
+            <span className="text-sm font-medium break-words">{leaderOf(report)}</span>
             {report.cell_deleted === true && <CellDeletedBadge />}
             {report.week_taken === true && <WeekTakenNotice />}
           </div>
@@ -116,7 +120,7 @@ const CellReportsDeletedList = () => {
         <TableCell className="text-sm break-words">{report.theme || "—"}</TableCell>
         <TableCell className="text-sm whitespace-nowrap">{info.deletedAtShort}</TableCell>
         <TableCell className="text-sm">{info.deletedByShort}</TableCell>
-        <TableCell className="text-right">{renderRestore(report)}</TableCell>
+        <ActionsCell>{renderRestore(report)}</ActionsCell>
       </TableRow>
     );
   };
@@ -140,8 +144,8 @@ const CellReportsDeletedList = () => {
             <TableHead>{TEXTS.columns.dateTime}</TableHead>
             <TableHead>{TEXTS.columns.status}</TableHead>
             <TableHead>{TEXTS.columns.theme}</TableHead>
-            <TableHead>{TEXTS.columns.deletedAt}</TableHead>
-            <TableHead>{TEXTS.columns.deletedBy}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedAt}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedBy}</TableHead>
           </>
         }
         renderRow={renderRow}

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { ActionsCell } from "@/components/ActionsColumn";
 import { DeletedListBody, DeletedListPage, RestoreButton } from "@/components/DeletedListLayout";
 import RestoreMemberDialog from "@/components/RestoreMemberDialog";
 import { MemberStatusBadge } from "@/components/StatusBadges";
@@ -74,7 +75,7 @@ const MembersDeletedList = () => {
         </TableCell>
         <TableCell className="text-sm whitespace-nowrap">{info.deletedAtShort}</TableCell>
         <TableCell className="text-sm">{info.deletedByShort}</TableCell>
-        <TableCell className="text-right">{renderRestore(member)}</TableCell>
+        <ActionsCell>{renderRestore(member)}</ActionsCell>
       </TableRow>
     );
   };
@@ -94,8 +95,8 @@ const MembersDeletedList = () => {
             <TableHead>{TEXTS.columns.name}</TableHead>
             <TableHead>{TEXTS.columns.leader}</TableHead>
             <TableHead>{TEXTS.columns.status}</TableHead>
-            <TableHead>{TEXTS.columns.deletedAt}</TableHead>
-            <TableHead>{TEXTS.columns.deletedBy}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedAt}</TableHead>
+            <TableHead className="whitespace-nowrap">{TEXTS.columns.deletedBy}</TableHead>
           </>
         }
         renderRow={renderRow}

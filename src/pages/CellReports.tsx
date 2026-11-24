@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import CellReportForm from "@/components/CellReportForm";
 import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
@@ -245,7 +246,7 @@ const CellReports = () => {
                     <TableHead>Tema</TableHead>
                     <TableHead className="text-center">Presenças</TableHead>
                     <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="w-24">Ações</TableHead>}
+                    {showActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -288,7 +289,7 @@ const CellReports = () => {
                             ) : <span className="text-muted-foreground">—</span>}
                           </TableCell>
                           <TableCell>{renderHeldBadge(r)}</TableCell>
-                          {showActions && <TableCell>{renderDesktopActions(r)}</TableCell>}
+                          {showActions && <ActionsCell>{renderDesktopActions(r)}</ActionsCell>}
                         </TableRow>
                       );
                     })

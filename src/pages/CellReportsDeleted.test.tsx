@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
@@ -109,9 +109,9 @@ describe("Relatórios excluídos", () => {
 
   it("Semana ocupada: o bloqueio abre sem chamar o servidor, e 'Ver relatórios da célula' busca pelo líder (UX-23)", async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 19/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 19/11/2026 da célula de Carlos Lima" }));
 
-    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 19/11/2026" });
+    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 19/11/2026 da célula de Carlos Lima" });
     expect(dialog).toHaveTextContent("Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.");
     expect(fakeRpcs()).toHaveLength(0);
 
@@ -128,18 +128,36 @@ describe("Relatórios excluídos", () => {
         week_start: "2026-11-09",
       }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Yara Melo" }));
 
-    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 12/11/2026" });
+    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 12/11/2026 da célula de Yara Melo" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Ver relatórios da célula" }));
     expect(await screen.findByTestId("where")).toHaveTextContent("/cell-reports?q=Yara+Melo");
+  });
+
+  it("Restaurando: o nome do botão traz a data e o líder e acompanha o texto visível (Acessibilidade, WCAG 2.5.3)", async () => {
+    renderPage();
+    let finish: () => void = () => {};
+    respondToRpc("restore_cell_report", { until: new Promise<void>((resolve) => (finish = resolve)) });
+    respondWith({ data: [taken], count: 1 });
+
+    const button = await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Yara Melo" });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(button).toHaveTextContent("Restaurando…"));
+    expect(button).toHaveAccessibleName("Restaurando o relatório de 12/11/2026 da célula de Yara Melo…");
+    expect(screen.getByRole("button", { name: "Restaurar o relatório de 19/11/2026 da célula de Carlos Lima" })).toHaveTextContent(
+      "Restaurar",
+    );
+    await act(async () => finish());
+    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Relatório restaurado." }));
   });
 
   it("Sucesso: o toast do Negócio", async () => {
     renderPage();
     respondToRpc("restore_cell_report", {});
     respondWith({ data: [taken], count: 1 });
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Yara Melo" }));
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Relatório restaurado." }));
     expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["restore_cell_report", { _report_id: "r2" }]]);

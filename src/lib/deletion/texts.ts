@@ -151,6 +151,8 @@ export const CELL_DELETION_TEXTS = {
 /** Células: restauração (T6). */
 export const CELL_RESTORE_TEXTS = {
   restoreLabel: (leader: string) => `Restaurar a célula de ${leader}`,
+  /** Não está no spec: o nome do botão enquanto restaura, com o texto visível "Restaurando…" (WCAG 2.5.3). */
+  restoringLabel: (leader: string) => `Restaurando a célula de ${leader}…`,
   restored: "Célula restaurada.",
   notDeleted: "Esta célula não está excluída.",
   refusedTitle: (leader: string) => `Não é possível restaurar a célula de ${leader}`,
@@ -196,10 +198,14 @@ export const CELL_REPORT_DELETION_TEXTS = {
 
 /** Relatórios: restauração (T6). */
 export const CELL_REPORT_RESTORE_TEXTS = {
-  restoreLabel: (date: string) => `Restaurar o relatório de ${date}`,
+  // O spec diz "o relatório de {data}"; o líder entra pela mesma razão do
+  // `CELL_REPORT_DELETION_TEXTS`: só com a data, o rótulo se repetiria na lista.
+  restoreLabel: (date: string, leader: string) => `Restaurar o relatório de ${date} da célula de ${leader}`,
+  /** Não está no spec: o nome do botão enquanto restaura, com o texto visível "Restaurando…" (WCAG 2.5.3). */
+  restoringLabel: (date: string, leader: string) => `Restaurando o relatório de ${date} da célula de ${leader}…`,
   restored: "Relatório restaurado.",
   notDeleted: "Este relatório não está excluído.",
-  refusedTitle: (date: string) => `Não é possível restaurar o relatório de ${date}`,
+  refusedTitle: (date: string, leader: string) => `Não é possível restaurar o relatório de ${date} da célula de ${leader}`,
   weekTaken: "Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.",
   /** Ação do bloqueio: abre `/cell-reports?q={Líder}`. */
   seeCellReports: "Ver relatórios da célula",

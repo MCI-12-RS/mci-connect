@@ -1,6 +1,7 @@
 import { useState, type ReactNode, type RefObject } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlertCircle, ArchiveRestore, Search } from "lucide-react";
+import { ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import ListPagination from "@/components/ListPagination";
 import { UNAVAILABLE_WHILE_SAVING } from "@/components/ConfirmDeleteDialog";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListSearchState } from "@/hooks/use-list-search-params";
 import type { ListResult } from "@/lib/list-query";
@@ -124,9 +125,9 @@ interface DeletedListBodyProps<Row> {
   rowKey: (row: Row) => string;
   /** O card do celular: primeiro o que identifica o item, depois até 3 dados e o "Restaurar" (UX-16). */
   renderCard: (row: Row) => ReactNode;
-  /** As colunas da tabela (a partir de 768 px). */
+  /** As colunas da tabela (a partir de 768 px), sem a do "Restaurar", que o corpo põe no fim. */
   tableHead: ReactNode;
-  /** A linha da tabela (`<TableRow>`), com `className` para a troca de página. */
+  /** A linha da tabela (`<TableRow>`), com `className` para a troca de página e o "Restaurar" num `ActionsCell`. */
   renderRow: (row: Row, className: string | undefined) => ReactNode;
 }
 
@@ -218,9 +219,9 @@ export function DeletedListBody<Row>({
           <TableHeader>
             <TableRow>
               {tableHead}
-              <TableHead className="w-32">
+              <ActionsHead>
                 <span className="sr-only">{DELETED_LIST_TEXTS.actionsColumn}</span>
-              </TableHead>
+              </ActionsHead>
             </TableRow>
           </TableHeader>
           <TableBody>{rows.map((row) => renderRow(row, staleClass))}</TableBody>
@@ -261,10 +262,15 @@ export function DeletedListBody<Row>({
 }
 
 interface RestoreButtonProps {
-  /** "Restaurar Bruno Almeida", "Restaurar a célula de {Líder}", "Restaurar o relatório de {data}". */
+  /** "Restaurar Bruno Almeida", "Restaurar a célula de {Líder}", "Restaurar o relatório de {data} da célula de {Líder}". */
   label: string;
   /** Restauração deste item em andamento: "Restaurando…" e indisponível (UX-21). */
   restoring?: boolean;
+  /**
+   * O nome acessível enquanto restaura ("Restaurando a célula de {Líder}…"),
+   * para o nome conter o texto visível (WCAG 2.5.3). Sem ele, fica o `label`.
+   */
+  restoringLabel?: string;
   /** Recebe o próprio botão, para o foco voltar a ele (ou à busca, se o item sair da lista). */
   onRestore: (button: HTMLButtonElement) => void;
 }
@@ -274,13 +280,13 @@ interface RestoreButtonProps {
  * no celular. Enquanto restaura, fica com `aria-disabled` (e não `disabled`),
  * para o foco continuar nele.
  */
-export function RestoreButton({ label, restoring = false, onRestore }: RestoreButtonProps) {
+export function RestoreButton({ label, restoring = false, restoringLabel, onRestore }: RestoreButtonProps) {
   return (
     <Button
       type="button"
       variant="outline"
       className={cn("h-auto min-h-11 shrink-0 whitespace-normal md:min-h-9", UNAVAILABLE_WHILE_SAVING)}
-      aria-label={label}
+      aria-label={restoring && restoringLabel ? restoringLabel : label}
       aria-disabled={restoring || undefined}
       onClick={restoring ? undefined : (event) => onRestore(event.currentTarget)}
     >

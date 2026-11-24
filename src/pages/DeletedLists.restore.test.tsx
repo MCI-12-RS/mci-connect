@@ -80,10 +80,13 @@ const cell = (id: string, leader: string, people: Partial<DeletedCellRow> = {}):
   meeting_day: "Quarta",
   meeting_time: "20:00:00",
   neighborhood: "Centro",
+  leader_id: `m-${id}`,
   leader_name: leader,
   leader_deleted: false,
+  timothy_id: "m-tito",
   timothy_name: "Tito Lima",
   timothy_deleted: false,
+  host_id: "m-quintino",
   host_name: "Quintino Reis",
   host_deleted: false,
   deleted_at: "2026-11-12T13:05:00Z",
@@ -158,7 +161,7 @@ describe("UX-20: o que pede confirmação na restauração", () => {
     respondToRpc("restore_cell_report", {});
     respondWith({ data: [], count: 0 });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Carlos Lima" }));
 
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     await waitFor(() => expect(fakeRpcs().map((call) => call.fn)).toEqual(["restore_cell_report"]));
@@ -305,9 +308,9 @@ describe("UX-23: recusas da restauração (tabela da T6)", () => {
     const card = (await screen.findByText("Célula de Membro sem nome")).closest("li");
     expect(card).toHaveTextContent("Já há outro relatório desta célula na mesma semana.");
 
-    fireEvent.click(within(card).getByRole("button", { name: "Restaurar o relatório de 19/11/2026" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Restaurar o relatório de 19/11/2026 da célula de Membro sem nome" }));
 
-    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 19/11/2026" });
+    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 19/11/2026 da célula de Membro sem nome" });
     expect(dialog).toHaveTextContent("Esta célula já tem outro relatório na mesma semana. Exclua-o antes de restaurar este.");
     const close = within(dialog).getByRole("button", { name: "Fechar" });
     expect(within(dialog).getAllByRole("button").map((button) => button.textContent)).toEqual(["Fechar"]);
@@ -321,7 +324,7 @@ describe("UX-23: recusas da restauração (tabela da T6)", () => {
     const row = (await screen.findByText("Carlos Lima")).closest("tr");
     expect(row).toHaveTextContent("Já há outro relatório desta célula na mesma semana.");
 
-    fireEvent.click(within(row).getByRole("button", { name: "Restaurar o relatório de 19/11/2026" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Restaurar o relatório de 19/11/2026 da célula de Carlos Lima" }));
 
     const dialog = await screen.findByRole("alertdialog");
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Ver relatórios da célula" })).toHaveFocus());
@@ -338,9 +341,9 @@ describe("UX-23: recusas da restauração (tabela da T6)", () => {
       }),
     );
     respondWith({ data: [report("r2", "2026-11-12", { week_taken: true })], count: 1 });
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Carlos Lima" }));
 
-    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 12/11/2026" });
+    const dialog = await screen.findByRole("alertdialog", { name: "Não é possível restaurar o relatório de 12/11/2026 da célula de Carlos Lima" });
     expect(dialog).toHaveTextContent("Esta célula já tem outro relatório na mesma semana.");
     expect(fakeRpcs()).toHaveLength(1);
     // A recusa pode vir de algo que a lista ainda não mostrava: ela recarrega e passa a mostrar o aviso.
@@ -354,7 +357,7 @@ describe("UX-24: o que já não está excluído vira aviso informativo, e a list
     renderAt("/cell-reports/deleted", <CellReportsDeleted />, [report("r2", "2026-11-12")]);
     respondToRpc("restore_cell_report", appError("not_deleted", "Este relatório não está excluído.", { entity: "cell_report" }));
     respondWith({ data: [], count: 0 });
-    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restaurar o relatório de 12/11/2026 da célula de Carlos Lima" }));
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Este relatório não está excluído." }));
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));

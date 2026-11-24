@@ -38,10 +38,13 @@ const rui: DeletedCellRow = {
   meeting_day: "Quarta",
   meeting_time: "20:00:00",
   neighborhood: "Centro",
+  leader_id: "m-rui",
   leader_name: "Rui Prado",
   leader_deleted: false,
+  timothy_id: "m-tito",
   timothy_name: "Tito Lima",
   timothy_deleted: false,
+  host_id: "m-quintino",
   host_name: "Quintino Reis",
   host_deleted: true,
   deleted_at: "2026-11-12T13:05:00Z",
@@ -51,8 +54,11 @@ const rui: DeletedCellRow = {
 const carlos: DeletedCellRow = {
   ...rui,
   id: "c2",
+  leader_id: "m-carlos",
   leader_name: "Carlos Lima",
+  timothy_id: "m-ana",
   timothy_name: "Ana Souza",
+  host_id: "m-bia",
   host_name: "Bia Dias",
   host_deleted: false,
 };
@@ -105,6 +111,33 @@ describe("Células excluídas", () => {
     expect(screen.getByText("2 células excluídas")).toBeInTheDocument();
   });
 
+  // O líder excluído que também é o anfitrião já aparece no título, com a marca.
+  const gil: DeletedCellRow = {
+    ...carlos,
+    id: "c3",
+    leader_id: "m-gil",
+    leader_name: "Gil Souza",
+    leader_deleted: true,
+    host_id: "m-gil",
+    host_name: "Gil Souza",
+    host_deleted: true,
+  };
+
+  it("Card: o líder excluído que também é o anfitrião não se repete como 'Anfitrião' (T4)", async () => {
+    renderPage([gil]);
+    const card = (await screen.findByText("Célula de Gil Souza (cadastro excluído)")).closest("li");
+    expect(card).not.toHaveTextContent("Anfitrião");
+    expect(within(card).getAllByText(/Gil Souza/)).toHaveLength(1);
+  });
+
+  it("Tabela: o líder excluído que também é o anfitrião não se repete como 'Anfitrião' (T4)", async () => {
+    setWidth(1280);
+    renderPage([gil]);
+    const row = (await screen.findByText("Gil Souza (cadastro excluído)")).closest("tr");
+    expect(row).not.toHaveTextContent("Anfitrião");
+    expect(within(row).getAllByText(/Gil Souza/)).toHaveLength(1);
+  });
+
   it("Com o motivo no card, o bloqueio abre sem chamar o servidor, com 'Ver membros excluídos' no foco (UX-23)", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Restaurar a célula de Rui Prado" }));
@@ -133,6 +166,8 @@ describe("Células excluídas", () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(button).toHaveTextContent("Restaurando…"));
+    // O nome acessível acompanha o texto visível (WCAG 2.5.3).
+    expect(button).toHaveAccessibleName("Restaurando a célula de Carlos Lima…");
     expect(button).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Restaurar a célula de Rui Prado" })).toHaveTextContent("Restaurar");
     expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["restore_cell", { _cell_id: "c2" }]]);

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
 import CellReportForm from "@/components/CellReportForm";
@@ -258,7 +259,7 @@ const Cells = () => {
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
                     <TableHead>Status</TableHead>
-                    {anyCellHasActions && <TableHead className="w-24">Ações</TableHead>}
+                    {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -292,7 +293,7 @@ const Cells = () => {
                         <TableCell>
                           <CellStatusBadge active={c.is_active === true} />
                         </TableCell>
-                        {anyCellHasActions && <TableCell>{cellHasActions(c) && renderDesktopActions(c)}</TableCell>}
+                        {anyCellHasActions && <ActionsCell>{cellHasActions(c) && renderDesktopActions(c)}</ActionsCell>}
                       </TableRow>
                     ))
                   )}

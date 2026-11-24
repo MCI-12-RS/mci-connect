@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
 import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
@@ -233,7 +234,7 @@ const Members = () => {
                     <TableHead>Ministério</TableHead>
                     <TableHead>Líder</TableHead>
                     <TableHead>Status</TableHead>
-                    {showActions && <TableHead className="w-24">Ações</TableHead>}
+                    {showActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,7 +283,7 @@ const Members = () => {
                           <MemberStatusBadge active={m.is_active === true} />
                         </TableCell>
                         {showActions && (
-                          <TableCell>
+                          <ActionsCell>
                             <div className="flex items-center gap-1">
                               {canEdit(m) && (
                                 <Button
@@ -305,7 +306,7 @@ const Members = () => {
                                 </Button>
                               )}
                             </div>
-                          </TableCell>
+                          </ActionsCell>
                         )}
                       </TableRow>
                     ))
