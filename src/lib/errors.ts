@@ -101,3 +101,13 @@ export function isNetworkError(error: unknown): boolean {
   if (!isJsonObject(error)) return false;
   return error.code === "" && typeof error.message === "string" && FETCH_FAILURE.test(error.message);
 }
+
+/**
+ * `retry` do TanStack Query para uma leitura que a pessoa espera olhando (o
+ * painel "Ver relatório"): uma nova tentativa só, e só na queda de conexão.
+ * Uma resposta de erro do servidor se repetiria. Com as 3 novas tentativas do
+ * padrão, o erro e o "Tentar de novo" levariam cerca de 7 s para aparecer.
+ */
+export function retryOnceOnNetworkError(failureCount: number, error: unknown): boolean {
+  return failureCount < 1 && isNetworkError(error);
+}

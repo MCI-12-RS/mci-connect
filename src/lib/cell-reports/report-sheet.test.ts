@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { CellReportDetail, CellReportDetailRow } from "./fields";
-import { reportDateTime, reportSheetState, toReportSheetView, type ReportSheetInput } from "./report-sheet";
+import { reportDateTime, reportIdToRead, reportSheetState, toReportSheetView, type ReportSheetInput } from "./report-sheet";
 
 // Consulta do relatório de célula excluída (E2.01, T7, UXD-7; RN-09 b, RN-11 e
 // RN-13; UX-26 e UX-27).
@@ -28,9 +28,30 @@ const detail = (overrides: Partial<CellReportDetailRow> = {}, participants: Cell
 // O Intl separa o "R$" do valor com um espaço inseparável.
 const brl = (text: string) => text.replace(" ", " ");
 
+const REPORT_ID = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
+
+describe("reportIdToRead: o relatório da URL que a tela lê", () => {
+  const input = { reportId: REPORT_ID, permissionsLoaded: true, canView: true };
+
+  it("lê o relatório depois das permissões, para quem consulta", () => {
+    expect(reportIdToRead(input)).toBe(REPORT_ID);
+  });
+
+  it("não lê nada sem o parâmetro, antes das permissões ou sem edit_cell_report", () => {
+    expect(reportIdToRead({ ...input, reportId: null })).toBeNull();
+    expect(reportIdToRead({ ...input, permissionsLoaded: false })).toBeNull();
+    expect(reportIdToRead({ ...input, canView: false })).toBeNull();
+  });
+
+  it("id malformado: não lê o banco", () => {
+    expect(reportIdToRead({ ...input, reportId: "abc" })).toBeNull();
+    expect(reportIdToRead({ ...input, reportId: `${REPORT_ID}x` })).toBeNull();
+  });
+});
+
 describe("reportSheetState: o ?report=<id> da URL (Navegação e rotas, PO-UX-3)", () => {
   const input = (overrides: Partial<ReportSheetInput>): ReportSheetInput => ({
-    reportId: "r1",
+    reportId: REPORT_ID,
     permissionsLoaded: true,
     canView: true,
     detail: undefined,
@@ -46,6 +67,12 @@ describe("reportSheetState: o ?report=<id> da URL (Navegação e rotas, PO-UX-3)
 
   it("enquanto as permissões não chegam, nada é decidido: o parâmetro fica e o painel não abre", () => {
     expect(reportSheetState(input({ permissionsLoaded: false, canView: false }))).toBe("closed");
+  });
+
+  it("id malformado: sai da URL na hora, mesmo antes das permissões, sem abrir o painel", () => {
+    expect(reportSheetState(input({ reportId: "abc" }))).toBe("dismiss");
+    expect(reportSheetState(input({ reportId: "abc", permissionsLoaded: false }))).toBe("dismiss");
+    expect(reportSheetState(input({ reportId: "abc", failed: true, alreadyOpen: true }))).toBe("dismiss");
   });
 
   it("sem edit_cell_report, o parâmetro é ignorado e sai da URL", () => {
@@ -112,7 +139,7 @@ describe("toReportSheetView: célula realizada (T7, UX-27)", () => {
     });
   });
 
-  it("o participante excluído aparece só pelo nome, na ordem da consulta, e conta no total (RN-13)", () => {
+  it("o participante excluído aparece só pelo nome, em ordem alfabética, e conta no total (RN-13)", () => {
     const view = toReportSheetView(
       detail({}, [
         { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
@@ -122,7 +149,7 @@ describe("toReportSheetView: célula realizada (T7, UX-27)", () => {
     expect(view.status === "held" && view.participants).toEqual(["Ana Souza", "Sara Reis"]);
   });
 
-  it("campos vazios: 'Não informado'; sem participantes, a lista vazia; oferta 0 é R$ 0,00", () => {
+  it("campos vazios: 'Não informado'; sem participantes, a lista vazia; sem visitantes, 'Nenhum visitante.'; oferta 0 é R$ 0,00", () => {
     const view = toReportSheetView(detail({ theme: "  ", observations: "", visitors: [], offering: 0 }));
     expect(view).toMatchObject({
       status: "held",
@@ -130,7 +157,7 @@ describe("toReportSheetView: célula realizada (T7, UX-27)", () => {
       observations: "Não informado",
       participants: [],
       visitorsCount: 0,
-      visitors: "Não informado",
+      visitors: "Nenhum visitante.",
       offering: brl("R$ 0,00"),
     });
   });
@@ -138,6 +165,19 @@ describe("toReportSheetView: célula realizada (T7, UX-27)", () => {
   it("sem oferta, 'Não informado'; visitantes sem nome não contam", () => {
     const view = toReportSheetView(detail({ offering: null, visitors: ["João", " ", ""] }));
     expect(view).toMatchObject({ offering: "Não informado", visitorsCount: 1, visitors: "João" });
+  });
+
+  it("participantes em ordem alfabética do português, qualquer que seja a ordem da consulta", () => {
+    // A ordem do banco depende da collation dele: outra poria "Álvaro" depois de "Zuleica".
+    const view = toReportSheetView(
+      detail({}, [
+        { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
+        { member_id: "m2", member_name: "Zuleica Zanetti", member_deleted: false },
+        { member_id: "m3", member_name: "Álvaro Dias", member_deleted: true },
+        { member_id: "m4", member_name: " Bruno Lima ", member_deleted: false },
+      ]),
+    );
+    expect(view.status === "held" && view.participants).toEqual(["Álvaro Dias", "Ana Souza", "Bruno Lima", "Zuleica Zanetti"]);
   });
 
   it("participante sem nome: 'Membro sem nome'", () => {

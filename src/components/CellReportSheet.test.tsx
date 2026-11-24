@@ -168,14 +168,14 @@ describe("CellReportSheet: relatório de célula excluída", () => {
     expect(within(dialog).queryByText("Ana Souza")).not.toBeInTheDocument();
   });
 
-  it("Vazio: 'Não informado' nos campos vazios e 'Participantes (0)' com 'Nenhum membro.'", async () => {
+  it("Vazio: 'Não informado' nos campos vazios, 'Participantes (0)' com 'Nenhum membro.' e 'Visitantes (0)' com 'Nenhum visitante.'", async () => {
     respondWith({ data: report({ theme: null, visitors: [], offering: null }) }, { data: [] });
     renderSheet();
 
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 19/11/2026" });
     expect(field(dialog, "Tema")).toHaveTextContent("Não informado");
     expect(field(dialog, "Participantes (0)")).toHaveTextContent("Nenhum membro.");
-    expect(field(dialog, "Visitantes (0)")).toHaveTextContent("Não informado");
+    expect(field(dialog, "Visitantes (0)")).toHaveTextContent("Nenhum visitante.");
     expect(field(dialog, "Oferta")).toHaveTextContent("Não informado");
     expect(field(dialog, "Observações")).toHaveTextContent("Não informado");
   });

@@ -25,9 +25,15 @@ import { useSearchParam } from "@/hooks/use-search-param";
 import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
-import { REPORT_PARAM, reportSheetState } from "@/lib/cell-reports/report-sheet";
+import { REPORT_PARAM, reportIdToRead, reportSheetState } from "@/lib/cell-reports/report-sheet";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
+
+/** O "Ver relatório" (card ou ícone) da linha do relatório, se ela está na página. */
+function findViewReportButton(reportId: string): HTMLElement | null {
+  const buttons = document.querySelectorAll<HTMLElement>("[data-report-id]");
+  return Array.from(buttons).find((button) => button.dataset.reportId === reportId) ?? null;
+}
 
 const CellReports = () => {
   const list = useListSearchParams();
@@ -72,12 +78,12 @@ const CellReports = () => {
   const canViewRow = (r: CellReportRow) => canViewReport && r.cell_deleted === true;
 
   // A consulta abre por `?report=<id>`, que fica na URL ao recarregar (UX-27). O
-  // parâmetro só vale para relatório de célula excluída e para quem pode
-  // consultar; nos demais casos, sai da URL.
+  // parâmetro só vale para relatório de célula excluída, para quem pode
+  // consultar e com um id bem formado; nos demais casos, sai da URL.
   const [reportParam, setReportParam] = useSearchParam(REPORT_PARAM);
   // O painel lê o relatório junto com a página (a mesma consulta, uma vez só) e
   // só aparece quando a página decide.
-  const reportToRead = permissionsLoaded && canViewReport ? reportParam : null;
+  const reportToRead = reportIdToRead({ reportId: reportParam, permissionsLoaded, canView: canViewReport });
   const reportQuery = useCellReport(reportToRead);
   // O relatório para o qual o painel está aberto: ao ler de novo ("Tentar de
   // novo"), a consulta volta a carregar sem o erro, e num link direto nada
@@ -106,6 +112,15 @@ const CellReports = () => {
   const openReport = (r: CellReportRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setReportParam(r.id);
+  };
+
+  // Ao fechar o painel, o foco volta ao "Ver relatório" da linha, se ela está
+  // na página: ninguém o abriu (link direto, recarregar), ou quem abriu trocou
+  // (o ícone vira card ao estreitar a tela). Senão, vai para a busca.
+  const onSheetCloseAutoFocus = (event: Event, reportId: string | null) => {
+    const viewButton = reportId ? findViewReportButton(reportId) : null;
+    if (viewButton) returnFocus.setOpener(viewButton);
+    returnFocus.onCloseAutoFocus(event);
   };
 
   const startDeletion = (r: CellReportRow, opener: HTMLElement | null) => {
@@ -144,6 +159,7 @@ const CellReports = () => {
           size="icon"
           className="h-8 w-8"
           aria-label={CELL_REPORT_DELETION_TEXTS.viewReportLabel(...rowLabel(r))}
+          data-report-id={r.id}
           onClick={(e) => openReport(r, e.currentTarget)}
         >
           <Eye className="w-3.5 h-3.5" aria-hidden="true" />
@@ -213,12 +229,12 @@ const CellReports = () => {
     );
   };
 
-  /** Situação e presenças. */
+  /** Situação e presenças. Em tela estreita ou com fonte grande, as presenças descem inteiras para a linha de baixo. */
   const renderCardStatus = (r: CellReportRow) => (
-    <span className="flex items-center justify-between">
+    <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
       {renderHeldBadge(r)}
       {r.was_held && (
-        <span className="text-sm font-medium text-foreground">
+        <span className="whitespace-nowrap text-sm font-medium text-foreground">
           {attendance(r)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
         </span>
       )}
@@ -232,6 +248,45 @@ const CellReports = () => {
       </span>
     );
 
+  /** Card de célula excluída, para quem consulta: o corpo é o botão "Ver relatório" (T7). */
+  const renderViewCard = (r: CellReportRow) => {
+    // O `aria-label` vira o nome do botão e esconde o conteúdo do leitor de
+    // tela: o conteúdo do card entra como descrição (UX-25, WCAG 1.3.1).
+    const summaryId = `report-card-${r.id}`;
+    return (
+      // O "⋯" fica ao lado do botão, nunca dentro dele.
+      <div key={r.id} className="flex items-start gap-2 px-4 py-4">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={CELL_REPORT_DELETION_TEXTS.viewReportLabel(...rowLabel(r))}
+          aria-describedby={summaryId}
+          data-report-id={r.id}
+          onClick={(e) => openReport(r, e.currentTarget)}
+        >
+          <span id={summaryId} className="min-w-0 flex-1 space-y-3">
+            <span className="block">{renderCardSummary(r)}</span>
+            {renderCardStatus(r)}
+            {renderCardTheme(r)}
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+        {rowActions(r).length > 0 && renderMobileActions(r)}
+      </div>
+    );
+  };
+
+  const renderPlainCard = (r: CellReportRow) => (
+    <div key={r.id} className="px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">{renderCardSummary(r)}</div>
+        {showActions && renderMobileActions(r)}
+      </div>
+      {renderCardStatus(r)}
+      {renderCardTheme(r)}
+    </div>
+  );
+
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os relatórios</p>;
@@ -239,36 +294,7 @@ const CellReports = () => {
 
     return (
       <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
-        {reports.map((r) =>
-          canViewRow(r) ? (
-            // O corpo do card abre a consulta (T7); o "⋯" fica ao lado, nunca dentro dele.
-            <div key={r.id} className="flex items-start gap-2 px-4 py-4">
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                aria-label={CELL_REPORT_DELETION_TEXTS.viewReportLabel(...rowLabel(r))}
-                onClick={(e) => openReport(r, e.currentTarget)}
-              >
-                <span className="min-w-0 flex-1 space-y-3">
-                  <span className="block">{renderCardSummary(r)}</span>
-                  {renderCardStatus(r)}
-                  {renderCardTheme(r)}
-                </span>
-                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </button>
-              {rowActions(r).length > 0 && renderMobileActions(r)}
-            </div>
-          ) : (
-            <div key={r.id} className="px-4 py-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">{renderCardSummary(r)}</div>
-                {showActions && renderMobileActions(r)}
-              </div>
-              {renderCardStatus(r)}
-              {renderCardTheme(r)}
-            </div>
-          ),
-        )}
+        {reports.map((r) => (canViewRow(r) ? renderViewCard(r) : renderPlainCard(r)))}
       </div>
     );
   };
@@ -415,7 +441,7 @@ const CellReports = () => {
           reportId={reportToRead}
           open={sheetState === "open"}
           onClose={() => setReportParam(null)}
-          onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          onCloseAutoFocus={onSheetCloseAutoFocus}
           canSeeDeletedCells={hasPermission("manage_roles")}
         />
 

@@ -32,8 +32,13 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+// Os ids de relatório são UUIDs, como os do banco: um id malformado sai da URL sem ser lido.
+const R1 = "00000000-0000-4000-8000-000000000001";
+const R2 = "00000000-0000-4000-8000-000000000002";
+const R9 = "00000000-0000-4000-8000-000000000009";
+
 const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
-  id: "r1",
+  id: R1,
   cell_id: "c1",
   date: "2026-11-19",
   time: "20:00:00",
@@ -53,15 +58,15 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   ...overrides,
 });
 
-// r1: célula de Carlos (não excluída); r2: célula de Rui (excluída).
-const rows = [row({}), row({ id: "r2", date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true })];
+// R1: célula de Carlos (não excluída); R2: célula de Rui (excluída).
+const rows = [row({}), row({ id: R2, date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true })];
 const listResponses: FakeResponse[] = [
   { data: rows, count: rows.length },
   { data: rows.map((r) => ({ id: r.id, participants_count: 3 })) },
 ];
 
 const detail = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailRow => ({
-  id: "r2",
+  id: R2,
   date: "2026-11-12",
   time: "20:00:00",
   theme: "Fé",
@@ -132,7 +137,7 @@ describe("Relatórios: 'Ver relatório' na linha (UX-26)", () => {
     fireEvent.click(view);
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
     expect(within(dialog).getByText("Sara Reis")).toBeInTheDocument();
-    expect(urlParams()).toEqual({ q: "r", size: "10", report: "r2" });
+    expect(urlParams()).toEqual({ q: "r", size: "10", report: R2 });
   });
 
   it("Desktop: fechar tira o parâmetro, mantém a busca e o tamanho, e devolve o foco ao ícone", async () => {
@@ -173,6 +178,14 @@ describe("Relatórios: 'Ver relatório' na linha (UX-26)", () => {
     expect(card).toHaveTextContent("Rui Prado");
     expect(card).toHaveTextContent("Célula excluída");
     expect(card).toHaveTextContent("12/11/2026 · 20:00");
+    // O nome do botão é o rótulo; o conteúdo do card chega ao leitor de tela como descrição (UX-25).
+    expect(card).toHaveAccessibleDescription(/Célula excluída/);
+    expect(card).toHaveAccessibleDescription(/12\/11\/2026 · 20:00/);
+    expect(card).toHaveAccessibleDescription(/3 presenças/);
+    // As presenças não quebram no meio: descem inteiras para a linha de baixo.
+    const presences = within(card).getByText("presenças").parentElement;
+    expect(presences).toHaveClass("whitespace-nowrap");
+    expect(presences?.parentElement).toHaveClass("flex-wrap");
     // Controles irmãos, nunca aninhados.
     expect(within(card).queryByRole("button")).not.toBeInTheDocument();
     const menu = screen.getByRole("button", { name: "Ações do relatório de 12/11/2026 da célula de Rui Prado" });
@@ -217,11 +230,11 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
 
   it("Recarregar com ?report= de relatório de célula excluída reabre o painel, com a busca e o tamanho na URL", async () => {
     respondWith(...withDetail({ data: detail() }, { data: [SARA] }));
-    renderReports("/cell-reports?q=r&size=10&report=r2");
+    renderReports(`/cell-reports?q=r&size=10&report=${R2}`);
 
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
     expect(within(dialog).getByText("Sara Reis")).toBeInTheDocument();
-    expect(urlParams()).toEqual({ q: "r", size: "10", report: "r2" });
+    expect(urlParams()).toEqual({ q: "r", size: "10", report: R2 });
     // Uma consulta só ao relatório, embora a página e o painel leiam o mesmo.
     expect(detailQueries()).toHaveLength(2);
   });
@@ -229,7 +242,7 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
   it("Sem edit_cell_report: o parâmetro é ignorado e sai da URL, sem consultar o relatório", async () => {
     auth.permissions = new Set(["delete_cell_report"]);
     respondWith(...listResponses);
-    renderReports("/cell-reports?q=r&report=r2");
+    renderReports(`/cell-reports?q=r&report=${R2}`);
 
     await screen.findByText("Rui Prado");
     await waitFor(() => expect(urlParams()).toEqual({ q: "r" }));
@@ -242,14 +255,14 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
     const until = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const carlos = detail({ id: "r1", date: "2026-11-19", cell_leader_name: "Carlos Lima", cell_deleted: false });
+    const carlos = detail({ id: R1, date: "2026-11-19", cell_leader_name: "Carlos Lima", cell_deleted: false });
     respondWith(...withDetail({ data: carlos, until }, { data: [], until }));
-    renderReports("/cell-reports?report=r1&size=10");
+    renderReports(`/cell-reports?report=${R1}&size=10`);
 
     // Enquanto lê o relatório, o painel espera fechado: a linha não diz "Célula excluída".
     await screen.findByText("Carlos Lima");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(urlParams()).toEqual({ report: "r1", size: "10" });
+    expect(urlParams()).toEqual({ report: R1, size: "10" });
 
     release();
     await waitFor(() => expect(urlParams()).toEqual({ size: "10" }));
@@ -258,23 +271,72 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
     expect(screen.getByRole("textbox", { name: "Buscar relatórios" })).not.toHaveFocus();
   });
 
+  it("Id malformado: o parâmetro sai da URL sem consultar o relatório e sem abrir o painel", async () => {
+    respondWith(...listResponses);
+    renderReports("/cell-reports?q=r&size=10&report=abc");
+
+    await screen.findByText("Rui Prado");
+    await waitFor(() => expect(urlParams()).toEqual({ q: "r", size: "10" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(detailQueries()).toHaveLength(0);
+  });
+
+  it("Recarregar com ?report= e fechar: o foco vai para o 'Ver relatório' da linha, que está na página", async () => {
+    respondWith(...withDetail({ data: detail() }, { data: [] }));
+    renderReports(`/cell-reports?q=r&report=${R2}`);
+    const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(urlParams()).toEqual({ q: "r" });
+    await waitFor(() => expect(screen.getByRole("button", { name: VIEW_RUI })).toHaveFocus());
+  });
+
+  it("Celular, recarregar com ?report= e fechar: o foco vai para o card 'Ver relatório' da linha", async () => {
+    setWidth(360);
+    respondWith(...withDetail({ data: detail() }, { data: [] }));
+    renderReports(`/cell-reports?report=${R2}`);
+    const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const card = screen.getByRole("button", { name: VIEW_RUI });
+    expect(card).toHaveAttribute("data-report-id", R2);
+    await waitFor(() => expect(card).toHaveFocus());
+  });
+
+  it("Link direto com a linha fora da página: ao fechar, o foco vai para a busca", async () => {
+    // A página da lista só traz o relatório de Carlos.
+    respondWith({ data: detail() }, { data: [] }, { data: [rows[0]], count: 1 }, { data: [{ id: R1, participants_count: 3 }] });
+    renderReports(`/cell-reports?report=${R2}`);
+    await screen.findByText("Carlos Lima");
+    const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Buscar relatórios" })).toHaveFocus());
+  });
+
   it("Leitura que falha no link direto: o painel abre com 'Tentar de novo'", async () => {
     respondWith(...withDetail({ error: { code: "XX000", message: "falhou" } }, { data: [] }));
-    renderReports("/cell-reports?report=r9");
+    renderReports(`/cell-reports?report=${R9}`);
 
     const dialog = await screen.findByRole("dialog", { name: "Relatório" });
     expect(within(dialog).getByText("Não foi possível carregar o relatório.")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
-    expect(urlParams()).toEqual({ report: "r9" });
+    expect(urlParams()).toEqual({ report: R9 });
   });
 
   it("Enquanto as permissões não chegam, o parâmetro fica e nada é consultado; depois, o painel abre", async () => {
     auth.permissionsLoaded = false;
     respondWith(...listResponses);
-    const { rerender } = renderReports("/cell-reports?report=r2");
+    const { rerender } = renderReports(`/cell-reports?report=${R2}`);
 
     await screen.findByText("Rui Prado");
-    expect(urlParams()).toEqual({ report: "r2" });
+    expect(urlParams()).toEqual({ report: R2 });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(detailQueries()).toHaveLength(0);
 
@@ -290,7 +352,7 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
       release = resolve;
     });
     respondWith(...withDetail({ data: null, until }, { data: [], until }));
-    renderReports("/cell-reports?report=r2");
+    renderReports(`/cell-reports?report=${R2}`);
     await screen.findByText("Rui Prado");
     // A linha diz "Célula excluída": o painel abre já carregando.
     const loading = await screen.findByRole("dialog", { name: "Relatório" });
@@ -298,7 +360,7 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
     const listQueriesBefore = fakeQueries().length;
 
     // A lista recarregada, já sem o relatório de Rui.
-    respondWith({ data: [rows[0]], count: 1 }, { data: [{ id: "r1", participants_count: 3 }] });
+    respondWith({ data: [rows[0]], count: 1 }, { data: [{ id: R1, participants_count: 3 }] });
     release();
 
     const dialog = await screen.findByRole("dialog", { name: "Relatório" });

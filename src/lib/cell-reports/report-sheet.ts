@@ -3,9 +3,11 @@
 import { getDay, isValid, parseISO } from "date-fns";
 import { formatMeetingTime } from "@/lib/cells/labels";
 import { WEEKDAYS } from "@/lib/cells/weekdays";
+import { sortAlphabetically } from "@/lib/collation";
 import { leaderLabel } from "@/lib/deletion/targets";
 import { CELL_REPORT_SHEET_TEXTS } from "@/lib/deletion/texts";
 import { formatCurrency } from "@/lib/format";
+import { isUuid } from "@/lib/ids";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
 import { withSearchParam } from "@/lib/navigation";
 import type { CellReportDetail, CellReportDetailRow } from "./fields";
@@ -50,11 +52,24 @@ export interface ReportSheetInput {
   alreadyOpen: boolean;
 }
 
+/** O que decide se o relatório da URL é lido. */
+type ReportToReadInput = Pick<ReportSheetInput, "reportId" | "permissionsLoaded" | "canView">;
+
+/**
+ * O relatório da URL que a tela lê para o painel: só depois que as permissões
+ * chegam, para quem consulta e com um id bem formado (UUID). Nos demais
+ * casos, nada é lido (`reportSheetState` decide o que fazer com o parâmetro).
+ */
+export function reportIdToRead({ reportId, permissionsLoaded, canView }: ReportToReadInput): string | null {
+  return reportId && permissionsLoaded && canView && isUuid(reportId) ? reportId : null;
+}
+
 /**
  * O que fazer com o `report` da URL (Navegação e rotas, PO-UX-3). Ele só abre
  * o painel para quem tem `edit_cell_report` e para relatório de célula
- * excluída; nos demais casos, é ignorado e sai da URL. Enquanto as permissões
- * não chegam, nada é decidido.
+ * excluída; nos demais casos, é ignorado e sai da URL. Um id malformado sai
+ * da URL na hora, sem consultar o banco. Enquanto as permissões não chegam,
+ * nada mais é decidido.
  *
  * Quando a tela ainda não sabe se a célula foi excluída (link direto ou
  * recarregar, antes da leitura), o painel espera fechado: abrir e fechar em
@@ -77,7 +92,9 @@ export function reportSheetState({
   failed,
   alreadyOpen,
 }: ReportSheetInput): ReportSheetState {
-  if (!reportId || !permissionsLoaded) return "closed";
+  if (!reportId) return "closed";
+  if (!isUuid(reportId)) return "dismiss";
+  if (!permissionsLoaded) return "closed";
   if (!canView) return "dismiss";
   if (detail) return detail.report.cell_deleted === true ? "open" : "dismiss";
   if (detail === null || knownCellDeleted || failed || alreadyOpen) return "open";
@@ -104,11 +121,11 @@ export interface HeldReportSheetView extends ReportSheetCommon {
   // texto separa os dois casos.
   status: "held";
   theme: string;
-  /** Todos os participantes, pelo nome, inclusive os excluídos (RN-13), na ordem da consulta (alfabética). */
+  /** Todos os participantes, pelo nome, inclusive os excluídos (RN-13), em ordem alfabética do português. */
   participants: string[];
   /** Quantos visitantes têm nome. */
   visitorsCount: number;
-  /** "João, Maria", ou "Não informado". */
+  /** "João, Maria", ou "Nenhum visitante.". */
   visitors: string;
   /** "R$ 50,00", ou "Não informado". */
   offering: string;
@@ -156,9 +173,9 @@ export function toReportSheetView({ report, participants }: CellReportDetail): R
     ...common,
     status: "held",
     theme: orNotInformed(report.theme),
-    participants: participants.map((p) => p.member_name?.trim() || UNNAMED_MEMBER_LABEL),
+    participants: sortAlphabetically(participants.map((p) => p.member_name?.trim() || UNNAMED_MEMBER_LABEL)),
     visitorsCount: visitors.length,
-    visitors: visitors.length > 0 ? visitors.join(", ") : TEXTS.notInformed,
+    visitors: visitors.length > 0 ? visitors.join(", ") : TEXTS.noVisitors,
     offering: report.offering === null || report.offering === undefined ? TEXTS.notInformed : formatCurrency(report.offering),
   };
 }

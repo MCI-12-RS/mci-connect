@@ -5,16 +5,22 @@ import {
   REPORT_PARTICIPANT_SELECT,
   type CellReportDetail,
 } from "@/lib/cell-reports/fields";
+import { retryOnceOnNetworkError } from "@/lib/errors";
 import { fetchAllRows } from "@/lib/list-query";
 
 /**
  * Um relatório para o painel de consulta ("Ver relatório", E2.01 T7): a linha
  * da `cell_reports_view` (com `cell_deleted`) e todos os participantes, da
- * `cell_report_participants_view`, em ordem alfabética e sem corte, inclusive
- * os excluídos, pelo nome (RN-09 b, RN-13). As duas consultas vão juntas.
+ * `cell_report_participants_view`, sem corte, inclusive os excluídos, pelo
+ * nome (RN-09 b, RN-13). As duas consultas vão juntas.
+ *
+ * Os participantes vêm na ordem do nome e do id, estável entre os blocos de
+ * 1000 linhas. A ordem alfabética do português é do painel (`toReportSheetView`),
+ * porque a do banco depende da collation dele.
  *
  * `null` se o relatório não vier: excluído no meio tempo, fora do escopo ou
- * inexistente. Sem `reportId`, não consulta nada.
+ * inexistente. Sem `reportId`, não consulta nada. Na queda de conexão, tenta
+ * de novo uma vez só, para o erro não demorar a aparecer.
  *
  * Com `enabled: false`, não consulta, mas devolve o que já leu desse
  * relatório (o painel fechando continua com ele, sem recarregar à toa).
@@ -23,6 +29,7 @@ export function useCellReport(reportId: string | null, { enabled = true }: { ena
   return useQuery({
     queryKey: ["cell_reports", "detail", reportId],
     enabled: !!reportId && enabled,
+    retry: retryOnceOnNetworkError,
     queryFn: async (): Promise<CellReportDetail | null> => {
       const [{ data: report, error }, participants] = await Promise.all([
         supabase.from("cell_reports_view").select(CELL_REPORT_DETAIL_SELECT).eq("id", reportId).maybeSingle(),

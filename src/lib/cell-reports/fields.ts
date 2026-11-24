@@ -81,7 +81,7 @@ export type CellReportDetailRow = Pick<
   | "cell_deleted"
 >;
 
-/** O relatório e todos os participantes dele, em ordem alfabética, inclusive os excluídos (RN-13). */
+/** O relatório e todos os participantes dele, inclusive os excluídos (RN-13), na ordem do nome e do id. */
 export interface CellReportDetail {
   report: CellReportDetailRow;
   participants: ReportParticipant[];

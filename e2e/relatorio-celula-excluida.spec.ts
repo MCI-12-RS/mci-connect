@@ -532,12 +532,12 @@ test("UX-27 (AD): 'Não houve célula' mostra 'Não realizada' e o motivo, sem t
   await expect(field(dialog, "Situação")).toHaveText("Realizada");
   await expect(field(dialog, "Tema")).toHaveText("Não informado");
   await expect(field(dialog, "Participantes (0)")).toHaveText("Nenhum membro.");
-  await expect(field(dialog, "Visitantes (0)")).toHaveText("Não informado");
+  await expect(field(dialog, "Visitantes (0)")).toHaveText("Nenhum visitante.");
   await expect(field(dialog, "Oferta")).toHaveText("Não informado");
   await expect(field(dialog, "Observações")).toHaveText("Não informado");
 });
 
-test("UX-27 e Navegação (AD): ?report= reabre o painel ao recarregar, com q e size; fechar tira o parâmetro e devolve o foco a quem abriu (ou à busca, num link direto); a largura é toda abaixo de 640 px e 512 px a partir de 640 px", async ({
+test("UX-27 e Navegação (AD): ?report= reabre o painel ao recarregar, com q e size; fechar tira o parâmetro e devolve o foco a quem abriu (ou, depois de recarregar, ao 'Ver relatório' da linha); a largura é toda abaixo de 640 px e 512 px a partir de 640 px", async ({
   page,
 }) => {
   await login(page, env.admin);
@@ -572,11 +572,12 @@ test("UX-27 e Navegação (AD): ?report= reabre o painel ao recarregar, com q e 
   await page.setViewportSize({ width: 360, height: 800 });
   await expectSheetWidth(page, 360, "360 px");
 
-  // Num link direto, ninguém abriu o painel: o foco vai para a busca.
+  // Depois de recarregar, ninguém abriu o painel: o foco vai para o "Ver
+  // relatório" da linha, que está na página (em 360 px, o card).
   await page.keyboard.press("Escape");
   await expect(sheet(page)).toHaveCount(0);
   expect(urlParams(page)).toEqual({ q: NAME, size: "10" });
-  await expect(page.getByRole("textbox", { name: "Buscar relatórios" })).toBeFocused();
+  await expect(view).toBeFocused();
 });
 
 /** Marca, desde o carregamento da página, se algum diálogo apareceu (mesmo por um instante). */

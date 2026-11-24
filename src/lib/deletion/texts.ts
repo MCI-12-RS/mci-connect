@@ -218,6 +218,8 @@ export const CELL_REPORT_SHEET_TEXTS = {
   visitors: (count: number) => `Visitantes (${count})`,
   notInformed: "Não informado",
   noMembers: "Nenhum membro.",
+  /** Não está no spec: "Visitantes (0)", como o "Nenhum membro." dos participantes. */
+  noVisitors: "Nenhum visitante.",
   /** Abre `/cells/deleted?q={Líder}`; só para o administrador. */
   seeDeletedCells: "Ver células excluídas",
   /** Não está no spec: anúncio do carregamento para leitor de tela. */

@@ -33,8 +33,12 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+// Os ids de relatório são UUIDs, como os do banco: um id malformado sai da URL sem ser lido.
+const R1 = "00000000-0000-4000-8000-000000000001";
+const R2 = "00000000-0000-4000-8000-000000000002";
+
 const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
-  id: "r1",
+  id: R1,
   cell_id: "c1",
   date: "2026-11-19",
   time: "20:00:00",
@@ -54,16 +58,16 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   ...overrides,
 });
 
-// r1: célula de Carlos (não excluída); r2: célula de Rui (excluída).
+// R1: célula de Carlos (não excluída); R2: célula de Rui (excluída).
 const CARLOS_ROW = row({});
-const RUI_ROW = row({ id: "r2", date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true });
+const RUI_ROW = row({ id: R2, date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true });
 const list = (...rows: CellReportPageRow[]): FakeResponse[] => [
   { data: rows, count: rows.length },
   { data: rows.map((r) => ({ id: r.id, participants_count: 3 })) },
 ];
 
 const detail = (): CellReportDetailRow => ({
-  id: "r2",
+  id: R2,
   date: "2026-11-12",
   time: "20:00:00",
   theme: "Fé",
@@ -128,7 +132,7 @@ describe("UX-26 (MB, só vê relatórios: sem edit_cell_report e sem delete_cell
   it("Celular: o card de célula excluída não vira botão e não tem '⋯'; o ?report= sai da URL sem consultar o relatório", async () => {
     setWidth(360);
     respondWith(...list(CARLOS_ROW, RUI_ROW));
-    renderReports("/cell-reports?q=r&report=r2");
+    renderReports(`/cell-reports?q=r&report=${R2}`);
 
     await screen.findByText("Rui Prado");
     expect(screen.getByText("Célula excluída")).toBeInTheDocument();
@@ -155,7 +159,7 @@ describe("Acessibilidade (WCAG 2.4.3): o foco ao fechar o painel no celular", ()
     act(() => card.focus());
     fireEvent.click(card);
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
-    expect(urlParams()).toEqual({ q: "r", report: "r2" });
+    expect(urlParams()).toEqual({ q: "r", report: R2 });
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
 
@@ -176,9 +180,9 @@ describe("'Estados' (erro ao carregar) num link direto: QA-E201-PR4-1", () => {
   // No navegador, com as 3 tentativas padrão do React Query, o painel some por
   // cerca de 7 s quando a falha continua (e2e/relatorio-celula-excluida.spec.ts).
   it("'Tentar de novo' mantém o painel aberto (carregando) até o resultado", async () => {
-    // O painel consulta o relatório antes da lista (ver CellReports.sheet.test.tsx); a lista não traz r2.
+    // O painel consulta o relatório antes da lista (ver CellReports.sheet.test.tsx); a lista não traz R2.
     respondWith({ error: { code: "XX000", message: "falhou" } }, { data: [] }, ...list(CARLOS_ROW));
-    renderReports("/cell-reports?report=r2");
+    renderReports(`/cell-reports?report=${R2}`);
     const failed = await screen.findByRole("dialog", { name: "Relatório" });
     const retry = within(failed).getByRole("button", { name: "Tentar de novo" });
 
@@ -199,6 +203,6 @@ describe("'Estados' (erro ao carregar) num link direto: QA-E201-PR4-1", () => {
     release();
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
     expect(within(dialog).getByText("Sara Reis")).toBeInTheDocument();
-    expect(urlParams()).toEqual({ report: "r2" });
+    expect(urlParams()).toEqual({ report: R2 });
   });
 });

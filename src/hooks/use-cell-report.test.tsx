@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
 import { CELL_REPORT_DETAIL_SELECT, REPORT_PARTICIPANT_SELECT } from "@/lib/cell-reports/fields";
@@ -21,7 +21,7 @@ const participants = [
 describe("useCellReport", () => {
   beforeEach(() => resetFakeSupabase());
 
-  it("lê o relatório na cell_reports_view e todos os participantes na cell_report_participants_view, juntos e em ordem alfabética", async () => {
+  it("lê o relatório na cell_reports_view e todos os participantes na cell_report_participants_view, juntos e na ordem do nome e do id", async () => {
     respondWith({ data: report }, { data: participants });
 
     const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
@@ -72,6 +72,45 @@ describe("useCellReport", () => {
 
     const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  describe("novas tentativas", () => {
+    afterEach(() => vi.useRealTimers());
+    const offline = { code: "", message: "TypeError: Failed to fetch", details: "", hint: "" };
+
+    it("um erro do servidor aparece na hora, sem nova tentativa", async () => {
+      vi.useFakeTimers();
+      respondWith({ error: { code: "XX000", message: "falhou" } }, { data: [] }, { data: report }, { data: participants });
+
+      const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+      expect(result.current.isError).toBe(true);
+      expect(fakeQueries()).toHaveLength(2);
+    });
+
+    it("na queda de conexão, tenta de novo uma vez só, e o erro aparece em seguida", async () => {
+      vi.useFakeTimers();
+      respondWith({ error: offline }, { data: [] }, { error: offline }, { data: [] }, { data: report }, { data: participants });
+
+      const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
+      await act(() => vi.advanceTimersByTimeAsync(1_100));
+      expect(result.current.isError).toBe(true);
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+      expect(result.current.isError).toBe(true);
+      expect(fakeQueries()).toHaveLength(4);
+    });
+
+    it("na queda de conexão, a nova tentativa que dá certo traz o relatório", async () => {
+      vi.useFakeTimers();
+      respondWith({ error: offline }, { data: [] }, { data: report }, { data: participants });
+
+      const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
+      await act(() => vi.advanceTimersByTimeAsync(1_100));
+
+      expect(result.current.data).toEqual({ report, participants });
+    });
   });
 
   it("desligado (painel fechando), não consulta, mas devolve o que já leu desse relatório", async () => {

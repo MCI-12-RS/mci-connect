@@ -123,7 +123,7 @@ const ReportDetails = ({ view, canSeeDeletedCells }: { view: ReportSheetView; ca
           <Field label={TEXTS.fields.theme}>{view.theme}</Field>
           <Field label={TEXTS.participants(view.participants.length)}>
             {view.participants.length > 0 ? (
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {view.participants.map((name, index) => (
                   // A lista não muda enquanto o painel está aberto; nomes podem se repetir.
                   <li key={index}>{name}</li>
@@ -154,8 +154,11 @@ export interface CellReportSheetProps {
    */
   open?: boolean;
   onClose: () => void;
-  /** Ao fechar, o foco volta a quem abriu o painel (`useReturnFocus`). */
-  onCloseAutoFocus?: (event: Event) => void;
+  /**
+   * Ao fechar, a tela devolve o foco (`useReturnFocus`). Recebe o relatório
+   * que o painel mostrava, para achar o "Ver relatório" da linha dele.
+   */
+  onCloseAutoFocus?: (event: Event, reportId: string | null) => void;
   /** "Ver células excluídas": só para o administrador (`manage_roles`). */
   canSeeDeletedCells: boolean;
 }
@@ -205,14 +208,14 @@ const CellReportSheet = ({ reportId, open = reportId !== null, onClose, onCloseA
         ref={contentRef}
         side="right"
         // `[&>button:last-child]:hidden` esconde o "✕" do `SheetContent`, que é o último filho (ver `CloseButton`).
-        className="w-full overflow-y-auto outline-none motion-reduce:!animate-none sm:max-w-lg [&>button:last-child]:hidden"
+        className="w-full overflow-y-auto p-4 outline-none motion-reduce:!animate-none sm:max-w-lg sm:p-6 [&>button:last-child]:hidden"
         // O foco vai para o painel, que o leitor de tela anuncia pelo título, e
         // não para o primeiro link ("Ver células excluídas").
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           contentRef.current?.focus();
         }}
-        onCloseAutoFocus={onCloseAutoFocus}
+        onCloseAutoFocus={(event) => onCloseAutoFocus?.(event, shownId)}
         {...(hasDescription ? {} : { "aria-describedby": undefined })}
       >
         <CloseButton />
