@@ -3,6 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import MemberForm from "@/components/MemberForm";
+import { MemberFormById } from "@/components/EditRecordDialogs";
+import type { RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
@@ -38,6 +40,8 @@ const Members = () => {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  // Cadastro novo com dados de um excluído: restaurado pelo aviso, o diálogo passa a editá-lo (RN-18, UX-32).
+  const [restoredMember, setRestoredMember] = useState<RestoredFromWarning | null>(null);
   const [deletingMember, setDeletingMember] = useState<MemberDeletionTarget | null>(null);
   const { hasPermission, user } = useAuth();
   const isMobile = useIsMobile();
@@ -64,6 +68,7 @@ const Members = () => {
   const handleClose = () => {
     setFormOpen(false);
     setEditingMember(null);
+    setRestoredMember(null);
   };
 
   const getLevelLabel = (level: number) => {
@@ -334,9 +339,18 @@ const Members = () => {
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
           >
             <DialogHeader>
-              <DialogTitle>{editingMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
+              <DialogTitle>{editingMember || restoredMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
             </DialogHeader>
-            <MemberForm member={editingMember} onClose={handleClose} />
+            {restoredMember ? (
+              <MemberFormById
+                key={restoredMember.memberId}
+                memberId={restoredMember.memberId}
+                restoredFrom={restoredMember}
+                onClose={handleClose}
+              />
+            ) : (
+              <MemberForm member={editingMember} onClose={handleClose} onRestored={setRestoredMember} />
+            )}
           </DialogContent>
         </Dialog>
 

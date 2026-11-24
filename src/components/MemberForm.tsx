@@ -11,19 +11,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Key } from "lucide-react";
+import { AlertCircle, CheckCircle2, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
 import type { PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
 import { toMemberWritePayload, type MemberRow } from "@/lib/members/fields";
-import { DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
+import DeletedMatchesDialog, { type RestoredFromWarning } from "@/components/DeletedMatchesDialog";
+import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { memberRestoreNotices } from "@/lib/deletion/restore";
+import { readFunctionErrorBody, isJsonObject } from "@/lib/errors";
+import {
+  deletedMatchesWarning,
+  parseCreateMemberRefusal,
+  type DeletedMatchesDialogModel,
+  type DeletedMatchesWarning,
+} from "@/lib/members/deleted-matches";
 
 type Member = MemberRow;
 type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
 
-/** "gone": a edição não voltou com a linha, porque o cadastro foi excluído no meio tempo (E2.01, DT-19). */
-type SaveResult = "saved" | "gone";
+/**
+ * - "gone": a edição não voltou com a linha, porque o cadastro foi excluído no meio tempo (E2.01, DT-19);
+ * - "deletedMatches": o cadastro novo tem dados de um membro excluído (E2.01, RN-18).
+ */
+type SaveResult = { kind: "saved" } | { kind: "gone" } | { kind: "deletedMatches"; warning: DeletedMatchesWarning };
+
+interface SaveInput {
+  data: MemberInsert;
+  /** "Cadastrar mesmo assim" (RN-18): segue apesar dos cadastros excluídos com os mesmos dados. */
+  confirmDeletedMatches: boolean;
+}
 
 const FAKE_EMAIL_DOMAIN = "@mci12fakemail.com";
 
@@ -35,6 +53,13 @@ interface MemberFormProps {
    * UX-22): abre com "Tem Liderança?" ligado e o foco no campo Líder.
    */
   defineLeader?: boolean;
+  /**
+   * Cadastro novo com dados de um excluído (E2.01, RN-18): o administrador
+   * restaurou o excluído pelo aviso, e a tela passa a editá-lo (UX-32).
+   */
+  onRestored?: (restored: RestoredFromWarning) => void;
+  /** Aberto logo depois de restaurar pelo aviso: o `Alert` de restauração, com o foco (UX-32). */
+  restoredFrom?: RestoredFromWarning;
 }
 
 const BRAZILIAN_STATES = [
@@ -141,7 +166,7 @@ const RoleField = ({ roles, loadError, value, canAssign, onChange }: RoleFieldPr
   );
 };
 
-const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) => {
+const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restoredFrom }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { hasPermission, isSystem } = useAuth();
@@ -158,6 +183,12 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
   const canViewSensitive = !isEditing || member?.sensitive_visible === true;
   const canChangePassword = isSystem || hasPermission("change_member_password");
   const canEditMinistry = isSystem || hasPermission("edit_member");
+  // Quem vê o nome e restaura os cadastros excluídos do aviso (RN-15, RN-18).
+  const isAdmin = isSystem || hasPermission("manage_roles");
+
+  // Restaurado pelo aviso (UX-32): as mensagens da RN-16 e, se voltou sem líder, o foco no Líder.
+  const restoredNotices = restoredFrom ? memberRestoreNotices(restoredFrom.outcome) : null;
+  const focusLeader = defineLeader || (restoredNotices?.withoutLeader === true && canEditMinistry);
 
   const fetchAddressByCEP = useCallback(async (cep: string) => {
     const digits = cep.replace(/\D/g, "");
@@ -200,14 +231,24 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
   // opções ainda não existem, e o Radix apagaria o valor.
   const [form, setForm] = useState<MemberInsert>(() => {
     if (!member) return EMPTY_FORM;
-    return defineLeader ? { ...member, has_leadership: true } : { ...member };
+    return focusLeader ? { ...member, has_leadership: true } : { ...member };
   });
 
   // "Definir líder": o foco vai para o campo Líder, que já abre visível.
   const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
+  const restoredAlertRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (defineLeader) leaderSelectRef.current?.focus();
-  }, [defineLeader]);
+    if (focusLeader) leaderSelectRef.current?.focus();
+    else if (restoredFrom) restoredAlertRef.current?.focus();
+  }, [focusLeader, restoredFrom]);
+
+  // RN-18: o aviso de cadastro excluído com os mesmos dados, ou o erro no campo E-mail (UXD-9).
+  const [deletedMatches, setDeletedMatches] = useState<DeletedMatchesDialogModel | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (emailError) emailInputRef.current?.focus();
+  }, [emailError]);
 
   const [password, setPassword] = useState("");
   // O cadastro foi excluído (ou saiu do escopo) enquanto era editado.
@@ -226,7 +267,7 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
   }, [isEditing, defaultRoleId, form.role_id]);
 
   const mutation = useMutation({
-    mutationFn: async (data: MemberInsert): Promise<SaveResult> => {
+    mutationFn: async ({ data, confirmDeletedMatches }: SaveInput): Promise<SaveResult> => {
       // E-mail em branco: na edição, mantém o atual (o fictício, se for o caso);
       // no cadastro, gera um fictício, porque o Auth exige e-mail.
       let email: string | undefined = data.email?.trim() || undefined;
@@ -263,25 +304,41 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
             email: payload.email,
             password: finalPassword,
             memberData: payload,
+            confirmDeletedMatches,
           }
         });
         if (error) {
           // Respostas 4xx/5xx da função trazem a mensagem em { error }.
-          const detail = await error.context?.json?.().catch(() => null);
-          throw new Error(detail?.error ?? error.message);
+          const refusal = parseCreateMemberRefusal(await readFunctionErrorBody(error));
+          if (refusal?.kind === "deletedMatches") {
+            return {
+              kind: "deletedMatches",
+              warning: deletedMatchesWarning(refusal.matches, { isAdmin, accountEmail: refusal.accountEmail }),
+            };
+          }
+          throw new Error(refusal?.message ?? error.message);
         }
-        if (result.error) throw new Error(result.error);
-        return "saved";
+        if (isJsonObject(result) && typeof result.error === "string") throw new Error(result.error);
+        return { kind: "saved" };
       }
 
       // Só o id de volta: pedir coluna sensível no RETURNING dá 42501 (E1.08, PR 5).
       // Sem linha, o cadastro não existe mais ou foi excluído (DT-19).
       const { data: saved, error } = await supabase.from("members").update(payload).eq("id", member.id).select("id");
       if (error) throw error;
-      return saved?.length ? "saved" : "gone";
+      return saved?.length ? { kind: "saved" } : { kind: "gone" };
     },
     onSuccess: (result) => {
-      if (result === "gone") {
+      if (result.kind === "deletedMatches") {
+        if (result.warning.kind === "emailError") {
+          setDeletedMatches(null);
+          setEmailError(result.warning.message);
+        } else {
+          setDeletedMatches(result.warning.dialog);
+        }
+        return;
+      }
+      if (result.kind === "gone") {
         setDeletedWhileEditing(true);
         // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem o cadastro.
         queryClient.invalidateQueries({ queryKey: ["members", "list"] });
@@ -302,10 +359,23 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
       toast({ variant: "destructive", title: "Erro", description: "Selecione uma função para o membro." });
       return;
     }
-    mutation.mutate(form);
+    mutation.mutate({ data: form, confirmDeletedMatches: false });
+  };
+
+  /** "Cadastrar mesmo assim" (RN-18, UX-34): o mesmo cadastro, sem nova pergunta. */
+  const registerAnyway = () => {
+    mutation.mutate({ data: form, confirmDeletedMatches: true });
+  };
+
+  /** "Restaurar {Nome}": a tela passa a editar o cadastro restaurado; nada do que foi digitado fica (UX-32). */
+  const handleRestored = (restored: RestoredFromWarning) => {
+    setDeletedMatches(null);
+    if (onRestored) onRestored(restored);
+    else onClose();
   };
 
   const update = (field: keyof MemberInsert, value: string | boolean | null) => {
+    if (field === "email") setEmailError(null);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -346,6 +416,18 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {restoredFrom && (
+        <Alert ref={restoredAlertRef} role="status" tabIndex={-1} className="focus:outline-none">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="space-y-2">
+            <p>{DELETED_MATCHES_TEXTS.restoredFromForm(restoredFrom.name)}</p>
+            {restoredNotices?.messages.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {deletedWhileEditing && (
         <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
@@ -371,13 +453,23 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
               <Label htmlFor="email">
                 E-mail {isFakeEmail && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
               </Label>
-              <Input 
-                id="email" 
-                type="email" 
-                value={isFakeEmail ? "" : (form.email || "")} 
-                onChange={(e) => update("email", e.target.value)} 
-                placeholder={isFakeEmail ? "Adicionar e-mail..." : ""} 
+              <Input
+                ref={emailInputRef}
+                id="email"
+                type="email"
+                value={isFakeEmail ? "" : (form.email || "")}
+                onChange={(e) => update("email", e.target.value)}
+                placeholder={isFakeEmail ? "Adicionar e-mail..." : ""}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? "email-error" : undefined}
+                className={emailError ? "border-destructive" : undefined}
               />
+              {emailError && (
+                <p id="email-error" className="flex items-start gap-1.5 text-sm text-destructive">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{emailError}</span>
+                </p>
+              )}
             </div>
           )}
           <div className="space-y-2">
@@ -595,6 +687,16 @@ const MemberForm = ({ member, onClose, defineLeader = false }: MemberFormProps) 
           {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
         </Button>
       </div>
+
+      {deletedMatches && (
+        <DeletedMatchesDialog
+          dialog={deletedMatches}
+          registering={mutation.isPending}
+          onRegisterAnyway={registerAnyway}
+          onClose={() => setDeletedMatches(null)}
+          onRestored={handleRestored}
+        />
+      )}
 
       {/* Password Change Dialog */}
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>

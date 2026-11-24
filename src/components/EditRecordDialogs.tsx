@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import MemberForm from "@/components/MemberForm";
+import type { RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import CellForm from "@/components/CellForm";
 import { useMember } from "@/hooks/use-member";
 import { useCell } from "@/hooks/use-cell";
@@ -66,27 +67,41 @@ interface EditMemberDialogProps extends EditByIdDialogProps {
   defineLeader?: boolean;
 }
 
+interface MemberFormByIdProps {
+  memberId: string;
+  onClose: () => void;
+  defineLeader?: boolean;
+  /** Restaurado pelo aviso de cadastro com dados de um excluído (RN-18, UX-32). */
+  restoredFrom?: RestoredFromWarning;
+}
+
+/** O formulário de edição de um membro pelo id, lido na `members_view`, com carregando e erro. */
+export function MemberFormById({ memberId, onClose, defineLeader = false, restoredFrom }: MemberFormByIdProps) {
+  const { data: member, isPending, isError, refetch } = useMember(memberId);
+  if (member) {
+    return <MemberForm member={member} onClose={onClose} defineLeader={defineLeader} restoredFrom={restoredFrom} />;
+  }
+  return (
+    <LoadState
+      isPending={isPending}
+      isError={isError}
+      isMissing={!isPending && !isError}
+      missingText={MEMBER_DELETION_TEXTS.notFoundOrDeleted}
+      errorText={MEMBER_DELETION_TEXTS.loadFailed}
+      onRetry={() => void refetch()}
+    />
+  );
+}
+
 /** "Editar Membro" de um membro pelo id. */
 export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus, defineLeader = false }: EditMemberDialogProps) {
-  const { data: member, isPending, isError, refetch } = useMember(memberId);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Editar Membro</DialogTitle>
         </DialogHeader>
-        {member ? (
-          <MemberForm member={member} onClose={onClose} defineLeader={defineLeader} />
-        ) : (
-          <LoadState
-            isPending={isPending}
-            isError={isError}
-            isMissing={!isPending && !isError}
-            missingText={MEMBER_DELETION_TEXTS.notFoundOrDeleted}
-            errorText={MEMBER_DELETION_TEXTS.loadFailed}
-            onRetry={() => void refetch()}
-          />
-        )}
+        <MemberFormById memberId={memberId} onClose={onClose} defineLeader={defineLeader} />
       </DialogContent>
     </Dialog>
   );
