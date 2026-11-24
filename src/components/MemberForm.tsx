@@ -247,7 +247,10 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
   const [emailError, setEmailError] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (emailError) emailInputRef.current?.focus();
+    if (!emailError) return;
+    // Depois do foco que o Radix devolve ao fechar o aviso, se ele estava aberto.
+    const timer = window.setTimeout(() => emailInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
   }, [emailError]);
 
   const [password, setPassword] = useState("");
@@ -359,6 +362,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       toast({ variant: "destructive", title: "Erro", description: "Selecione uma função para o membro." });
       return;
     }
+    // O erro do e-mail some no reenvio; se voltar, o foco volta para o campo.
+    setEmailError(null);
     mutation.mutate({ data: form, confirmDeletedMatches: false });
   };
 
