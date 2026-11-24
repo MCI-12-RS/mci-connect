@@ -90,7 +90,8 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     cellOptionsQuery.data?.pages.flatMap((page) => page.items).find((cell) => cell.id === cellId) ?? null;
 
   // A célula já conhecida: a da tela de Células ou a do relatório em edição.
-  // Nos dois casos o seletor fica travado.
+  // Nos dois casos o seletor fica travado (e também depois que um relatório
+  // novo foi gravado e os participantes falharam).
   const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
 
   // Seletor de participantes: membros visíveis e ativos, 20 por vez (RN-07).
@@ -280,7 +281,9 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                       setSelectedCell(findLoadedCell(option?.value));
                       field.onChange(option?.value ?? "");
                     }}
-                    isDisabled={!!report || !!initialCell}
+                    // Depois que a primeira tentativa gravou o relatório, a célula fica:
+                    // a nova tentativa atualiza esse relatório e não o leva para outra célula.
+                    isDisabled={!!report || !!initialCell || !!savedReportId}
                     placeholder="Buscar por líder, rua ou bairro…"
                     noResultsLabel="Nenhuma célula encontrada"
                   />

@@ -100,7 +100,7 @@ const CellReports = () => {
     </StatusBadge>
   );
 
-  const HeldBadge = ({ r }: { r: CellReportRow }) =>
+  const renderHeldBadge = (r: CellReportRow) =>
     r.was_held ? (
       <Badge className="bg-green-500 hover:bg-green-600">Realizada</Badge>
     ) : (
@@ -138,7 +138,7 @@ const CellReports = () => {
 
               {/* Status + attendance */}
               <div className="flex items-center justify-between">
-                <HeldBadge r={r} />
+                {renderHeldBadge(r)}
                 {r.was_held && (
                   <span className="text-sm font-medium text-foreground">
                     {attendance(r)} <span className="text-xs font-normal text-muted-foreground">presenças</span>
@@ -247,7 +247,7 @@ const CellReports = () => {
                               </div>
                             ) : <span className="text-muted-foreground">—</span>}
                           </TableCell>
-                          <TableCell><HeldBadge r={r} /></TableCell>
+                          <TableCell>{renderHeldBadge(r)}</TableCell>
                           {showActions && <TableCell>{renderDesktopActions(r)}</TableCell>}
                         </TableRow>
                       );

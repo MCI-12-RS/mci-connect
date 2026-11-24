@@ -61,9 +61,14 @@ export function useSaveCellReport() {
       return { kind: "saved", reportId: savedId };
     },
     onSuccess: (result) => {
-      // A lista mostra o relatório gravado, mesmo que os participantes tenham falhado.
+      // O relatório gravado aparece na lista, mesmo que os participantes tenham falhado,
+      // e muda o último relatório da célula e os números da semana no Dashboard.
       if (result.kind === "saved" || result.step === "participants") {
-        void queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
+          queryClient.invalidateQueries({ queryKey: ["cells"] }),
+          queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        ]);
       }
     },
   });

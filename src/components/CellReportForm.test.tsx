@@ -359,6 +359,26 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     expectNoDirectParticipantWrites();
   });
 
+  it("Dado um relatório novo gravado com os participantes recusados, então o seletor de célula trava, para a nova tentativa não levar o relatório a outra célula", async () => {
+    respondWith(
+      { data: [todayCell] },
+      { data: [{ id: "new1" }] },
+    );
+    respondToRpc("set_cell_report_participants", {
+      error: appError("too_many_participants", "Um relatório pode ter no máximo 1000 participantes."),
+    });
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const cellInput = screen.getByLabelText(CELL);
+    openMenu(cellInput);
+    fireEvent.click(await screen.findByRole("option", { name: "Célula de Ana Alves, em Rua A 10, Centro" }));
+    expect(cellInput).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    expect(await screen.findByText("Um relatório pode ter no máximo 1000 participantes.")).toBeInTheDocument();
+    expect(screen.getByLabelText(CELL)).toBeDisabled();
+  });
+
   it("Dada a célula excluída entre a escolha e o envio, então o aviso fica no topo, sem gravar participantes (UX-30)", async () => {
     respondWith({ error: appError("cell_deleted", "Esta célula foi excluída e não recebe relatórios.", { cell_id: "c1" }) });
     const onClose = vi.fn();
