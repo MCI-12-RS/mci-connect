@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { formatCount, formatDateTimeInBrasilia, formatList } from "./format";
+import { formatCount, formatCurrency, formatDateTimeInBrasilia, formatList } from "./format";
 
 describe("formatCount", () => {
   it("abaixo de mil, sai sem separador", () => {
@@ -12,6 +12,18 @@ describe("formatCount", () => {
     expect(formatCount(1000)).toBe("1.000");
     expect(formatCount(1530)).toBe("1.530");
     expect(formatCount(1234567)).toBe("1.234.567");
+  });
+});
+
+describe("formatCurrency (E2.01, T7)", () => {
+  // O Intl separa o "R$" do valor com um espaço inseparável.
+  const brl = (text: string) => text.replace(" ", "\u00a0");
+
+  it("em reais, com vírgula nos centavos e ponto nos milhares", () => {
+    expect(formatCurrency(50)).toBe(brl("R$ 50,00"));
+    expect(formatCurrency(0)).toBe(brl("R$ 0,00"));
+    expect(formatCurrency(12.5)).toBe(brl("R$ 12,50"));
+    expect(formatCurrency(1234.56)).toBe(brl("R$ 1.234,56"));
   });
 });
 

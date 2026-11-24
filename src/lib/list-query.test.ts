@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { RANGE_NOT_SATISFIABLE, fetchListPage, withSearch } from "./list-query";
+import { MAX_ROWS_PER_REQUEST, RANGE_NOT_SATISFIABLE, fetchAllRows, fetchListPage, withSearch } from "./list-query";
 
 class FakeQuery {
   readonly filters: Array<[string, string]> = [];
@@ -65,5 +65,47 @@ describe("fetchListPage (RN-01)", () => {
       () => Promise.resolve({ count: null, error: null }),
     );
     expect(result).toEqual({ rows: [], total: 0 });
+  });
+});
+
+describe("fetchAllRows (sem o corte de 1000 linhas do PostgREST)", () => {
+  const rowsUpTo = (total: number) => Array.from({ length: total }, (_, i) => ({ id: i }));
+  /** Um servidor com `total` linhas, que devolve no máximo 1000 por consulta. */
+  const server = (total: number) => {
+    const all = rowsUpTo(total);
+    return vi.fn((from: number, to: number) => Promise.resolve({ data: all.slice(from, Math.min(to + 1, total)), error: null }));
+  };
+
+  it("com menos de 1000 linhas, faz uma consulta só", async () => {
+    const fetchBlock = server(3);
+    expect(await fetchAllRows(fetchBlock)).toEqual(rowsUpTo(3));
+    expect(fetchBlock.mock.calls).toEqual([[0, MAX_ROWS_PER_REQUEST - 1]]);
+  });
+
+  it("acima de 1000, pede os blocos seguintes até vir um incompleto", async () => {
+    const fetchBlock = server(2500);
+    const rows = await fetchAllRows(fetchBlock);
+    expect(rows).toHaveLength(2500);
+    expect(rows[2499]).toEqual({ id: 2499 });
+    expect(fetchBlock.mock.calls).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [2000, 2999],
+    ]);
+  });
+
+  it("com exatamente 1000, confere o bloco seguinte, que vem vazio", async () => {
+    const fetchBlock = server(1000);
+    expect(await fetchAllRows(fetchBlock)).toHaveLength(1000);
+    expect(fetchBlock).toHaveBeenCalledTimes(2);
+  });
+
+  it("um erro em qualquer bloco é repassado", async () => {
+    const failure = { code: "XX000", message: "falhou" };
+    const fetchBlock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: rowsUpTo(1000), error: null })
+      .mockResolvedValueOnce({ data: null, error: failure });
+    await expect(fetchAllRows(fetchBlock)).rejects.toBe(failure);
   });
 });

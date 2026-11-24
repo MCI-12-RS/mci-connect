@@ -40,3 +40,14 @@ export function withSearchParam(path: string, search: string): string {
   const query = new URLSearchParams({ q: search }).toString();
   return `${path}?${query}`;
 }
+
+/**
+ * Os parâmetros da URL com `name` trocado por `value`, ou retirado com
+ * `null` ou vazio. Os demais (`q`, `page`, `size`…) ficam como estavam.
+ */
+export function withQueryParam(params: URLSearchParams, name: string, value: string | null): URLSearchParams {
+  const next = new URLSearchParams(params);
+  if (value) next.set(name, value);
+  else next.delete(name);
+  return next;
+}

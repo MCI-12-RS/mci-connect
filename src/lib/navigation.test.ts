@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isNavItemActive, returnPathFrom, toReturnToState, withSearchParam } from "./navigation";
+import { isNavItemActive, returnPathFrom, toReturnToState, withQueryParam, withSearchParam } from "./navigation";
 
 // Item ativo do menu lateral (UX-18) e o "← {Lista}" das listas de excluídos (UX-19).
 
@@ -49,5 +49,24 @@ describe("withSearchParam", () => {
   it("põe a busca na URL, com os caracteres codificados", () => {
     expect(withSearchParam("/members/deleted", "Quintino Reis")).toBe("/members/deleted?q=Quintino+Reis");
     expect(withSearchParam("/cell-reports", "Ana & Bia")).toBe("/cell-reports?q=Ana+%26+Bia");
+  });
+});
+
+describe("withQueryParam (E2.01, T7: o ?report=<id> de Relatórios)", () => {
+  const params = new URLSearchParams("q=rui&page=2&size=50");
+
+  it("acrescenta ou troca o parâmetro, sem mexer na busca, na página e no tamanho", () => {
+    expect(withQueryParam(params, "report", "r1").toString()).toBe("q=rui&page=2&size=50&report=r1");
+    expect(withQueryParam(new URLSearchParams("report=r1&q=rui"), "report", "r2").toString()).toBe("report=r2&q=rui");
+  });
+
+  it("com null ou vazio, retira o parâmetro e mantém os demais", () => {
+    expect(withQueryParam(new URLSearchParams("q=rui&report=r1&page=2"), "report", null).toString()).toBe("q=rui&page=2");
+    expect(withQueryParam(new URLSearchParams("report=r1"), "report", "").toString()).toBe("");
+  });
+
+  it("não altera os parâmetros recebidos", () => {
+    withQueryParam(params, "report", "r1");
+    expect(params.toString()).toBe("q=rui&page=2&size=50");
   });
 });

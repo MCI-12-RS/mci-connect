@@ -7,6 +7,13 @@ export function formatCount(value: number): string {
   return COUNT_FORMAT.format(value);
 }
 
+const CURRENCY_FORMAT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Valor em reais, no padrão pt-BR: 50 → "R$ 50,00" (com espaço inseparável depois do "R$"). */
+export function formatCurrency(value: number): string {
+  return CURRENCY_FORMAT.format(value);
+}
+
 /** Lista em frase, no padrão pt-BR: "Ana", "Ana e Bruno", "Ana, Bruno e Sara". */
 export function formatList(items: readonly string[]): string {
   if (items.length <= 1) return items.join("");

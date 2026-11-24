@@ -69,3 +69,30 @@ export async function fetchListPage<Row>(
   if (error) throw error;
   return { rows: data ?? [], total: count ?? 0 };
 }
+
+/**
+ * O máximo de linhas que o PostgREST devolve por consulta (`max_rows`, 1000
+ * por padrão). Acima disso, a resposta corta as linhas sem avisar.
+ */
+export const MAX_ROWS_PER_REQUEST = 1000;
+
+interface BlockResponse<Row> {
+  data: Row[] | null;
+  error: QueryError | null;
+}
+
+/**
+ * Todas as linhas de uma consulta, sem o corte do PostgREST: pede blocos de
+ * `MAX_ROWS_PER_REQUEST` (`range(from, to)`) até vir um bloco incompleto. A
+ * consulta precisa de uma ordem estável, para um bloco continuar o anterior.
+ */
+export async function fetchAllRows<Row>(fetchBlock: (from: number, to: number) => PromiseLike<BlockResponse<Row>>): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += MAX_ROWS_PER_REQUEST) {
+    const { data, error } = await fetchBlock(from, from + MAX_ROWS_PER_REQUEST - 1);
+    if (error) throw error;
+    const block = data ?? [];
+    rows.push(...block);
+    if (block.length < MAX_ROWS_PER_REQUEST) return rows;
+  }
+}
