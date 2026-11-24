@@ -208,11 +208,19 @@ async function insertMember(asCaller: SupabaseClient, memberRow: Record<string, 
   if (error) throw insertErrorToHttp(error)
 }
 
-/** 8. Desfaz a conta criada nesta chamada quando o cadastro falha. */
+/**
+ * 8. Desfaz a conta criada nesta chamada quando o cadastro falha. Nunca lança:
+ * a resposta de erro original precisa sair, e a conta órfã fica no log.
+ */
 async function undoAccount(admin: SupabaseClient, authUserId: string): Promise<void> {
-  const { error } = await admin.auth.admin.deleteUser(authUserId)
-  if (error) {
-    console.error('create-user-admin: rollback falhou, conta de acesso órfã', authUserId, error.message)
+  try {
+    const { error } = await admin.auth.admin.deleteUser(authUserId)
+    if (error) {
+      console.error('create-user-admin: rollback falhou, conta de acesso órfã', authUserId, error.code, error.status)
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.name : 'unknown'
+    console.error('create-user-admin: rollback falhou, conta de acesso órfã', authUserId, reason)
   }
 }
 
