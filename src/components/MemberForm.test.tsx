@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
 import type { MemberRow } from "@/lib/members/fields";
@@ -184,5 +186,28 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("Dado um PATCH que volta sem linha, então a lista de Membros recarrega já, e 'Cancelar' volta para ela atualizada", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    respondWith({ data: roles });
+    const onClose = vi.fn();
+    render(<MemberForm member={member} onClose={onClose} />, { wrapper });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    respondWith({ data: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const alert = await screen.findByRole("alert");
+    // O texto fica na cor do texto (contraste, UX-38); o vermelho fica na borda e no ícone.
+    expect(within(alert).getByText(/As alterações não foram salvas/).parentElement).toHaveClass("text-foreground");
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([["members", "list"]]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

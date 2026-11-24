@@ -192,14 +192,20 @@ describe("Contrato com o banco: formulário de relatório (RN-06, RN-11, RN-12, 
     expect(classifyReportSaveError(PARTICIPANT_REMOVAL)).toEqual({
       kind: "blocked",
       message: "Não é possível retirar um participante cujo cadastro foi excluído.",
+      cellDeleted: false,
     });
   });
 
   it("RN-06 e RN-11: relatório para célula excluída e edição de relatório de célula excluída ficam no aviso do topo (UX-28, UX-30)", () => {
-    expect(classifyReportSaveError(CELL_DELETED)).toEqual({ kind: "blocked", message: "Esta célula foi excluída e não recebe relatórios." });
+    expect(classifyReportSaveError(CELL_DELETED)).toEqual({
+      kind: "blocked",
+      message: "Esta célula foi excluída e não recebe relatórios.",
+      cellDeleted: true,
+    });
     expect(classifyReportSaveError(REPORT_CELL_DELETED)).toEqual({
       kind: "blocked",
       message: "A célula deste relatório foi excluída. Restaure a célula para editar o relatório.",
+      cellDeleted: true,
     });
   });
 

@@ -261,8 +261,10 @@ test("UX-01 e UX-25 (360×800): em Células e Relatórios, 'Excluir' fica só no
   expect(cellCount).toBe(4); // a célula de Rui foi excluída
   for (let i = 0; i < cellCount; i++) {
     const group = cellMenus.nth(i).locator("xpath=..");
-    await expect(group.getByRole("button", { name: "Novo relatório" })).toBeVisible();
-    await expect(group.getByRole("button", { name: "Editar célula" })).toBeVisible();
+    // Os rótulos trazem a célula do card, como o do "⋯".
+    const leader = (await cellMenus.nth(i).getAttribute("aria-label"))?.replace("Ações da célula de ", "") ?? "";
+    await expect(group.getByRole("button", { name: `Novo relatório da célula de ${leader}`, exact: true })).toBeVisible();
+    await expect(group.getByRole("button", { name: `Editar a célula de ${leader}`, exact: true })).toBeVisible();
     await expectTouchTargets(group, `célula ${i + 1}`);
   }
   await cellMenus.first().click();
@@ -280,12 +282,14 @@ test("UX-01 e UX-25 (360×800): em Células e Relatórios, 'Excluir' fica só no
     const group = reportMenus.nth(i).locator("xpath=..");
     await expectTouchTargets(group, `relatório ${i + 1}`);
     const card = group.locator("xpath=..");
+    // Os rótulos trazem a data e o líder do card, como o do "⋯".
+    const reportOf = (await reportMenus.nth(i).getAttribute("aria-label"))?.replace("Ações do relatório de ", "") ?? "";
     if ((await card.getByText("Célula excluída").count()) > 0) {
       deletedCellCards++;
       await expect(card).toContainText(RUI);
-      await expect(group.getByRole("button", { name: "Editar relatório" })).toHaveCount(0);
+      await expect(group.getByRole("button", { name: /^Editar o relatório/ })).toHaveCount(0);
     } else {
-      await expect(group.getByRole("button", { name: "Editar relatório" })).toBeVisible();
+      await expect(group.getByRole("button", { name: `Editar o relatório de ${reportOf}`, exact: true })).toBeVisible();
     }
   }
   expect(deletedCellCards).toBe(1);
@@ -310,7 +314,7 @@ test("UX-12 (360×640, fonte 200%): as confirmações de célula e de relatório
 
   await openList(page, "/cell-reports", TEO);
   await largeFont(page);
-  await page.getByRole("button", { name: `Ações do relatório de ${shown(weekStart)}` }).click();
+  await page.getByRole("button", { name: `Ações do relatório de ${shown(weekStart)} da célula de ${TEO}` }).click();
   await page.getByRole("menuitem", { name: "Excluir relatório" }).click();
   dialog = page.getByRole("alertdialog");
   await expectDialogFitsSmallScreen(page, dialog, ["Cancelar", "Excluir relatório"], "confirmação de relatório");
@@ -326,9 +330,9 @@ test("RN-11 e UX-25 (AD): o relatório da célula excluída tem o badge, não te
   await openList(page, "/cell-reports", RUI);
   const row = page.getByRole("row", { name: new RegExp(RUI) });
   await expect(row.getByText("Célula excluída")).toBeVisible();
-  await expect(row.getByRole("button", { name: "Editar relatório" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /^Editar o relatório/ })).toHaveCount(0);
 
-  await row.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)}` }).click();
+  await row.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)} da célula de ${RUI}` }).click();
   const dialog = page.getByRole("alertdialog");
   await expect(dialog.getByRole("heading", { name: `Excluir o relatório de ${shown(weekStart)} da célula de ${RUI}?` })).toBeVisible();
   await dialog.getByRole("button", { name: "Excluir relatório" }).click();
@@ -346,7 +350,7 @@ test("RN-12 (AD): com o relatório da semana, outro é recusado; excluído o rel
 
   async function newReportForZeca() {
     await openList(page, "/cells", ZECA);
-    await page.getByRole("button", { name: "Novo relatório" }).click();
+    await page.getByRole("button", { name: `Novo relatório da célula de ${ZECA}` }).click();
     const form = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
     await expect(form.getByLabel("Data *")).toHaveValue(weekStart);
     await form.getByLabel("Tema da Palavra").fill(`${NAME} tema novo`);
@@ -355,12 +359,14 @@ test("RN-12 (AD): com o relatório da semana, outro é recusado; excluído o rel
   }
 
   let form = await newReportForZeca();
-  await expect(toast(page, "Erro ao salvar")).toContainText("Já existe um relatório dessa célula nesta semana (domingo a sábado).");
+  // O aviso traz só a mensagem, sem um título repetido.
+  await expect(toast(page, "Já existe um relatório dessa célula nesta semana (domingo a sábado).")).toBeVisible();
+  await expect(toast(page, "Erro ao salvar")).toHaveCount(0);
   await expect(form).toBeVisible();
   await form.getByRole("button", { name: "Cancelar" }).click();
 
   await openList(page, "/cell-reports", ZECA);
-  await page.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)}` }).click();
+  await page.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)} da célula de ${ZECA}` }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Excluir relatório" }).click();
   await expect(toast(page, "Relatório excluído.")).toBeVisible();
 
@@ -381,7 +387,7 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
 }) => {
   await login(page, env.admin);
   await openList(page, "/cell-reports", TEO);
-  await page.getByRole("button", { name: "Editar relatório" }).click();
+  await page.getByRole("button", { name: `Editar o relatório de ${shown(weekStart)} da célula de ${TEO}` }).click();
   const form = page.getByRole("dialog", { name: "Editar Relatório" });
 
   const keptLine = `Continuam no relatório (cadastros excluídos): ${SARA}.`;
@@ -411,7 +417,7 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   expect(participantsOf(report(3))).toBe([ANA, BIA, SARA].sort().join(","));
   expect(sql(env, `SELECT theme FROM public.cell_reports WHERE id = ${lit(report(3))}`)).toBe(`${NAME} tema Teo editado`);
 
-  await page.getByRole("button", { name: "Editar relatório" }).click();
+  await page.getByRole("button", { name: `Editar o relatório de ${shown(weekStart)} da célula de ${TEO}` }).click();
   const reopened = page.getByRole("dialog", { name: "Editar Relatório" });
   await expect(reopened.getByText(keptLine)).toBeVisible();
   await expect(reopened.getByRole("button", { name: `Remover ${BIA}` })).toBeVisible();
@@ -459,6 +465,6 @@ test("RN-02 (LE) e UX-07: LE exclui a célula de Fábio (sem 'Marcar como inativ
 
   await openList(page, "/cell-reports", TEO);
   const row = page.getByRole("row", { name: new RegExp(TEO) });
-  await expect(row.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)}` })).toBeVisible();
-  await expect(row.getByRole("button", { name: "Editar relatório" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)} da célula de ${TEO}` })).toBeVisible();
+  await expect(row.getByRole("button", { name: /^Editar o relatório/ })).toHaveCount(0);
 });

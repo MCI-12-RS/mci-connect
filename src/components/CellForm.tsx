@@ -136,6 +136,8 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     onSuccess: (result) => {
       if (result === "gone") {
         setDeletedWhileEditing(true);
+        // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem a célula.
+        queryClient.invalidateQueries({ queryKey: ["cells", "list"] });
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["cells"] });
@@ -173,7 +175,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
       {deletedWhileEditing && (
         <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription className="space-y-3">
+          <AlertDescription className="space-y-3 text-foreground">
             <p>{CELL_DELETION_TEXTS.deletedWhileEditing}</p>
             <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeDeleted}>
               {DELETION_TEXTS.close}

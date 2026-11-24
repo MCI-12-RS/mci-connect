@@ -50,9 +50,13 @@ type ReportFormValues = z.infer<typeof reportSchema>;
 
 /** Aviso no topo do formulário depois de uma gravação recusada. */
 type FormNotice =
-  /** O relatório não existe mais ou foi excluído (DT-19): "Fechar" recarrega a lista. */
-  | { kind: "gone" }
-  /** Regra que o formulário não resolve, como a célula excluída (UX-28, UX-30). */
+  /**
+   * Nada no formulário resolve: o relatório não existe mais (DT-19), ou a
+   * célula foi excluída e não pode ser trocada (UX-28, UX-30). Salvar fica
+   * desabilitado, e "Fechar" volta para a lista.
+   */
+  | { kind: "final"; message: string }
+  /** Regra que o formulário não resolve, mas a pessoa pode mudar a escolha (outra célula). */
   | { kind: "blocked"; message: string };
 
 interface CellReportFormProps {
@@ -78,6 +82,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   const saveMutation = useSaveCellReport();
   const cellInputId = useId();
   const participantsInputId = useId();
+  const keptLineId = useId();
 
   // Seletor de célula: células visíveis e ativas, 20 por vez, buscadas no
   // servidor (E1.08, RN-07).
@@ -93,6 +98,9 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Nos dois casos o seletor fica travado (e também depois que um relatório
   // novo foi gravado e os participantes falharam).
   const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
+  // Depois que a primeira tentativa gravou o relatório, a célula também fica:
+  // a nova tentativa atualiza esse relatório e não o leva para outra célula.
+  const isCellFixed = (savedId: string | null) => !!report || !!initialCell || !!savedId;
 
   // Seletor de participantes: membros visíveis e ativos, 20 por vez (RN-07).
   // As opções escolhidas ficam guardadas com o nome, que não depende das
@@ -168,8 +176,16 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     if (suggestedTime) form.setValue("time", suggestedTime.substring(0, 5));
   }, [cellIdValue, suggestedDay, suggestedTime, form]);
 
-  const showSaveError = (message: string) =>
-    toast({ variant: "destructive", title: CELL_REPORT_FORM_TEXTS.failedTitle, description: message });
+  const showSaveError = (message: string) => toast({ variant: "destructive", title: message });
+
+  /** Nada no formulário resolve: as listas recarregam já, para qualquer jeito de fechar voltar a elas atualizadas. */
+  const showFinalNotice = (message: string) => {
+    setNotice({ kind: "final", message });
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["cell_reports", "list"] }),
+      queryClient.invalidateQueries({ queryKey: ["cells", "list"] }),
+    ]);
+  };
 
   /** Fecha com o toast, ou mostra a falha sem perder o que foi digitado. */
   const handleSaveResult = (result: SaveCellReportResult) => {
@@ -182,11 +198,13 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     if (result.step === "participants") setParticipantsUnsaved(true);
     const { failure } = result;
     if (failure.kind === "gone") {
-      setNotice({ kind: "gone" });
+      showFinalNotice(CELL_REPORT_DELETION_TEXTS.deletedWhileEditing);
       return;
     }
     if (failure.kind === "blocked") {
-      setNotice({ kind: "blocked", message: failure.message });
+      // Célula excluída: só outra célula resolveria, e só o relatório novo aberto em Relatórios deixa trocá-la.
+      if (failure.cellDeleted && isCellFixed(result.reportId)) showFinalNotice(failure.message);
+      else setNotice({ kind: "blocked", message: failure.message });
       return;
     }
     if (failure.kind === "participants") {
@@ -226,9 +244,12 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     }
   };
 
-  /** "Fechar" do aviso de relatório excluído: volta para a lista, recarregada. */
-  const closeGone = () => {
-    void queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
+  /** "Fechar" do aviso: volta para a lista, recarregada. */
+  const closeFinal = () => {
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
+      queryClient.invalidateQueries({ queryKey: ["cells"] }),
+    ]);
     onClose();
   };
 
@@ -243,20 +264,14 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
         {notice && (
           <Alert ref={noticeRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
             <AlertCircle className="h-4 w-4" aria-hidden="true" />
-            <AlertDescription className="space-y-3">
-              <p>{notice.kind === "gone" ? CELL_REPORT_DELETION_TEXTS.deletedWhileEditing : notice.message}</p>
-              {notice.kind === "gone" && (
-                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeGone}>
+            <AlertDescription className="space-y-3 text-foreground">
+              <p>{notice.message}</p>
+              {notice.kind === "final" && (
+                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeFinal}>
                   {DELETION_TEXTS.close}
                 </Button>
               )}
             </AlertDescription>
-          </Alert>
-        )}
-        {participantsUnsaved && !notice && (
-          <Alert>
-            <Info className="h-4 w-4" aria-hidden="true" />
-            <AlertDescription>{CELL_REPORT_FORM_TEXTS.participantsNotSaved}</AlertDescription>
           </Alert>
         )}
 
@@ -281,9 +296,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                       setSelectedCell(findLoadedCell(option?.value));
                       field.onChange(option?.value ?? "");
                     }}
-                    // Depois que a primeira tentativa gravou o relatório, a célula fica:
-                    // a nova tentativa atualiza esse relatório e não o leva para outra célula.
-                    isDisabled={!!report || !!initialCell || !!savedReportId}
+                    isDisabled={isCellFixed(savedReportId)}
                     placeholder="Buscar por líder, rua ou bairro…"
                     noResultsLabel="Nenhuma célula encontrada"
                   />
@@ -394,13 +407,18 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                     onChange={handleParticipantsChange}
                     placeholder="Buscar membros…"
                     noResultsLabel="Nenhum membro encontrado"
+                    aria-describedby={keptLine ? keptLineId : undefined}
                   />
                   <FormMessage />
-                  {keptLine && <p className="text-sm text-muted-foreground">{keptLine}</p>}
+                  {keptLine && (
+                    <p id={keptLineId} className="text-sm text-muted-foreground">
+                      {keptLine}
+                    </p>
+                  )}
                   {savedParticipantsQuery.isError && kept === null && (
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" aria-hidden="true" />
-                      <AlertDescription className="space-y-3">
+                      <AlertDescription className="space-y-3 text-foreground">
                         <p>{CELL_REPORT_FORM_TEXTS.participantsLoadFailed}</p>
                         <Button
                           type="button"
@@ -470,11 +488,19 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
           </div>
         )}
 
+        {/* Perto de "Salvar", que é o que resolve; o foco fica no campo de participantes. */}
+        {participantsUnsaved && !notice && (
+          <Alert>
+            <Info className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription>{CELL_REPORT_FORM_TEXTS.participantsNotSaved}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={saveMutation.isPending || participantsPending || notice?.kind === "gone"}>
+          <Button type="submit" disabled={saveMutation.isPending || participantsPending || notice?.kind === "final"}>
             {saveMutation.isPending ? "Salvando..." : "Salvar"}
           </Button>
         </div>

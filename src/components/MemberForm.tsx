@@ -268,6 +268,8 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
     onSuccess: (result) => {
       if (result === "gone") {
         setDeletedWhileEditing(true);
+        // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem o cadastro.
+        queryClient.invalidateQueries({ queryKey: ["members", "list"] });
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["members"] });
@@ -332,7 +334,7 @@ const MemberForm = ({ member, onClose }: MemberFormProps) => {
       {deletedWhileEditing && (
         <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription className="space-y-3">
+          <AlertDescription className="space-y-3 text-foreground">
             <p>{MEMBER_DELETION_TEXTS.deletedWhileEditing}</p>
             <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeDeleted}>
               {DELETION_TEXTS.close}

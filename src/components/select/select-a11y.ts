@@ -37,11 +37,16 @@ export function loadFailedLabel(hasOptions: boolean): string {
 
 /**
  * O `aria-describedby` do campo: o que o react-select já põe (o placeholder ou
- * a região viva) e, com o campo inválido, o id da mensagem de erro. O
- * `aria-errormessage` sozinho tem suporte irregular no TalkBack e no VoiceOver.
+ * a região viva), o texto que a tela liga ao campo (`descriptionId`) e, com o
+ * campo inválido, o id da mensagem de erro. O `aria-errormessage` sozinho tem
+ * suporte irregular no TalkBack e no VoiceOver.
  */
-export function describedByWithError(describedBy: string | undefined, errorId: string | undefined): string | undefined {
-  const ids = [describedBy, errorId].filter((id): id is string => !!id);
+export function describedByWithError(
+  describedBy: string | undefined,
+  errorId: string | undefined,
+  descriptionId?: string,
+): string | undefined {
+  const ids = [describedBy, descriptionId, errorId].filter((id): id is string => !!id);
   return ids.length ? ids.join(" ") : undefined;
 }
 

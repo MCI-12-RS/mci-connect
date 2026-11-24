@@ -75,12 +75,17 @@ describe("classifyReportSaveError", () => {
     expect(classifyReportSaveError(appError("report_cell_deleted", message, { cell_id: "c1" }))).toEqual({
       kind: "blocked",
       message,
+      cellDeleted: true,
     });
   });
 
   it("Dado relatório novo para célula excluída, então o aviso no topo (UX-30)", () => {
     const message = "Esta célula foi excluída e não recebe relatórios.";
-    expect(classifyReportSaveError(appError("cell_deleted", message, { cell_id: "c1" }))).toEqual({ kind: "blocked", message });
+    expect(classifyReportSaveError(appError("cell_deleted", message, { cell_id: "c1" }))).toEqual({
+      kind: "blocked",
+      message,
+      cellDeleted: true,
+    });
   });
 
   it("Dado um participante excluído entre a escolha e o envio, então a mensagem vai para o campo, com o membro (UX-30)", () => {
@@ -105,6 +110,7 @@ describe("classifyReportSaveError", () => {
     expect(classifyReportSaveError(appError("deleted_participant_removal", message, { member_id: "m2" }))).toEqual({
       kind: "blocked",
       message,
+      cellDeleted: false,
     });
   });
 

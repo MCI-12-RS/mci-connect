@@ -8,7 +8,6 @@ import type { DeletionErrorCode } from "@/lib/deletion/codes";
 /** Textos do formulário de relatório. */
 export const CELL_REPORT_FORM_TEXTS = {
   saved: "Relatório salvo com sucesso",
-  failedTitle: "Erro ao salvar",
   weekTaken: "Já existe um relatório dessa célula nesta semana (domingo a sábado).",
   outsideCurrentWeek: "A data do relatório precisa estar dentro da semana atual (de domingo a sábado).",
   /** Não está no spec: queda de conexão ao salvar ("O formulário mantém os dados"). */
@@ -19,9 +18,9 @@ export const CELL_REPORT_FORM_TEXTS = {
    * Não está no spec: o relatório foi gravado e os participantes não (são duas
    * chamadas até o E2.11). Salvar de novo atualiza o mesmo relatório.
    */
-  participantsNotSaved: "O relatório foi gravado, mas os participantes não. Salve de novo para gravá-los.",
-  /** Não está no spec: os participantes salvos não carregaram na edição. */
-  participantsLoadFailed: "Não foi possível carregar os participantes.",
+  participantsNotSaved: "O relatório foi salvo, mas os participantes ainda não. Salve de novo para incluí-los.",
+  /** Não está no spec: os participantes salvos não carregaram na edição (e Salvar fica desabilitado). */
+  participantsLoadFailed: "Não foi possível carregar os participantes. Tente de novo para poder salvar.",
 } as const;
 
 /**
@@ -73,14 +72,18 @@ export function toReportWrite(values: ReportFormInput): CellReportWrite {
 export type ReportSaveFailure =
   /** O relatório não existe mais ou foi excluído (DT-19): `Alert` no topo, com "Fechar". */
   | { kind: "gone" }
-  /** Regra que o formulário não resolve (célula excluída, RN-06 e RN-11): `Alert` no topo; o formulário fica (UX-28, UX-30). */
-  | { kind: "blocked"; message: string }
+  /**
+   * Regra que o formulário não resolve (célula excluída, RN-06 e RN-11): `Alert` no topo; o formulário fica
+   * (UX-28, UX-30). `cellDeleted`: a célula do relatório foi excluída; só outra célula resolveria.
+   */
+  | { kind: "blocked"; message: string; cellDeleted: boolean }
   /** Problema nos participantes escolhidos: mensagem embaixo do campo e, se houver, o membro excluído (UX-30). */
   | { kind: "participants"; message: string; memberId: string | null }
-  /** Demais falhas: o aviso "Erro ao salvar", com o formulário como estava. */
+  /** Demais falhas: um aviso com a mensagem, e o formulário como estava. */
   | { kind: "error"; message: string };
 
 const PARTICIPANT_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["deleted_member_chosen", "too_many_participants"]);
+const CELL_DELETED_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["cell_deleted", "report_cell_deleted"]);
 
 function fromRefusal(refusal: AppError): ReportSaveFailure {
   if (refusal.code === "not_found_or_deleted") return { kind: "gone" };
@@ -89,7 +92,7 @@ function fromRefusal(refusal: AppError): ReportSaveFailure {
     return { kind: "participants", message: refusal.message, memberId: typeof memberId === "string" ? memberId : null };
   }
   // cell_deleted, report_cell_deleted, deleted_participant_removal e regras futuras: a mensagem do Negócio.
-  return { kind: "blocked", message: refusal.message };
+  return { kind: "blocked", message: refusal.message, cellDeleted: CELL_DELETED_CODES.has(refusal.code) };
 }
 
 /** SQLSTATE das regras de semana (triggers de `cell_reports` e o índice único da semana). */
