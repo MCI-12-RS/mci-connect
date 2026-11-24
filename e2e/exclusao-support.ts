@@ -209,3 +209,91 @@ export async function expectDialogFitsSmallScreen(page: Page, dialog: Locator, b
   }
   return metrics;
 }
+
+// ---------------------------------------------------------------------------
+// Listas de excluídos e restauração (E2.01, PR 3).
+
+/** O id do Auth de um e-mail da stack local (vazio se não houver). */
+export const authIdOf = (env: E2EEnv, email: string) => sql(env, `SELECT coalesce((SELECT id::text FROM auth.users WHERE email = ${lit(email)}), '')`);
+
+/** O nome do cadastro ligado à conta do administrador de teste. */
+export const adminMemberName = (env: E2EEnv) =>
+  sql(env, `SELECT m.name FROM public.members m JOIN auth.users u ON u.id = m.auth_user_id WHERE u.email = ${lit(env.admin.email)}`);
+
+/**
+ * Várias RPCs como o usuário do Auth `authUserId`, na ordem, numa transação só
+ * (para preparar a massa pela API, com as mesmas regras e a mesma Auditoria).
+ */
+export function rpcsAs(env: E2EEnv, authUserId: string, calls: readonly string[]): void {
+  sql(
+    env,
+    `BEGIN;
+     SELECT set_config('request.jwt.claims', json_build_object('sub', ${lit(authUserId)}, 'role', 'authenticated')::text, true);
+     SET LOCAL ROLE authenticated;
+     ${calls.map((call) => `SELECT ${call};`).join("\n     ")}
+     COMMIT;`,
+  );
+}
+
+/** Abre uma lista de excluídos com a busca na URL e espera a lista (ou o aviso) carregar. */
+export async function openDeleted(page: Page, path: string, search: string, extra = "") {
+  await page.goto(`${path}?q=${encodeURIComponent(search)}${extra}`);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+}
+
+/** Login por senha direto no Auth local: o status HTTP (200 entra; 400 recusa). */
+export async function passwordGrant(env: E2EEnv, email: string, password: string): Promise<number> {
+  const response = await fetch(`${env.apiUrl}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: env.publishableKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  await response.text();
+  return response.status;
+}
+
+/** As requisições ao PostgREST (`/rest/v1/…`) feitas pela página, a partir de agora. */
+export function trackRestRequests(page: Page): string[] {
+  const urls: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/rest/v1/")) urls.push(decodeURIComponent(url));
+  });
+  return urls;
+}
+
+/**
+ * UX-40: nenhum botão (ou link com cara de botão) visível no escopo estoura a
+ * largura da tela nem o próprio contorno: o texto quebra linha. A página não
+ * rola de lado.
+ */
+export async function expectNoButtonOverflow(page: Page, scope: Locator, label: string) {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("sem viewport");
+  const boxes = await scope.locator("button, a[href]").evaluateAll((elements) =>
+    elements
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          name: element.getAttribute("aria-label") ?? element.textContent?.trim() ?? "",
+          left: rect.left,
+          right: rect.right,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        };
+      }),
+  );
+  expect(boxes.length, `${label}: botões na tela`).toBeGreaterThan(0);
+  for (const box of boxes) {
+    expect(box.left, `${label}: "${box.name}" começa dentro da tela`).toBeGreaterThanOrEqual(-0.5);
+    expect(box.right, `${label}: "${box.name}" termina dentro da tela`).toBeLessThanOrEqual(viewport.width + 0.5);
+    expect(box.scrollWidth, `${label}: o texto de "${box.name}" cabe no botão`).toBeLessThanOrEqual(box.clientWidth + 1);
+  }
+  const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(pageWidth, `${label}: sem rolagem lateral`).toBeLessThanOrEqual(viewport.width);
+}
