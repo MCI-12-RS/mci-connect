@@ -50,6 +50,12 @@ type OkAttempt = Extract<AttemptResult, { result: 'ok' }>
 /** Folga para a diferença de relógio entre a função e o Auth (DT-18). */
 const CLOCK_SKEW_MS = 60_000
 
+/** Tempo-limite de cada chamada ao banco e ao Auth: um Auth travado vira 500, sem prender a função. */
+const UPSTREAM_TIMEOUT_MS = 10_000
+
+const fetchWithTimeout: typeof fetch = (input, init) =>
+  fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+
 function log(result: string, startedAt: number, code?: string): void {
   const entry: Record<string, string | number> = {
     fn: 'sign-in',
@@ -84,15 +90,20 @@ async function mintOnce(
   }
   if (data.properties.verification_type !== 'magiclink') return { kind: 'failed', code: 'link_type' }
 
-  const response = await fetch(`${supabaseUrl}/auth/v1/verify`, {
-    method: 'POST',
-    headers: {
-      apikey: apiKey,
-      'Content-Type': 'application/json',
-      'Sb-Forwarded-For': origin,
-    },
-    body: JSON.stringify({ type: 'email', token_hash: data.properties.hashed_token }),
-  })
+  let response: Response
+  try {
+    response = await fetchWithTimeout(`${supabaseUrl}/auth/v1/verify`, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        'Content-Type': 'application/json',
+        'Sb-Forwarded-For': origin,
+      },
+      body: JSON.stringify({ type: 'email', token_hash: data.properties.hashed_token }),
+    })
+  } catch {
+    return { kind: 'failed', code: 'verify_network' }
+  }
   const body: unknown = await response.json().catch(() => null)
   if (response.ok) {
     const session = pickSession(body)
@@ -166,6 +177,7 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, apiKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: fetchWithTimeout },
     })
 
     const { data, error } = await admin.rpc('sign_in_attempt', {
