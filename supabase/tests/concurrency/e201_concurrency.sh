@@ -153,7 +153,7 @@ q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALU
 pair s1 "$U1" "BEGIN; SELECT public.delete_member('$M_BRUNO'); SELECT pg_sleep($HOLD); COMMIT;" \
         "$U2" "SELECT public.delete_member('$M_BRUNO');"
 show s1
-check "A exclui Bruno" "SELECT $(outcome "$TMP/s1.A" | grep -q '^OK' && echo true || echo false)"
+check "A exclui Bruno" "SELECT $([[ "$(outcome "$TMP/s1.A")" == OK* ]] && echo true || echo false)"
 check "B recebe not_found_or_deleted (\"Este cadastro não existe ou já foi excluído.\")" \
   "SELECT $(grep -q 'not_found_or_deleted' "$TMP/s1.B" && grep -q 'Este cadastro não existe ou já foi excluído.' "$TMP/s1.B" && echo true || echo false)"
 check "só a primeira exclusão vale: autor = Ana" "SELECT deleted_by = '$M_AD1' FROM public.members WHERE id = '$M_BRUNO'"
@@ -230,7 +230,7 @@ for i in 1 2 3 4 5; do
   echo "  rodada $i: A=$(outcome "$TMP/s3b.A" | cut -c1-50) / B=$(outcome "$TMP/s3b.B" | cut -c1-50)"
   check "rodada $i: exatamente um dos dois excluído; o outro recebe 42501" \
     "SELECT (SELECT count(*) FROM public.members WHERE id IN ('$M_AD1', '$M_AD2') AND deleted_at IS NOT NULL) = 1
-        AND $(cat "$TMP/s3b.A" "$TMP/s3b.B" | grep -q '42501' && ! cat "$TMP/s3b.A" "$TMP/s3b.B" | grep -q '40P01' && echo true || echo false)"
+        AND $(grep -q '42501' "$TMP/s3b.A" "$TMP/s3b.B" && ! grep -q '40P01' "$TMP/s3b.A" "$TMP/s3b.B" && echo true || echo false)"
 done
 
 # ---------------------------------------------------------------------------
