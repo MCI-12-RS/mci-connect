@@ -6,7 +6,8 @@
 --   - privilégios: anon e authenticated sem SELECT de tabela em members;
 --     authenticated com SELECT em cada coluna não sensível e sem SELECT nas 8
 --     sensíveis; anon sem nenhuma coluna; service_role com a tabela inteira;
---     INSERT, UPDATE e DELETE de tabela mantidos para authenticated;
+--     INSERT e UPDATE de tabela mantidos para authenticated; DELETE retirado
+--     pela migration 5 do E2.01 (exclusão só pelas RPCs);
 --   - guarda do risco 4 (a trava falha fechada): toda coluna de members, lida
 --     do catálogo, ou é sensível ou tem SELECT para authenticated. Uma coluna
 --     nova sem GRANT faz este teste falhar; o §8 demonstra isso com uma coluna
@@ -17,9 +18,9 @@
 --     preserva;
 --   - comportamento como authenticated: ler, filtrar ou ordenar por coluna
 --     sensível, select *, RETURNING com coluna sensível e copiar uma coluna
---     sensível para outra dão 42501; ler as colunas liberadas, UPDATE e DELETE
---     por id e INSERT sem RETURNING funcionam (é o que o front e a
---     create-user-admin fazem);
+--     sensível para outra dão 42501; ler as colunas liberadas, UPDATE por id e
+--     INSERT sem RETURNING funcionam (é o que o front e a create-user-admin
+--     fazem); DELETE por id dá 42501 e não tira ninguém da tabela (E2.01);
 --   - regressões que dependem de leitura interna da tabela: regras 5 e 6,
 --     g12_level, cônjuge, totais e auditoria; members_view, member_names,
 --     dashboard_*, ministry_tree_nodes e as views de células e relatórios;
@@ -31,8 +32,9 @@
 --
 -- Colunas novas: a guarda e a amarração olham o catálogo, então uma coluna nova
 -- com o GRANT (como deleted_at e deleted_by no E2.01, DT-22) continua passando.
--- Quando o E2.01 retirar o DELETE de authenticated (migration 5 dele), as
--- verificações de DELETE dos §1 e §5 passam a esperar a recusa.
+-- Desde a migration 5 do E2.01, authenticated não tem DELETE em members: as
+-- verificações de DELETE dos §1 e §5 esperam a recusa (42501), e o membro
+-- continua na tabela.
 --
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Rodar com: supabase test db (ou psql no banco local).
@@ -273,8 +275,8 @@ SELECT ok(has_table_privilege('authenticated', 'public.members', 'INSERT'),
   'authenticated: INSERT de tabela mantido (create-user-admin grava com a sessão de quem chama)');
 SELECT ok(has_table_privilege('authenticated', 'public.members', 'UPDATE'),
   'authenticated: UPDATE de tabela mantido (MemberForm)');
-SELECT ok(has_table_privilege('authenticated', 'public.members', 'DELETE'),
-  'authenticated: DELETE de tabela mantido (Members)');
+SELECT ok(NOT has_table_privilege('authenticated', 'public.members', 'DELETE'),
+  'authenticated: sem DELETE de tabela (E2.01, migration 5: exclusão só pelas RPCs)');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.members'::regclass),
   'members: o RLS continua ligado');
 
@@ -449,18 +451,18 @@ SELECT throws_ok(format($$ UPDATE public.members SET notes = cpf WHERE id = %L $
   'P1: copiar uma coluna sensível para uma legível (SET notes = cpf) → 42501');
 SELECT lives_ok(format($$ UPDATE public.members SET cpf = '10850002222' WHERE id = %L $$, pg_temp.m(16)),
   'P1: gravar uma coluna sensível sem lê-la (SET cpf = valor) funciona');
-SELECT lives_ok(format($$ DELETE FROM public.members WHERE id = %L $$, pg_temp.m(12)),
-  'P1 (delete_member): DELETE … WHERE id = … funciona (Members)');
+SELECT throws_ok(format($$ DELETE FROM public.members WHERE id = %L $$, pg_temp.m(12)), '42501', NULL,
+  'P1 (delete_member): DELETE … WHERE id = … → 42501 (E2.01: exclusão só pelas RPCs)');
 SELECT throws_ok(format($$ DELETE FROM public.members WHERE id = %L RETURNING cpf $$, pg_temp.m(17)), '42501', NULL,
-  'P1: DELETE … RETURNING cpf → 42501');
+  'P1: DELETE … RETURNING cpf → 42501 (sem DELETE de tabela desde o E2.01)');
 RESET ROLE;
 
 SELECT results_eq(
   format($$ SELECT notes, instagram, cpf FROM public.members WHERE id = %L $$, pg_temp.m(16)),
   $$ VALUES ('notas PR5'::text, '@nuno.pr5'::text, '10850002222'::text) $$,
   'P1: as escritas por id gravaram (notes, instagram e o CPF, que P1 vê)');
-SELECT is_empty(format($$ SELECT 1 FROM public.members WHERE id = %L $$, pg_temp.m(12)),
-  'P1: o membro excluído por id saiu da tabela');
+SELECT isnt_empty(format($$ SELECT 1 FROM public.members WHERE id = %L $$, pg_temp.m(12)),
+  'P1: o DELETE … WHERE id recusado não tirou o membro da tabela');
 SELECT isnt_empty(format($$ SELECT 1 FROM public.members WHERE id = %L $$, pg_temp.m(17)),
   'P1: o DELETE … RETURNING cpf recusado não excluiu nada');
 

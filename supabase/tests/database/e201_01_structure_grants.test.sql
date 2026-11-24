@@ -22,8 +22,9 @@
 --     com referência;
 --   - triggers novos e o valor 'restore' do enum event_action.
 --
--- Fora deste arquivo (PR 2): "depois da migration 5, DELETE e TRUNCATE dão
--- 42501". No PR 1 as políticas de DELETE ainda existem, de propósito.
+-- Fora deste arquivo: "depois da migration 5, DELETE e TRUNCATE dão 42501"
+-- está em e201_06_no_physical_delete.test.sql (PR 2). As exclusões físicas do
+-- fim deste arquivo rodam como postgres, que mantém o DELETE, e conferem as FKs.
 --
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Rodar com: supabase test db
