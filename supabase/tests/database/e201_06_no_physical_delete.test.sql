@@ -81,9 +81,11 @@ SELECT pg_temp.u(n), 'e201-06-' || n || '@teste.invalid', extensions.crypt('Senh
 INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(1), 'E201-06 AD'), (pg_temp.role(2), 'E201-06 LE');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(2), 'view_members'), (pg_temp.role(2), 'edit_cell');
+  (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'edit_cell'),
+  (pg_temp.role(2), 'edit_cell_report');  -- E2.02 (DA-5): retirar participante exige edit_cell_report
 
 INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
   (pg_temp.m(1), 'Pedro Pastor E201-06', 'M', true, false);

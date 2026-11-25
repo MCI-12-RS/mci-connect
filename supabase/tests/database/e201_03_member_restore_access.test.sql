@@ -112,18 +112,20 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(4), 'E201-03 AD ministério'), (pg_temp.role(5), 'E201-03 Ana'), (pg_temp.role(6), 'E201-03 CM'),
   (pg_temp.role(11), 'E201-03 Líder (será apagada)');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(10), 'view_dashboard'),
-  (pg_temp.role(2), 'view_members'), (pg_temp.role(2), 'create_member'), (pg_temp.role(2), 'delete_member'),
+  (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'create_member'), (pg_temp.role(2), 'delete_member'),
   (pg_temp.role(2), 'view_dashboard'),
-  (pg_temp.role(3), 'manage_roles'), (pg_temp.role(3), 'view_members'), (pg_temp.role(3), 'create_member'),
+  (pg_temp.role(3), 'manage_roles'), (pg_temp.role(3), 'view_all_church'), (pg_temp.role(3), 'create_member'),
   (pg_temp.role(3), 'delete_member'),
   (pg_temp.role(4), 'manage_roles'), (pg_temp.role(4), 'view_own_ministry'), (pg_temp.role(4), 'create_member'),
-  (pg_temp.role(5), 'view_members'), (pg_temp.role(5), 'view_dashboard'), (pg_temp.role(5), 'delete_member'),
+  (pg_temp.role(5), 'view_all_church'), (pg_temp.role(5), 'view_dashboard'), (pg_temp.role(5), 'delete_member'),
   (pg_temp.role(5), 'create_member'), (pg_temp.role(5), 'edit_own_data'), (pg_temp.role(5), 'view_all_reports'),
-  (pg_temp.role(6), 'create_member'), (pg_temp.role(6), 'view_members'),
-  (pg_temp.role(11), 'view_members');
+  (pg_temp.role(6), 'create_member'), (pg_temp.role(6), 'view_all_church'),
+  (pg_temp.role(6), 'view_dashboard'),  -- E2.02 (RN-19): cobre a função padrão do arquivo
+  (pg_temp.role(11), 'view_all_church');
 
 INSERT INTO auth.users (id, email, encrypted_password, banned_until)
 SELECT pg_temp.u(n), 'e201-03-' || n || '@teste.invalid', extensions.crypt('Senha#' || n, extensions.gen_salt('bf', 4)),
@@ -237,8 +239,8 @@ SELECT is(pg_temp.code(pg_temp.try(5, 'SELECT * FROM public.dashboard_summary()'
 SELECT is(pg_temp.val(5, 'SELECT public.viewer_member_id()'), NULL, 'RN-14: viewer_member_id() de Ana é nulo');
 SELECT is(pg_temp.val(5, format('SELECT count(*) FROM public.member_names(ARRAY[%L]::uuid[])', pg_temp.m(26))), '0',
   'RN-14: member_names não devolve nada para Ana');
-SELECT is(pg_temp.val(5, $$SELECT public.user_has_permission(auth.uid(), 'view_members')$$), 'false',
-  'RN-14: user_has_permission é falso para Ana');
+SELECT is(pg_temp.val(5, $$SELECT public.viewer_has('view_all_church')$$), 'false',
+  'RN-14: viewer_has é falso para Ana (E2.02: user_has_permission saiu de authenticated; a consulta é sobre a sessão)');
 SELECT is(pg_temp.code(pg_temp.try(5, $$SELECT public.log_auth_event('logout', true, NULL, NULL)$$)), '00000',
   'DA-9: log_auth_event de Ana não dá erro');
 SELECT is((SELECT count(*)::int FROM public.events WHERE actor_user_id = pg_temp.u(5) AND entity = 'auth'), 0,

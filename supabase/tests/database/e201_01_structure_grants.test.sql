@@ -33,7 +33,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(176);
+SELECT plan(177);
 
 CREATE FUNCTION pg_temp.m(_n int) RETURNS uuid LANGUAGE sql IMMUTABLE AS
 $$ SELECT ('c2010100-0000-0000-0000-' || lpad(_n::text, 12, '0'))::uuid $$;
@@ -167,16 +167,19 @@ SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('
 SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 1],
   'search_text', 'cell_reports_view: as colunas do E1.08 continuam antes de cell_deleted');
 SELECT is((pg_temp.cols('public.cell_report_participants_view')),
-  ARRAY['report_id','member_id','member_name','member_deleted'],
-  'cell_report_participants_view: member_deleted no fim (AQ-5)');
+  ARRAY['report_id','member_id','member_name','member_deleted','member_visible'],
+  'cell_report_participants_view: member_deleted e, depois, member_visible do E2.02 no fim (AQ-5)');
 SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.members_view')))
           AND NOT ('deleted_by' = ANY(pg_temp.cols('public.members_view'))),
   'members_view: sem colunas de exclusão (já filtra os excluídos)');
 SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.cells_view')))
           AND NOT ('deleted_by' = ANY(pg_temp.cols('public.cells_view'))),
   'cells_view: sem colunas de exclusão');
-SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1)],
-  'search_text', 'cells_view: nenhuma coluna nova (search_text continua a última)');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 3],
+  'search_text', 'cells_view: nenhuma coluna de exclusão; as três do E2.02 vêm depois de search_text');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 2 : array_length(pg_temp.cols('public.cells_view'), 1)],
+  ARRAY['can_submit_report','is_mine','leader_is_pastor'],
+  'cells_view: can_submit_report, is_mine e leader_is_pastor no fim (E2.02)');
 
 -- ===========================================================================
 -- 3. RPCs: grants e propriedades (critério de pronto 1) — 54

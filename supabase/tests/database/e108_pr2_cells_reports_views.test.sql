@@ -80,7 +80,7 @@ SELECT pg_temp.u(n), 'e108pr2-' || n || '@teste.local' FROM generate_series(1, 9
 -- 1 P1, 2 P2, 3 P3, 4 P4, 5 P3b, 6 P4b, 7 P5, 8 sem cadastro de membro, 9 pastor
 
 INSERT INTO public.roles (id, name) VALUES
-  (pg_temp.role(1), 'Teste E108 P1 view_members'),
+  (pg_temp.role(1), 'Teste E108 P1 view_all_church (ex-view_members)'),
   (pg_temp.role(2), 'Teste E108 P2 view_all_church'),
   (pg_temp.role(3), 'Teste E108 P3 view_own_ministry'),
   (pg_temp.role(4), 'Teste E108 P4 view_own_reports'),
@@ -88,7 +88,7 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(6), 'Teste E108 P4b view_all_reports'),
   (pg_temp.role(9), 'Teste E108 pastor view_own_ministry');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(1), 'view_members'),
+  (pg_temp.role(1), 'view_all_church'),
   (pg_temp.role(2), 'view_all_church'),
   (pg_temp.role(3), 'view_own_ministry'),
   (pg_temp.role(4), 'view_own_reports'),
@@ -277,8 +277,9 @@ SELECT is(
         'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'zip_code',
         'is_active', 'created_at', 'updated_at',
         'meeting_weekday', 'leader_name', 'leader_gender', 'leader_g12_level', 'timothy_name',
-        'host_name', 'g12_leader_id', 'g12_leader_name', 'last_report_date', 'search_text'],
-  'cells_view: colunas na ordem do spec');
+        'host_name', 'g12_leader_id', 'g12_leader_name', 'last_report_date', 'search_text',
+        'can_submit_report', 'is_mine', 'leader_is_pastor'],
+  'cells_view: colunas na ordem do spec (E2.02 acrescenta três no fim)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum > 0 AND NOT attisdropped),
@@ -292,8 +293,8 @@ SELECT is(
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_report_participants_view'::regclass AND attnum > 0 AND NOT attisdropped),
-  ARRAY['report_id', 'member_id', 'member_name', 'member_deleted'],
-  'cell_report_participants_view: colunas na ordem do spec (member_deleted no fim, E2.01 AQ-5)');
+  ARRAY['report_id', 'member_id', 'member_name', 'member_deleted', 'member_visible'],
+  'cell_report_participants_view: colunas na ordem do spec (member_deleted e, no fim, member_visible do E2.02)');
 
 -- ===========================================================================
 -- 3. Paridade por persona (RN-05) e o que cada uma vê — 9 personas
@@ -331,13 +332,13 @@ SELECT set_eq($$ SELECT id FROM public.cells_view WHERE id::text LIKE 'd1080000%
   pg_temp.cs(1, 2, 3, 4, 6, 9, 10),
   'P3: células com líder, timóteo ou anfitrião no ministério (02 e 06 só pelo anfitrião; 03 sem timóteo/anfitrião; 10 abaixo da cônjuge do G12)');
 SELECT set_eq($$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' $$,
-  pg_temp.rs(1, 2, 4, 5, 10),
-  'P3: relatórios das células com líder ou timóteo no ministério (sem os das células 02 e 06, vistas só pelo anfitrião)');
-SELECT is_empty(format('SELECT 1 FROM public.cell_report_participants_view WHERE report_id IN (%L, %L, %L)',
-                       pg_temp.r(3), pg_temp.r(11), pg_temp.r(7)),
+  pg_temp.rs(1, 2, 3, 4, 5, 7, 9, 10, 11),
+  'P3: relatórios de todas as células visíveis, inclusive as vistas só pelo anfitrião (02 e 06; RN-04 do E2.02)');
+SELECT is_empty(format('SELECT 1 FROM public.cell_report_participants_view WHERE report_id IN (%L, %L)',
+                       pg_temp.r(6), pg_temp.r(8)),
   'P3: participantes dos relatórios fora do escopo não aparecem');
 SELECT is((SELECT count(*)::int FROM public.cell_report_participants_view WHERE report_id::text LIKE 'e1080000%'),
-  11, 'P3: participações dos 5 relatórios visíveis (3 + 2 + 1 + 3 + 2)');
+  17, 'P3: participações dos 9 relatórios visíveis (3 + 2 + 3 + 1 + 3 + 2 + 0 + 2 + 1)');
 RESET ROLE;
 
 -- P3b: view_own_ministry + view_own_reports (Amanda, abaixo da cônjuge do G12) — 4 + 2
@@ -347,19 +348,19 @@ SELECT * FROM pg_temp.parity('P3b view_own_ministry + view_own_reports');
 SELECT set_eq($$ SELECT id FROM public.cells_view WHERE id::text LIKE 'd1080000%' $$,
   pg_temp.cs(1, 2, 3, 4, 6, 9, 10), 'P3b: mesmas células de P3 (mesmo ministério)');
 SELECT set_eq($$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' $$,
-  pg_temp.rs(1, 2, 4, 5, 10), 'P3b: view_own_reports não acrescenta relatórios além do ministério');
+  pg_temp.rs(1, 2, 3, 4, 5, 7, 9, 10, 11), 'P3b: view_own_reports não acrescenta relatórios além do ministério');
 RESET ROLE;
 
--- P4: só view_own_reports (Alberto; achado 3: vê só a própria célula) — 4 + 4
+-- P4: só view_own_reports (Alberto; E2.02: relatórios do ministério, células só as suas) — 4 + 4
 SELECT pg_temp.login(4);
 SET LOCAL ROLE authenticated;
 SELECT * FROM pg_temp.parity('P4 view_own_reports');
 SELECT set_eq($$ SELECT id FROM public.cells_view WHERE id::text LIKE 'd1080000%' $$,
-  pg_temp.cs(3), 'P4: só a célula que lidera (a 02, em que é só anfitrião, não aparece)');
+  pg_temp.cs(2, 3), 'P4: só as células em que é pessoa: líder da 03 e anfitrião da 02 (sempre vê a própria célula, RN-02 d)');
 SELECT set_eq($$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' $$,
-  pg_temp.rs(4), 'P4: só os relatórios da própria célula (achado 3)');
-SELECT is_empty(format('SELECT 1 FROM public.cell_reports_view WHERE cell_id = %L', pg_temp.c(1)),
-  'P4: não vê os relatórios da célula 01, embora o líder dela seja do seu ministério (achado 3)');
+  pg_temp.rs(1, 2, 3, 4, 5, 7, 9, 10, 11), 'P4: view_own_reports dá os relatórios das células do ministério (RN-04)');
+SELECT is_empty(format('SELECT 1 FROM public.cell_reports_view WHERE cell_id IN (%L, %L)', pg_temp.c(5), pg_temp.c(7)),
+  'P4: não vê os relatórios de células fora do ministério (05 e 07)');
 SELECT set_eq($$ SELECT id FROM public.members_view WHERE id::text LIKE 'c1080000%' $$,
   pg_temp.ms(7), 'P4: na members_view só o próprio cadastro');
 RESET ROLE;
@@ -405,9 +406,9 @@ SELECT pg_temp.login(9);
 SET LOCAL ROLE authenticated;
 SELECT * FROM pg_temp.parity('Pastor view_own_ministry');
 SELECT set_eq($$ SELECT id FROM public.cells_view WHERE id::text LIKE 'd1080000%' $$,
-  pg_temp.cs(6), 'Pastor: só a própria célula');
+  pg_temp.cs(1, 2, 3, 4, 6, 7, 9, 10), 'Pastor: a árvore inteira (RN-05 do E2.02); só a célula 05 (Xavier, sem líder) e a 08 (sem pessoas) ficam de fora');
 SELECT set_eq($$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' $$,
-  pg_temp.rs(7, 9), 'Pastor: os relatórios da própria célula');
+  pg_temp.rs(1, 2, 3, 4, 5, 7, 8, 9, 10, 11), 'Pastor: os relatórios das células da árvore inteira');
 RESET ROLE;
 
 -- ===========================================================================
@@ -622,16 +623,16 @@ SELECT is_empty(
   'busca de relatórios: visitantes e observações não são pesquisáveis (só líder e tema)');
 RESET ROLE;
 
--- P3 vê a célula 02 (pelo anfitrião), mas nenhum relatório dela; a data do
--- último relatório considera relatórios fora do escopo (decisão do spec).
+-- P3 vê a célula 02 (pelo anfitrião) e, no E2.02, os relatórios dela (RN-04).
+-- Os relatórios da célula 07 (de Bia, ministério B) continuam fora do escopo.
 SELECT pg_temp.login(3);
 SET LOCAL ROLE authenticated;
 SELECT is((SELECT last_report_date FROM public.cells_view WHERE id = pg_temp.c(2)), '2026-11-15'::date,
-  'last_report_date/P3: considera relatórios que P3 não vê');
-SELECT is_empty(format('SELECT 1 FROM public.cell_reports_view WHERE cell_id = %L', pg_temp.c(2)),
-  'last_report_date/P3: os relatórios da célula 02 não estão no escopo de P3');
+  'last_report_date/P3: o relatório mais recente da célula 02');
+SELECT is((SELECT count(*)::int FROM public.cell_reports_view WHERE cell_id = pg_temp.c(2)), 2,
+  'last_report_date/P3: os 2 relatórios da célula 02 estão no escopo de P3 (anfitrião, RN-04)');
 SELECT is_empty(
-  $$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' AND search_text ILIKE '%bento%' $$,
+  $$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' AND search_text ILIKE '%bastos%' $$,
   'busca/P3: buscar o líder de uma célula fora do escopo não revela relatórios');
 RESET ROLE;
 
