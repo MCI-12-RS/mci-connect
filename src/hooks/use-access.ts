@@ -90,6 +90,8 @@ export function useAccessQuery(userId: string | null): AccessQueryResult {
   const data = query.data;
   const seen = useRef<{ userId: string; fingerprint: string } | null>(null);
   useEffect(() => {
+    // Sem sessão: o próximo login começa sem leitura anterior (sem aviso).
+    if (!userId) seen.current = null;
     if (!data || !userId) return;
     const fingerprint = accessFingerprint(data);
     const previous = seen.current;
