@@ -20,6 +20,10 @@ vi.mock("@/integrations/supabase/client", async () => {
   return { supabase: fakeSupabase };
 });
 
+// O acesso de quem está logado (E2.02): `null` antes da primeira leitura; os testes de escopo trocam.
+const auth = vi.hoisted(() => ({ access: null as import("@/lib/access/access").Access | null }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ access: auth.access }) }));
+
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 
@@ -167,7 +171,7 @@ describe("CellReportForm: participantes (RN-06, RN-07)", () => {
     // Uma consulta só, à view de participantes; nada da tabela de membros.
     expect(fakeQueries().map((query) => query.table)).toEqual(["cell_report_participants_view"]);
     expect(fakeQueries()[0].calls).toEqual([
-      ["select", "member_id, member_name, member_deleted"],
+      ["select", "member_id, member_name, member_deleted, member_visible"],
       ["eq", "report_id", "r1"],
       ["order", "member_name"],
     ]);
@@ -215,11 +219,11 @@ describe("CellReportForm: célula obrigatória", () => {
     // Os participantes não têm erro.
     expect(screen.getByLabelText(PARTICIPANTS)).toHaveAttribute("aria-invalid", "false");
     expect(screen.getByLabelText(PARTICIPANTS).getAttribute("aria-describedby")).not.toContain(messageId);
-    // Nada foi gravado.
-    expect(fakeQueries()).toHaveLength(0);
+    // Nada foi gravado: a única leitura é a primeira página de células, para a célula única (E2.02, UXD-9).
+    expect(fakeQueries().map((query) => query.table)).toEqual(["cells_view"]);
   });
 
-  it("Dado um seletor de célula aberto sem resultado, então o menu diz Nenhuma célula encontrada", async () => {
+  it("Dado um seletor de célula aberto sem nenhuma célula para lançar, então o menu diz que a pessoa não pode enviar nenhum (E2.02, UXD-9)", async () => {
     respondWith({ data: [] });
     render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
     const cellInput = screen.getByLabelText(CELL);
@@ -227,10 +231,11 @@ describe("CellReportForm: célula obrigatória", () => {
 
     openMenu(cellInput);
 
-    expect(await screen.findByText("Nenhuma célula encontrada")).toBeInTheDocument();
+    // No menu e na região de status (que, sem ponto repetido, tem o mesmo texto).
+    expect(await screen.findAllByText("Você não pode enviar o relatório de nenhuma célula.")).toHaveLength(2);
     // A região de status do seletor de célula anuncia o vazio; a dos participantes fica muda.
     expect(screen.getAllByRole("status").map((status) => status.textContent)).toEqual([
-      "Nenhuma célula encontrada.",
+      "Você não pode enviar o relatório de nenhuma célula.",
       "",
     ]);
   });
@@ -538,5 +543,110 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
       variant: "destructive",
       title: "Já existe um relatório dessa célula nesta semana (domingo a sábado).",
     });
+  });
+});
+
+// Escopo e quem lança (E2.02, T8, UXD-9, AQ-7). Os critérios completos (UX-26, UX-27) ficam com o QA.
+describe("CellReportForm: escopo (E2.02, T8)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+  });
+
+  it("Dada uma célula só em que a pessoa pode lançar, então ela já vem escolhida, com o horário sugerido, e o seletor continua editável", async () => {
+    respondWith({ data: [todayCell] });
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+
+    expect(await screen.findByText("Célula de Ana Alves, em Rua A 10, Centro")).toBeInTheDocument();
+    expect(screen.getByLabelText("Horário *")).toHaveValue("20:00");
+    expect(screen.getByLabelText(CELL)).toBeEnabled();
+    const [query] = fakeQueries();
+    expect(query.calls).toContainEqual(["eq", "can_submit_report", true]);
+  });
+
+  it("Dadas duas células, então nenhuma vem escolhida", async () => {
+    respondWith({ data: [todayCell, { ...todayCell, id: "c2", leader_name: "Bruno Braga" }] });
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+
+    await waitFor(() => expect(fakeQueries()).toHaveLength(1));
+    expect(screen.getByText("Buscar por líder, rua ou bairro…")).toBeInTheDocument();
+  });
+
+  it("Dado o lançamento recusado pela RN-13, então o aviso no topo com o foco, a célula desmarcada e o resto do formulário mantido", async () => {
+    const message = "Você não pode enviar o relatório desta célula.";
+    respondWith({ data: [todayCell] }, { error: appError("report_submit_not_allowed", message, { cell_id: "c1" }) });
+    const onClose = vi.fn();
+    const invalidatedKeys = renderWatched(<CellReportForm onClose={onClose} />);
+    await screen.findByText("Célula de Ana Alves, em Rua A 10, Centro");
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Fé" } });
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    await waitFor(() => expect(alert).toHaveFocus());
+    expect(screen.queryByText("Célula de Ana Alves, em Rua A 10, Centro")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Tema da Palavra")).toHaveValue("Fé");
+    expect(invalidatedKeys()).toContainEqual(["cells", "options"]);
+    expect(invalidatedKeys()).toContainEqual(["access"]);
+    expect(toast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Dado um 42501 ao salvar, então o texto de permissão no topo, sem toast, e o acesso é relido (T11)", async () => {
+    respondWith({ data: [todayCell] }, { error: { code: "42501", message: "new row violates row-level security policy" } });
+    const invalidatedKeys = renderWatched(<CellReportForm onClose={vi.fn()} />);
+    await screen.findByText("Célula de Ana Alves, em Rua A 10, Centro");
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Você não tem permissão para esta ação.");
+    expect(invalidatedKeys()).toContainEqual(["access"]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("Dado um relatório em edição com participantes que a pessoa não vê, então o aviso aparece e some quando eles são retirados (UX-27)", async () => {
+    respondWith({
+      data: [
+        { member_id: "m1", member_name: "Caio Lima", member_deleted: false, member_visible: true },
+        { member_id: "m2", member_name: "Diego Reis", member_deleted: false, member_visible: false },
+      ],
+    });
+    render(<CellReportForm report={editing} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const warning =
+      "Alguns participantes não são do seu ministério: se você retirá-los, não poderá incluí-los de novo.";
+
+    expect(await screen.findByText(warning)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Remover Diego Reis"));
+    expect(screen.queryByText(warning)).not.toBeInTheDocument();
+  });
+
+  it("Dado quem vê só o ministério, então a dica dos participantes aparece ligada ao seletor; para quem vê a igreja toda, não", () => {
+    const hint = "Aparecem só as pessoas do seu ministério.";
+    auth.access = {
+      member_id: "m-pedro",
+      role_id: "r-lider",
+      role_name: "Líder",
+      role_is_protected: false,
+      permissions: ["view_own_ministry"],
+      sees_whole_church: false,
+      sees_ministry: true,
+      sees_whole_church_reports: false,
+      sees_ministry_reports: true,
+      can_create_member: false,
+      can_assign_roles: false,
+      can_submit_some_report: true,
+    };
+    const { unmount } = render(<CellReportForm initialCell={cell} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const hintElement = screen.getByText(hint);
+    expect(screen.getByLabelText(PARTICIPANTS).getAttribute("aria-describedby")).toContain(hintElement.id);
+    unmount();
+
+    auth.access = { ...auth.access, sees_whole_church: true };
+    render(<CellReportForm initialCell={cell} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
   });
 });

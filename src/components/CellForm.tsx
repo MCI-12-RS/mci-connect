@@ -13,11 +13,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useMemberAddress } from "@/hooks/use-member-address";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
+import type { PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
 import { applyHostAddress } from "@/lib/cells/host-address";
 import type { CellRow } from "@/lib/cells/fields";
 import { WEEKDAYS } from "@/lib/cells/weekdays";
 import { CELL_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
 import { requestSessionCheck } from "@/lib/auth/session-check";
+import { useAuth } from "@/contexts/AuthContext";
+import { refreshAccess } from "@/hooks/use-access";
+import { memberSearchEmptyLabel, peopleLimitedToMinistry } from "@/lib/access/access";
+import { cellRefusalFromError, type CellFormRefusal, type CellPersonField } from "@/lib/access/cell-form";
+import { CELL_FORM_TEXTS } from "@/lib/access/texts";
+import { describedBy } from "@/lib/a11y";
+import { FieldError, FieldHint } from "@/components/members/FormFieldParts";
 
 type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
 type CellField = keyof CellInsert;
@@ -80,8 +88,16 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!cell;
-  
-  const [form, setForm] = useState<CellInsert>(DEFAULT_FORM);
+  const { access } = useAuth();
+  // Quem vê só o ministério escolhe as três pessoas entre as do ministério (T7, P11).
+  const showPeopleHint = peopleLimitedToMinistry(access);
+  const searchEmptyLabel = memberSearchEmptyLabel(access);
+
+  // A célula entra já na montagem (o diálogo monta o formulário a cada
+  // abertura): o seletor guarda o valor de abertura para mostrar o nome salvo
+  // (`savedLabel`, DT-23), e um valor preenchido depois, num efeito, cairia na
+  // `member_names`, que não resolve quem está fora do escopo (UX-20).
+  const [form, setForm] = useState<CellInsert>(() => (cell ? toCellInsertPayload(cell) : DEFAULT_FORM));
   // A célula foi excluída (ou saiu do escopo) enquanto era editada.
   const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
   const deletedAlertRef = useRef<HTMLDivElement>(null);
@@ -90,11 +106,38 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     if (deletedWhileEditing) deletedAlertRef.current?.focus();
   }, [deletedWhileEditing]);
 
+  // Recusas do servidor (T11, UX-22): no topo, com o foco e rolando até ele, ou embaixo do campo.
+  const [topRefusal, setTopRefusal] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ field: CellPersonField; message: string } | null>(null);
+  const refusalAlertRef = useRef<HTMLDivElement>(null);
+  const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
+  const timothySelectRef = useRef<PaginatedSelectHandle>(null);
+  const hostSelectRef = useRef<PaginatedSelectHandle>(null);
+
+  // O erro embaixo do campo leva o foco a ele.
   useEffect(() => {
-    if (cell) {
-      setForm(toCellInsertPayload(cell));
+    const refs = { leader_id: leaderSelectRef, timothy_id: timothySelectRef, host_id: hostSelectRef };
+    if (fieldError) refs[fieldError.field].current?.focus();
+  }, [fieldError]);
+
+  useEffect(() => {
+    if (!topRefusal) return;
+    refusalAlertRef.current?.focus();
+    refusalAlertRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [topRefusal]);
+
+  const showRefusal = (refusal: CellFormRefusal) => {
+    if (refusal.rereadAccess) void refreshAccess(queryClient);
+    if (refusal.field) {
+      setTopRefusal(null);
+      setFieldError({ field: refusal.field, message: refusal.message });
+    } else {
+      setFieldError(null);
+      setTopRefusal(refusal.message);
     }
-  }, [cell]);
+  };
+
+  const errorFor = (field: CellPersonField) => (fieldError?.field === field ? fieldError.message : null);
 
   // Endereço do anfitrião: carregado no cadastro e quando o anfitrião muda na
   // edição. Vem da members_view, que mascara rua, número e CEP para quem não
@@ -130,7 +173,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         if (error) throw error;
         return saved?.length ? "saved" : "gone";
       }
-      const { error } = await supabase.from("cells").insert(payload);
+      const { error } = await supabase.from("cells").insert(payload).select("id");
       if (error) throw error;
       return "saved";
     },
@@ -150,12 +193,17 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
       onClose();
     },
     onError: (error) => {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
+      // As recusas ficam no formulário, com os dados (T11); o resto, como antes.
+      const refusal = cellRefusalFromError(error);
+      if (refusal) showRefusal(refusal);
+      else toast({ variant: "destructive", title: "Erro", description: error.message });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setTopRefusal(null);
+    setFieldError(null);
     if (!form.leader_id) {
       toast({ variant: "destructive", title: "Erro", description: "O Líder é obrigatório." });
       return;
@@ -165,6 +213,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
 
   const update = <F extends CellField>(field: F, value: CellInsert[F]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (fieldError?.field === field) setFieldError(null);
   };
 
   /** "Fechar" do aviso de célula excluída: volta para a lista, recarregada. */
@@ -187,36 +236,64 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         </Alert>
       )}
 
+      {topRefusal && (
+        <Alert ref={refusalAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="text-foreground">{topRefusal}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Dica única, acima dos três campos de pessoa, e ligada a cada um (T7, P11). */}
+        {showPeopleHint && (
+          <div className="md:col-span-2">
+            <FieldHint id="cell-people-hint">{CELL_FORM_TEXTS.peopleHint}</FieldHint>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="leader_id">Líder *</Label>
           <AsyncMemberSelect
             inputId="leader_id"
+            focusRef={leaderSelectRef}
             value={form.leader_id}
             onChange={(v) => update("leader_id", v || "")}
             placeholder="Buscar líder…"
+            savedLabel={cell?.leader_name}
+            noResultsLabel={searchEmptyLabel}
+            aria-describedby={describedBy(errorFor("leader_id") && "leader_id-error", showPeopleHint && "cell-people-hint")}
           />
+          {fieldError?.field === "leader_id" && <FieldError id="leader_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="timothy_id">Timóteo (Auxiliar)</Label>
           <AsyncMemberSelect
             inputId="timothy_id"
+            focusRef={timothySelectRef}
             value={form.timothy_id || null}
             onChange={(v) => update("timothy_id", v)}
             placeholder="Buscar timóteo…"
+            savedLabel={cell?.timothy_name}
+            noResultsLabel={searchEmptyLabel}
+            aria-describedby={describedBy(errorFor("timothy_id") && "timothy_id-error", showPeopleHint && "cell-people-hint")}
           />
+          {fieldError?.field === "timothy_id" && <FieldError id="timothy_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="host_id">Anfitrião</Label>
           <AsyncMemberSelect
             inputId="host_id"
+            focusRef={hostSelectRef}
             value={form.host_id || null}
             onChange={(v) => update("host_id", v)}
             placeholder="Buscar anfitrião…"
+            savedLabel={cell?.host_name}
+            noResultsLabel={searchEmptyLabel}
+            aria-describedby={describedBy(errorFor("host_id") && "host_id-error", showPeopleHint && "cell-people-hint")}
           />
+          {fieldError?.field === "host_id" && <FieldError id="host_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">

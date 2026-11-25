@@ -60,6 +60,18 @@ export const REPORT_PARTICIPANT_SELECT = "member_id, member_name, member_deleted
 export type ReportParticipant = Pick<ReportParticipantViewRow, "member_id" | "member_name" | "member_deleted">;
 
 /**
+ * Participantes no formulário de relatório: os de `ReportParticipant` e se
+ * quem edita vê o participante (E2.02, `member_visible`, AQ-7), para o aviso
+ * de que, retirado, ele não volta pelo seletor.
+ */
+export const FORM_PARTICIPANT_SELECT = "member_id, member_name, member_deleted, member_visible";
+
+export type FormParticipant = Pick<
+  ReportParticipantViewRow,
+  "member_id" | "member_name" | "member_deleted" | "member_visible"
+>;
+
+/**
  * Um relatório no painel de consulta ("Ver relatório", E2.01 T7): o que o
  * painel mostra e se a célula foi excluída (AQ-4).
  */

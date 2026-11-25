@@ -57,3 +57,13 @@ export function flattenOptionPages<T>(
   }
   return options;
 }
+
+/**
+ * O único item, quando a primeira página é a última e tem um item só; senão
+ * `null`. É a escolha que o seletor já pode trazer feita (E2.02, UXD-9: a
+ * única célula em que a pessoa pode lançar o relatório).
+ */
+export function onlyItem<T>(firstPage: OptionsPage<T> | undefined): T | null {
+  if (!firstPage || firstPage.nextOffset !== null || firstPage.items.length !== 1) return null;
+  return firstPage.items[0];
+}

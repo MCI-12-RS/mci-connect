@@ -82,8 +82,17 @@ export const DASHBOARD_TEXTS = {
   newReport: "Novo relatório",
 } as const;
 
-/** Ministérios até o E2.15 (T10). */
+/**
+ * Ministérios (T10). Com a DA-6 (PR 1), a árvore começa no topo do escopo, e
+ * o estado vazio fica só para quem não vê ninguém (AQ-10). Os dois textos do
+ * vazio substituem os do E1.08 ("Nenhum pastor visível…"), que deixaram de
+ * valer; aguardam a revisão do `ux-designer`.
+ */
 export const MINISTRIES_TEXTS = {
+  emptyTitle: "Ninguém visível para você na árvore.",
+  emptyDescription: "As pessoas do seu ministério aparecem em Membros.",
+  /** Sem acesso a Membros: não aponta para uma tela que a pessoa não vê. */
+  emptyDescriptionNoMembers: "Fale com um administrador.",
   goToMembers: "Ver membros do seu ministério",
 } as const;
 
@@ -133,6 +142,8 @@ export const CELL_FORM_TEXTS = {
 
 /** Formulário de relatório (T8). */
 export const REPORT_FORM_TEXTS = {
+  /** O título do diálogo de relatório novo (o de Células e Relatórios), usado pelo atalho do Dashboard (T9). */
+  newReportTitle: "Novo Relatório de Célula",
   participantsHint: "Aparecem só as pessoas do seu ministério.",
   hiddenParticipants: "Alguns participantes não são do seu ministério: se você retirá-los, não poderá incluí-los de novo.",
 } as const;

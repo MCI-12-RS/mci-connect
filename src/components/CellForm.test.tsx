@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { CellRow } from "@/lib/cells/fields";
 import CellForm from "./CellForm";
 
@@ -14,6 +14,10 @@ vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
 });
+
+// O acesso de quem está logado (E2.02): `null` antes da primeira leitura; os testes de escopo trocam.
+const auth = vi.hoisted(() => ({ access: null as import("@/lib/access/access").Access | null }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ access: auth.access }) }));
 
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
@@ -46,6 +50,7 @@ const carlos: CellRow = {
   timothy_name: null,
   host_name: null,
   g12_leader_name: "Vera",
+  can_submit_report: true,
 };
 
 function renderForm() {
@@ -103,5 +108,107 @@ describe("CellForm: célula excluída durante a edição (DT-19)", () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(invalidatedKeys()).toContainEqual(["cells", "list"]);
+  });
+});
+
+// Escopo no formulário de célula (E2.02, T7, T11). Os critérios completos (UX-24) ficam com o QA.
+describe("CellForm: escopo (E2.02, T7)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+  });
+
+  const ministryAccess = {
+    member_id: "m-pedro",
+    role_id: "r-lider",
+    role_name: "Líder",
+    role_is_protected: false,
+    permissions: ["view_own_ministry" as const, "edit_cell" as const],
+    sees_whole_church: false,
+    sees_ministry: true,
+    sees_whole_church_reports: false,
+    sees_ministry_reports: true,
+    can_create_member: false,
+    can_assign_roles: false,
+    can_submit_some_report: true,
+  };
+
+  it("Dado quem vê só o ministério, então a dica única fica acima das três pessoas e ligada a cada campo", () => {
+    auth.access = ministryAccess;
+    renderForm();
+
+    const hint = screen.getByText("Líder, timóteo e anfitrião são escolhidos entre as pessoas do seu ministério.");
+    for (const id of ["leader_id", "timothy_id", "host_id"]) {
+      expect(document.getElementById(id)?.getAttribute("aria-describedby")).toContain(hint.id);
+    }
+  });
+
+  it("Dado quem vê a igreja toda, então a dica não aparece", () => {
+    auth.access = { ...ministryAccess, sees_whole_church: true };
+    renderForm();
+
+    expect(screen.queryByText(/escolhidos entre as pessoas do seu ministério/)).not.toBeInTheDocument();
+  });
+
+  it("Dada a RN-09 (c) na gravação, então a mensagem no Alert do topo, com o foco, sem toast e sem fechar (UX-24)", async () => {
+    const message =
+      "Com esta alteração, você deixaria de ver esta célula. Mantenha pelo menos uma pessoa do seu ministério como líder, timóteo ou anfitrião. As alterações não foram salvas.";
+    const { onClose } = renderForm();
+    // O erro do PostgREST traz também `details` e `hint`, que o tipo da resposta falsa não descreve.
+    const error = { code: "22023", message, details: JSON.stringify({ code: "would_leave_scope", entity: "cell" }), hint: "app_error" };
+    respondWith({ error });
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    expect(alert).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
+    expect(toast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// Nomes salvos fora do escopo (E2.02, DT-23, RN-02, UX-20): com o seletor de
+// verdade, Líder e Timóteo de C2 aparecem pelo nome da cells_view mesmo que a
+// `member_names` não os devolva (Pedro editando a célula de Diego).
+describe("CellForm: nomes salvos fora do escopo (DT-23, UX-20)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+  });
+
+  const diegoCell: CellRow = {
+    ...carlos,
+    id: "c2",
+    leader_id: "m-diego",
+    leader_name: "Diego Souza",
+    timothy_id: "m-hugo",
+    timothy_name: "Hugo Reis",
+    host_id: "m-caio",
+    host_name: "Caio Nunes",
+  };
+
+  it("Dada a edição de C2 por quem não vê Diego nem Hugo, então Líder, Timóteo e Anfitrião mostram os nomes salvos", async () => {
+    // A member_names não devolve quem está fora do escopo.
+    respondToRpc("member_names", { data: [] }, { data: [] }, { data: [] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CellForm cell={diegoCell} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Diego Souza")).toBeInTheDocument();
+    expect(screen.getByText("Hugo Reis")).toBeInTheDocument();
+    expect(screen.getByText("Caio Nunes")).toBeInTheDocument();
+    expect(screen.queryByText("Membro sem nome")).not.toBeInTheDocument();
+    expect(fakeRpcs().some((call) => call.fn === "member_names")).toBe(false);
   });
 });

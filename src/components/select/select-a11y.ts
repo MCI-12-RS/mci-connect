@@ -70,7 +70,8 @@ export function resultsMessage(count: number, { failed = false } = {}): string {
  * opções, então o seletor o coloca na própria região de status.
  */
 export function noResultsMessage(label: string, search: string): string {
-  return `${label}${searchSuffix(search)}.`;
+  // Os textos do E2.02 já terminam em ponto ("Nenhum membro do seu ministério encontrado."): sem ponto repetido.
+  return `${label.replace(/\.$/, "")}${searchSuffix(search)}.`;
 }
 
 /** Uma opção que se escolhe: nem grupo, nem item de ação. */

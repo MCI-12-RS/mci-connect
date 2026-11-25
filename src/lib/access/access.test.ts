@@ -9,6 +9,7 @@ import {
   memberSearchEmptyLabel,
   menuItems,
   ownDataMode,
+  peopleLimitedToMinistry,
   roleDisplayName,
   type Access,
 } from "./access";
@@ -272,5 +273,13 @@ describe("memberSearchEmptyLabel (P11)", () => {
     expect(memberSearchEmptyLabel(pedro)).toBe("Nenhum membro do seu ministério encontrado.");
     expect(memberSearchEmptyLabel(rita)).toBe("Nenhum membro encontrado");
     expect(memberSearchEmptyLabel(null)).toBe("Nenhum membro encontrado");
+  });
+});
+
+describe("peopleLimitedToMinistry (P11, T7, T8)", () => {
+  it("é verdadeiro só para quem não vê a igreja toda, e falso sem acesso lido", () => {
+    expect(peopleLimitedToMinistry(pedro)).toBe(true);
+    expect(peopleLimitedToMinistry(rita)).toBe(false);
+    expect(peopleLimitedToMinistry(null)).toBe(false);
   });
 });

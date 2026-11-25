@@ -77,8 +77,17 @@ export type ReportSaveFailure =
    * (UX-28, UX-30). `cellDeleted`: a célula do relatório foi excluída; só outra célula resolveria.
    */
   | { kind: "blocked"; message: string; cellDeleted: boolean }
-  /** Problema nos participantes escolhidos: mensagem embaixo do campo e, se houver, o membro excluído (UX-30). */
+  /**
+   * Problema nos participantes escolhidos: mensagem embaixo do campo e, se houver, o membro excluído (UX-30).
+   * Um participante que a pessoa não vê (RN-09 b do E2.02) vem sem membro: não é cadastro excluído.
+   */
   | { kind: "participants"; message: string; memberId: string | null }
+  /**
+   * Recusa por escopo ou por função (E2.02, T8 e T11): `Alert` no topo, com o formulário como estava, e a
+   * tela relê o acesso (P13). `clearCell`: a pessoa não pode lançar nesta célula (RN-13); a célula é
+   * desmarcada e o seletor recarrega.
+   */
+  | { kind: "refused"; message: string; clearCell: boolean }
   /** Demais falhas: um aviso com a mensagem, e o formulário como estava. */
   | { kind: "error"; message: string };
 
@@ -86,12 +95,18 @@ const PARTICIPANT_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["dele
 const CELL_DELETED_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["cell_deleted", "report_cell_deleted"]);
 
 function fromRefusal(refusal: AppError): ReportSaveFailure {
-  if (refusal.code === "not_found_or_deleted") return { kind: "gone" };
+  if (refusal.code === "not_found_or_deleted") {
+    // No lançamento, a célula que a pessoa não vê é tratada como inexistente (E2.02, RN-09 a, AQ-5).
+    if (refusal.detail.entity === "cell") return { kind: "blocked", message: refusal.message, cellDeleted: true };
+    return { kind: "gone" };
+  }
+  if (refusal.code === "report_submit_not_allowed") return { kind: "refused", message: refusal.message, clearCell: true };
+  if (refusal.code === "person_not_visible") return { kind: "participants", message: refusal.message, memberId: null };
   if (PARTICIPANT_CODES.has(refusal.code)) {
     const memberId = refusal.detail.member_id;
     return { kind: "participants", message: refusal.message, memberId: typeof memberId === "string" ? memberId : null };
   }
-  // cell_deleted, report_cell_deleted, deleted_participant_removal e regras futuras: a mensagem do Negócio.
+  // cell_deleted, report_cell_deleted, deleted_participant_removal, would_leave_scope e regras futuras: a mensagem do Negócio.
   return { kind: "blocked", message: refusal.message, cellDeleted: CELL_DELETED_CODES.has(refusal.code) };
 }
 
@@ -108,7 +123,7 @@ function errorMessage(error: unknown): string | null {
 
 /** Classifica a falha ao gravar o relatório ou os participantes. */
 export function classifyReportSaveError(error: unknown): ReportSaveFailure {
-  if (isPermissionDenied(error)) return { kind: "error", message: DELETION_TEXTS.permissionDenied };
+  if (isPermissionDenied(error)) return { kind: "refused", message: DELETION_TEXTS.permissionDenied, clearCell: false };
   const refusal = parseAppError(error);
   if (refusal) return fromRefusal(refusal);
   if (isNetworkError(error)) return { kind: "error", message: CELL_REPORT_FORM_TEXTS.networkError };

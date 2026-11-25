@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
-import { REPORT_PARTICIPANT_SELECT } from "@/lib/cell-reports/fields";
+import { FORM_PARTICIPANT_SELECT } from "@/lib/cell-reports/fields";
 import { MEMBER_ADDRESS_SELECT } from "@/lib/members/fields";
 import { useCellReportParticipants } from "./use-cell-report-participants";
 import { useMemberAddress } from "./use-member-address";
@@ -28,7 +28,7 @@ describe("useCellReportParticipants (RN-06)", () => {
     const [query] = fakeQueries();
     expect(query.table).toBe("cell_report_participants_view");
     expect(query.calls).toEqual([
-      ["select", REPORT_PARTICIPANT_SELECT],
+      ["select", FORM_PARTICIPANT_SELECT],
       ["eq", "report_id", "r1"],
       ["order", "member_name"],
     ]);

@@ -192,7 +192,16 @@ export function roleDisplayName(access: Access): string {
   return access.role_name ?? MENU_TEXTS.noRole;
 }
 
+/**
+ * Os seletores de pessoa de quem está logado ficam limitados ao ministério
+ * (P11): a dica de alcance aparece e a busca vazia diz "do seu ministério".
+ * Sem acesso lido, `false` (nada de dica antes de saber).
+ */
+export function peopleLimitedToMinistry(access: Access | null | undefined): boolean {
+  return !!access && !access.sees_whole_church;
+}
+
 /** A busca sem resultado nos seletores de pessoa (P11, UXD-4). */
 export function memberSearchEmptyLabel(access: Access | null | undefined): string {
-  return access && !access.sees_whole_church ? SELECT_TEXTS.noMembersInMinistry : SELECT_TEXTS.noMembers;
+  return peopleLimitedToMinistry(access) ? SELECT_TEXTS.noMembersInMinistry : SELECT_TEXTS.noMembers;
 }

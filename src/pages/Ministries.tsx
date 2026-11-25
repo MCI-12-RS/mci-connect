@@ -1,4 +1,8 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { canSeeRoute } from "@/lib/access/access";
+import { MINISTRIES_TEXTS } from "@/lib/access/texts";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -179,6 +183,8 @@ const Ministries = () => {
   const roots = useMinistryTree(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const isEmpty = roots.data?.length === 0;
+  const { access } = useAuth();
+  const canSeeMembers = canSeeRoute(access, "/members");
 
   let content;
   // Também ao tentar de novo depois de um erro: a consulta segue com erro até responder.
@@ -199,10 +205,18 @@ const Ministries = () => {
   } else if (isEmpty) {
     content = (
       <div className="space-y-1 px-4 py-12 text-center">
-        <p className="text-muted-foreground">Nenhum pastor visível para você.</p>
+        <p className="text-foreground">{MINISTRIES_TEXTS.emptyTitle}</p>
         <p className="text-sm text-muted-foreground">
-          Por enquanto, a árvore começa pelos pastores. As pessoas do seu ministério aparecem em Membros.
+          {canSeeMembers ? MINISTRIES_TEXTS.emptyDescription : MINISTRIES_TEXTS.emptyDescriptionNoMembers}
         </p>
+        {/* Uma saída para a pessoa não ficar sem caminho (T10). */}
+        {canSeeMembers && (
+          <div className="pt-4">
+            <Button asChild variant="outline" className="h-11">
+              <Link to="/members">{MINISTRIES_TEXTS.goToMembers}</Link>
+            </Button>
+          </div>
+        )}
       </div>
     );
   } else {

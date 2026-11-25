@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   finalParticipantIds,
+  hasHiddenParticipants,
+  hiddenParticipantIds,
   keptParticipantsLine,
   markDeletedChoice,
   splitSavedParticipants,
@@ -128,5 +130,32 @@ describe("markDeletedChoice (UX-30)", () => {
 
   it("membro que não está entre os escolhidos: nada muda", () => {
     expect(markDeletedChoice(options, "m9")).toEqual(options);
+  });
+});
+
+describe("participantes que quem edita não vê (E2.02, T8, UX-27)", () => {
+  const formSaved = (member_id: string, member_visible: boolean | null, member_deleted = false) => ({
+    member_id,
+    member_name: member_id,
+    member_deleted,
+    member_visible,
+  });
+
+  it("são os salvos com member_visible falso, sem os de cadastro excluído", () => {
+    expect(
+      hiddenParticipantIds([
+        formSaved("caio", true),
+        formSaved("diego", false),
+        formSaved("hugo", false),
+        formSaved("excluido", false, true),
+        formSaved("sem-info", null),
+      ]),
+    ).toEqual(["diego", "hugo"]);
+  });
+
+  it("o aviso aparece só enquanto algum deles continua escolhido", () => {
+    expect(hasHiddenParticipants(["caio", "diego"], ["diego", "hugo"])).toBe(true);
+    expect(hasHiddenParticipants(["caio"], ["diego", "hugo"])).toBe(false);
+    expect(hasHiddenParticipants([], [])).toBe(false);
   });
 });
