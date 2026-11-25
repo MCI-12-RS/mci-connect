@@ -19,11 +19,15 @@ vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
 
-const auth = vi.hoisted(() => ({ permissions: new Set<string>(), permissionsLoaded: true }));
+const auth = vi.hoisted(() => ({
+  permissions: new Set<string>(),
+  permissionsLoaded: true,
+  access: null as import("@/lib/access/access").Access | null,
+}));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "u-self" },
-    isSystem: false,
+    access: auth.access,
     permissionsLoaded: auth.permissionsLoaded,
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
@@ -201,5 +205,56 @@ describe("Relatórios: o foco volta a quem abriu o diálogo (Acessibilidade, WCA
 
     await waitFor(() => expect(edit).toHaveFocus());
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+// Botão "Novo relatório" e subtítulo (E2.02, T8, UX-25, UX-15). Os demais critérios ficam com o QA.
+describe("Relatórios: quem lança e o alcance (E2.02)", () => {
+  const base = {
+    member_id: "m-1",
+    role_id: "r-1",
+    role_name: "Membro",
+    role_is_protected: false,
+    permissions: [],
+    sees_whole_church: false,
+    sees_ministry: false,
+    sees_whole_church_reports: false,
+    sees_ministry_reports: true,
+    can_create_member: false,
+    can_assign_roles: false,
+    can_submit_some_report: false,
+  };
+
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set(["edit_own_data", "view_own_ministry"]);
+    auth.permissionsLoaded = true;
+    setWidth(1280);
+  });
+  afterEach(() => {
+    setWidth(originalWidth);
+    auth.access = null;
+  });
+
+  it("Sem relatório para lançar (mesmo com 'Editar Próprio Cadastro'), então não há 'Novo Relatório'; com algum, há", async () => {
+    auth.access = base;
+    renderReports();
+    expect(await screen.findByText("Relatórios das células do seu ministério")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo Relatório" })).not.toBeInTheDocument();
+  });
+
+  it("Com algum relatório para lançar, então o botão aparece; com os relatórios da igreja toda, o subtítulo diz isso", async () => {
+    auth.access = { ...base, can_submit_some_report: true, sees_whole_church_reports: true };
+    renderReports();
+    expect(await screen.findByRole("button", { name: "Novo Relatório" })).toBeInTheDocument();
+    expect(screen.getByText("Relatórios das células de toda a igreja")).toBeInTheDocument();
+  });
+
+  it("Enquanto o acesso carrega, o lugar do botão fica reservado, sem o botão", () => {
+    auth.access = null;
+    auth.permissionsLoaded = false;
+    renderReports();
+    expect(screen.queryByRole("button", { name: "Novo Relatório" })).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-hidden="true"].h-11')).not.toBeNull();
   });
 });

@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
 import { useSaveCellReport, type SaveCellReportResult } from "@/hooks/use-save-cell-report";
-import { useCellOptions, toCellOption } from "@/hooks/use-cell-options";
+import { CELL_OPTIONS_QUERY_KEY, useCellOptions, toCellOption } from "@/hooks/use-cell-options";
 import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
 import { FormPaginatedSelect } from "@/components/select/FormPaginatedSelect";
@@ -24,6 +24,8 @@ import { weekdayIndex } from "@/lib/cells/weekdays";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import {
   finalParticipantIds,
+  hasHiddenParticipants,
+  hiddenParticipantIds,
   keptParticipantsLine,
   markDeletedChoice,
   splitSavedParticipants,
@@ -31,7 +33,13 @@ import {
 } from "@/lib/cell-reports/participants";
 import { CELL_REPORT_FORM_TEXTS, toReportWrite } from "@/lib/cell-reports/report-form";
 import { CELL_REPORT_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
-import type { SelectOption } from "@/lib/selectors";
+import { onlyItem, type SelectOption } from "@/lib/selectors";
+import { useAuth } from "@/contexts/AuthContext";
+import { refreshAccess } from "@/hooks/use-access";
+import { memberSearchEmptyLabel, peopleLimitedToMinistry } from "@/lib/access/access";
+import { REPORT_FORM_TEXTS, SELECT_TEXTS } from "@/lib/access/texts";
+import { describedBy } from "@/lib/a11y";
+import { FieldHint } from "@/components/members/FormFieldParts";
 
 const reportSchema = z.object({
   cell_id: z.string().min(1, "Selecione uma célula"),
@@ -83,9 +91,14 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   const cellInputId = useId();
   const participantsInputId = useId();
   const keptLineId = useId();
+  const scopeHintId = useId();
+  const hiddenWarningId = useId();
+  const { access } = useAuth();
+  // Quem vê só o ministério escolhe participantes só do ministério (T8, P11).
+  const showScopeHint = peopleLimitedToMinistry(access);
 
-  // Seletor de célula: células visíveis e ativas, 20 por vez, buscadas no
-  // servidor (E1.08, RN-07).
+  // Seletor de célula: células ativas em que a pessoa pode lançar, 20 por vez,
+  // buscadas no servidor (E1.08, RN-07; E2.02, RN-13, UXD-9).
   const cellSearch = useSelectSearch();
   const cellOptionsQuery = useCellOptions({ search: cellSearch.term, enabled: cellSearch.isMenuOpen });
   const cellPagination = useOptionsPagination(cellOptionsQuery, toCellOption);
@@ -98,6 +111,14 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Nos dois casos o seletor fica travado (e também depois que um relatório
   // novo foi gravado e os participantes falharam).
   const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
+  // Relatório novo aberto sem célula (Relatórios, Dashboard): quando a pessoa
+  // pode lançar numa célula só, ela já vem escolhida, com a data e o horário
+  // sugeridos, e o seletor continua editável (UXD-9). Uma vez só, depois da
+  // primeira página: uma recusa que desmarca a célula não a escolhe de novo.
+  const canAutoPickCell = !report && !initialCell;
+  const firstCellsQuery = useCellOptions({ search: "", enabled: canAutoPickCell });
+  const cellAutoPickDone = useRef(false);
+
   // Depois que a primeira tentativa gravou o relatório, a célula também fica:
   // a nova tentativa atualiza esse relatório e não o leva para outra célula.
   const isCellFixed = (savedId: string | null) => !!report || !!initialCell || !!savedId;
@@ -113,6 +134,8 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   });
   const participantPagination = useOptionsPagination(memberOptionsQuery, toMemberOption);
   const [participants, setParticipants] = useState<SelectOption[]>([]);
+  // Participantes salvos que a pessoa não vê: continuam como chips e no relatório (RN-09, AQ-7).
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   // Participantes de cadastro excluído: fora do seletor e sem mudança (RN-13).
   // `null` enquanto os participantes salvos de um relatório em edição carregam.
   const [kept, setKept] = useState<KeptParticipant[] | null>(report ? null : []);
@@ -160,8 +183,19 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     const { editable, kept: keptParticipants } = splitSavedParticipants(savedParticipants);
     setParticipants(editable);
     setKept(keptParticipants);
+    setHiddenIds(hiddenParticipantIds(savedParticipants));
     form.setValue("participant_ids", editable.map((p) => p.value));
   }, [savedParticipants, report?.id, form]);
+
+  const firstCellsPage = firstCellsQuery.data?.pages[0];
+  useEffect(() => {
+    if (!canAutoPickCell || cellAutoPickDone.current || !firstCellsPage) return;
+    cellAutoPickDone.current = true;
+    const only = onlyItem(firstCellsPage);
+    if (!only || form.getValues("cell_id")) return;
+    setSelectedCell(only);
+    form.setValue("cell_id", only.id);
+  }, [canAutoPickCell, firstCellsPage, form]);
 
   const cellIdValue = form.watch("cell_id");
   const wasHeldValue = form.watch("was_held");
@@ -199,6 +233,23 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     const { failure } = result;
     if (failure.kind === "gone") {
       showFinalNotice(CELL_REPORT_DELETION_TEXTS.deletedWhileEditing);
+      return;
+    }
+    if (failure.kind === "refused") {
+      // Escopo ou função mudaram (T11): a tela relê o acesso (P13).
+      void refreshAccess(queryClient);
+      if (failure.clearCell && isCellFixed(result.reportId)) {
+        // A célula veio escolhida de fora e não pode ser trocada aqui: só resta fechar.
+        showFinalNotice(failure.message);
+        return;
+      }
+      if (failure.clearCell) {
+        // RN-13: a célula é desmarcada, o seletor recarrega e o resto fica como estava (T8).
+        setSelectedCell(null);
+        form.setValue("cell_id", "");
+        void queryClient.invalidateQueries({ queryKey: CELL_OPTIONS_QUERY_KEY });
+      }
+      setNotice({ kind: "blocked", message: failure.message });
       return;
     }
     if (failure.kind === "blocked") {
@@ -256,6 +307,11 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Na edição, salvar com os participantes ainda carregando apagaria os que não chegaram.
   const participantsPending = wasHeldValue && kept === null;
   const keptLine = keptParticipantsLine(kept ?? []);
+  // O aviso só aparece enquanto algum participante que a pessoa não vê continua escolhido (T8).
+  const showHiddenWarning = hasHiddenParticipants(
+    participants.map((p) => p.value),
+    hiddenIds,
+  );
 
   return (
     <Form {...form}>
@@ -298,7 +354,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                     }}
                     isDisabled={isCellFixed(savedReportId)}
                     placeholder="Buscar por líder, rua ou bairro…"
-                    noResultsLabel="Nenhuma célula encontrada"
+                    noResultsLabel={cellSearch.term ? "Nenhuma célula encontrada" : SELECT_TEXTS.noCellsToReport}
                   />
                   <FormMessage />
                 </FormItem>
@@ -406,14 +462,22 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                     value={participants}
                     onChange={handleParticipantsChange}
                     placeholder="Buscar membros…"
-                    noResultsLabel="Nenhum membro encontrado"
-                    aria-describedby={keptLine ? keptLineId : undefined}
+                    noResultsLabel={memberSearchEmptyLabel(access)}
+                    aria-describedby={describedBy(
+                      keptLine && keptLineId,
+                      showScopeHint && scopeHintId,
+                      showHiddenWarning && hiddenWarningId,
+                    )}
                   />
                   <FormMessage />
                   {keptLine && (
                     <p id={keptLineId} className="text-sm text-muted-foreground">
                       {keptLine}
                     </p>
+                  )}
+                  {showScopeHint && <FieldHint id={scopeHintId}>{REPORT_FORM_TEXTS.participantsHint}</FieldHint>}
+                  {showHiddenWarning && (
+                    <FieldHint id={hiddenWarningId}>{REPORT_FORM_TEXTS.hiddenParticipants}</FieldHint>
                   )}
                   {savedParticipantsQuery.isError && kept === null && (
                     <Alert variant="destructive">

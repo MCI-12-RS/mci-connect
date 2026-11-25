@@ -28,6 +28,8 @@ import { formatReportDate } from "@/lib/cell-reports/labels";
 import { REPORT_PARAM, reportIdToRead, reportSheetState } from "@/lib/cell-reports/report-sheet";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
+import { listSubtitle } from "@/lib/access/access";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** O "Ver relatório" (card ou ícone) da linha do relatório, se ela está na página. */
 function findViewReportButton(reportId: string): HTMLElement | null {
@@ -40,7 +42,7 @@ const CellReports = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<CellReportRow | null>(null);
   const [deletingReport, setDeletingReport] = useState<CellReportDeletionTarget | null>(null);
-  const { hasPermission, permissionsLoaded } = useAuth();
+  const { hasPermission, permissionsLoaded, access } = useAuth();
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
 
@@ -65,8 +67,11 @@ const CellReports = () => {
   // "Ver relatório" fica no lugar do "Editar", para quem edita relatórios (P-DEL-19).
   const canViewReport = canEditReport;
   const canDeleteReport = hasPermission("delete_cell_report");
-  const canSubmitNewReport =
-    hasPermission("edit_cell") || hasPermission("submit_own_cell_report") || hasPermission("submit_any_visible_report") || hasPermission("edit_own_data");
+  // Só para quem pode lançar o relatório de pelo menos uma célula (RN-13, UX-25).
+  const canSubmitNewReport = access?.can_submit_some_report === true;
+  // Enquanto o acesso carrega, o lugar do botão fica reservado, para a lista não pular (Estados).
+  const submitButtonPending = !permissionsLoaded;
+  const subtitle = listSubtitle(access, "cellReports");
   const showActions = canEditReport || canDeleteReport;
   const columnCount = showActions ? 6 : 5;
 
@@ -309,22 +314,23 @@ const CellReports = () => {
                 <ClipboardList className="w-7 h-7 md:w-8 md:h-8 text-primary shrink-0" />
                 Relatórios de Células
               </h1>
-              <p className="text-muted-foreground text-sm">Gerenciar relatórios de encontros das células</p>
+              {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
           </div>
-          {(canSubmitNewReport || (!isMobile && deletedButton)) && (
+          {(canSubmitNewReport || submitButtonPending || (!isMobile && deletedButton)) && (
             <div className="flex flex-col sm:flex-row gap-2">
               {!isMobile && deletedButton}
+              {submitButtonPending && <Skeleton className="h-11 w-full sm:h-10 sm:w-40" aria-hidden="true" />}
               {canSubmitNewReport && (
                 <Button
                   onClick={(e) => {
                     returnFocus.setOpener(e.currentTarget);
                     setFormOpen(true);
                   }}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:h-10 sm:w-auto"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
                   Novo Relatório
                 </Button>
               )}
