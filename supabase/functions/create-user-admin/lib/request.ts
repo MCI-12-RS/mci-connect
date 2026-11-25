@@ -25,6 +25,10 @@ export interface CreateMemberRequest {
   attemptId: string
   /** O corpo trouxe o `attemptId` (a tentativa pode ser repetida). */
   attemptIdFromClient: boolean
+  /**
+   * A senha inicial como foi digitada. Vazia quando não veio: vale `123456`
+   * (D11, RN-07), como a própria `123456`; as duas não passam pela política.
+   */
   password: string
   /** Linha de `members`, só com as colunas de MEMBER_FIELDS, sem `id` nem `auth_user_id`. */
   memberRow: Record<string, unknown>
@@ -32,9 +36,11 @@ export interface CreateMemberRequest {
 }
 
 /**
- * Confere o corpo: `{ attemptId?, password, memberData, confirmDeletedMatches? }`.
+ * Confere o corpo: `{ attemptId?, password?, memberData, confirmDeletedMatches? }`.
  *
  * - `attemptId` ausente (ou nulo) → gerado com `newId`; presente e fora do UUID v4 → `invalid_request`;
+ * - `password` ausente, nulo ou vazio → '' (a senha inicial `123456`, E2.03 RN-07);
+ *   presente e que não é texto → `invalid_request`. A política fica no banco;
  * - `memberData` precisa ser um objeto; as colunas fora da lista branca são descartadas;
  * - o e-mail vem só de `memberData.email`, como veio: o banco normaliza e recusa o
  *   fictício (`email_placeholder`). Um `email` no topo do corpo é ignorado;
@@ -61,9 +67,8 @@ export function parseCreateMemberRequest(raw: unknown, newId: () => string): Cre
   const memberData = raw.memberData
   if (!isRecord(memberData)) throw invalidRequest()
 
-  if (typeof raw.password !== 'string' || raw.password === '') {
-    throw invalidRequest('Informe a senha.')
-  }
+  const rawPassword = raw.password ?? ''
+  if (typeof rawPassword !== 'string') throw invalidRequest()
 
   const memberRow: Record<string, unknown> = {}
   for (const field of MEMBER_FIELDS) {
@@ -74,7 +79,7 @@ export function parseCreateMemberRequest(raw: unknown, newId: () => string): Cre
   return {
     attemptId,
     attemptIdFromClient,
-    password: raw.password,
+    password: rawPassword,
     memberRow,
     confirmDeletedMatches: raw.confirmDeletedMatches === true,
   }

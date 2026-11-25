@@ -1,4 +1,5 @@
-// Origem do pedido de login (E1.04: RN-11, DT-06, DA-1 e DA-2).
+// Origem do pedido (E1.04: RN-11, DT-06, DA-1 e DA-2). Usada pela `sign-in` e
+// pela `change-own-password` (E2.03, DT-08 e DT-18): a mesma regra nas duas.
 //
 // Módulo puro (sem Deno nem import remoto), testado pelo Vitest.
 //

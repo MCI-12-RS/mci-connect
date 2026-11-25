@@ -1198,6 +1198,7 @@ export type Database = {
           neighborhood: string | null
           notes: string | null
           number: string | null
+          password_reset_status: string | null
           phone: string | null
           role_id: string | null
           search_text: string | null
@@ -1361,8 +1362,31 @@ export type Database = {
       can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
       cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
+      change_own_password: {
+        Args: {
+          _auth_user_id: string
+          _confirmation: string
+          _current_password: string
+          _mode: string
+          _new_password: string
+          _origin: string
+          _request_id: string
+          _session_id: string
+        }
+        Returns: Json
+      }
       check_member_deletion: { Args: { _member_id: string }; Returns: Json }
       check_member_insert: { Args: { _member: Json }; Returns: undefined }
+      check_password_policy: {
+        Args: {
+          _birth_date: string
+          _cpf: string
+          _email: string
+          _mobile: string
+          _password: string
+        }
+        Returns: string
+      }
       dashboard_cells_by_type: {
         Args: never
         Returns: {
@@ -1482,12 +1506,19 @@ export type Database = {
           sees_whole_church_reports: boolean
         }[]
       }
+      my_password_status: {
+        Args: never
+        Returns: {
+          must_change_password: boolean
+        }[]
+      }
       normalize_digits: { Args: { _value: string }; Returns: string }
       normalize_email: { Args: { _value: string }; Returns: string }
       normalize_mobile: { Args: { _value: string }; Returns: string }
       normalize_person_name: { Args: { _name: string }; Returns: string }
       placeholder_email_domain: { Args: never; Returns: string }
       placeholder_email_domains: { Args: never; Returns: string[] }
+      reset_member_password: { Args: { _member_id: string }; Returns: Json }
       restore_cell: { Args: { _cell_id: string }; Returns: undefined }
       restore_cell_report: { Args: { _report_id: string }; Returns: undefined }
       restore_member: {
@@ -1518,6 +1549,18 @@ export type Database = {
       search_normalize: { Args: { _value: string }; Returns: string }
       set_cell_report_participants: {
         Args: { _member_ids: string[]; _report_id: string }
+        Returns: undefined
+      }
+      set_initial_password: {
+        Args: {
+          _auth_user_id: string
+          _birth_date: string
+          _cpf: string
+          _email: string
+          _member_id: string
+          _mobile: string
+          _password: string
+        }
         Returns: undefined
       }
       sign_in_attempt: {
@@ -1592,6 +1635,11 @@ export type Database = {
         | "password_changed"
         | "restore"
         | "login_blocked"
+        | "password_reset"
+        | "password_reset_refused"
+        | "password_change_failed"
+        | "password_change_blocked"
+        | "password_change_required"
       event_entity:
         | "member"
         | "cell"
@@ -1760,6 +1808,11 @@ export const Constants = {
         "password_changed",
         "restore",
         "login_blocked",
+        "password_reset",
+        "password_reset_refused",
+        "password_change_failed",
+        "password_change_blocked",
+        "password_change_required",
       ],
       event_entity: [
         "member",

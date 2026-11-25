@@ -1,28 +1,23 @@
-// Contrato HTTP da função `sign-in` (E1.04: Contratos, DA-3, DT-07, DT-10, DT-18).
+// Contrato HTTP da função `sign-in` (E1.04: Contratos, DA-3, DT-07, DT-10, DT-18;
+// E2.03: `must_change_password`).
 //
-// Módulo puro (sem Deno nem import remoto), testado pelo Vitest: leitura do
-// pedido, respostas da função, piso de tempo das falhas e leitura das respostas
-// da RPC `sign_in_attempt` e do Auth.
+// Módulo puro (sem Deno nem import remoto), testado pelo Vitest: corpos da
+// função, piso de tempo das falhas e leitura das respostas da RPC
+// `sign_in_attempt` e do Auth. O transporte (CORS, no-store, leitura do corpo)
+// é o de `_shared/http.ts`.
 //
 // Respostas (sempre com `result` e `Cache-Control: no-store`):
-//   200 { result: 'ok', session }            RN-13 (só a sessão, sem `user`)
+//   200 { result: 'ok', session, must_change_password }   RN-13 do E1.04 (só a sessão, sem `user`);
+//                                                          a marca vem do cofre (E2.03, RN-08 b, AQ-3)
 //   400 { result: 'empty_fields' }           RN-08, DA-3 (não conta nem registra)
 //   401 { result: 'invalid_credentials' }    RN-07 (corpo idêntico em todos os casos)
 //   429 { result: 'locked', retry_after_minutes } + Retry-After (segundos)
 //   500 { result: 'server_error' }           RN-08, P-LOG-12, DA-1 (não conta)
 //   405, 413 { result: 'server_error' }      método errado ou corpo acima de 4 KB
+import { isRecord, jsonReply } from '../../_shared/http.ts'
 
 /** Piso das respostas 401 e 429, contado da chegada do pedido (RN-07, DT-07). */
 export const FAILURE_FLOOR_MS = 700
-
-/** Tamanho máximo do corpo (DA-3). */
-export const MAX_BODY_BYTES = 4096
-
-export const CORS_HEADERS: Readonly<Record<string, string>> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
 
 /** A sessão devolvida à tela: só estes campos (RN-13). */
 export interface Session {
@@ -34,7 +29,7 @@ export interface Session {
 }
 
 export type SignInResponseBody =
-  | { result: 'ok'; session: Session }
+  | { result: 'ok'; session: Session; must_change_password: boolean }
   | { result: 'empty_fields' }
   | { result: 'invalid_credentials' }
   | { result: 'locked'; retry_after_minutes: number }
@@ -57,11 +52,9 @@ export type AttemptResult =
       // Ponto do E3.02 ('set' ou 'set_random_and_flag'). Neste passo é sempre
       // null; outro valor é tratado como fora do contrato (500).
       password_action: null
+      // A marca da conta, lida do cofre depois da política do login (E2.03).
+      must_change_password: boolean
     }
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 const IDENTIFIER_TYPES: readonly string[] = ['email', 'mobile', 'cpf', 'cpf_or_mobile']
 
@@ -86,7 +79,8 @@ export function isAttemptResult(value: unknown): value is AttemptResult {
         typeof value.identifier_type === 'string' &&
         IDENTIFIER_TYPES.includes(value.identifier_type) &&
         isNonEmptyString(value.identifier_masked) &&
-        value.password_action === null
+        value.password_action === null &&
+        typeof value.must_change_password === 'boolean'
       )
     default:
       return false
@@ -99,59 +93,7 @@ export function reply(
   body: SignInResponseBody,
   extraHeaders: Record<string, string> = {},
 ): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...CORS_HEADERS,
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store',
-      ...extraHeaders,
-    },
-  })
-}
-
-/** Resposta ao preflight do CORS. */
-export function preflight(): Response {
-  return new Response('ok', { headers: { ...CORS_HEADERS, 'Cache-Control': 'no-store' } })
-}
-
-export type BodyRead = { kind: 'ok'; value: unknown } | { kind: 'too_large' }
-
-/**
- * Lê o corpo como JSON, com teto de bytes (DA-3). Acima do teto: too_large,
- * sem ler o resto. JSON inválido ou corpo vazio: `{ kind: 'ok', value: null }`
- * (a função responde como campos vazios).
- */
-export async function readJsonBody(req: Request, maxBytes: number = MAX_BODY_BYTES): Promise<BodyRead> {
-  const declared = Number(req.headers.get('content-length') ?? '')
-  if (Number.isFinite(declared) && declared > maxBytes) return { kind: 'too_large' }
-  if (!req.body) return { kind: 'ok', value: null }
-
-  const reader = req.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined)
-      return { kind: 'too_large' }
-    }
-    chunks.push(value)
-  }
-
-  const bytes = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  try {
-    return { kind: 'ok', value: JSON.parse(new TextDecoder().decode(bytes)) }
-  } catch {
-    return { kind: 'ok', value: null }
-  }
+  return jsonReply(status, body, extraHeaders)
 }
 
 /**

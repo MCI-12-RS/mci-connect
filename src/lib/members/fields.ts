@@ -26,6 +26,9 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  * quem não atribui funções, a não ser no próprio cadastro. Por isso ela não
  * entra em SENSITIVE_MEMBER_FIELDS. A gravação continua (`toMemberWritePayload`
  * com `includeRole`), sem lê-la de volta.
+ *
+ * A `password_reset_status` (E2.03) também fica de fora: chama funções de
+ * escopo por linha e só a tela de redefinição de senha a usa.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =
@@ -44,6 +47,7 @@ export type MemberRow = Omit<
   | "created_at"
   | "updated_at"
   | "g12_id"
+  | "password_reset_status"
 >;
 
 /**

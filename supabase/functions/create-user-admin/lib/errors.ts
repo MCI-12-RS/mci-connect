@@ -170,6 +170,58 @@ export function appErrorToHttp(error: DbError): HttpError | null {
 }
 
 /**
+ * Códigos do portão (E2.03, DT-04 e AQ-3): 42501 com `HINT app_error` e o
+ * código no DETAIL. Ligado no PR 4 em `viewer_member_id`, `viewer_has` e
+ * `default_role_id`, então pode vir de qualquer chamada com a sessão de quem
+ * chama.
+ */
+export const GATE_CODES: readonly string[] = ['session_ended', 'password_change_required']
+
+/** Texto de reserva do 403 do portão, se o banco não mandar mensagem. */
+export const GATE_MESSAGE = 'Não foi possível concluir com a sua sessão. Entre de novo.'
+
+/**
+ * Recusa do portão → 403 com o `code` (`session_ended`, `password_change_required`),
+ * para a tela levar à troca de senha ou ao login. `null` para outro erro.
+ */
+export function gateErrorToHttp(error: DbError): HttpError | null {
+  if (error.code !== '42501' || error.hint !== APP_ERROR_HINT) return null
+  const detail = parseDetail(error.details)
+  const code = detail?.code
+  if (typeof code !== 'string' || !GATE_CODES.includes(code)) return null
+  const message = typeof error.message === 'string' && error.message.trim() !== '' ? error.message : GATE_MESSAGE
+  return new HttpError(403, message, code)
+}
+
+/** 42501 com a sessão de quem chama: o do portão leva o código; o resto é falta de permissão. */
+export const permissionErrorToHttp = (error: DbError): HttpError => gateErrorToHttp(error) ?? forbidden()
+
+// Mensagens da política na senha inicial (E2.03, RN-07 e P-SEN-21: falam do
+// membro que está sendo cadastrado). As mesmas da `set_initial_password`.
+const PASSWORD_POLICY_MESSAGE: ReadonlyMap<string, string> = new Map([
+  ['password_too_short', 'A senha precisa ter pelo menos 8 caracteres.'],
+  ['password_too_long', 'A senha é longa demais.'],
+  ['password_weak', 'Esta senha é fácil de adivinhar. Escolha outra.'],
+  ['password_personal_data', 'A senha não pode conter o CPF, o celular ou a data de nascimento do membro, nem ser o e-mail do cadastro.'],
+])
+
+/** Senha inicial que vale `123456` sem passar pela política (D11): vazia ou exatamente `123456`. */
+export const isDefaultInitialPassword = (password: string): boolean => password === '' || password === '123456'
+
+/**
+ * Código de `check_password_policy` → 400 `{ error, code, field: 'password' }`
+ * (AQ-8). Código fora da lista: 500 (o banco mudou sem a função).
+ */
+export function passwordPolicyRefusal(code: string): HttpError {
+  const message = PASSWORD_POLICY_MESSAGE.get(code)
+  if (!message) {
+    console.error('create-user-admin: código de política desconhecido', code)
+    return serverError()
+  }
+  return new HttpError(400, message, code, { field: 'password' })
+}
+
+/**
  * Erro do INSERT (ou do ensaio) de `members` → resposta. As recusas de regra
  * (`app_error`) levam o código e o campo, e o `23505` de um índice de
  * identificação vira `value_in_use`; os demais erros viram mensagens genéricas,
@@ -188,7 +240,7 @@ export function insertErrorToHttp(error: DbError): HttpError {
     case '22P02':
     case '22007':
     case '22008': return new HttpError(400, 'Algum campo tem um formato inválido.')
-    case '42501': return forbidden()
+    case '42501': return permissionErrorToHttp(error)
     default:
       // Só o código: `details` e algumas mensagens trazem valores digitados (e-mail, CPF).
       console.error('create-user-admin: falha ao inserir membro', error.code)

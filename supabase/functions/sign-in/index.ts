@@ -5,7 +5,7 @@
 // 1. Corpo `{ identifier, password }`. Campos vazios, JSON inválido ou campos
 //    que não são texto: 400, sem contar nem registrar (RN-08, DA-3). Acima de
 //    4 KB: 413.
-// 2. Origem: só o `CF-Connecting-IP` (lib/client-ip.ts, DT-06). Hospedado sem
+// 2. Origem: só o `CF-Connecting-IP` (_shared/client-ip.ts, DT-06). Hospedado sem
 //    ele: 500, sem contar (DA-1).
 // 3. RPC `sign_in_attempt` (só service_role): busca, contagem, bloqueio, um
 //    bcrypt e Auditoria das falhas, numa transação (DT-02, DT-03).
@@ -15,10 +15,11 @@
 //    secreta e `Sb-Forwarded-For` (DT-01, DT-10). Com `otp_expired`, uma nova
 //    tentativa; se falhar, o código pendente é descartado e a resposta é 500
 //    (DA-13, DT-18). Depois, `sign_in_record_login` (erro ignorado, DA-12) e
-//    200 só com a sessão (RN-13).
+//    200 só com a sessão (RN-13) e a marca de troca obrigatória
+//    (`must_change_password`, E2.03 RN-08 b e AQ-3), lida do cofre pela RPC.
 //
 // Chave: em produção, só a secreta nova (`SUPABASE_SECRET_KEYS`); sem ela, 500.
-// Na stack local, pode ser a `SUPABASE_SERVICE_ROLE_KEY` (lib/env.ts).
+// Na stack local, pode ser a `SUPABASE_SERVICE_ROLE_KEY` (_shared/env.ts).
 //
 // Logs: só o `result`, o tempo e um código interno. Nunca a identificação, a
 // senha, o e-mail, o token, a origem nem a mensagem de erro do banco ou do
@@ -28,8 +29,9 @@
 // só com a chave pública, que não é um JWT.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { clientIpFrom } from './lib/client-ip.ts'
-import { isHostedSupabaseUrl, resolveServiceKey } from './lib/env.ts'
+import { clientIpFrom } from '../_shared/client-ip.ts'
+import { isHostedSupabaseUrl, resolveServiceKey } from '../_shared/env.ts'
+import { preflight, readJsonBody } from '../_shared/http.ts'
 import {
   type AttemptResult,
   isAttemptResult,
@@ -37,13 +39,11 @@ import {
   isUserCreatedByLink,
   lockedReply,
   pickSession,
-  preflight,
   readCredentials,
-  readJsonBody,
   reply,
   type Session,
   waitForFloor,
-} from './lib/http.ts'
+} from './lib/contract.ts'
 
 type OkAttempt = Extract<AttemptResult, { result: 'ok' }>
 
@@ -215,7 +215,11 @@ serve(async (req) => {
           _identifier_masked: data.identifier_masked,
         })
         log('ok', startedAt, recordError ? `record_${recordError.code ?? 'error'}` : undefined)
-        return reply(200, { result: 'ok', session: minted.session })
+        return reply(200, {
+          result: 'ok',
+          session: minted.session,
+          must_change_password: data.must_change_password,
+        })
       }
     }
   } catch {
