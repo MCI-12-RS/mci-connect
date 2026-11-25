@@ -152,11 +152,11 @@ const accountName = (input: CreateMemberRequest): string =>
   typeof input.memberRow.name === 'string' ? input.memberRow.name.trim().replace(/\s+/g, ' ') : ''
 
 /**
- * 7. Conta de acesso com `id` = `attemptId` e o e-mail técnico (DA-1). Devolve
- * `true` se a conta foi criada nesta chamada (e pode ser desfeita), `false` se
- * foi reaproveitada de uma tentativa anterior cujo cadastro falhou (risco 5).
+ * 7. Conta de acesso com `id` = `attemptId` e o e-mail técnico (DA-1). A conta
+ * criada nesta chamada é informada a `onCreated` (só ela pode ser desfeita); a
+ * reaproveitada de uma tentativa anterior cujo cadastro falhou (risco 5), não.
  */
-async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, onCreated: (id: string) => void): Promise<boolean> {
+async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, onCreated: (id: string) => void): Promise<void> {
   const id = input.attemptId
   const { data: email, error: emailError } = await admin.rpc('member_account_email', { _member_id: id })
   if (emailError || typeof email !== 'string' || email === '') {
@@ -179,7 +179,7 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
       console.error('create-user-admin: o Auth não aceitou o id da conta')
       throw serverError()
     }
-    return true
+    return
   }
   if (error && isWeakPassword(error)) throw authErrorToHttp(error)
 
@@ -197,7 +197,6 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
     user_metadata: { name: accountName(input) },
   })
   if (updateError) throw authErrorToHttp(updateError)
-  return false
 }
 
 /**
