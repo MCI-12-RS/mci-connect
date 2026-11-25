@@ -627,6 +627,8 @@ DECLARE
   _role public.roles%ROWTYPE;
   _id uuid;
   _constraint text;
+  _changed bigint;
+  _inserted bigint;
 BEGIN
   IF NOT public.viewer_has('manage_roles'::public.permission_action) THEN
     RAISE EXCEPTION 'Você não tem permissão para esta ação.' USING ERRCODE = '42501';
@@ -714,9 +716,17 @@ BEGIN
 
   DELETE FROM public.role_permissions rp
    WHERE rp.role_id = _id AND rp.permission <> ALL (_perms);
+  GET DIAGNOSTICS _changed = ROW_COUNT;
   INSERT INTO public.role_permissions (role_id, permission)
   SELECT _id, p FROM unnest(_perms) AS p
   ON CONFLICT (role_id, permission) DO NOTHING;
+  GET DIAGNOSTICS _inserted = ROW_COUNT;
+
+  -- Mudou só a lista de permissões: a função também conta como alterada, para
+  -- a guarda _expected_updated_at de outra tela (role_changed).
+  IF _role_id IS NOT NULL AND _changed + _inserted > 0 THEN
+    UPDATE public.roles SET updated_at = now() WHERE id = _id;
+  END IF;
 
   RETURN _id;
 END;

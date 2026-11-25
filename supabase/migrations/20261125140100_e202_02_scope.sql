@@ -298,11 +298,13 @@ LANGUAGE sql
 STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (SELECT 1 FROM public.members m WHERE m.id = _member_id AND m.deleted_at IS NULL)
-     AND (    public.viewer_has('view_all_church'::public.permission_action)
-           OR _member_id = public.viewer_member_id()
-           OR (    public.viewer_has('view_own_ministry'::public.permission_action)
-               AND public.viewer_scope_contains_any(ARRAY[_member_id])))
+  SELECT coalesce(
+           EXISTS (SELECT 1 FROM public.members m WHERE m.id = _member_id AND m.deleted_at IS NULL)
+       AND (    public.viewer_has('view_all_church'::public.permission_action)
+             OR _member_id = public.viewer_member_id()
+             OR (    public.viewer_has('view_own_ministry'::public.permission_action)
+                 AND public.viewer_scope_contains_any(ARRAY[_member_id]))),
+         false)
 $$;
 
 -- Célula visível pelas pessoas dela (RN-02, RN-03): igreja toda, ou
