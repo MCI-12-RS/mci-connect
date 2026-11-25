@@ -126,7 +126,7 @@ const AppSidebar = () => {
 
   const ownDataDialog = member && ownData ? (
     <Dialog open={ownDataOpen} onOpenChange={setOwnDataOpen}>
-      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto w-[95vw] sm:w-full" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{ownData === "view" ? OWN_DATA_TEXTS.title : OWN_DATA_TEXTS.editTitle}</DialogTitle>
         </DialogHeader>

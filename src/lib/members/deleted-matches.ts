@@ -186,8 +186,8 @@ const DELETED_ACCOUNT_EMAIL_CODE = "deleted_account_email";
 export type CreateMemberRefusal =
   /** Há cadastro excluído com os dados: o aviso da T9 (ou o erro no campo E-mail). */
   | { kind: "deletedMatches"; matches: DeletedMatch[]; accountEmail: boolean }
-  /** Qualquer outra recusa: a mensagem pronta do servidor e, se houver, o campo. */
-  | { kind: "message"; message: string; field: string | null };
+  /** Qualquer outra recusa: a mensagem pronta do servidor e, se houver, o código e o campo. */
+  | { kind: "message"; message: string; code: string | null; field: string | null };
 
 /**
  * Lê o corpo `{ error, code?, field?, matches? }` de uma resposta de erro da
@@ -205,5 +205,10 @@ export function parseCreateMemberRefusal(body: unknown): CreateMemberRefusal | n
       accountEmail: body.code === DELETED_ACCOUNT_EMAIL_CODE,
     };
   }
-  return { kind: "message", message: body.error, field: typeof body.field === "string" ? body.field : null };
+  return {
+    kind: "message",
+    message: body.error,
+    code: typeof body.code === "string" ? body.code : null,
+    field: typeof body.field === "string" ? body.field : null,
+  };
 }

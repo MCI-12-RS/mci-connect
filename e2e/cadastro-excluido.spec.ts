@@ -171,11 +171,11 @@ interface NewMember {
   cpf?: string;
 }
 
-/** Abre o formulário "Novo Membro" e preenche; não envia. */
+/** Abre o formulário "Novo membro" e preenche; não envia. */
 async function fillNewMember(page: Page, data: NewMember) {
   await openList(page, "/members", NAME);
-  await page.getByRole("button", { name: "Novo Membro", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Novo Membro" });
+  await page.getByRole("button", { name: "Novo membro", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Novo membro" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Nome *").fill(data.name);
   if (data.email) await dialog.getByLabel("E-mail").fill(data.email);
@@ -184,7 +184,7 @@ async function fillNewMember(page: Page, data: NewMember) {
   return dialog;
 }
 
-const submit = (dialog: ReturnType<Page["getByRole"]>) => dialog.getByRole("button", { name: "Criar Membro", exact: true }).click();
+const submit = (dialog: ReturnType<Page["getByRole"]>) => dialog.getByRole("button", { name: "Criar membro", exact: true }).click();
 
 /** O aviso do cadastro excluído (T9). */
 const warning = (page: Page) => page.getByRole("alertdialog");
@@ -406,7 +406,7 @@ test.describe("RN-18 / UX-34: cadastrar mesmo assim", () => {
 
     await expect(toast(page, "Membro criado com sucesso")).toBeVisible();
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
-    await expect(page.getByRole("dialog", { name: "Novo Membro" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: "Novo membro" })).toBeHidden();
     await expect.poll(() => replies.map((r) => r.status)).toEqual([409, 200]);
     expect(membersNamed(novo)).toBe(1);
     expect(isDeleted(member(7)), "Marta continua excluída").toBe("true");
