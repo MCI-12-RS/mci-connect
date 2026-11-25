@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { CellRow } from "@/lib/cells/fields";
 import CellForm from "./CellForm";
 
@@ -169,5 +169,46 @@ describe("CellForm: escopo (E2.02, T7)", () => {
     expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
     expect(toast).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// Nomes salvos fora do escopo (E2.02, DT-23, RN-02, UX-20): com o seletor de
+// verdade, Líder e Timóteo de C2 aparecem pelo nome da cells_view mesmo que a
+// `member_names` não os devolva (Pedro editando a célula de Diego).
+describe("CellForm: nomes salvos fora do escopo (DT-23, UX-20)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+  });
+
+  const diegoCell: CellRow = {
+    ...carlos,
+    id: "c2",
+    leader_id: "m-diego",
+    leader_name: "Diego Souza",
+    timothy_id: "m-hugo",
+    timothy_name: "Hugo Reis",
+    host_id: "m-caio",
+    host_name: "Caio Nunes",
+  };
+
+  it("Dada a edição de C2 por quem não vê Diego nem Hugo, então Líder, Timóteo e Anfitrião mostram os nomes salvos", async () => {
+    // A member_names não devolve quem está fora do escopo.
+    respondToRpc("member_names", { data: [] }, { data: [] }, { data: [] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CellForm cell={diegoCell} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Diego Souza")).toBeInTheDocument();
+    expect(screen.getByText("Hugo Reis")).toBeInTheDocument();
+    expect(screen.getByText("Caio Nunes")).toBeInTheDocument();
+    expect(screen.queryByText("Membro sem nome")).not.toBeInTheDocument();
+    expect(fakeRpcs().some((call) => call.fn === "member_names")).toBe(false);
   });
 });

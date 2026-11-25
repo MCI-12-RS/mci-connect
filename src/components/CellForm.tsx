@@ -93,7 +93,11 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   const showPeopleHint = peopleLimitedToMinistry(access);
   const searchEmptyLabel = memberSearchEmptyLabel(access);
 
-  const [form, setForm] = useState<CellInsert>(DEFAULT_FORM);
+  // A célula entra já na montagem (o diálogo monta o formulário a cada
+  // abertura): o seletor guarda o valor de abertura para mostrar o nome salvo
+  // (`savedLabel`, DT-23), e um valor preenchido depois, num efeito, cairia na
+  // `member_names`, que não resolve quem está fora do escopo (UX-20).
+  const [form, setForm] = useState<CellInsert>(() => (cell ? toCellInsertPayload(cell) : DEFAULT_FORM));
   // A célula foi excluída (ou saiu do escopo) enquanto era editada.
   const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
   const deletedAlertRef = useRef<HTMLDivElement>(null);
@@ -134,12 +138,6 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
   };
 
   const errorFor = (field: CellPersonField) => (fieldError?.field === field ? fieldError.message : null);
-
-  useEffect(() => {
-    if (cell) {
-      setForm(toCellInsertPayload(cell));
-    }
-  }, [cell]);
 
   // Endereço do anfitrião: carregado no cadastro e quando o anfitrião muda na
   // edição. Vem da members_view, que mascara rua, número e CEP para quem não
