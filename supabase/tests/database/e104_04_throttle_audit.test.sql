@@ -7,7 +7,7 @@
 --     bloqueio dá locked com o tempo restante, sem estender; o e-mail de Ana segue livre; o bloqueio vencido
 --     zera a contagem; o sucesso zera a identificação; identificação inexistente também bloqueia; janela de 15 min;
 --     CPF e celular no mesmo número contam nas duas chaves (DA-7);
---   - RN-11: origem com 20 falhas; o sucesso não zera a origem; IPv6 por /64 e IPv4 mapeado; nada em claro na tabela;
+--   - RN-11: origem com 50 falhas; o sucesso não zera a origem; IPv6 por /64 e IPv4 mapeado; nada em claro na tabela;
 --   - RN-12: 30 segundos viram "1 minuto"; vale o maior prazo entre identificação e origem;
 --   - RN-15: um evento por falha (reason, tipo, máscara certos), um por bloqueio e nenhum pelas recusadas;
 --     sign_in_record_login grava o autor e o cadastro; nada de senha, identificação completa ou origem; Lia não lê;
@@ -24,7 +24,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(129);
+SELECT plan(135);
 
 -- ---------------------------------------------------------------------------
 -- Ids fixos: u = auth, m = membros, role = funções.
@@ -356,12 +356,12 @@ SELECT is(pg_temp.nfail('identifier', 'e:janela@teste.invalid'), 1, 'RN-10: as f
 SELECT pg_temp.reset_throttle();
 SELECT pg_temp.take();
 SELECT is(pg_temp.res('origem-1@teste.invalid', 'x', '198.18.250.2'), 'invalid', 'RN-11: cria a linha da origem');
-UPDATE private.sign_in_throttle SET failures = (SELECT array_agg(clock_timestamp() - interval '10 minutes' + (i || ' seconds')::interval) FROM generate_series(1, 19) i)
+UPDATE private.sign_in_throttle SET failures = (SELECT array_agg(clock_timestamp() - interval '10 minutes' + (i || ' seconds')::interval) FROM generate_series(1, 49) i)
  WHERE kind = 'origin' AND key_hash = private.sign_in_key('origin', 'o:198.18.250.2');
-SELECT is(pg_temp.nfail('origin', 'o:198.18.250.2'), 19, 'RN-11: 19 falhas da mesma origem, com identificações diferentes, em 10 minutos');
+SELECT is(pg_temp.nfail('origin', 'o:198.18.250.2'), 49, 'RN-11: 49 falhas da mesma origem, com identificações diferentes, em 10 minutos');
 SELECT pg_temp.take();
 CREATE TEMP TABLE lock_origin AS SELECT pg_temp.att('ana.souza@exemplo.com', 'errada-origem', '198.18.250.2') AS j;
-SELECT is((SELECT j ->> 'result' FROM lock_origin), 'locked', 'RN-11: a 20ª falha recebe a mensagem de bloqueio');
+SELECT is((SELECT j ->> 'result' FROM lock_origin), 'locked', 'RN-11: a 50ª falha recebe a mensagem de bloqueio');
 SELECT is((SELECT (j ->> 'retry_after_minutes')::int FROM lock_origin), 15, 'RN-11: por 15 minutos');
 CREATE TEMP TABLE ev_origin AS SELECT pg_temp.take() AS j;
 SELECT is((SELECT jsonb_array_length(j) FROM ev_origin), 2, 'RN-15 c: a falha e um bloqueio (só o da origem; a identificação de Ana não chegou a 5)');
@@ -379,13 +379,13 @@ SELECT is(pg_temp.nfail('origin', 'o:198.18.250.2'), 0, 'RN-11: a origem bloquea
 -- RN-11: o sucesso não zera a origem.
 SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.res('origem-2@teste.invalid', 'x', '198.18.250.1'), 'invalid', 'RN-11: cria a linha da origem');
-UPDATE private.sign_in_throttle SET failures = (SELECT array_agg(clock_timestamp() - interval '10 minutes' + (i || ' seconds')::interval) FROM generate_series(1, 15) i)
+UPDATE private.sign_in_throttle SET failures = (SELECT array_agg(clock_timestamp() - interval '10 minutes' + (i || ' seconds')::interval) FROM generate_series(1, 45) i)
  WHERE kind = 'origin' AND key_hash = private.sign_in_key('origin', 'o:198.18.250.1');
-SELECT is(pg_temp.att('e104-5@exemplo.com', 'Senha#5', '198.18.250.1') ->> 'result', 'ok', 'RN-11: um login com sucesso depois de 15 falhas da origem');
-SELECT is(pg_temp.nfail('origin', 'o:198.18.250.1'), 15, 'RN-11: o sucesso não zera a contagem da origem');
+SELECT is(pg_temp.att('e104-5@exemplo.com', 'Senha#5', '198.18.250.1') ->> 'result', 'ok', 'RN-11: um login com sucesso depois de 45 falhas da origem');
+SELECT is(pg_temp.nfail('origin', 'o:198.18.250.1'), 45, 'RN-11: o sucesso não zera a contagem da origem');
 CREATE TEMP TABLE more5 AS SELECT i, pg_temp.res('mais-' || i || '@teste.invalid', 'x', '198.18.250.1') AS r FROM generate_series(1, 5) i;
 SELECT is((SELECT array_agg(r ORDER BY i) FROM more5), ARRAY['invalid', 'invalid', 'invalid', 'invalid', 'locked']::text[],
-  'RN-11: mais 5 falhas dentro dos 15 minutos bloqueiam a origem (15 + 5 = 20, na 5ª)');
+  'RN-11: mais 5 falhas dentro dos 15 minutos bloqueiam a origem (45 + 5 = 50, na 5ª)');
 SELECT is(pg_temp.res('e104-5@exemplo.com', 'Senha#5', '198.18.250.1'), 'locked', 'RN-11: e a origem fica bloqueada');
 
 -- RN-12: identificação e origem bloqueadas: vale o maior prazo.
@@ -477,8 +477,27 @@ SELECT is((pg_temp.fev('ninguem@exemplo.com', 'errada') - 'actor_label'),
 SELECT is((pg_temp.fev('ana.souza', 'errada') - 'actor_label'),
   jsonb_build_object('action', 'login_failed', 'entity', 'auth', 'entity_id', NULL, 'entity_label', NULL, 'actor_user_id', NULL,
     'description', 'Falha no login', 'success', false, 'error_reason', 'Identificação inválida',
-    'metadata', jsonb_build_object('reason', 'invalid_identifier', 'identifier_masked', 'a***a')),
+    'metadata', jsonb_build_object('reason', 'invalid_identifier', 'identifier_masked', '***')),
   'RN-15 b: identificação inválida pela API: sem tipo (a chave identifier_type não existe) e sem ligação');
+-- Risco 17, RN-15 d: a inválida vira só "***", sem nenhum caractere da entrada (quem cola a senha no campo).
+SELECT is(pg_temp.fev('Senha#Forte1', 'x') -> 'metadata', '{"reason": "invalid_identifier", "identifier_masked": "***"}'::jsonb,
+  'Risco 17: a senha colada no campo de identificação vira só "***" no metadata da falha');
+SELECT is(pg_temp.fev('Senha#Forte1' || repeat('z', 250), 'x') -> 'metadata', '{"reason": "invalid_identifier", "identifier_masked": "***"}'::jsonb,
+  'Risco 17, DA-4: a inválida de mais de 254 caracteres também vira só "***"');
+SELECT is(pg_temp.fev(repeat('s', 250) || '@x.com', 'x') -> 'metadata', '{"reason": "invalid_identifier", "identifier_masked": "***"}'::jsonb,
+  'Risco 17, DA-4: com "@" e mais de 254 caracteres, também só "***"');
+SELECT pg_temp.reset_throttle();
+SELECT pg_temp.take();
+CREATE TEMP TABLE inv5 AS SELECT i, pg_temp.res('Senha#Forte1', 'x') AS r FROM generate_series(1, 5) i;
+CREATE TEMP TABLE ev_inv5 AS SELECT pg_temp.take() AS j;
+SELECT is((SELECT array_agg(r ORDER BY i) FROM inv5), ARRAY['invalid', 'invalid', 'invalid', 'invalid', 'locked']::text[],
+  'RN-10: a mesma identificação inválida também bloqueia na 5ª');
+SELECT is((SELECT pg_temp.ev_of(j, 'login_blocked') -> 'metadata' FROM ev_inv5),
+  '{"block_scope": "identifier", "block_minutes": 15, "identifier_masked": "***"}'::jsonb,
+  'Risco 17, RN-15 c: o bloqueio da inválida também só traz "***"');
+SELECT is((SELECT count(*) FILTER (WHERE e #>> '{metadata,identifier_masked}' = '***') || '/' || count(*)
+             FROM jsonb_array_elements((SELECT j FROM ev_inv5)) e), '6/6',
+  'Risco 17: os 6 eventos (5 falhas e o bloqueio) trazem só "***"');
 SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.fev('51988887704', 'x') #>> '{metadata,identifier_type}', 'cpf_or_mobile', 'RN-15: Davi e Elisa, o número procurado como os dois: "CPF ou celular"');
 SELECT is(pg_temp.fev('51988887704', 'x') ->> 'error_reason', 'Identificação ambígua', 'RN-05, RN-15: o motivo "Identificação ambígua"');
@@ -495,7 +514,7 @@ SELECT is(pg_temp.fev('bruno_k3j9x2@mci12fakemail.com', 'x') #>> '{metadata,reas
 SELECT is((SELECT count(*)::int FROM public.events e
             WHERE e.entity = 'auth'
               AND (e::text ILIKE ANY (ARRAY['%errada%', '%Senha#%', '%98888-7777%', '%5198888%', '%52998224725%', '%529.982.247%',
-                                            '%ana.souza@exemplo.com%', '%198.18.%', '%2001:db8%', '%123.456.789%', '%12345678909%']))), 0,
+                                            '%ana.souza@exemplo.com%', '%198.18.%', '%2001:db8%', '%123.456.789%', '%12345678909%', '%forte1%', '%zzz%', '%sss%']))), 0,
   'RN-15 d, RN-09: nenhum evento de autenticação contém senha, identificação completa ou origem');
 
 -- (f) Só quem tem view_audit_log lê.

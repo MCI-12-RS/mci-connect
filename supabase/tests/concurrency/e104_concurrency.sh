@@ -5,7 +5,7 @@
 #
 #   1. 20 chamadas simultâneas com o CPF de Ana (origens diferentes): exatamente 5 senhas
 #      conferidas (5 falhas na Auditoria), 4 respostas "invalid" e 16 "locked", um bloqueio;
-#   2. 30 chamadas simultâneas de uma origem, com identificações diferentes: no máximo 20
+#   2. 60 chamadas simultâneas de uma origem, com identificações diferentes: no máximo 50
 #      conferidas, um bloqueio por origem;
 #   3. a limpeza (private.sign_in_purge) rodando durante as tentativas: sem deadlock (40P01);
 #   4. a linha da chave travada além do lock_timeout (3 s): a RPC dá 55P03 e nada é contado.
@@ -109,10 +109,10 @@ R=$(sr "SELECT public.sign_in_attempt('$ANA_CPF', '$ANA_PW', '198.18.251.100');"
 expect_eq "RN-10: senha certa durante o bloqueio" "$(echo "$R" | grep -c '"result": "locked"')" 1
 
 # ---------------------------------------------------------------------------
-echo "== 2. 30 tentativas simultâneas da mesma origem, com identificações diferentes"
+echo "== 2. 60 tentativas simultâneas da mesma origem, com identificações diferentes"
 setup
 T0=$(q "SELECT clock_timestamp()::text")
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
   ( sr "SELECT public.sign_in_attempt('e104-conc-$i@teste.invalid', 'errada', '198.18.252.1');" > "$TMP/s2.$i" ) &
 done
 wait
@@ -121,14 +121,14 @@ LOCKED=$(count_in '"result": "locked"' "$TMP"/s2.*)
 ERRORS=$(count_in 'ERROR' "$TMP"/s2.*)
 FAILED=$(q "SELECT count(*) FROM public.events WHERE entity = 'auth' AND action = 'login_failed' AND occurred_at >= '$T0'::timestamptz")
 echo "  invalid=$INVALID locked=$LOCKED erros=$ERRORS falhas na Auditoria=$FAILED"
-check "RN-11: no máximo 20 senhas conferidas" "SELECT $FAILED <= 20"
-expect_eq "RN-11: toda tentativa teve uma resposta" "$((INVALID + LOCKED + ERRORS))" 30
+check "RN-11: no máximo 50 senhas conferidas" "SELECT $FAILED <= 50"
+expect_eq "RN-11: toda tentativa teve uma resposta" "$((INVALID + LOCKED + ERRORS))" 60
 expect_eq "RN-11: sem deadlock (40P01)" "$(count_in '40P01' "$TMP"/s2.*)" 0
 if [ "$ERRORS" -eq 0 ]; then
-  expect_eq "RN-11: sem erros, exatamente 20 conferidas (19 invalid + a 20ª, que bloqueia)" "$FAILED" 20
-  expect_eq "RN-11: e 11 respostas locked (a 20ª e as 10 recusadas)" "$LOCKED" 11
+  expect_eq "RN-11: sem erros, exatamente 50 conferidas (49 invalid + a 50ª, que bloqueia)" "$FAILED" 50
+  expect_eq "RN-11: e 11 respostas locked (a 50ª e as 10 recusadas)" "$LOCKED" 11
 else
-  echo "  AVISO: $ERRORS tentativa(s) com erro (lock_timeout de 3 s: risco 4 do spec); o teto de 20 foi conferido acima"
+  echo "  AVISO: $ERRORS tentativa(s) com erro (lock_timeout de 3 s: risco 4 do spec); o teto de 50 foi conferido acima"
 fi
 check "RN-11, RN-15 c: um único bloqueio, por origem, sem identificação nem endereço" \
   "SELECT count(*) = 1 FROM public.events WHERE entity = 'auth' AND action = 'login_blocked' AND occurred_at >= '$T0'::timestamptz
