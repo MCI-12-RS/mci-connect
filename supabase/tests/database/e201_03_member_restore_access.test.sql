@@ -166,9 +166,11 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_acti
                             email, mobile_whatsapp, cpf, notes) VALUES
   (pg_temp.m(23), 'Bruno Brito', 'M', pg_temp.m(5), true, true, pg_temp.u(7), pg_temp.role(11),
    'Bruno@E201-03.invalid ', '(51) 99999-0000', '529.982.247-25', 'Observação do Bruno');
--- 11 cadastros com o mesmo celular (limite de 10).
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_whatsapp)
-SELECT pg_temp.m(60 + n), 'Repetido ' || lpad(n::text, 2, '0'), 'M', pg_temp.m(2), true, '51 97777 0000'
+-- 11 cadastros excluídos com o mesmo celular (limite de 10). Já nascem
+-- excluídos: entre não excluídos, o celular é único (E2.04, RN-09).
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_whatsapp, deleted_at, deleted_by)
+SELECT pg_temp.m(60 + n), 'Repetido ' || lpad(n::text, 2, '0'), 'M', pg_temp.m(2), true, '51 97777 0000',
+       now(), pg_temp.m(17)
   FROM generate_series(1, 11) n;
 
 -- Bruno participou de 12 relatórios (semanas passadas).
@@ -502,8 +504,6 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', 
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(25)))), 'not_found_or_deleted',
   'RN-07: Davi já estava excluído');
 UPDATE public.members SET deleted_at = now() - interval '10 minutes' WHERE id = pg_temp.m(28);
-UPDATE public.members SET deleted_at = now(), deleted_by = pg_temp.m(17)
- WHERE id IN (SELECT pg_temp.m(60 + n) FROM generate_series(1, 11) n);
 
 -- Administrador: nome, data e "Restaurar".
 SELECT is(pg_temp.matches(1, ' BRUNO@e201-03.invalid', NULL, NULL),

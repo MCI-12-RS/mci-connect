@@ -1,0 +1,770 @@
+{
+ "_doc": "E2.04 (AQ-2, DT-17): tabela única de casos das regras do cadastro de membro. Lida pelo Vitest da tela (src/lib/members/*, PR 3) e pelo gerador do pgTAP (generate-member-validation-cases.mjs). Cada seção: entrada -> forma normalizada -> válido/código. null = vazio ou ilegível.",
+ "placeholderEmailDomains": [
+  "mci12fakemail.com"
+ ],
+ "generationDomain": "mci12fakemail.com",
+ "name": [
+  {
+   "id": "N01",
+   "input": "  Ana   Souza ",
+   "normalized": "Ana Souza",
+   "valid": true,
+   "note": "RN-02: espaços das pontas e repetidos saem"
+  },
+  {
+   "id": "N02",
+   "input": "Ana B.",
+   "normalized": "Ana B.",
+   "valid": true,
+   "note": "RN-02: \"Ana B.\" é aceito"
+  },
+  {
+   "id": "N03",
+   "input": "Ana",
+   "normalized": "Ana",
+   "valid": false,
+   "note": "RN-02: uma palavra só"
+  },
+  {
+   "id": "N04",
+   "input": "Ana 2",
+   "normalized": "Ana 2",
+   "valid": false,
+   "note": "RN-02: \"2\" não é letra"
+  },
+  {
+   "id": "N05",
+   "input": "Ana .",
+   "normalized": "Ana .",
+   "valid": false,
+   "note": "RN-02: \".\" não é letra"
+  },
+  {
+   "id": "N06",
+   "input": "Ana\tSouza\n",
+   "normalized": "Ana Souza",
+   "valid": true,
+   "note": "RN-02: tabulação e quebra de linha viram espaço"
+  },
+  {
+   "id": "N07",
+   "input": "Ana\n\t Souza",
+   "normalized": "Ana Souza",
+   "valid": true,
+   "note": "RN-02: espaços de vários tipos seguidos viram um"
+  },
+  {
+   "id": "N08",
+   "input": "ÇÃO Éd",
+   "normalized": "ÇÃO Éd",
+   "valid": true,
+   "note": "DA-12: acento e cedilha são letras"
+  },
+  {
+   "id": "N09",
+   "input": "Åsa Öberg",
+   "normalized": "Åsa Öberg",
+   "valid": true,
+   "note": "DA-12: letras de outros alfabetos latinos"
+  },
+  {
+   "id": "N10",
+   "input": "Борис Иванов",
+   "normalized": "Борис Иванов",
+   "valid": true,
+   "note": "DA-12: alfabeto cirílico"
+  },
+  {
+   "id": "N11",
+   "input": "李 小龙",
+   "normalized": "李 小龙",
+   "valid": true,
+   "note": "DA-12: ideogramas"
+  },
+  {
+   "id": "N12",
+   "input": "Maria-José d'Ávila",
+   "normalized": "Maria-José d'Ávila",
+   "valid": true,
+   "note": "RN-02: hífen e apóstrofo dentro do nome"
+  },
+  {
+   "id": "N13",
+   "input": "",
+   "normalized": null,
+   "valid": false,
+   "note": "vazio vira nulo"
+  },
+  {
+   "id": "N14",
+   "input": "   ",
+   "normalized": null,
+   "valid": false,
+   "note": "só espaços vira nulo"
+  },
+  {
+   "id": "N15",
+   "input": null,
+   "normalized": null,
+   "valid": false,
+   "note": "nulo"
+  },
+  {
+   "id": "N16",
+   "input": "1 2",
+   "normalized": "1 2",
+   "valid": false,
+   "note": "só dígitos"
+  },
+  {
+   "id": "N17",
+   "input": "- -",
+   "normalized": "- -",
+   "valid": false,
+   "note": "só pontuação"
+  },
+  {
+   "id": "N18",
+   "input": "ana souza",
+   "normalized": "ana souza",
+   "valid": true,
+   "note": "RN-02: maiúsculas ficam como foram digitadas"
+  },
+  {
+   "id": "N19",
+   "input": " José   da    Silva Neto ",
+   "normalized": "José da Silva Neto",
+   "valid": true,
+   "note": "RN-02: várias palavras"
+  },
+  {
+   "id": "N20",
+   "input": "Ana 2 Souza",
+   "normalized": "Ana 2 Souza",
+   "valid": true,
+   "note": "RN-02: duas palavras com letra e uma sem"
+  }
+ ],
+ "email": [
+  {
+   "id": "E01",
+   "input": "ana@exemplo.com",
+   "normalized": "ana@exemplo.com",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-04"
+  },
+  {
+   "id": "E02",
+   "input": "ana.souza@igreja.org.br",
+   "normalized": "ana.souza@igreja.org.br",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-04"
+  },
+  {
+   "id": "E03",
+   "input": "  ANA@Exemplo.COM ",
+   "normalized": "ana@exemplo.com",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-04: pontas e maiúsculas"
+  },
+  {
+   "id": "E04",
+   "input": "ana@exemplo",
+   "normalized": "ana@exemplo",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: sem ponto depois do @"
+  },
+  {
+   "id": "E05",
+   "input": "ana@.com",
+   "normalized": "ana@.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: nada antes do ponto"
+  },
+  {
+   "id": "E06",
+   "input": "ana @exemplo.com",
+   "normalized": "ana @exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: espaço no meio"
+  },
+  {
+   "id": "E07",
+   "input": "ana@@exemplo.com",
+   "normalized": "ana@@exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: dois @"
+  },
+  {
+   "id": "E08",
+   "input": "ana@exemplo..com",
+   "normalized": "ana@exemplo..com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: dois pontos seguidos"
+  },
+  {
+   "id": "E09",
+   "input": "@exemplo.com",
+   "normalized": "@exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: nada antes do @"
+  },
+  {
+   "id": "E10",
+   "input": "ana@exemplo.com.",
+   "normalized": "ana@exemplo.com.",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: ponto no fim"
+  },
+  {
+   "id": "E11",
+   "input": "ana.exemplo.com",
+   "normalized": "ana.exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: sem @"
+  },
+  {
+   "id": "E12",
+   "input": "",
+   "normalized": null,
+   "valid": false,
+   "placeholder": false,
+   "note": "vazio"
+  },
+  {
+   "id": "E13",
+   "input": null,
+   "normalized": null,
+   "valid": false,
+   "placeholder": false,
+   "note": "nulo"
+  },
+  {
+   "id": "E14",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@exemplo.com",
+   "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@exemplo.com",
+   "valid": true,
+   "placeholder": false,
+   "note": "DA-3: 254 caracteres"
+  },
+  {
+   "id": "E15",
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@exemplo.com",
+   "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "DA-3: 255 caracteres"
+  },
+  {
+   "id": "E16",
+   "input": "caio_a1b2c3@mci12fakemail.com",
+   "normalized": "caio_a1b2c3@mci12fakemail.com",
+   "valid": true,
+   "placeholder": true,
+   "note": "RN-05: domínio fictício"
+  },
+  {
+   "id": "E17",
+   "input": " CAIO@MCI12FAKEMAIL.COM ",
+   "normalized": "caio@mci12fakemail.com",
+   "valid": true,
+   "placeholder": true,
+   "note": "RN-05: domínio fictício em maiúsculas e com espaços"
+  },
+  {
+   "id": "E18",
+   "input": "caio@sub.mci12fakemail.com",
+   "normalized": "caio@sub.mci12fakemail.com",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-05: subdomínio não é o domínio fictício"
+  },
+  {
+   "id": "E19",
+   "input": "caio@mci12fakemail.com.br",
+   "normalized": "caio@mci12fakemail.com.br",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-05: domínio diferente"
+  },
+  {
+   "id": "E20",
+   "input": "mci12fakemail.com@exemplo.com",
+   "normalized": "mci12fakemail.com@exemplo.com",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-05: o domínio está antes do @"
+  },
+  {
+   "id": "E21",
+   "input": "ana@exemplo.c",
+   "normalized": "ana@exemplo.c",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-04: o formato não exige tamanho do domínio final"
+  },
+  {
+   "id": "E22",
+   "input": "a@b.co",
+   "normalized": "a@b.co",
+   "valid": true,
+   "placeholder": false,
+   "note": "RN-04: o menor e-mail aceito"
+  },
+  {
+   "id": "E23",
+   "input": "ana\t@exemplo.com",
+   "normalized": "ana\t@exemplo.com",
+   "valid": false,
+   "placeholder": false,
+   "note": "RN-04: tabulação no meio"
+  }
+ ],
+ "mobile": [
+  {
+   "id": "M01",
+   "input": "(51) 98888-7777",
+   "normalized": "51988887777",
+   "matchKey": "5188887777",
+   "note": "RN-06/RN-09"
+  },
+  {
+   "id": "M02",
+   "input": "+55 (51) 98888-7777",
+   "normalized": "51988887777",
+   "matchKey": "5188887777",
+   "note": "RN-06: o 55 do Brasil sai"
+  },
+  {
+   "id": "M03",
+   "input": "5551988887777",
+   "normalized": "51988887777",
+   "matchKey": "5188887777",
+   "note": "RN-06: 13 dígitos com 55"
+  },
+  {
+   "id": "M04",
+   "input": "051 98888-7777",
+   "normalized": "51988887777",
+   "matchKey": "5188887777",
+   "note": "RN-06: zero à esquerda"
+  },
+  {
+   "id": "M05",
+   "input": "(51) 8888-7777",
+   "normalized": "5188887777",
+   "matchKey": "5188887777",
+   "note": "RN-09: o 9º dígito nos dois sentidos"
+  },
+  {
+   "id": "M06",
+   "input": "55999991234",
+   "normalized": "55999991234",
+   "matchKey": "5599991234",
+   "note": "RN-06: 11 dígitos, o 55 é o DDD de Santa Maria"
+  },
+  {
+   "id": "M07",
+   "input": "+55 55 99999-1234",
+   "normalized": "55999991234",
+   "matchKey": "5599991234",
+   "note": "RN-06: 55 do Brasil e DDD 55"
+  },
+  {
+   "id": "M08",
+   "input": "(51) 3333-4444",
+   "normalized": "5133334444",
+   "matchKey": "5133334444",
+   "note": "RN-06: telefone fixo"
+  },
+  {
+   "id": "M09",
+   "input": "98887777",
+   "normalized": null,
+   "matchKey": null,
+   "note": "DA-5: sem DDD, ilegível"
+  },
+  {
+   "id": "M10",
+   "input": "",
+   "normalized": null,
+   "matchKey": null,
+   "note": "vazio"
+  },
+  {
+   "id": "M11",
+   "input": null,
+   "normalized": null,
+   "matchKey": null,
+   "note": "nulo"
+  },
+  {
+   "id": "M12",
+   "input": "abc",
+   "normalized": null,
+   "matchKey": null,
+   "note": "sem dígitos"
+  },
+  {
+   "id": "M13",
+   "input": "(51) 9888-777",
+   "normalized": null,
+   "matchKey": null,
+   "note": "DA-5: 9 dígitos"
+  }
+ ],
+ "cpf": [
+  {
+   "id": "C01",
+   "input": "529.982.247-25",
+   "digits": "52998224725",
+   "valid": true,
+   "note": "RN-07"
+  },
+  {
+   "id": "C02",
+   "input": "52998224725",
+   "digits": "52998224725",
+   "valid": true,
+   "note": "RN-07: só dígitos"
+  },
+  {
+   "id": "C03",
+   "input": " 529 982 247 25 ",
+   "digits": "52998224725",
+   "valid": true,
+   "note": "RN-07: espaços"
+  },
+  {
+   "id": "C04",
+   "input": "529.982.247-26",
+   "digits": "52998224726",
+   "valid": false,
+   "note": "RN-07: dígito verificador errado"
+  },
+  {
+   "id": "C05",
+   "input": "111.111.111-11",
+   "digits": "11111111111",
+   "valid": false,
+   "note": "RN-07: todos iguais"
+  },
+  {
+   "id": "C06",
+   "input": "012.345.678-90",
+   "digits": "01234567890",
+   "valid": true,
+   "note": "RN-07: zero à esquerda"
+  },
+  {
+   "id": "C07",
+   "input": "000.000.001-91",
+   "digits": "00000000191",
+   "valid": true,
+   "note": "RN-07: quase todos zeros, válido"
+  },
+  {
+   "id": "C08",
+   "input": "123",
+   "digits": "123",
+   "valid": false,
+   "note": "RN-07: curto"
+  },
+  {
+   "id": "C09",
+   "input": "529.982.247-250",
+   "digits": "529982247250",
+   "valid": false,
+   "note": "RN-07: 12 dígitos"
+  },
+  {
+   "id": "C10",
+   "input": "",
+   "digits": null,
+   "valid": false,
+   "note": "vazio"
+  },
+  {
+   "id": "C11",
+   "input": null,
+   "digits": null,
+   "valid": false,
+   "note": "nulo"
+  },
+  {
+   "id": "C12",
+   "input": "abc",
+   "digits": null,
+   "valid": false,
+   "note": "sem dígitos"
+  },
+  {
+   "id": "C13",
+   "input": "000.000.000-00",
+   "digits": "00000000000",
+   "valid": false,
+   "note": "RN-07: todos zeros"
+  }
+ ],
+ "birthDate": [
+  {
+   "id": "B01",
+   "today": "2026-11-23",
+   "birth": "1926-11-24",
+   "problem": null,
+   "note": "RN-15: o mais velho aceito"
+  },
+  {
+   "id": "B02",
+   "today": "2026-11-23",
+   "birth": "1926-11-23",
+   "problem": "birth_date_too_old",
+   "note": "RN-15: 100 anos exatos"
+  },
+  {
+   "id": "B03",
+   "today": "2026-11-23",
+   "birth": "2026-11-23",
+   "problem": null,
+   "note": "RN-15: hoje"
+  },
+  {
+   "id": "B04",
+   "today": "2026-11-23",
+   "birth": "2026-11-24",
+   "problem": "birth_date_future",
+   "note": "RN-15: amanhã"
+  },
+  {
+   "id": "B05",
+   "today": "2026-11-23",
+   "birth": "1920-03-10",
+   "problem": "birth_date_too_old",
+   "note": "RN-15: Fábio"
+  },
+  {
+   "id": "B06",
+   "today": "2026-11-23",
+   "birth": "2000-02-29",
+   "problem": null,
+   "note": "DA-13: 29/02/2000 em 2026"
+  },
+  {
+   "id": "B07",
+   "today": "2026-11-23",
+   "birth": null,
+   "problem": null,
+   "note": "sem data"
+  },
+  {
+   "id": "B08",
+   "today": "2100-02-28",
+   "birth": "2000-02-29",
+   "problem": null,
+   "note": "DA-13: 100 anos antes de 28/02/2100 é 28/02/2000; 29/02/2000 é posterior"
+  },
+  {
+   "id": "B09",
+   "today": "2100-02-28",
+   "birth": "2000-02-28",
+   "problem": "birth_date_too_old",
+   "note": "DA-13: o mesmo dia 100 anos antes"
+  },
+  {
+   "id": "B10",
+   "today": "2100-03-01",
+   "birth": "2000-02-29",
+   "problem": "birth_date_too_old",
+   "note": "DA-13: 01/03/2100 menos 100 anos é 01/03/2000"
+  },
+  {
+   "id": "B11",
+   "today": "2100-03-01",
+   "birth": "2000-03-02",
+   "problem": null,
+   "note": "DA-13: depois do limite"
+  },
+  {
+   "id": "B12",
+   "today": "2024-02-29",
+   "birth": "1924-02-29",
+   "problem": "birth_date_too_old",
+   "note": "DA-13: hoje é 29/02 (bissexto)"
+  },
+  {
+   "id": "B13",
+   "today": "2024-02-29",
+   "birth": "1924-03-01",
+   "problem": null,
+   "note": "DA-13: depois do limite"
+  },
+  {
+   "id": "B14",
+   "today": "2026-01-01",
+   "birth": "2026-01-01",
+   "problem": null,
+   "note": "RN-15: nascido hoje"
+  },
+  {
+   "id": "B15",
+   "today": "2026-12-31",
+   "birth": "1926-12-31",
+   "problem": "birth_date_too_old",
+   "note": "RN-15: virada de ano, 100 anos exatos"
+  },
+  {
+   "id": "B16",
+   "today": "2026-12-31",
+   "birth": "1927-01-01",
+   "problem": null,
+   "note": "RN-15: virada de ano, aceito"
+  }
+ ],
+ "age": [
+  {
+   "id": "A01",
+   "today": "2026-11-23",
+   "birth": "2026-11-23",
+   "text": "Menos de 1 ano",
+   "note": "RN-15"
+  },
+  {
+   "id": "A02",
+   "today": "2026-11-23",
+   "birth": "2025-11-23",
+   "text": "1 ano",
+   "note": "RN-15"
+  },
+  {
+   "id": "A03",
+   "today": "2026-11-23",
+   "birth": "2025-11-24",
+   "text": "Menos de 1 ano",
+   "note": "RN-15"
+  },
+  {
+   "id": "A04",
+   "today": "2026-11-23",
+   "birth": "2000-02-29",
+   "text": "26 anos",
+   "note": "RN-15"
+  },
+  {
+   "id": "A05",
+   "today": "2026-11-23",
+   "birth": "1926-11-24",
+   "text": "99 anos",
+   "note": "RN-15"
+  }
+ ],
+ "identifier": [
+  {
+   "id": "I01",
+   "email": "ana@exemplo.com",
+   "mobile": null,
+   "cpf": null,
+   "hasIdentifier": true,
+   "note": "RN-08: e-mail real"
+  },
+  {
+   "id": "I02",
+   "email": "caio@mci12fakemail.com",
+   "mobile": null,
+   "cpf": null,
+   "hasIdentifier": false,
+   "note": "RN-08: o fictício não conta"
+  },
+  {
+   "id": "I03",
+   "email": "ana@exemplo",
+   "mobile": null,
+   "cpf": null,
+   "hasIdentifier": false,
+   "note": "RN-08: e-mail inválido"
+  },
+  {
+   "id": "I04",
+   "email": null,
+   "mobile": "(51) 98888-7777",
+   "cpf": null,
+   "hasIdentifier": true,
+   "note": "RN-08: celular legível"
+  },
+  {
+   "id": "I05",
+   "email": null,
+   "mobile": "98887777",
+   "cpf": null,
+   "hasIdentifier": false,
+   "note": "RN-08: celular ilegível (Fábio)"
+  },
+  {
+   "id": "I06",
+   "email": null,
+   "mobile": null,
+   "cpf": "529.982.247-25",
+   "hasIdentifier": true,
+   "note": "RN-08: CPF válido"
+  },
+  {
+   "id": "I07",
+   "email": null,
+   "mobile": null,
+   "cpf": "529.982.247-26",
+   "hasIdentifier": false,
+   "note": "RN-08: CPF inválido"
+  },
+  {
+   "id": "I08",
+   "email": null,
+   "mobile": null,
+   "cpf": null,
+   "hasIdentifier": false,
+   "note": "RN-08: nada"
+  },
+  {
+   "id": "I09",
+   "email": "caio@mci12fakemail.com",
+   "mobile": null,
+   "cpf": "529.982.247-25",
+   "hasIdentifier": true,
+   "note": "RN-08: fictício mais CPF"
+  },
+  {
+   "id": "I10",
+   "email": "ana@exemplo",
+   "mobile": "(51) 98888-7777",
+   "cpf": null,
+   "hasIdentifier": true,
+   "note": "RN-08: e-mail inválido mais celular"
+  },
+  {
+   "id": "I11",
+   "email": "",
+   "mobile": "",
+   "cpf": "",
+   "hasIdentifier": false,
+   "note": "RN-08: tudo vazio"
+  },
+  {
+   "id": "I12",
+   "email": "ana@exemplo.com",
+   "mobile": "98887777",
+   "cpf": "111.111.111-11",
+   "hasIdentifier": true,
+   "note": "RN-08: um só basta"
+  }
+ ]
+}

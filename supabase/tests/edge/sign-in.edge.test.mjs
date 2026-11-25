@@ -51,7 +51,7 @@ describe('contrato HTTP', () => {
     const casos = {
       'a inválida': ['ana.souza', PW],
       'b não encontrada': [`ninguem@${DOMAIN}`, PW],
-      'c ambígua': ['(51) 90000-2001', PW],
+      'c ambígua': ['51900002060', PW],
       'd excluída': [`excluida@${DOMAIN}`, PW],
       'e sem conta': [`semconta@${DOMAIN}`, PW],
       'f conta indisponível': [`banida@${DOMAIN}`, PW],

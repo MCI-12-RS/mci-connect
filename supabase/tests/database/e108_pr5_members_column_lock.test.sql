@@ -543,13 +543,14 @@ SELECT results_eq(format($$ SELECT name, cpf FROM public.members WHERE id = %L $
   $$ VALUES ('Edite Renomeada'::text, '10850000955'::text) $$,
   'Regra 6/P2: o nome muda e o CPF continua o mesmo (RN-12)');
 
--- Com view_sensitive_data, troca o CPF.
+-- Com view_sensitive_data, troca o CPF (por um que nenhum outro cadastro usa:
+-- o 10850009820 é do Rui, e o CPF é único desde o E2.04).
 SELECT pg_temp.login(3);
 SET LOCAL ROLE authenticated;
-SELECT lives_ok(format($$ UPDATE public.members SET cpf = '10850009820' WHERE id = %L $$, pg_temp.m(9)),
+SELECT lives_ok(format($$ UPDATE public.members SET cpf = '10850009073' WHERE id = %L $$, pg_temp.m(9)),
   'P3 com view_sensitive_data: UPDATE do CPF é aceito');
 RESET ROLE;
-SELECT is((SELECT cpf FROM public.members WHERE id = pg_temp.m(9)), '10850009820',
+SELECT is((SELECT cpf FROM public.members WHERE id = pg_temp.m(9)), '10850009073',
   'P3 com view_sensitive_data: o CPF muda (RN-12)');
 
 -- O próprio membro troca o próprio celular e não troca o próprio líder (regra 5).

@@ -54,7 +54,8 @@ export const DOMAIN = 'e104edge.invalid'
 export const PW = 'Senha#Edge1'
 
 /**
- * Massa fictícia (commitada): Ana (e-mail, CPF e celular), duas pessoas com o mesmo celular (ambíguo),
+ * Massa fictícia (commitada): Ana (e-mail, CPF e celular), duas pessoas com o mesmo número (ambíguo: o
+ * celular de uma é o CPF da outra; o mesmo celular em dois cadastros não excluídos o E2.04 não aceita),
  * uma excluída, uma sem conta e uma com conta banida.
  */
 export async function createMassa() {
@@ -67,8 +68,8 @@ UPDATE auth.users SET banned_until = now() + interval '10 years' WHERE id = '${a
 INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES ('${ids.pastor}', 'E104 Edge Pastor', 'M', true, false);
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, email, cpf, mobile_whatsapp) VALUES
   ('${ids.ana}', 'E104 Edge Ana', 'F', '${ids.pastor}', true, '${auth.ana}', 'ana@${DOMAIN}', '168.995.350-09', '(51) 90000-2000'),
-  ('${ids.ouro}', 'E104 Edge Ouro', 'M', '${ids.pastor}', true, NULL, 'ouro@${DOMAIN}', NULL, '(51) 90000-2001'),
-  ('${ids.prata}', 'E104 Edge Prata', 'M', '${ids.pastor}', true, NULL, 'prata@${DOMAIN}', NULL, '(51) 90000-2001'),
+  ('${ids.ouro}', 'E104 Edge Ouro', 'M', '${ids.pastor}', true, NULL, 'ouro@${DOMAIN}', NULL, '(51) 90000-2060'),
+  ('${ids.prata}', 'E104 Edge Prata', 'M', '${ids.pastor}', true, NULL, 'prata@${DOMAIN}', '519.000.020-60', NULL),
   ('${ids.excluida}', 'E104 Edge Excluida', 'F', '${ids.pastor}', true, NULL, 'excluida@${DOMAIN}', NULL, NULL),
   ('${ids.semConta}', 'E104 Edge Sem Conta', 'F', '${ids.pastor}', true, NULL, 'semconta@${DOMAIN}', NULL, NULL),
   ('${ids.banida}', 'E104 Edge Banida', 'F', '${ids.pastor}', true, '${auth.banida}', 'banida@${DOMAIN}', NULL, NULL);
