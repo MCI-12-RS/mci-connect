@@ -158,6 +158,12 @@ WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(3), 'view_audit_log'), (pg_temp.role(3), 'view_all_church');
 
+-- A massa tem celulares equivalentes entre não excluídos (Ivo e Joana, Otávio e
+-- Paula, Rita e Sílvia), como os dados anteriores ao E2.04, para provar a
+-- correspondência exata e a ambiguidade da sign-in. O índice único do E2.04
+-- (RN-09) sai só nesta transação, que termina em ROLLBACK.
+DROP INDEX IF EXISTS public.members_mobile_key;
+
 INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active, auth_user_id, email, cpf, mobile_whatsapp) VALUES
   (pg_temp.m(18), 'Samuel Pastor E104', 'M', true, NULL, false, true, pg_temp.u(18), 'e104-18@exemplo.com', NULL, NULL);
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id, email, cpf, mobile_whatsapp)
