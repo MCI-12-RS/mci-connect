@@ -1,9 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute, PublicRoute } from "@/components/RouteGuards";
+import { requestSessionCheckOnDenied } from "@/lib/auth/session-check";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
@@ -17,21 +19,12 @@ import CellReportsDeleted from "./pages/CellReportsDeleted";
 import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { session, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando...</div>;
-  if (!session) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-};
-
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const { session, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando...</div>;
-  if (session) return <Navigate to="/" replace />;
-  return <>{children}</>;
-};
+// Toda recusa 42501 de leitura ou gravação pede a releitura do próprio cadastro:
+// a de um membro excluído encerra a sessão (E2.01, RN-14 e DT-20).
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: requestSessionCheckOnDenied }),
+  mutationCache: new MutationCache({ onError: requestSessionCheckOnDenied }),
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { requestSessionCheck } from "@/lib/auth/session-check";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
 import type { WriteResult } from "@/lib/deletion/outcome";
 import type { AppError } from "@/lib/errors";
@@ -39,10 +40,13 @@ export function useDialogWrite(onClose: () => void) {
         onClose();
         return;
       case "gone":
+        // "0 linhas" e 42501 também são o que um membro excluído recebe (RN-14): confere a própria sessão.
+        requestSessionCheck();
         toast({ title: result.message });
         onClose();
         return;
       case "forbidden":
+        requestSessionCheck();
         toast({ variant: "destructive", title: DELETION_TEXTS.permissionDenied });
         onClose();
         return;

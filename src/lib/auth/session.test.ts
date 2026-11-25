@@ -7,8 +7,10 @@ import {
   lockedMessage,
   loginNoticeText,
   noticeForOutcome,
+  shouldEndSession,
   type LoginNotice,
 } from "./session";
+import { isNetworkError } from "@/lib/errors";
 
 const ALL_NOTICES: LoginNotice[] = [
   { kind: "session_ended" },
@@ -77,5 +79,31 @@ describe("isSessionEndedState (contrato com o PR 6 do E2.01)", () => {
     expect(isSessionEndedState(null)).toBe(false);
     expect(isSessionEndedState(undefined)).toBe(false);
     expect(isSessionEndedState("session_ended")).toBe(false);
+  });
+});
+
+describe("shouldEndSession (E2.01, RN-14 e DT-20)", () => {
+  it("encerra só quando a releitura volta sem erro e sem linha", () => {
+    expect(shouldEndSession({ data: null, error: null })).toBe(true);
+  });
+
+  it("mantém a sessão quando o cadastro voltou", () => {
+    expect(shouldEndSession({ data: { id: "m1" }, error: null })).toBe(false);
+  });
+
+  it("mantém a sessão na queda de conexão", () => {
+    const error = { code: "", message: "TypeError: Failed to fetch", details: "", hint: "" };
+    expect(isNetworkError(error)).toBe(true);
+    expect(shouldEndSession({ data: null, error })).toBe(false);
+  });
+
+  it.each([
+    ["5xx", { code: "", message: "Internal Server Error", details: "", hint: "" }],
+    ["tempo esgotado", { code: "", message: "AbortError: signal is aborted", details: "", hint: "" }],
+    ["JWT recusado (401)", { code: "PGRST301", message: "JWT expired", details: "", hint: "" }],
+    ["42501", { code: "42501", message: "permission denied", details: "", hint: "" }],
+    ["mais de uma linha", { code: "PGRST116", message: "multiple rows", details: "", hint: "" }],
+  ])("mantém a sessão com qualquer erro: %s", (_label, error) => {
+    expect(shouldEndSession({ data: null, error })).toBe(false);
   });
 });

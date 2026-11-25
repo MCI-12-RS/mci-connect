@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { requestSessionCheck, requestSessionCheckOnDenied } from "@/lib/auth/session-check";
 import { classifyReportSaveError, type CellReportWrite, type ReportSaveFailure } from "@/lib/cell-reports/report-form";
 
 export interface SaveCellReportInput {
@@ -38,14 +39,22 @@ export function useSaveCellReport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ reportId, report, participantIds }: SaveCellReportInput): Promise<SaveCellReportResult> => {
+      // "0 linhas" e 42501 também são o que um membro excluído recebe (RN-14): confere a própria sessão.
+      const fail = (step: "report" | "participants", id: string | null, error: unknown): SaveCellReportResult => {
+        requestSessionCheckOnDenied(error);
+        return { kind: "failed", reportId: id, step, failure: classifyReportSaveError(error) };
+      };
       let savedId = reportId;
       if (savedId) {
         const { data, error } = await supabase.from("cell_reports").update(report).eq("id", savedId).select("id");
-        if (error) return { kind: "failed", reportId: savedId, step: "report", failure: classifyReportSaveError(error) };
-        if (!data?.length) return { kind: "failed", reportId: savedId, step: "report", failure: { kind: "gone" } };
+        if (error) return fail("report", savedId, error);
+        if (!data?.length) {
+          requestSessionCheck();
+          return { kind: "failed", reportId: savedId, step: "report", failure: { kind: "gone" } };
+        }
       } else {
         const { data, error } = await supabase.from("cell_reports").insert([report]).select("id").single();
-        if (error) return { kind: "failed", reportId: null, step: "report", failure: classifyReportSaveError(error) };
+        if (error) return fail("report", null, error);
         savedId = data.id;
       }
 
@@ -54,9 +63,7 @@ export function useSaveCellReport() {
           _report_id: savedId,
           _member_ids: participantIds,
         });
-        if (error) {
-          return { kind: "failed", reportId: savedId, step: "participants", failure: classifyReportSaveError(error) };
-        }
+        if (error) return fail("participants", savedId, error);
       }
       return { kind: "saved", reportId: savedId };
     },
