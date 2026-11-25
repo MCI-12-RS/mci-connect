@@ -32,7 +32,7 @@ import {
   type DashboardSummary,
 } from "@/hooks/use-dashboard";
 import { dashboardDeniedLines, dashboardHeader } from "@/lib/access/access";
-import { DASHBOARD_TEXTS } from "@/lib/access/texts";
+import { DASHBOARD_TEXTS, REPORT_FORM_TEXTS } from "@/lib/access/texts";
 import { formatWeekRange } from "@/lib/dashboard/week";
 import { isPermissionDenied } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
@@ -40,9 +40,6 @@ import { formatCount } from "@/lib/format";
 // Todos os números vêm prontos das RPCs do dashboard (E1.08, RN-02 e RN-08);
 // a tela só exibe. Sem "Visualizar Dashboard" (pelo acesso, ou pela recusa do
 // banco), mostra o acesso negado sem nenhum card (E2.02, RN-07, T9).
-
-/** Título do diálogo do atalho: o mesmo das telas de Células e Relatórios. */
-const NEW_REPORT_DIALOG_TITLE = "Novo Relatório de Célula";
 const LOAD_ERROR_MESSAGE = "Erro ao carregar o dashboard.";
 const LOADING_MESSAGE = "Carregando…";
 
@@ -366,7 +363,7 @@ const Dashboard = () => {
         <Dialog open={reportFormOpen} onOpenChange={setReportFormOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
             <DialogHeader>
-              <DialogTitle>{NEW_REPORT_DIALOG_TITLE}</DialogTitle>
+              <DialogTitle>{REPORT_FORM_TEXTS.newReportTitle}</DialogTitle>
             </DialogHeader>
             {reportFormOpen && <CellReportForm onClose={() => setReportFormOpen(false)} />}
           </DialogContent>

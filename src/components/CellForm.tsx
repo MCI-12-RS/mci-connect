@@ -265,7 +265,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             noResultsLabel={searchEmptyLabel}
             aria-describedby={describedBy(errorFor("leader_id") && "leader_id-error", showPeopleHint && "cell-people-hint")}
           />
-          {errorFor("leader_id") && <FieldError id="leader_id-error">{errorFor("leader_id") ?? ""}</FieldError>}
+          {fieldError?.field === "leader_id" && <FieldError id="leader_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">
@@ -280,7 +280,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             noResultsLabel={searchEmptyLabel}
             aria-describedby={describedBy(errorFor("timothy_id") && "timothy_id-error", showPeopleHint && "cell-people-hint")}
           />
-          {errorFor("timothy_id") && <FieldError id="timothy_id-error">{errorFor("timothy_id") ?? ""}</FieldError>}
+          {fieldError?.field === "timothy_id" && <FieldError id="timothy_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">
@@ -295,7 +295,7 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
             noResultsLabel={searchEmptyLabel}
             aria-describedby={describedBy(errorFor("host_id") && "host_id-error", showPeopleHint && "cell-people-hint")}
           />
-          {errorFor("host_id") && <FieldError id="host_id-error">{errorFor("host_id") ?? ""}</FieldError>}
+          {fieldError?.field === "host_id" && <FieldError id="host_id-error">{fieldError.message}</FieldError>}
         </div>
 
         <div className="space-y-2">
