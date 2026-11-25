@@ -114,10 +114,45 @@ describe("classifyReportSaveError", () => {
     });
   });
 
-  it("Dado 42501, então o texto de permissão, sem mensagem técnica (UX-39)", () => {
+  it("Dado 42501, então o texto de permissão no topo, sem mensagem técnica (UX-39; E2.02, T11)", () => {
     expect(classifyReportSaveError({ code: "42501", message: "new row violates row-level security policy" })).toEqual({
-      kind: "error",
+      kind: "refused",
       message: "Você não tem permissão para esta ação.",
+      clearCell: false,
+    });
+  });
+
+  it("Dado o lançamento sem direito (RN-13), então o aviso no topo e a célula desmarcada (T8)", () => {
+    const message = "Você não pode enviar o relatório desta célula.";
+    expect(classifyReportSaveError(appError("report_submit_not_allowed", message, { cell_id: "c1" }))).toEqual({
+      kind: "refused",
+      message,
+      clearCell: true,
+    });
+  });
+
+  it("Dada a célula que a pessoa não vê no lançamento (RN-09 a), então o aviso da célula, como a excluída", () => {
+    const message = "Esta célula não existe ou já foi excluída.";
+    expect(classifyReportSaveError(appError("not_found_or_deleted", message, { entity: "cell" }))).toEqual({
+      kind: "blocked",
+      message,
+      cellDeleted: true,
+    });
+  });
+
+  it("Dado um participante novo que a pessoa não vê (RN-09 b), então a mensagem vai para o campo, sem marcar como excluído", () => {
+    const message = "Você só pode escolher pessoas que você vê.";
+    expect(
+      classifyReportSaveError(appError("person_not_visible", message, { field: "member_id", member_id: "m9" })),
+    ).toEqual({ kind: "participants", message, memberId: null });
+  });
+
+  it("Dada a RN-09 (c), então o aviso no topo, com a mensagem do Negócio", () => {
+    const message = "Com esta alteração, você deixaria de ver esta célula.";
+    expect(classifyReportSaveError(appError("would_leave_scope", message, { entity: "cell" }))).toEqual({
+      kind: "blocked",
+      message,
+      cellDeleted: false,
     });
   });
 

@@ -448,7 +448,8 @@ describe("AsyncMemberSelect: seletor limitado ao que se vê (E2.02, P11)", () =>
 
     openMenu(input);
 
-    expect(await screen.findByText("Nenhum membro do seu ministério encontrado.")).toBeInTheDocument();
+    // No menu e no anúncio da região de status, sem ponto repetido.
+    expect(await screen.findAllByText("Nenhum membro do seu ministério encontrado.")).toHaveLength(2);
   });
 
   it("Dado o valor trocado, então o nome salvo deixa de valer e não volta às opções", async () => {

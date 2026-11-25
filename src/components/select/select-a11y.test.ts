@@ -56,6 +56,15 @@ describe("noResultsMessage", () => {
   it("com a busca", () => {
     expect(noResultsMessage("Nenhuma célula encontrada", "rua a")).toBe('Nenhuma célula encontrada para a busca "rua a".');
   });
+
+  it("o texto que já termina em ponto não ganha outro (E2.02, P11)", () => {
+    expect(noResultsMessage("Nenhum membro do seu ministério encontrado.", "")).toBe(
+      "Nenhum membro do seu ministério encontrado.",
+    );
+    expect(noResultsMessage("Nenhum membro do seu ministério encontrado.", "ana")).toBe(
+      'Nenhum membro do seu ministério encontrado para a busca "ana".',
+    );
+  });
 });
 
 describe("SELECT_ARIA_MESSAGES.onFilter", () => {

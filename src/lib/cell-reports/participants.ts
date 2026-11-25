@@ -1,5 +1,5 @@
 // Participantes no formulário de relatório (E1.08, PR 2 e PR 4; E2.01, RN-13).
-import type { ReportParticipant } from "@/lib/cell-reports/fields";
+import type { FormParticipant, ReportParticipant } from "@/lib/cell-reports/fields";
 import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { formatList } from "@/lib/format";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
@@ -66,4 +66,18 @@ export function markDeletedChoice(options: readonly SelectOption[], memberId: st
   return options.map((option) =>
     option.value === memberId && !option.label.endsWith(mark) ? { ...option, label: `${option.label} ${mark}` } : option,
   );
+}
+
+/**
+ * Os participantes salvos que quem edita não vê (E2.02, RN-09, AQ-7): ficam
+ * no relatório e como chips, mas o seletor não os oferece de volta. Os de
+ * cadastro excluído ficam de fora: eles já têm a linha própria (RN-13 do E2.01).
+ */
+export function hiddenParticipantIds(saved: readonly FormParticipant[]): string[] {
+  return saved.filter((p) => p.member_visible === false && p.member_deleted !== true).map((p) => p.member_id);
+}
+
+/** Algum dos participantes escolhidos é de quem a pessoa não vê? Dá o aviso da T8, só enquanto houver algum. */
+export function hasHiddenParticipants(chosenIds: readonly string[], hiddenIds: readonly string[]): boolean {
+  return chosenIds.some((id) => hiddenIds.includes(id));
 }

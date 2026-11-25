@@ -31,7 +31,7 @@ function renderOptions(params: CellOptionsParams) {
 describe("useCellOptions (RN-05, RN-07)", () => {
   beforeEach(() => resetFakeSupabase());
 
-  it("Dado o seletor de célula aberto sem texto, então lê só as células ativas da cells_view, pelo nome do líder (sem líder no fim) e desempate por id, pedindo 21 linhas", async () => {
+  it("Dado o seletor de célula aberto sem texto, então lê só as células ativas em que pode lançar, da cells_view, as próprias primeiro, depois pelo nome do líder (sem líder no fim) e desempate por id, pedindo 21 linhas", async () => {
     respondWith({ data: cells(2) });
 
     const { result } = renderOptions({ search: "" });
@@ -42,6 +42,8 @@ describe("useCellOptions (RN-05, RN-07)", () => {
     expect(query.calls).toEqual([
       ["select", CELL_SUMMARY_SELECT],
       ["eq", "is_active", true],
+      ["eq", "can_submit_report", true],
+      ["order", "is_mine", { ascending: false, nullsFirst: false }],
       ["order", "leader_name", { nullsFirst: false }],
       ["order", "id"],
       ["range", 0, 20],

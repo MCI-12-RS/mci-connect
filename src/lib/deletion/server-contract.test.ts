@@ -168,7 +168,11 @@ describe("Contrato com o banco: corrida e permissão nas três entidades (UX-24,
 
   it("RN-02 e UX-39: o 42501 real das RPCs de exclusão é falta de permissão, sem mensagem técnica", () => {
     expect(classifyWriteError(PERMISSION_DENIED)).toEqual({ kind: "forbidden" });
-    expect(classifyReportSaveError(PERMISSION_DENIED)).toEqual({ kind: "error", message: DELETION_TEXTS.permissionDenied });
+    expect(classifyReportSaveError(PERMISSION_DENIED)).toEqual({
+      kind: "refused",
+      message: DELETION_TEXTS.permissionDenied,
+      clearCell: false,
+    });
   });
 
   it("Todos os códigos reais estão na lista de códigos da tela", () => {

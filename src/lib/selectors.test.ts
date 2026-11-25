@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { OPTIONS_PAGE_SIZE, flattenOptionPages, optionsPageRange, toOptionsPage } from "./selectors";
+import { OPTIONS_PAGE_SIZE, flattenOptionPages, onlyItem, optionsPageRange, toOptionsPage } from "./selectors";
 
 const rows = (count: number, start = 0) => Array.from({ length: count }, (_, i) => ({ id: `m${start + i}` }));
 const toOption = (row: { id: string }) => ({ value: row.id, label: row.id.toUpperCase() });
@@ -59,5 +59,18 @@ describe("flattenOptionPages (RN-07)", () => {
 
   it("nada carregado ainda", () => {
     expect(flattenOptionPages(undefined, toOption)).toEqual([]);
+  });
+});
+
+describe("onlyItem (E2.02, UXD-9)", () => {
+  it("devolve o item quando a primeira página é a última e tem um só", () => {
+    expect(onlyItem({ items: ["c1"], nextOffset: null })).toBe("c1");
+  });
+
+  it("devolve null sem página, com nenhum, com mais de um ou com outra página depois", () => {
+    expect(onlyItem(undefined)).toBeNull();
+    expect(onlyItem({ items: [], nextOffset: null })).toBeNull();
+    expect(onlyItem({ items: ["c1", "c2"], nextOffset: null })).toBeNull();
+    expect(onlyItem({ items: ["c1"], nextOffset: 20 })).toBeNull();
   });
 });
