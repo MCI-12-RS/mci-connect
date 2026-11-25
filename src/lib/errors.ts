@@ -24,6 +24,15 @@ export function retryUnlessPermissionDenied(failureCount: number, error: unknown
   return !isPermissionDenied(error) && failureCount < DEFAULT_QUERY_RETRIES;
 }
 
+/**
+ * `retry` padrão das leituras do app: como o padrão do TanStack Query, menos
+ * no código do portão da senha (E2.03, AQ-3), que leva à troca ou ao login na
+ * hora, sem esperar as novas tentativas.
+ */
+export function retryUnlessGate(failureCount: number, error: unknown): boolean {
+  return gateCode(error) === null && failureCount < DEFAULT_QUERY_RETRIES;
+}
+
 /** Um objeto JSON: chaves de texto e valores ainda não conferidos. */
 export type JsonObject = { readonly [key: string]: unknown };
 
@@ -73,8 +82,10 @@ function parseDetail(details: unknown): JsonObject | null {
 
 /**
  * Lê um erro de regra do banco (`hint: "app_error"`), como o PostgREST o
- * devolve: `{ code: "22023", message, details: "<json>", hint }`. `null` para
- * qualquer outro erro (permissão, rede, erro técnico).
+ * devolve: `{ code: "22023", message, details: "<json>", hint }`. Vale para
+ * qualquer SQLSTATE: o portão da senha (E2.03, DT-04) recusa com 42501 e o
+ * mesmo formato. `null` para qualquer outro erro (permissão sem detalhes, rede,
+ * erro técnico).
  *
  * Se os detalhes não vierem ou não forem um JSON com `code`, a recusa volta
  * com o código vazio: a tela mostra a mensagem como veio (UX-11).
@@ -84,6 +95,26 @@ export function parseAppError(error: unknown): AppError | null {
   const detail = parseDetail(error.details);
   const code = detail && typeof detail.code === "string" ? detail.code : "";
   return { code, message: error.message, detail: code ? detail : {} };
+}
+
+/**
+ * Os códigos do portão da senha (E2.03, RN-09, RN-16, DT-04 e AQ-3), que o
+ * banco manda com 42501 + `app_error`. A tela trata antes de qualquer outra
+ * recusa: a marca leva à troca obrigatória, e a sessão apagada, ao login.
+ */
+export const GATE_CODES = ["password_change_required", "session_ended"] as const;
+
+export type GateCode = (typeof GATE_CODES)[number];
+
+export function isGateCode(value: unknown): value is GateCode {
+  return value === "password_change_required" || value === "session_ended";
+}
+
+/** O código do portão de um erro do banco; `null` se não for do portão. */
+export function gateCode(error: unknown): GateCode | null {
+  const appError = parseAppError(error);
+  if (appError && isGateCode(appError.code)) return appError.code;
+  return null;
 }
 
 // O supabase-js não lança quando o fetch falha: devolve um erro sem código,

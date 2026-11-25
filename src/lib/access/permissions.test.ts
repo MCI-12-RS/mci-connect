@@ -67,3 +67,16 @@ describe("permissões aposentadas", () => {
     for (const permission of ALL) expect(permissionLabel(permission)).not.toBe("");
   });
 });
+
+describe("E2.03 (T7, RN-01): 'Redefinir Senha de Membros'", () => {
+  it("rótulo e dica do Negócio, no grupo Membros; o rótulo antigo não existe mais", async () => {
+    const { PERMISSION_CATALOG: catalog, PERMISSION_GROUPS: groups } = await import("./permissions");
+    const info = catalog.find((p) => p.value === "change_member_password");
+    expect(info?.label).toBe("Redefinir Senha de Membros");
+    expect(info?.hint).toBe(
+      "Gera uma senha temporária para os membros que a pessoa vê, só de funções com permissões que ela também tem. O membro cria uma nova senha no próximo acesso.",
+    );
+    expect(groups.find((g) => g.id === "members")?.permissions).toContain("change_member_password");
+    expect(JSON.stringify(catalog)).not.toContain("Alterar Senha");
+  });
+});

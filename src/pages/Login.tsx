@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle, Clock, Eye, EyeOff, Info, Loader2, WifiOff, type LucideIcon } from "lucide-react";
+import { AlertCircle, Clock, Info, Loader2, WifiOff, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { checkBeforeSubmit, identifierIndicatorLabel } from "@/lib/auth/identifier";
 import {
   LOGIN_TEXTS,
@@ -16,6 +17,8 @@ import {
   noticeForOutcome,
   type LoginNotice,
 } from "@/lib/auth/session";
+import { LOGIN_PASSWORD_TEXTS, REVEAL_LABELS } from "@/lib/auth/password-texts";
+import { CHANGE_PASSWORD_PATH, type ChangePasswordState } from "@/lib/auth/password-change-route";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
@@ -57,7 +60,8 @@ const Login = () => {
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  // A cada envio, a senha volta a ficar oculta (P15 do E2.03).
+  const [hideSignal, setHideSignal] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   // Aviso de sessão encerrada (E2.01, PR 6): chega pelo estado da navegação e é lido uma vez só.
   const [arrivedAfterSessionEnd] = useState(() => isSessionEndedState(location.state));
@@ -107,7 +111,7 @@ const Login = () => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submittingRef.current) return;
-    setShowPassword(false);
+    setHideSignal((n) => n + 1);
 
     const problem = checkBeforeSubmit(identifier, password);
     if (problem?.kind === "empty_fields") {
@@ -128,7 +132,13 @@ const Login = () => {
     try {
       const outcome = await signIn(identifier, password);
       if (outcome.result === "ok") {
-        navigate("/");
+        // Com a marca, a troca obrigatória, com a identificação para o gerenciador de senhas (E2.03, T2).
+        if (outcome.mustChangePassword) {
+          const state: ChangePasswordState = { username: identifier };
+          navigate(CHANGE_PASSWORD_PATH, { replace: true, state });
+        } else {
+          navigate("/", { replace: true });
+        }
         return;
       }
       const next = noticeForOutcome(outcome);
@@ -157,11 +167,6 @@ const Login = () => {
       e.preventDefault();
       passwordRef.current?.focus();
     }
-  };
-
-  const togglePassword = () => {
-    setShowPassword((shown) => !shown);
-    passwordRef.current?.focus();
   };
 
   const NoticeIcon = notice ? NOTICE_ICONS[notice.kind] : null;
@@ -235,36 +240,19 @@ const Login = () => {
 
             <div className="space-y-2">
               <Label htmlFor="password">{LOGIN_TEXTS.passwordLabel}</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  ref={passwordRef}
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  enterKeyHint="go"
-                  required
-                  aria-invalid={invalid.password || undefined}
-                  aria-describedby={invalid.password ? MESSAGE_ID : undefined}
-                  className="h-11 pr-12"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-11 w-11"
-                  onClick={togglePassword}
-                  aria-label={showPassword ? LOGIN_TEXTS.hidePassword : LOGIN_TEXTS.showPassword}
-                  aria-pressed={showPassword}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <Eye className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </Button>
-              </div>
+              <PasswordInput
+                id="password"
+                ref={passwordRef}
+                revealLabels={REVEAL_LABELS.single}
+                hideSignal={hideSignal}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                enterKeyHint="go"
+                required
+                aria-invalid={invalid.password || undefined}
+                aria-describedby={invalid.password ? MESSAGE_ID : undefined}
+              />
             </div>
 
             <Button type="submit" size="lg" className="w-full" disabled={submitting}>
@@ -278,6 +266,8 @@ const Login = () => {
               )}
             </Button>
           </form>
+          {/* RN-15: sem link e sem botão; não muda com o que foi digitado nem com as mensagens (UX-01). */}
+          <p className="mt-4 text-center text-sm text-muted-foreground">{LOGIN_PASSWORD_TEXTS.forgot}</p>
         </CardContent>
       </Card>
     </div>

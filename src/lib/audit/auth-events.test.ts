@@ -18,8 +18,19 @@ const event = (over: Partial<AuthEventLike>): AuthEventLike => ({
 });
 
 describe("AUTH_ACTION_LABELS (UX-15)", () => {
-  it("tem Login (bloqueio) entre Login (falha) e Logout", () => {
-    expect(Object.values(AUTH_ACTION_LABELS)).toEqual(["Login", "Login (falha)", "Login (bloqueio)", "Logout"]);
+  it("tem Login (bloqueio) entre Login (falha) e Logout e, depois, as seis ações de senha na ordem da T8 do E2.03", () => {
+    expect(Object.values(AUTH_ACTION_LABELS)).toEqual([
+      "Login",
+      "Login (falha)",
+      "Login (bloqueio)",
+      "Logout",
+      "Senha redefinida",
+      "Senha redefinida (recusa)",
+      "Senha alterada",
+      "Senha alterada (falha)",
+      "Senha alterada (bloqueio)",
+      "Troca de senha exigida",
+    ]);
   });
 });
 
@@ -121,5 +132,47 @@ describe("authEventDetailFields (UX-17)", () => {
   it("login antigo, sem cadastro ligado: só a identificação mascarada", () => {
     const fields = authEventDetailFields(event({ action: "login", metadata: { identifier_masked: "a***@x.com" } }));
     expect(fields.map((f) => f.label)).toEqual(["Identificação"]);
+  });
+});
+
+describe("eventos de senha (E2.03, T8, UX-33, UX-34)", () => {
+  const event = (action: string, metadata: unknown, entity_label: string | null = "Caio Lima", error_reason: string | null = null) => ({
+    action,
+    entity: "auth",
+    entity_label,
+    error_reason,
+    metadata,
+  });
+
+  it("a segunda linha de cada ação", () => {
+    expect(authEventSecondLine(event("password_reset", { valid_until: "2026-12-01T00:50:00Z" }))).toBe(
+      "Caio Lima · válida até 30/11/2026 às 21:50",
+    );
+    expect(authEventSecondLine(event("password_reset_refused", { reason: "role_not_covered" }, "Olga"))).toBe("Função não coberta · Olga");
+    expect(authEventSecondLine(event("password_reset_refused", { reason: "no_permission" }, null))).toBe("Sem permissão");
+    expect(authEventSecondLine(event("password_changed", { change_type: "forced" }))).toBe("Obrigatória");
+    expect(authEventSecondLine(event("password_change_failed", { reason: "current_password_invalid" }))).toBe("Senha atual incorreta");
+    expect(authEventSecondLine(event("password_change_blocked", { block_minutes: 15 }))).toBe("15 minutos");
+    expect(authEventSecondLine(event("password_change_required", { reason: "initial_password" }, "Vera"))).toBe("Senha inicial · Vera");
+  });
+
+  it("o painel: Cadastro, Motivo, Tipo de troca, Validade e Duração, só os que têm valor; nada de senha", () => {
+    expect(authEventDetailFields(event("password_reset", { valid_until: "2026-12-01T00:50:00Z" }))).toEqual([
+      { key: "member", label: "Cadastro", value: "Caio Lima" },
+      { key: "validUntil", label: "Validade", value: "30/11/2026 às 21:50" },
+    ]);
+    expect(authEventDetailFields(event("password_changed", { change_type: "voluntary", password: "x" })).map((f) => f.label)).toEqual([
+      "Cadastro",
+      "Tipo de troca",
+    ]);
+    expect(authEventDetailFields(event("password_change_blocked", { block_minutes: 1 }))).toContainEqual({
+      key: "duration",
+      label: "Duração",
+      value: "1 minuto",
+    });
+  });
+
+  it("UX-34: a falha de login com a temporária vencida aparece como as outras", () => {
+    expect(authEventSecondLine(event("login_failed", { reason: "temp_password_expired" }))).toBe("Senha temporária vencida · Caio Lima");
   });
 });

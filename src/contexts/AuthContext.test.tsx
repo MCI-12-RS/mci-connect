@@ -5,15 +5,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { isSessionEndedState } from "@/lib/auth/session";
 import { ProtectedRoute } from "@/components/RouteGuards";
-import { requestSessionCheck } from "@/lib/auth/session-check";
+import { requestGate, requestSessionCheck } from "@/lib/auth/session-check";
 
 // O cliente do Supabase falso: só o que o AuthContext usa.
 type AuthListener = (event: string, session: { user: { id: string } } | null) => void;
 type ReadResult = { data: unknown; error: unknown };
 
 const mock = vi.hoisted(() => {
-  const state: { listener: AuthListener | null; ownRead: () => Promise<ReadResult>; ownReads: number } = {
+  const state: {
+    listener: AuthListener | null;
+    ownRead: () => Promise<ReadResult>;
+    ownReads: number;
+    passwordStatus: () => Promise<ReadResult>;
+    rpcCalls: string[];
+    memberReads: number;
+  } = {
     listener: null,
+    /** `my_password_status()` (E2.03): sem linha, sem a marca. */
+    passwordStatus: (): Promise<ReadResult> => Promise.resolve({ data: null, error: null }),
+    rpcCalls: [],
+    memberReads: 0,
     /** Resposta da releitura (`select("id")`) do próprio cadastro. */
     ownRead: (): Promise<ReadResult> => Promise.resolve({ data: { id: "m1" }, error: null }),
     ownReads: 0,
@@ -36,7 +47,10 @@ const mock = vi.hoisted(() => {
           state.ownReads += 1;
           return state.ownRead();
         }
-        if (table === "members_view") return Promise.resolve({ data: { id: "m1", role_id: null }, error: null });
+        if (table === "members_view") {
+          state.memberReads += 1;
+          return Promise.resolve({ data: { id: "m1", role_id: null }, error: null });
+        }
         return Promise.resolve({ data: null, error: null });
       },
       then: (resolve: (value: ReadResult) => unknown) => resolve({ data: [], error: null }),
@@ -54,7 +68,11 @@ const mock = vi.hoisted(() => {
       setSession: vi.fn(),
     },
     from: (table: string) => chain(table),
-    rpc: () => Promise.resolve({ data: null, error: null }),
+    rpc: (name: string) => {
+      state.rpcCalls.push(name);
+      if (name === "my_password_status") return state.passwordStatus();
+      return Promise.resolve({ data: null, error: null });
+    },
   };
   return { state, session, signOut, supabase };
 });
@@ -90,6 +108,7 @@ function renderApp() {
           <Routes>
             <Route path="/login" element={<LoginProbe />} />
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/change-password" element={<p>troca obrigatória</p>} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>
@@ -189,5 +208,49 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
     });
 
     expect(mock.state.ownReads).toBe(1);
+  });
+});
+
+describe("AuthContext: a marca de troca obrigatória (E2.03, RN-09, RN-16, AQ-3)", () => {
+  beforeEach(() => {
+    mock.state.ownRead = () => Promise.resolve({ data: { id: "m1" }, error: null });
+    mock.state.passwordStatus = () => Promise.resolve({ data: null, error: null });
+    mock.state.rpcCalls = [];
+    mock.state.memberReads = 0;
+    mock.signOut.mockClear();
+  });
+
+  it("com a marca na abertura, leva à troca e não lê o acesso nem o próprio cadastro (RN-09 b)", async () => {
+    mock.state.passwordStatus = () => Promise.resolve({ data: [{ must_change_password: true }], error: null });
+    renderApp();
+    expect(await screen.findByText("troca obrigatória")).toBeInTheDocument();
+    expect(mock.state.rpcCalls).toContain("my_password_status");
+    expect(mock.state.rpcCalls).not.toContain("my_access");
+    expect(mock.state.memberReads).toBe(0);
+  });
+
+  it("a sessão apagada (session_ended) vai ao login com o aviso (RN-16)", async () => {
+    mock.state.passwordStatus = () =>
+      Promise.resolve({
+        data: null,
+        error: { code: "42501", message: "x", details: JSON.stringify({ code: "session_ended" }), hint: "app_error" },
+      });
+    renderApp();
+    expect(await screen.findByText("login com aviso")).toBeInTheDocument();
+    expect(mock.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("o código password_change_required de qualquer chamada leva à troca, sem mensagem (RN-09 c)", async () => {
+    renderApp();
+    await screen.findByRole("button", { name: "Sair" });
+    await act(async () => requestGate("password_change_required"));
+    expect(await screen.findByText("troca obrigatória")).toBeInTheDocument();
+    expect(mock.signOut).not.toHaveBeenCalled();
+  });
+
+  it("sem a marca, a leitura com erro de rede não prende a tela", async () => {
+    mock.state.passwordStatus = () => Promise.resolve({ data: null, error: { code: "", message: "TypeError: Failed to fetch" } });
+    renderApp();
+    expect(await screen.findByRole("button", { name: "Sair" })).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,8 +15,11 @@ import { MemberFormDialog } from "@/components/members/MemberFormDialog";
 import { MemberPersonalSection } from "@/components/members/MemberPersonalSection";
 import { MemberMinistrySection } from "@/components/members/MemberMinistrySection";
 import { MemberAddressSection } from "@/components/members/MemberAddressSection";
-import { MemberAccessSection } from "@/components/members/MemberAccessSection";
-import { MemberPasswordDialog } from "@/components/members/MemberPasswordDialog";
+import { MemberAccessSection, type MemberPasswordRowProps } from "@/components/members/MemberAccessSection";
+import type { ResetPasswordOutcome } from "@/components/members/ResetPasswordDialog";
+import { refreshAccess } from "@/hooks/use-access";
+import { nextStepForRefusal } from "@/lib/auth/temporary-password";
+import { passwordRowView } from "@/lib/members/password-row";
 import { memberSearchEmptyLabel } from "@/lib/access/access";
 import { MEMBER_FORM_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
 import {
@@ -84,7 +88,8 @@ const MemberForm = ({
   readOnly = false,
 }: MemberFormProps) => {
   const { toast } = useToast();
-  const { hasPermission, access, member: ownMember } = useAuth();
+  const { hasPermission, access, member: ownMember, user } = useAuth();
+  const queryClient = useQueryClient();
   const isEditing = !!member;
   const formId = `${useId()}-member-form`;
 
@@ -92,7 +97,6 @@ const MemberForm = ({
   // visíveis; no cadastro, quem tem create_member preenche todos (E1.08).
   const sensitiveVisible = !isEditing || member.sensitive_visible === true;
   const canEditMinistry = !readOnly && hasPermission(isEditing ? "edit_member" : "create_member");
-  const canChangePassword = isEditing && !readOnly && hasPermission("change_member_password");
   const isAdmin = hasPermission("manage_roles");
   const seesWholeChurch = access?.sees_whole_church === true;
 
@@ -138,6 +142,7 @@ const MemberForm = ({
     },
     view: ministryView,
     role: { required: roleView.kind === "select", initial: roleView.kind === "select" ? roleView.initialValue : null },
+    initialPassword: !isEditing,
   };
   const form = useForm<MemberFormFields, MemberFormContext>({
     defaultValues: initialFields,
@@ -188,7 +193,8 @@ const MemberForm = ({
   const [failure, setFailure] = useState<string | null>(null);
   const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
   const [deletedMatches, setDeletedMatches] = useState<DeletedMatchesDialogModel | null>(null);
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  // A recusa da redefinição nesta abertura vira o texto da linha "Senha" (E2.03, T6).
+  const [passwordRefusal, setPasswordRefusal] = useState<"no_account" | "role_not_covered" | null>(null);
   const topAlertRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
@@ -275,6 +281,39 @@ const MemberForm = ({
   };
 
   const ui = { readOnly, errors: errors.shown, warnings, onBlurCheck: errors.checkOnBlur };
+
+  // A linha "Senha" da edição (E2.03, T5): o próprio cadastro troca; o de outra pessoa, pela `password_reset_status`.
+  const isOwnRecord = isEditing && (readOnly || isSelf || (!!user && member.auth_user_id === user.id));
+  const passwordView = isEditing
+    ? passwordRowView({
+        isSelf: isOwnRecord,
+        accessLoaded: access !== null,
+        canReset: hasPermission("change_member_password"),
+        status: member.password_reset_status,
+        hasAccount: !!member.auth_user_id,
+        refusal: passwordRefusal,
+      })
+    : null;
+
+  /** Depois de uma recusa da redefinição (T6): fecha o cadastro, relê o acesso ou mostra o texto. */
+  const handleResetOutcome = (outcome: ResetPasswordOutcome) => {
+    if (outcome.kind !== "refused") return;
+    switch (nextStepForRefusal(outcome.code)) {
+      case "close_record":
+        onClose();
+        return;
+      case "reread_access":
+        void refreshAccess(queryClient);
+        return;
+      case "show_text":
+        if (outcome.code === "no_account" || outcome.code === "role_not_covered") setPasswordRefusal(outcome.code);
+    }
+  };
+
+  const passwordRow: MemberPasswordRowProps | null =
+    member && passwordView && passwordView.kind !== "hidden"
+      ? { view: passwordView, member: { id: member.id, name: member.name, gender: member.gender }, onResetOutcome: handleResetOutcome }
+      : null;
   const busy = save.isPending;
 
   // Depois de uma falha de envio, o foco volta à ação primária, que serve de "Tentar de novo" (T7).
@@ -372,8 +411,8 @@ const MemberForm = ({
             </>
           )}
 
-          {/* Acesso: some sem Função (UXD-12) e sem "Alterar Senha". */}
-          {(roleView.kind !== "hidden" || canChangePassword) && (
+          {/* Acesso: some sem Função (UXD-12) e sem a linha "Senha" (E2.03, T5); no cadastro novo, a senha inicial. */}
+          {(roleView.kind !== "hidden" || !isEditing || passwordRow) && (
             <>
               <Separator />
               <MemberAccessSection
@@ -381,7 +420,8 @@ const MemberForm = ({
                 roleView={roleView}
                 roleLoadFailed={roleOptions.isError}
                 isNew={!isEditing}
-                onChangePassword={canChangePassword ? () => setPasswordDialogOpen(true) : null}
+                passwordRow={passwordRow}
+                onPasswordBlur={errors.checkPasswordOnBlur}
               />
             </>
           )}
@@ -396,9 +436,6 @@ const MemberForm = ({
           onClose={() => setDeletedMatches(null)}
           onRestored={handleRestored}
         />
-      )}
-      {member && canChangePassword && (
-        <MemberPasswordDialog member={member} open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen} />
       )}
     </MemberFormDialog>
   );

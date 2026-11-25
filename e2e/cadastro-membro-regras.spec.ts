@@ -142,7 +142,7 @@ test.describe("E2.04 PR 2: cadastro e edição de membro pela tela atual", () =>
     const name = who("Ana Login Celular");
     const dialog = await openNewMember(page, name);
     await dialog.getByLabel("Celular / WhatsApp").fill("51988887705");
-    await dialog.getByLabel("Senha para Acesso").fill("QaReg#2026");
+    await dialog.getByLabel("Senha inicial (opcional)", { exact: true }).fill("QaReg#2026");
     await dialog.getByRole("button", { name: "Criar membro", exact: true }).click();
     await expect(toast(page, "Membro criado com sucesso")).toBeVisible();
     createdIds.push(authIdOf(env, `${sql(env, `SELECT id FROM public.members WHERE name = ${lit(name)}`)}@mci12fakemail.com`));
@@ -150,7 +150,11 @@ test.describe("E2.04 PR 2: cadastro e edição de membro pela tela atual", () =>
     sql(env, "DELETE FROM private.sign_in_throttle;");
     await page.context().clearCookies();
     await page.evaluate(() => window.localStorage.clear());
-    await login(page, { email: "51988887705", password: "QaReg#2026" });
-    await expect(page).toHaveURL(/\/$/);
+    // A conta nasce com a marca de troca (E2.03, RN-07): o login leva à troca obrigatória.
+    await page.goto("/login");
+    await page.getByLabel("Identificação").fill("51988887705");
+    await page.getByLabel("Senha", { exact: true }).fill("QaReg#2026");
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/\/change-password$/);
   });
 });

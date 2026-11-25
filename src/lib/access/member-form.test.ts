@@ -342,3 +342,17 @@ describe("recusas do servidor (T11 do E2.02; T5 do E2.04)", () => {
     expect(memberRefusalFromCreate({ message: "Erro inesperado", code: "server_error", field: null })).toBeNull();
   });
 });
+
+describe("E2.03 (AQ-8, UX-31): a senha inicial recusada pela create-user-admin", () => {
+  it("vai para o campo Senha inicial, com o texto sobre o membro", async () => {
+    const { memberRefusalFromCreate: fromCreate } = await import("./member-form");
+    expect(fromCreate({ message: "texto do servidor", code: "password_personal_data", field: "password" })).toEqual({
+      message: "A senha não pode conter o CPF, o celular ou a data de nascimento do membro, nem ser o e-mail do cadastro.",
+      fields: { password: "A senha não pode conter o CPF, o celular ou a data de nascimento do membro, nem ser o e-mail do cadastro." },
+      rereadAccess: false,
+    });
+    expect(fromCreate({ message: "x", code: "password_too_short", field: "password" })?.fields).toEqual({
+      password: "A senha precisa ter pelo menos 8 caracteres.",
+    });
+  });
+});

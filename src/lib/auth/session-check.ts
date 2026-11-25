@@ -3,7 +3,7 @@
 // por aqui, sem conhecer o `AuthContext`; o `AuthProvider` registra a
 // verificação. Sem React e sem Supabase, para ser testado sozinho.
 
-import { isPermissionDenied } from "@/lib/errors";
+import { gateCode, isPermissionDenied, type GateCode } from "@/lib/errors";
 
 type SessionCheck = () => void;
 
@@ -25,8 +25,44 @@ export function requestSessionCheck(): void {
   handler?.();
 }
 
-/** Pede a releitura se o erro for uma recusa de permissão (42501). Os demais erros são ignorados. */
+type GateHandler = (code: GateCode) => void;
+
+let gateHandler: GateHandler | null = null;
+
+/**
+ * Registra o tratamento do portão da senha (E2.03, AQ-3): o `AuthProvider`
+ * liga a marca ou encerra a sessão. Devolve a função que o desfaz.
+ */
+export function setGateHandler(handle: GateHandler): () => void {
+  gateHandler = handle;
+  return () => {
+    if (gateHandler === handle) gateHandler = null;
+  };
+}
+
+/** Avisa o código do portão. Sem tratamento registrado, não faz nada. */
+export function requestGate(code: GateCode): void {
+  gateHandler?.(code);
+}
+
+/**
+ * O erro é do portão da senha? Então avisa o portão e devolve `true`: quem
+ * chamou não trata como recusa comum (a releitura do cadastro e do acesso
+ * cairia no portão de novo).
+ */
+export function handleGateError(error: unknown): boolean {
+  const code = gateCode(error);
+  if (!code) return false;
+  requestGate(code);
+  return true;
+}
+
+/**
+ * Pede a releitura se o erro for uma recusa de permissão (42501). O código do
+ * portão (E2.03) vai antes, para o portão. Os demais erros são ignorados.
+ */
 export function requestSessionCheckOnDenied(error: unknown): void {
+  if (handleGateError(error)) return;
   if (isPermissionDenied(error)) requestSessionCheck();
 }
 

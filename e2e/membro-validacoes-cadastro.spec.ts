@@ -536,7 +536,8 @@ test.describe("UX-15, UX-16 e RN-11/RN-12: liderança no cadastro", () => {
     await guest.getByLabel("Identificação").fill(`(51) ${mobile.slice(2, 7)}-${mobile.slice(7)}`);
     await guest.getByLabel("Senha", { exact: true }).fill("123456");
     await guest.locator('button[type="submit"]').click();
-    await expect(guest).toHaveURL(/\/$/);
+    // A conta nasce com a marca de troca (E2.03, RN-07): o login leva à troca obrigatória.
+    await expect(guest).toHaveURL(/\/change-password$/);
     await context.close();
   });
 

@@ -48,7 +48,10 @@ const PERMISSION_TEXTS = {
     label: "Editar Próprio Cadastro",
     hint: "Só os dados pessoais. Líder, cônjuge, batismo, situação e função ficam de fora.",
   },
-  change_member_password: { label: "Alterar Senha de Membros", hint: null },
+  change_member_password: {
+    label: "Redefinir Senha de Membros",
+    hint: "Gera uma senha temporária para os membros que a pessoa vê, só de funções com permissões que ela também tem. O membro cria uma nova senha no próximo acesso.",
+  },
   create_cell: { label: "Criar Célula", hint: null },
   edit_cell: { label: "Editar Célula", hint: "Também envia o relatório das células que a pessoa vê." },
   delete_cell: { label: "Excluir Célula", hint: null },

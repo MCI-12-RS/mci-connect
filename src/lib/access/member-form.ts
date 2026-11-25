@@ -17,6 +17,8 @@ import {
 import type { MemberFormErrorField } from "@/lib/members/form-errors";
 import { ACCESS_TEXTS, MEMBER_FORM_TEXTS, MENU_TEXTS } from "./texts";
 import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
+import { isPasswordPolicyCode } from "@/lib/auth/password-policy";
+import { initialPasswordErrorMessage } from "@/lib/auth/password-texts";
 
 // --- `role_options` (AQ-3) ---
 
@@ -319,10 +321,16 @@ export interface CreateRefusalBody {
 /**
  * A recusa da `create-user-admin`: 403 (`forbidden`) é a falta de permissão;
  * os demais códigos vêm das regras do banco, pelo ensaio
- * (`check_member_insert`). Sem código, ou com um código técnico, `null`.
+ * (`check_member_insert`). A senha inicial fora da política (E2.03, AQ-8) vai
+ * para o campo, com o texto sobre o membro. Sem código, ou com um código
+ * técnico, `null`.
  */
 export function memberRefusalFromCreate(refusal: CreateRefusalBody): MemberFormRefusal | null {
   if (refusal.code === "forbidden") return permissionRefusal();
+  if (isPasswordPolicyCode(refusal.code)) {
+    const message = initialPasswordErrorMessage(refusal.code);
+    return { message, fields: { password: message }, rereadAccess: false };
+  }
   if (!refusal.code || CREATE_TECHNICAL_CODES.has(refusal.code)) return null;
   const detail = { code: refusal.code, field: refusal.field, fields: refusal.fields ? [...refusal.fields] : undefined };
   return ruleRefusal({ code: refusal.code, message: refusal.message, detail });

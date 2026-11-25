@@ -12,8 +12,27 @@ const session = {
 describe("parseSignInResponse (contrato da sign-in)", () => {
   it("200 ok com a sessão, só com os campos do contrato", () => {
     const parsed = parseSignInResponse(200, { result: "ok", session: { ...session, user: { email: "x" } } });
-    expect(parsed).toEqual({ result: "ok", session });
+    expect(parsed).toEqual({ result: "ok", session, mustChangePassword: false });
     expect(isSignInOk(parsed)).toBe(true);
+  });
+
+  it("E2.03 (RN-08 b): o 200 traz a marca de troca obrigatória; fora do tipo, server_error", () => {
+    expect(parseSignInResponse(200, { result: "ok", session, must_change_password: true })).toEqual({
+      result: "ok",
+      session,
+      mustChangePassword: true,
+    });
+    expect(parseSignInResponse(200, { result: "ok", session, must_change_password: false })).toEqual({
+      result: "ok",
+      session,
+      mustChangePassword: false,
+    });
+    expect(parseSignInResponse(200, { result: "ok", session, must_change_password: "true" })).toEqual({
+      result: "server_error",
+    });
+    expect(parseSignInResponse(200, { result: "ok", session, must_change_password: null })).toEqual({
+      result: "server_error",
+    });
   });
 
   it("200 sem sessão válida é server_error", () => {

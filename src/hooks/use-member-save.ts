@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { refreshAccess } from "@/hooks/use-access";
 import { ROLE_OPTIONS_QUERY_KEY } from "@/hooks/use-role-options";
-import { requestSessionCheck } from "@/lib/auth/session-check";
-import { isJsonObject, isNetworkError, isRecalcFailure, readFunctionErrorBody, RECALC_FAILURE_CODE } from "@/lib/errors";
+import { requestGate, requestSessionCheck } from "@/lib/auth/session-check";
+import { isGateCode, isJsonObject, isNetworkError, isRecalcFailure, readFunctionErrorBody, RECALC_FAILURE_CODE } from "@/lib/errors";
 import { refreshAfterMemberWrite } from "@/lib/query-refresh";
 import {
   memberRefusalFromCreate,
@@ -81,6 +81,11 @@ async function createMember({ attemptId, password, memberData, confirmDeletedMat
   if (error) {
     // As respostas 4xx/5xx da função trazem `{ error, code, field, fields, matches }`.
     const body = parseCreateMemberRefusal(await readFunctionErrorBody(error));
+    // O portão da senha (E2.03, AQ-3): o 403 leva o código; a marca leva à troca, e a sessão apagada, ao login.
+    if (body?.kind === "message" && isGateCode(body.code)) {
+      requestGate(body.code);
+      return { kind: "failed", cause: "other" };
+    }
     if (body?.kind === "deletedMatches") return { kind: "deletedMatches", matches: body.matches, accountEmail: body.accountEmail };
     // A falha no recálculo é um `app_error`, mas não é recusa de regra: "tente de novo" no rodapé (E2.06, AQ-5).
     if (body?.code === RECALC_FAILURE_CODE) return { kind: "failed", cause: "recalc" };

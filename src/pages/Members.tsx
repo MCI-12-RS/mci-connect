@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
@@ -6,6 +7,11 @@ import MemberForm from "@/components/MemberForm";
 import { MemberFormById } from "@/components/EditRecordDialogs";
 import type { RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/MemberDeletionFlow";
+import {
+  ResetPasswordDialog,
+  type ResetPasswordOutcome,
+  type ResetPasswordTarget,
+} from "@/components/members/ResetPasswordDialog";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
@@ -20,12 +26,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
+import { KeyRound, Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TABLE_MIN_WIDTH, WIDE_TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
+import { refreshAccess } from "@/hooks/use-access";
+import { PASSWORD_ROW_TEXTS } from "@/lib/auth/password-texts";
+import { nextStepForRefusal } from "@/lib/auth/temporary-password";
+import { canResetFromList } from "@/lib/members/password-row";
 import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
 import { DELETED_LIST_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { listSubtitle } from "@/lib/access/access";
@@ -52,6 +62,9 @@ const Members = () => {
   // Cadastro novo com dados de um excluído: restaurado pelo aviso, o diálogo passa a editá-lo (RN-18, UX-32).
   const [restoredMember, setRestoredMember] = useState<RestoredFromWarning | null>(null);
   const [deletingMember, setDeletingMember] = useState<MemberDeletionTarget | null>(null);
+  // "Redefinir senha" pela lista (E2.03, P-SEN-20, UX-39).
+  const [resettingMember, setResettingMember] = useState<ResetPasswordTarget | null>(null);
+  const queryClient = useQueryClient();
   // "Novo membro" com a função padrão acima de quem cadastra (RN-19, UXD-2): o bloqueio, e não o formulário.
   const [newMemberBlocked, setNewMemberBlocked] = useState(false);
   const { hasPermission, user, access } = useAuth();
@@ -90,7 +103,8 @@ const Members = () => {
 
   const canEditAny = hasPermission("edit_member") || hasPermission("edit_own_data");
   const canDeleteAny = hasPermission("delete_member");
-  const showActions = canEditAny || canDeleteAny;
+  const canResetAny = hasPermission("change_member_password");
+  const showActions = canEditAny || canDeleteAny || canResetAny;
   // Nome, Nível, Liderança, Ministério e Situação; foto e Celular a partir de 1280 px.
   const columnCount = 5 + (showWideColumns ? 2 : 0) + (showActions ? 1 : 0);
 
@@ -105,10 +119,28 @@ const Members = () => {
     setDeletingMember({ id: m.id, name: memberName(m), isActive: m.is_active === true });
   };
 
-  const rowActions = (m: Member): RowAction[] =>
-    canDelete(m)
-      ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(m, trigger) }]
-      : [];
+  // A coluna da view só diz `allowed` para quem tem a permissão, fora da própria linha, de quem tem conta e função coberta (UX-39).
+  const canReset = (m: Member) => canResetAny && canResetFromList(m.password_reset_status);
+
+  const startReset = (m: Member, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setResettingMember({ id: m.id, name: memberName(m), gender: m.gender });
+  };
+
+  /** Depois de uma recusa (T6): a lista recarrega (pelo hook) e, sem a permissão, o acesso é relido. */
+  const finishReset = (outcome: ResetPasswordOutcome) => {
+    setResettingMember(null);
+    if (outcome.kind === "refused" && nextStepForRefusal(outcome.code) === "reread_access") void refreshAccess(queryClient);
+  };
+
+  const rowActions = (m: Member): RowAction[] => [
+    ...(canReset(m)
+      ? [{ label: PASSWORD_ROW_TEXTS.reset, icon: KeyRound, onSelect: (trigger: HTMLButtonElement | null) => startReset(m, trigger) }]
+      : []),
+    ...(canDelete(m)
+      ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger: HTMLButtonElement | null) => startDeletion(m, trigger) }]
+      : []),
+  ];
 
   // Contato embaixo do nome no cartão e na tabela estreita: Instagram, e-mail ou celular.
   const contactLine = (m: Member) => {
@@ -329,6 +361,17 @@ const Members = () => {
                                   <Pencil className="w-4 h-4" aria-hidden="true" />
                                 </Button>
                               )}
+                              {canReset(m) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={PASSWORD_ROW_TEXTS.resetRowLabel(memberName(m))}
+                                  title={PASSWORD_ROW_TEXTS.reset}
+                                  onClick={(e) => startReset(m, e.currentTarget)}
+                                >
+                                  <KeyRound className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                                </Button>
+                              )}
                               {canDelete(m) && (
                                 <Button
                                   variant="ghost"
@@ -389,6 +432,15 @@ const Members = () => {
         >
           <p>{RULE_TEXTS.defaultRoleNotCovered}</p>
         </BlockedActionDialog>
+
+        {resettingMember && (
+          <ResetPasswordDialog
+            key={resettingMember.id}
+            member={resettingMember}
+            onClose={finishReset}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
+        )}
 
         {deletingMember && (
           <MemberDeletionFlow

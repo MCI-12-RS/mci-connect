@@ -203,3 +203,22 @@ describe("isRecalcFailure (E2.06, AQ-5 e DT-14)", () => {
     expect(isRecalcFailure("57014")).toBe(false);
   });
 });
+
+describe("portão da senha (E2.03, DT-04, AQ-3)", () => {
+  const gate = (code: string) => ({ code: "42501", message: "x", details: JSON.stringify({ code }), hint: "app_error" });
+
+  it("gateCode lê o código do 42501 + app_error; o resto é null", async () => {
+    const { gateCode, parseAppError, retryUnlessGate } = await import("./errors");
+    expect(gateCode(gate("password_change_required"))).toBe("password_change_required");
+    expect(gateCode(gate("session_ended"))).toBe("session_ended");
+    expect(gateCode(gate("member_has_links"))).toBeNull();
+    expect(gateCode({ code: "42501", message: "permission denied" })).toBeNull();
+    expect(gateCode(null)).toBeNull();
+    // parseAppError aceita app_error com qualquer SQLSTATE.
+    expect(parseAppError(gate("session_ended"))?.code).toBe("session_ended");
+    // Sem novas tentativas no portão.
+    expect(retryUnlessGate(0, gate("password_change_required"))).toBe(false);
+    expect(retryUnlessGate(0, { code: "XX000" })).toBe(true);
+    expect(retryUnlessGate(3, { code: "XX000" })).toBe(false);
+  });
+});
