@@ -11,6 +11,11 @@ verify_jwt = false
 [functions.sign-in]
 verify_jwt = false
 
+# Troca da própria senha (E2.03). O JWT é conferido dentro da função
+# (auth.getUser), como na create-user-admin.
+[functions.change-own-password]
+verify_jwt = false
+
 # Só para a stack local (E1.04, DT-13). A configuração do Auth de produção é
 # feita pela Management API, no roteiro de implantação, e conferida pelo
 # "Deploy: banco". Nunca use `supabase config push`: este arquivo não tem as
