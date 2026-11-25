@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from "react";
+import { useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { AlertCircle, ChevronDown, Lock, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import RowActionsMenu from "@/components/RowActionsMenu";
@@ -47,6 +47,13 @@ function permissionsPlaceholder(role: Role): string | null {
   return null;
 }
 
+/** O chip de uma permissão (card e tabela): `bg-muted` com `text-foreground` para o contraste (UX-29). */
+const PermissionChip = ({ children }: { children: ReactNode }) => (
+  <Badge variant="outline" className="whitespace-normal break-words bg-muted font-normal text-foreground">
+    {children}
+  </Badge>
+);
+
 /** "Ver permissões" do card (T2): as permissões nos grupos da T3. */
 const RolePermissionsCollapsible = ({ role }: { role: Role }) => {
   const [open, setOpen] = useState(false);
@@ -58,9 +65,7 @@ const RolePermissionsCollapsible = ({ role }: { role: Role }) => {
             <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
             <div className="flex flex-wrap gap-1.5">
               {group.permissions.map((permission) => (
-                <Badge key={permission.value} variant="secondary" className="whitespace-normal break-words font-normal">
-                  {permission.label}
-                </Badge>
+                <PermissionChip key={permission.value}>{permission.label}</PermissionChip>
               ))}
             </div>
           </div>
@@ -131,9 +136,7 @@ const RoleRow = ({ role, canManage, onEdit, onDelete }: RoleActions & { role: Ro
         ) : (
           <div className="flex flex-wrap gap-1">
             {role.permissions.map((permission) => (
-              <Badge key={permission} variant="secondary" className="whitespace-normal break-words font-normal">
-                {permissionLabel(permission)}
-              </Badge>
+              <PermissionChip key={permission}>{permissionLabel(permission)}</PermissionChip>
             ))}
           </div>
         )}

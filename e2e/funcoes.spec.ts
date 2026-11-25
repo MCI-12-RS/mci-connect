@@ -246,9 +246,9 @@ test.describe("UX-07 e RN-19: a função padrão", () => {
     const writes = trackWrites(page);
     await rowOf(page, BETA).getByRole("button", { name: `Editar a função ${BETA}` }).click();
     const dialog = page.getByRole("dialog", { name: "Editar função" });
-    await expect(dialog.getByRole("note")).toHaveCount(0);
+    await expect(dialog.getByRole("status")).toHaveCount(0);
     await dialog.getByRole("switch", { name: "Função padrão" }).click();
-    await expect(dialog.getByRole("note")).toContainText("A função Membro deixa de ser a padrão.");
+    await expect(dialog.getByRole("status")).toContainText("A função Membro deixa de ser a padrão.");
     expect(defaultRoleNames(), "antes de salvar nada muda").toBe("Membro");
 
     await dialog.getByRole("button", { name: "Salvar função" }).click();
@@ -274,7 +274,7 @@ test.describe("UX-07 e RN-19: a função padrão", () => {
     await rowOf(page, "Membro").getByRole("button", { name: "Editar a função Membro" }).click();
     const dialog = page.getByRole("dialog", { name: "Editar função" });
     await dialog.getByRole("switch", { name: "Função padrão" }).click();
-    await expect(dialog.getByRole("note")).toContainText(`A função ${BETA} deixa de ser a padrão.`);
+    await expect(dialog.getByRole("status")).toContainText(`A função ${BETA} deixa de ser a padrão.`);
     await dialog.getByRole("button", { name: "Salvar função" }).click();
     await expect(toast(page, "Função atualizada. Membro agora é a função padrão.")).toBeVisible();
     expect(defaultRoleNames()).toBe("Membro");

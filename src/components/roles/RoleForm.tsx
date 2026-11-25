@@ -253,7 +253,8 @@ const RoleForm = ({ role, roles, onClose, onCloseAutoFocus }: RoleFormProps) => 
                   }}
                 />
                 {nameError && (
-                  <p id={nameErrorId} className="text-sm font-medium text-destructive">
+                  <p id={nameErrorId} className="flex items-start gap-1.5 text-sm font-medium text-foreground">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
                     {nameError}
                   </p>
                 )}
@@ -295,9 +296,12 @@ const RoleForm = ({ role, roles, onClose, onCloseAutoFocus }: RoleFormProps) => 
             </section>
 
             <div className="space-y-3 rounded-md border p-3">
-              <div className="flex items-start justify-between gap-3">
+              {/* O `after` do rótulo cobre só esta linha (alvo de toque ≥ 44 px, como P14), nunca o aviso abaixo. */}
+              <div className="relative flex min-h-11 items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <Label htmlFor={defaultId}>{ROLE_TEXTS.defaultLabel}</Label>
+                  <Label htmlFor={defaultId} className={cn("after:absolute after:inset-0", !defaultLocked && "cursor-pointer")}>
+                    {ROLE_TEXTS.defaultLabel}
+                  </Label>
                   <p id={defaultHintId} className="break-words text-sm text-muted-foreground">
                     {defaultLocked ? ROLE_TEXTS.defaultLocked : ROLE_TEXTS.defaultHint}
                   </p>
@@ -307,11 +311,12 @@ const RoleForm = ({ role, roles, onClose, onCloseAutoFocus }: RoleFormProps) => 
                   checked={values.isDefault}
                   disabled={defaultLocked || saving}
                   aria-describedby={defaultHintId}
+                  className="relative z-10"
                   onCheckedChange={(isDefault) => setValues((current) => ({ ...current, isDefault }))}
                 />
               </div>
               {warning && (
-                <Alert role="note">
+                <Alert role="status">
                   <Info className="h-4 w-4" aria-hidden="true" />
                   <AlertDescription>{warning}</AlertDescription>
                 </Alert>

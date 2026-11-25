@@ -182,7 +182,7 @@ export const ROLE_TEXTS = {
   nameLabel: "Nome *",
   descriptionLabel: "Descrição",
   permissionsLabel: "Permissões",
-  checkedCount: (count: number) => `${count} marcadas`,
+  checkedCount: (count: number) => (count === 1 ? "1 marcada" : `${count} marcadas`),
   scopeNote: "Fora a Auditoria, todas as permissões valem só para o que a pessoa vê.",
   defaultLabel: "Função padrão",
   defaultHint: "Novos membros recebem esta função quando quem cadastra não escolhe outra.",
@@ -212,6 +212,7 @@ export const ROLE_TEXTS = {
   close: "Fechar",
   // Toasts
   created: "Função criada.",
+  createdAsDefault: (name: string) => `Função criada. ${name} agora é a função padrão.`,
   updated: "Função atualizada.",
   deleted: "Função excluída.",
   updatedAsDefault: (name: string) => `Função atualizada. ${name} agora é a função padrão.`,

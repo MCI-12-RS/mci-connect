@@ -202,6 +202,11 @@ describe("saveSuccessText", () => {
     expect(saveSuccessText(leader, { ...values, isDefault: true })).toBe(ROLE_TEXTS.updatedAsDefault("Líder"));
     expect(saveSuccessText(member, initialRoleFormValues(member))).toBe(ROLE_TEXTS.updated);
   });
+  it("criada já como padrão cita o nome sem espaços nas pontas", () => {
+    const created = { ...values, name: "  Nova  ", isDefault: true };
+    expect(saveSuccessText(null, created)).toBe("Função criada. Nova agora é a função padrão.");
+    expect(saveSuccessText(null, { ...created, isDefault: false })).toBe("Função criada.");
+  });
 });
 
 describe("classifyRoleWriteError", () => {

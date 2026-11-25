@@ -216,9 +216,9 @@ export function buildSaveRoleArgs(role: Role | null, values: RoleFormValues): Sa
   };
 }
 
-/** O toast do sucesso (T2, "Estados"): criada, atualizada, ou atualizada e agora a padrão. */
+/** O toast do sucesso (T2, "Estados"): criada, atualizada, ou criada/atualizada e agora a padrão. */
 export function saveSuccessText(role: Role | null, values: RoleFormValues): string {
-  if (!role) return ROLE_TEXTS.created;
+  if (!role) return values.isDefault ? ROLE_TEXTS.createdAsDefault(values.name.trim()) : ROLE_TEXTS.created;
   if (values.isDefault && !role.isDefault) return ROLE_TEXTS.updatedAsDefault(values.name.trim());
   return ROLE_TEXTS.updated;
 }
