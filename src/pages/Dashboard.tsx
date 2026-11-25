@@ -318,7 +318,7 @@ const Dashboard = () => {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
               {badge && (
-                <Badge variant="secondary" className="text-xs">{badge}</Badge>
+                <Badge variant="outline" className="text-xs">{badge}</Badge>
               )}
             </div>
             {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}

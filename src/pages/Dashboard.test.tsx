@@ -292,7 +292,10 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
     renderDashboard();
     await settle();
 
-    expect(screen.getByText("Meu Ministério")).toBeInTheDocument();
+    // Contorno sobre o fundo da página: o texto em primeiro plano passa no contraste nos dois temas (UX-29).
+    const badge = screen.getByText("Meu Ministério");
+    expect(badge).toHaveClass("text-foreground");
+    expect(badge).not.toHaveClass("bg-secondary");
     expect(screen.getByText("Visão do seu ministério")).toBeInTheDocument();
     expect(cardValue("Total de Membros")).toBe("1.530");
   });

@@ -205,8 +205,10 @@ const Ministries = () => {
   } else if (isEmpty) {
     content = (
       <div className="space-y-1 px-4 py-12 text-center">
-        <p className="text-muted-foreground">{MINISTRIES_TEXTS.emptyTitle}</p>
-        <p className="text-sm text-muted-foreground">{MINISTRIES_TEXTS.emptyDescription}</p>
+        <p className="text-foreground">{MINISTRIES_TEXTS.emptyTitle}</p>
+        <p className="text-sm text-muted-foreground">
+          {canSeeMembers ? MINISTRIES_TEXTS.emptyDescription : MINISTRIES_TEXTS.emptyDescriptionNoMembers}
+        </p>
         {/* Uma saída para a pessoa não ficar sem caminho (T10). */}
         {canSeeMembers && (
           <div className="pt-4">

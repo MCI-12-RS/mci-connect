@@ -222,28 +222,33 @@ describe("Ministérios (RN-10)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("Dado ninguém visível na árvore, então o estado vazio aponta Membros, sem a dica de expandir (E2.02, T10, AQ-10)", async () => {
+  it("Dado ninguém visível na árvore para quem não abre Membros, então o estado vazio pede um administrador, sem a dica de expandir (E2.02, T10, AQ-10)", async () => {
     auth.access = null;
     respondToRpc("ministry_tree_nodes", { data: [] });
 
     renderMinistries();
     await settle();
 
-    expect(screen.getByText("Ninguém visível para você na árvore.")).toBeInTheDocument();
-    expect(screen.getByText("As pessoas do seu ministério aparecem em Membros.")).toBeInTheDocument();
+    expect(screen.getByText("Ninguém visível para você na árvore.")).toHaveClass("text-foreground");
+    expect(screen.getByText("Fale com um administrador.")).toBeInTheDocument();
+    // Não aponta para uma tela que a pessoa não vê.
+    expect(screen.queryByText("As pessoas do seu ministério aparecem em Membros.")).not.toBeInTheDocument();
     expect(screen.queryByText(HINT)).not.toBeInTheDocument();
     // Sem acesso a Membros, nenhum caminho que levaria a uma tela sem acesso.
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("Dado o estado vazio para quem abre Membros, então o botão 'Ver membros do seu ministério' leva a /members (T10)", async () => {
+  it("Dado o estado vazio para quem abre Membros, então aponta Membros e o botão 'Ver membros do seu ministério' leva a /members (T10)", async () => {
     auth.access = MINISTRY_ACCESS;
     respondToRpc("ministry_tree_nodes", { data: [] });
 
     renderMinistries();
     await settle();
 
+    expect(screen.getByText("Ninguém visível para você na árvore.")).toHaveClass("text-foreground");
+    expect(screen.getByText("As pessoas do seu ministério aparecem em Membros.")).toBeInTheDocument();
+    expect(screen.queryByText("Fale com um administrador.")).not.toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Ver membros do seu ministério" });
     expect(link).toHaveAttribute("href", "/members");
     expect(link).toHaveClass("h-11");

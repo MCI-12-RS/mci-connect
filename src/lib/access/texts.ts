@@ -91,6 +91,8 @@ export const DASHBOARD_TEXTS = {
 export const MINISTRIES_TEXTS = {
   emptyTitle: "Ninguém visível para você na árvore.",
   emptyDescription: "As pessoas do seu ministério aparecem em Membros.",
+  /** Sem acesso a Membros: não aponta para uma tela que a pessoa não vê. */
+  emptyDescriptionNoMembers: "Fale com um administrador.",
   goToMembers: "Ver membros do seu ministério",
 } as const;
 
