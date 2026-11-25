@@ -486,7 +486,7 @@ test("RN-16 (f) e RN-14 (AD e Ana): Ana, com conta, excluída não entra; restau
   browser,
 }, testInfo) => {
   const ana = who("Ana Costa");
-  expect(await passwordGrant(env, ANA.email, ANA.password), "excluída, o login é recusado").toBe(400);
+  expect(await passwordGrant(env, ANA.email, ANA.password), "excluída, o login é recusado").toBe(401);
 
   await login(page, env.admin);
   await openDeleted(page, "/members/deleted", ana);

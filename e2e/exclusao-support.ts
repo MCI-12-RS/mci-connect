@@ -93,7 +93,7 @@ export function rpcAs(env: E2EEnv, authUserId: string, call: string): void {
 export async function login(page: Page, { email, password }: Credentials) {
   await page.goto("/login");
   await page.getByLabel("Identificação").fill(email);
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -242,12 +242,16 @@ export async function openDeleted(page: Page, path: string, search: string, extr
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
 }
 
-/** Login por senha direto no Auth local: o status HTTP (200 entra; 400 recusa). */
+/**
+ * Tentativa de login pela função `sign-in` (E1.04): o status HTTP (200 entra; 401 recusa).
+ * O login direto no Auth (`grant_type=password`) é recusado de propósito na stack local
+ * (`[auth.email] enable_signup = false`, RN-14), então não serve mais para testar o acesso.
+ */
 export async function passwordGrant(env: E2EEnv, email: string, password: string): Promise<number> {
-  const response = await fetch(`${env.apiUrl}/auth/v1/token?grant_type=password`, {
+  const response = await fetch(`${env.apiUrl}/functions/v1/sign-in`, {
     method: "POST",
     headers: { apikey: env.publishableKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ identifier: email, password }),
   });
   await response.text();
   return response.status;

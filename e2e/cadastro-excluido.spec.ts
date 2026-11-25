@@ -422,6 +422,11 @@ test.describe("RN-18 / UX-34: cadastrar mesmo assim", () => {
     await page.waitForTimeout(500);
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     expect(replies).toHaveLength(0);
-    expect(requests.filter((url) => url.includes("find_deleted_member_matches") || url.includes("/functions/v1/"))).toEqual([]);
+    // O login em si (a função sign-in, E1.04) não conta: o que não pode haver é a conferência de excluídos.
+    expect(
+      requests.filter(
+        (url) => url.includes("find_deleted_member_matches") || (url.includes("/functions/v1/") && !url.includes("/functions/v1/sign-in")),
+      ),
+    ).toEqual([]);
   });
 });

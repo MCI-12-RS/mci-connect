@@ -50,13 +50,16 @@ const tokens: { ad: string; le: string; cm: string; mb: string } = { ad: "", le:
 const createdEmails: string[] = [];
 
 async function tokenOf({ email, password }: Credentials): Promise<string> {
-  const response = await fetch(`${env.apiUrl}/auth/v1/token?grant_type=password`, {
+  // Pela função `sign-in` (E1.04): o login direto no Auth fica desligado (RN-14).
+  const response = await fetch(`${env.apiUrl}/functions/v1/sign-in`, {
     method: "POST",
     headers: { apikey: env.publishableKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ identifier: email, password }),
   });
   const body: unknown = await response.json();
-  const token = typeof body === "object" && body !== null && "access_token" in body ? body.access_token : null;
+  const session = typeof body === "object" && body !== null && "session" in body ? body.session : null;
+  const token =
+    typeof session === "object" && session !== null && "access_token" in session ? session.access_token : null;
   if (typeof token !== "string") throw new Error(`login de ${email} falhou (${response.status})`);
   return token;
 }

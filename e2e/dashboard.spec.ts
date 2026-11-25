@@ -12,8 +12,8 @@ import { test, expect, type Page, type Response } from "@playwright/test";
 
 const DASHBOARD_RPCS = ["dashboard_cells_by_type", "dashboard_g12_ranking", "dashboard_summary"];
 
-// O que o login e o AuthContext leem, além do dashboard.
-const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/role_permissions", "/rest/v1/roles", "/rest/v1/rpc/log_auth_event"];
+// O que o AuthContext lê depois do login, além do dashboard (o login em si é a função sign-in, que não passa pelo /rest/v1/; E1.04).
+const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/role_permissions", "/rest/v1/roles"];
 
 const WEEK_CARDS: Record<string, string> = {
   "Relatórios Enviados": "reports_sent",
@@ -68,7 +68,7 @@ function credentials(emailVar: string, passwordVar: string) {
 async function login(page: Page, { email, password }: { email: string; password: string }) {
   await page.goto("/login");
   await page.getByLabel("Identificação").fill(email);
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.locator('button[type="submit"]').click();
 }
 
