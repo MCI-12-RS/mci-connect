@@ -21,6 +21,38 @@ const couple = {
   direct_disciples: 12,
   total_disciples: 40,
   total_cells: 7,
+  kind: "node",
+  level_member_id: "h1",
+  level_gender: "M",
+  level_is_pastor: false,
+  spouse_is_pastor: false,
+};
+
+const reference = {
+  ...couple,
+  kind: "spouse_above",
+  member_id: "m2",
+  member_name: "Carla",
+  spouse_id: "h0",
+  spouse_name: "Davi",
+  g12_level: 4,
+  level_member_id: "m2",
+  level_gender: "F",
+  direct_disciples: 0,
+  total_disciples: null,
+  total_cells: null,
+};
+
+const coupleItem = {
+  kind: "node",
+  member_id: "h1",
+  member_name: "Bruno",
+  spouse_id: "m1",
+  spouse_name: "Ana",
+  level: { level: 1, isPastor: false, gender: "M", bothPastors: false },
+  direct_disciples: 12,
+  total_disciples: 40,
+  total_cells: 7,
 };
 
 describe("useMinistryTree (RN-10)", () => {
@@ -34,7 +66,26 @@ describe("useMinistryTree (RN-10)", () => {
 
     expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["ministry_tree_nodes", undefined]]);
     expect(fakeQueries()).toHaveLength(0);
-    expect(result.current.data).toEqual([couple]);
+    expect(result.current.data).toEqual([coupleItem]);
+  });
+
+  it("Dada uma referência (spouse_above), então ela vem como referência, sem totais, ao lado dos nós (T4)", async () => {
+    respondToRpc("ministry_tree_nodes", { data: [couple, reference] });
+
+    const { result } = renderHook(() => useMinistryTree(["h0"]), { wrapper: createQueryWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual([
+      coupleItem,
+      {
+        kind: "spouse_above",
+        member_id: "m2",
+        member_name: "Carla",
+        spouse_id: "h0",
+        spouse_name: "Davi",
+        level: { level: 4, isPastor: false, gender: "F" },
+      },
+    ]);
   });
 
   it("Dado um casal expandido, então os filhos vêm de uma chamada só, com os ids dos dois", async () => {
@@ -76,7 +127,7 @@ describe("useMinistryTree (RN-10)", () => {
     rerender({ enabled: false });
     rerender({ enabled: true });
 
-    expect(result.current.data).toEqual([couple]);
+    expect(result.current.data).toEqual([coupleItem]);
     expect(fakeRpcs()).toHaveLength(1);
   });
 
