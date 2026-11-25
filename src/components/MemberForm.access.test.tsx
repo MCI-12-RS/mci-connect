@@ -76,6 +76,7 @@ const member = (over: Partial<MemberRow>): MemberRow => ({
   baptism_date: null,
   is_active: true,
   g12_level: 4,
+  g12_name: null,
   total_disciples: 0,
   total_cells: 0,
   auth_user_id: null,
@@ -338,13 +339,13 @@ describe("UX-22: recusas do servidor na edição (Pedro, sem a igreja toda)", ()
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("erro técnico ou 40P01 (DT-25): 'tente de novo' no rodapé (role=alert), sem o texto técnico, sem toast, e o foco no botão (T7)", async () => {
+  it("40P01 (DT-25; E2.06, AQ-5): a falha do recálculo no rodapé (role=alert), sem o texto técnico, sem toast, e o foco no botão (T7)", async () => {
     await openAndFillNotes();
     refuse({ code: "40P01", message: "deadlock detected" });
     submitEdit();
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(alert).toHaveTextContent("Não foi possível salvar as alterações. Tente de novo.");
     expect(alert.textContent ?? "").not.toMatch(/40P01|deadlock/);
     expect(toast).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: "Salvar alterações" })).toHaveFocus());

@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
-import type { MinistryTreeNode } from "@/hooks/use-ministry-tree";
+import type { MinistryTreeNodeRow } from "@/hooks/use-ministry-tree";
 import { NO_ACCESS, type Access } from "@/lib/access/access";
 import Ministries from "./Ministries";
 
@@ -38,7 +38,7 @@ const MINISTRY_ACCESS: Access = {
   sees_ministry_reports: true,
 };
 
-function node(overrides: Partial<MinistryTreeNode>): MinistryTreeNode {
+function node(overrides: Partial<MinistryTreeNodeRow>): MinistryTreeNodeRow {
   return {
     member_id: "x",
     member_name: "Sem Nome",
@@ -67,7 +67,11 @@ const roots = [
     spouse_name: "Priscila Pastora",
     g12_level: 0,
     is_pastor: true,
+    level_is_pastor: true,
+    spouse_is_pastor: true,
     direct_disciples: 2,
+    total_disciples: 18,
+    total_cells: 8,
   }),
   node({ member_id: "s1", member_name: "Silas Pastor", g12_level: 0, is_pastor: true, direct_disciples: 1 }),
   node({ member_id: "v1", member_name: "Vitor Pastor", g12_level: 0, is_pastor: true, direct_disciples: 0 }),
@@ -101,7 +105,14 @@ async function settle() {
 }
 
 const nodeButton = (name: RegExp) => screen.getByRole("button", { name });
-const HINT = /Toque ou clique num nome para ver os discípulos/;
+/** O item da árvore (`li`) que tem o texto. */
+function treeItem(text: string): HTMLLIElement {
+  const item = screen.getByText(text).closest("li");
+  if (!item) throw new Error(`sem item para ${text}`);
+  return item;
+}
+const HINT =
+  "Toque ou clique num nome para ver os discípulos diretos. Os totais somam todos os níveis abaixo de cada nome, inclusive os discípulos de pessoas inativas, que não aparecem aqui.";
 const rpcCalls = () => fakeRpcs().map((call) => [call.fn, call.args]);
 
 describe("Ministérios (RN-10)", () => {
@@ -116,6 +127,10 @@ describe("Ministérios (RN-10)", () => {
 
     renderMinistries();
     expect(screen.getByRole("status")).toHaveTextContent("Carregando…");
+    // A altura do nó de duas linhas no celular, para a lista não pular.
+    const placeholders = document.querySelectorAll('[aria-busy="true"] > div');
+    expect(placeholders).toHaveLength(4);
+    placeholders.forEach((placeholder) => expect(placeholder).toHaveClass("h-16", "sm:h-11"));
     await settle();
 
     expect(rpcCalls()).toEqual([["ministry_tree_nodes", undefined]]);
@@ -125,7 +140,7 @@ describe("Ministérios (RN-10)", () => {
     expect(screen.getByText(HINT)).toBeInTheDocument();
   });
 
-  it("Dado um casal, então mostra os dois nomes, a contagem de discípulos diretos e o nível", async () => {
+  it("Dado um casal de pastores, então mostra os dois nomes, 'Pastores' e os totais por extenso (T3, UX-04, UX-12)", async () => {
     respondToRpc("ministry_tree_nodes", { data: roots });
 
     renderMinistries();
@@ -133,9 +148,43 @@ describe("Ministérios (RN-10)", () => {
 
     const couple = nodeButton(/Paulo Pastor/);
     expect(within(couple).getByText("Priscila Pastora")).toBeInTheDocument();
-    expect(within(couple).getByText("2 discípulos diretos")).toBeInTheDocument();
-    expect(within(couple).getByText("Pastor(a)")).toBeInTheDocument();
-    expect(couple).toHaveAccessibleName(/Paulo Pastor e Priscila Pastora/);
+    expect(within(couple).getByText("Pastores")).toBeInTheDocument();
+    // O badge dentro do botão é um span (HTML válido).
+    expect(within(couple).getByText("Pastores").tagName).toBe("SPAN");
+    expect(within(couple).getByText("18 discípulos")).toHaveClass("whitespace-nowrap");
+    expect(within(couple).getByText("8 células")).toHaveClass("whitespace-nowrap");
+    expect(couple).toHaveAccessibleName("Paulo Pastor e Priscila Pastora, Pastores, 18 discípulos, 8 células");
+    // Um pastor só no nó: "Pastor", nunca "Pastores" nem "Pastor(a)".
+    expect(nodeButton(/Silas Pastor/)).toHaveAccessibleName("Silas Pastor, Pastor, 0 discípulos, 0 células");
+  });
+
+  it("Dada a árvore, então os totais aparecem sempre, inclusive com zero, e nada fala em discípulos diretos nem abrevia (UX-04, UX-11)", async () => {
+    respondToRpc("ministry_tree_nodes", { data: roots });
+
+    renderMinistries();
+    await settle();
+
+    // Vitor é folha e tem zero nos dois totais.
+    const vitor = within(treeItem("Vitor Pastor"));
+    expect(vitor.getByText("0 discípulos")).toBeInTheDocument();
+    expect(vitor.getByText("0 células")).toBeInTheDocument();
+    // Só a ajuda fala em discípulos diretos (o que aparece ao abrir); os totais, nunca.
+    const text = (document.body.textContent ?? "").replace(HINT, "");
+    expect(text).not.toMatch(/discípulos? diretos?/);
+    expect(text).not.toMatch(/disc\.|cél\./);
+  });
+
+  it("Dada uma raiz sem liderança (nível nulo), então mostra 'Sem liderança', e não 'Nível null' (P40)", async () => {
+    respondToRpc("ministry_tree_nodes", {
+      data: [node({ member_id: "e1", member_name: "Ester Ramos", g12_level: null, level_gender: "F", direct_disciples: 1, total_disciples: 1 })],
+    });
+
+    renderMinistries();
+    await settle();
+
+    expect(nodeButton(/Ester Ramos/)).toHaveAccessibleName("Ester Ramos, Sem liderança, 1 discípulo, 0 células");
+    expect(screen.getByText("Sem liderança")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/null/);
   });
 
   it("Dado um nó sem discípulos diretos (folha), então ele aparece sem botão de expandir", async () => {
@@ -163,9 +212,8 @@ describe("Ministérios (RN-10)", () => {
     ]);
     expect(nodeButton(/Paulo Pastor/)).toHaveAttribute("aria-expanded", "true");
     expect(nodeButton(/André Alves/)).toBeInTheDocument();
-    // O nível só com número é lido como "nível 12"; "Pastor(a)" se explica sozinho.
-    expect(nodeButton(/André Alves/)).toHaveAccessibleName(/nível 12$/);
-    expect(nodeButton(/Paulo Pastor/)).toHaveAccessibleName(/diretos Pastor\(a\)$/);
+    // O nível da posição: "G12", nunca "12" sozinho.
+    expect(nodeButton(/André Alves/)).toHaveAccessibleName("André Alves e Ana Alves, G12, 0 discípulos, 0 células");
     // Bruno é folha: aparece sem botão.
     expect(screen.getByText("Bruno Borges")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Bruno Borges/ })).not.toBeInTheDocument();
@@ -314,5 +362,108 @@ describe("Ministérios (RN-10)", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar a árvore.");
     expect(fakeRpcs()).toHaveLength(1);
+  });
+  describe("cônjuge que está abaixo do outro (T4, RN-09, P43)", () => {
+    const diegoOlga = node({
+      member_id: "diego",
+      member_name: "Diego Reis",
+      spouse_id: "olga",
+      spouse_name: "Olga Reis",
+      g12_level: 2,
+      direct_disciples: 2,
+      total_disciples: 2,
+      total_cells: 3,
+    });
+    const diegosChildren = [
+      node({ member_id: "lauro", member_name: "Lauro Mendes", g12_level: 3, direct_disciples: 2, total_disciples: 2, total_cells: 2 }),
+      node({ member_id: "sonia", member_name: "Sônia Castro", g12_level: 5, level_gender: "F", total_cells: 1 }),
+    ];
+    const laurosChildren = [
+      node({
+        kind: "spouse_above",
+        member_id: "olga",
+        member_name: "Olga Reis",
+        spouse_id: "diego",
+        spouse_name: "Diego Reis",
+        g12_level: 4,
+        level_gender: "F",
+        direct_disciples: 0,
+        total_disciples: null,
+        total_cells: null,
+      }),
+    ];
+    const goToCouple = () => screen.getByRole("button", { name: "Ir para Diego Reis e Olga Reis, mais acima na árvore" });
+
+    async function openUpToLauro() {
+      respondToRpc("ministry_tree_nodes", { data: [diegoOlga] }, { data: diegosChildren }, { data: laurosChildren });
+      renderMinistries();
+      await settle();
+      fireEvent.click(nodeButton(/^Diego Reis e Olga Reis/));
+      await settle();
+      fireEvent.click(nodeButton(/^Lauro Mendes/));
+      await settle();
+    }
+
+    it("Dado Lauro aberto, então Olga aparece como referência: sem seta, sem totais, com o nível dela, a frase e 'Ir para o casal' (UX-10)", async () => {
+      await openUpToLauro();
+
+      const row = within(treeItem("Aparece com o cônjuge, Diego Reis, mais acima."));
+      expect(row.getByText("Olga Reis")).toBeInTheDocument();
+      expect(row.getByText("20.736")).toBeInTheDocument();
+      expect(row.queryByText(/discípulo|célula/)).not.toBeInTheDocument();
+      // O único botão é o "Ir para o casal": a referência não abre.
+      expect(row.getAllByRole("button")).toEqual([goToCouple()]);
+      expect(goToCouple()).toHaveTextContent("Ir para o casal");
+      expect(goToCouple()).toHaveClass("h-11", "md:h-9");
+      // Nenhum nó "Diego Reis e Olga Reis" sob Lauro: o casal aparece uma vez só.
+      expect(screen.getAllByRole("button", { name: /^Diego Reis e Olga Reis,/ })).toHaveLength(1);
+      expect(screen.getAllByText("Olga Reis")).toHaveLength(2);
+    });
+
+    it("Dado 'Ir para o casal', então rola até o nó do casal, foca e destaca por 2 s, sem abrir nem fechar nó nem chamar a RPC (UX-10)", async () => {
+      await openUpToLauro();
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+      const calls = fakeRpcs().length;
+      const couple = nodeButton(/^Diego Reis e Olga Reis/);
+
+      fireEvent.click(goToCouple());
+
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll.mock.contexts[0]).toBe(couple);
+      expect(scroll).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+      expect(couple).toHaveFocus();
+      expect(couple).toHaveClass("ring-2", "ring-ring");
+      expect(couple).toHaveAttribute("aria-expanded", "true");
+      expect(nodeButton(/^Lauro Mendes/)).toHaveAttribute("aria-expanded", "true");
+      expect(goToCouple()).toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(1_999));
+      expect(couple).toHaveClass("ring-2");
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(couple).not.toHaveClass("ring-2");
+      expect(fakeRpcs()).toHaveLength(calls);
+      scroll.mockRestore();
+    });
+
+    it("Dado prefers-reduced-motion, então a rolagem do 'Ir para o casal' é imediata", async () => {
+      await openUpToLauro();
+      const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+      const matchMedia = vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({
+        matches: query.includes("prefers-reduced-motion"),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true,
+      }));
+
+      fireEvent.click(goToCouple());
+
+      expect(scroll).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
+      matchMedia.mockRestore();
+      scroll.mockRestore();
+    });
   });
 });

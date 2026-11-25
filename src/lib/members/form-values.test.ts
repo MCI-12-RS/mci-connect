@@ -34,6 +34,7 @@ const andre: MemberRow = {
   baptism_date: "2020-05-10",
   is_active: true,
   g12_level: 2,
+  g12_name: null,
   total_disciples: 0,
   total_cells: 0,
   auth_user_id: "u1",

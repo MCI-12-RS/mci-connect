@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatCellLabel, formatG12Label, formatMeetingTime, formatShortAddress, formatStreetLine } from "./labels";
+import { cellG12, cellLeaderLevel, formatCellLabel, formatG12Label, formatMeetingTime, formatShortAddress, formatStreetLine } from "./labels";
 
 describe("formatCellLabel", () => {
   it("líder, rua, número e bairro", () => {
@@ -32,15 +32,39 @@ describe("formatStreetLine", () => {
   });
 });
 
-describe("formatG12Label", () => {
-  it("usa o nome do G12 vindo da view", () => {
-    expect(formatG12Label({ g12_leader_name: "Pedro", leader_g12_level: 3 })).toBe("Pedro");
+describe("formatG12Label (RN-11 do E2.06)", () => {
+  it("usa o nome do G12 vindo da view, um nome só", () => {
+    expect(formatG12Label({ g12_leader_name: "Pedro Alves", leader_g12_level: 2, leader_is_pastor: false })).toBe("Pedro Alves");
+    expect(formatG12Label({ g12_leader_name: "Tiago Rocha", leader_g12_level: 5, leader_is_pastor: false })).toBe("Tiago Rocha");
   });
 
-  it("sem G12: 'Pastores' para líder de nível 0, '—' nos demais casos", () => {
+  it("líder G12: o próprio líder, mesmo sem o nome do G12 na view", () => {
+    expect(formatG12Label({ g12_leader_name: "Lúcia Freitas", leader_g12_level: 1, leader_name: "Lúcia Freitas" })).toBe("Lúcia Freitas");
+    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 1, leader_name: "Lúcia Freitas" })).toBe("Lúcia Freitas");
+  });
+
+  it("líder pastor: 'Pastores'", () => {
+    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 0, leader_is_pastor: true })).toBe("Pastores");
     expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 0 })).toBe("Pastores");
-    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 2 })).toBe("—");
-    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: null })).toBe("—");
+  });
+
+  it("líder sem liderança (nível nulo): '—', e não 'Pastores'", () => {
+    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: null, leader_is_pastor: false })).toBe("—");
+    expect(cellG12({ g12_leader_name: null, leader_g12_level: null, leader_is_pastor: false })).toEqual({ kind: "none" });
+  });
+
+  it("sem o nome do G12 abaixo do nível 1: '—'", () => {
+    expect(formatG12Label({ g12_leader_name: null, leader_g12_level: 2, leader_is_pastor: false })).toBe("—");
+  });
+});
+
+describe("cellLeaderLevel", () => {
+  it("o nível do líder para o P40", () => {
+    expect(cellLeaderLevel({ leader_g12_level: 0, leader_is_pastor: true, leader_gender: "F" })).toEqual({
+      level: 0,
+      isPastor: true,
+      gender: "F",
+    });
   });
 });
 

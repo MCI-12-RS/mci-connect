@@ -170,12 +170,12 @@ describe("MemberDeletionFlow: envio e lista (UX-06, UX-07, UX-24)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it("UX-07: no sucesso, recarrega os membros (lista, seletores, árvore) e o Dashboard", async () => {
+  it("UX-07: no sucesso, recarrega os membros (lista, seletores, árvore), Células, Relatórios e o Dashboard (E2.06, P44)", async () => {
     const { onClose, invalidatedKeys } = await openConfirmation();
     respondToRpc("delete_member", { data: null });
     fireEvent.click(screen.getByRole("button", { name: "Excluir cadastro" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(invalidatedKeys()).toEqual([["members"], ["dashboard"]]);
+    expect(invalidatedKeys()).toEqual([["members"], ["cells"], ["cell_reports"], ["dashboard"]]);
   });
 
   it("UX-24: 'não existe ou já foi excluído' no envio é toast informativo, e a lista recarrega", async () => {

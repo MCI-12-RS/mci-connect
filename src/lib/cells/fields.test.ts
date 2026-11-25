@@ -13,7 +13,7 @@ describe("colunas lidas da cells_view (risco 6)", () => {
 
   it("a lista de Células traz os nomes e o G12 da própria view (RN-06), sem embed de members", () => {
     expect(columns(CELL_ROW_SELECT)).toEqual(
-      expect.arrayContaining(["leader_name", "timothy_name", "host_name", "g12_leader_name", "leader_g12_level"]),
+      expect.arrayContaining(["leader_name", "timothy_name", "host_name", "g12_leader_name", "leader_g12_level", "leader_is_pastor", "leader_gender"]),
     );
     expect(CELL_ROW_SELECT).not.toMatch(/members|\(/);
   });

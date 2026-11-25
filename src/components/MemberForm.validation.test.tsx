@@ -58,6 +58,7 @@ const member = (over: Partial<MemberRow> = {}): MemberRow => ({
   baptism_date: null,
   is_active: true,
   g12_level: 4,
+  g12_name: null,
   total_disciples: 0,
   total_cells: 0,
   auth_user_id: null,

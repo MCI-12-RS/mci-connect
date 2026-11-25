@@ -16,6 +16,8 @@ import LongAlertDialogContent, { DIALOG_FOOTER_BUTTON } from "@/components/LongA
 import { MEMBER_FORM_LAYOUT_TEXTS as TEXTS } from "@/lib/members/texts";
 import { cn } from "@/lib/utils";
 import { FormErrorSummary } from "./FormErrorSummary";
+import { useSlowPending } from "@/hooks/use-slow-pending";
+import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
 
 /**
  * Lado a lado, meia largura cada, no celular; quando o texto não cabe (320 px
@@ -59,10 +61,12 @@ interface MemberFormDialogProps {
  * celular e centralizado no desktop, com cabeçalho e rodapé fixos, fora da
  * área que rola; o `scroll-padding` do corpo deixa o rótulo do campo em foco à
  * vista (WCAG 2.4.11). Fechar com alterações ("Cancelar", "✕", `Esc` e o clique
- * fora) pede "Descartar as alterações?".
+ * fora) pede "Descartar as alterações?". Durante o envio nada fecha, e aos 3 s
+ * aparece "Ainda salvando…" (E2.06, T5 e P44).
  */
 export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoFocus, actions, children }: MemberFormDialogProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const slow = useSlowPending(actions?.busy === true);
 
   const requestClose = () => {
     if (actions?.busy) return;
@@ -87,6 +91,11 @@ export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoF
     <div className="flex w-full flex-col gap-2 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-col gap-2 md:mr-auto">
         <FormErrorSummary count={actions.errorCount} text={TEXTS.errorSummary} />
+        {slow && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {SAVE_TEXTS.stillSaving}
+          </p>
+        )}
         {actions.failure && (
           <p role="alert" className="flex items-start gap-1.5 text-sm font-medium text-foreground">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />

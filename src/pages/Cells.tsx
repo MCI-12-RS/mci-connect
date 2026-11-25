@@ -9,6 +9,7 @@ import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
 import { CellStatusBadge } from "@/components/StatusBadges";
+import LevelSuffix from "@/components/hierarchy/LevelSuffix";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,10 +18,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
-import { formatG12Label } from "@/lib/cells/labels";
+import { cellG12, cellLeaderLevel, formatG12Label } from "@/lib/cells/labels";
+import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -29,14 +32,21 @@ import { listSubtitle } from "@/lib/access/access";
 const Cells = () => {
   const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
+  // Durante o envio, o formulário não fecha por "✕", `Esc` nem toque fora (E2.06, P44).
+  const [cellSaving, setCellSaving] = useState(false);
   const [editingCell, setEditingCell] = useState<CellRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
   const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
   const { hasPermission, access } = useAuth();
   const isMobile = useIsMobile();
+  // Cartões até 1023 px e tabela a partir de 1024 px, já no primeiro render (P45).
+  const showTable = useMinWidth(TABLE_MIN_WIDTH);
 
-  const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
+  const { data, isLoading, isError, isPlaceholderData, isRefetching } = useCellsList(list.params);
+  // A lista na tela recarrega (troca de página ou depois de uma gravação): as
+  // linhas ficam em `opacity-60` e com `aria-busy` até a resposta (E1.08; E2.06, P44).
+  const refreshing = isPlaceholderData || isRefetching;
   const cells = data?.rows ?? [];
   const total = data?.total ?? 0;
 
@@ -51,7 +61,7 @@ const Cells = () => {
     setEditingCell(cell);
     setFormOpen(true);
   };
-  const handleClose = () => { setFormOpen(false); setEditingCell(null); };
+  const handleClose = () => { setFormOpen(false); setEditingCell(null); setCellSaving(false); };
   const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setSelectedCellForReport(cell);
@@ -144,10 +154,29 @@ const Cells = () => {
       : [];
 
   const renderMobileActions = (c: CellRow) => (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="ml-auto flex items-center gap-2 shrink-0">
       {renderFrequentActions(c, "h-11 w-11")}
       <RowActionsMenu label={CELL_DELETION_TEXTS.actionsLabel(leaderLabel(c.leader_name))} actions={rowActions(c)} />
     </div>
+  );
+
+  /** O G12 da célula (RN-11): o nome, "Pastores" ou "—", lido como "nenhum". */
+  const renderG12 = (c: CellRow) =>
+    cellG12(c).kind === "none" ? (
+      <>
+        <span aria-hidden="true">{CELLS_LIST_TEXTS.g12None}</span>
+        <span className="sr-only">{CELLS_LIST_TEXTS.g12NoneSpoken}</span>
+      </>
+    ) : (
+      formatG12Label(c)
+    );
+
+  /** "André Souza (144)": o líder com o nível do P40, que quebra entre as palavras. */
+  const renderLeader = (c: CellRow, className: string) => (
+    <span className={`${className} break-words`}>
+      {c.leader_name || "Sem líder"}
+      {c.leader_name && <LevelSuffix {...cellLeaderLevel(c)} />}
+    </span>
   );
 
   const renderMobileCards = () => {
@@ -156,14 +185,17 @@ const Cells = () => {
     if (cells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
 
     return (
-      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {cells.map((c) => (
           <div key={c.id} className="px-4 py-4 space-y-3">
             {/* Header */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm">{c.leader_name || "Sem líder"}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">G12: {formatG12Label(c)}</p>
+            {/* Com a fonte ampliada, as ações descem para a linha de baixo. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="grow basis-32 min-w-0">
+                <p className="text-sm">{renderLeader(c, "font-semibold")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {CELLS_LIST_TEXTS.g12Label} {renderG12(c)}
+                </p>
               </div>
               {cellHasActions(c) && renderMobileActions(c)}
             </div>
@@ -205,9 +237,9 @@ const Cells = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold">Células</h1>
+              <h1 className="text-2xl md:text-3xl font-bold break-words">Células</h1>
               {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
@@ -247,7 +279,7 @@ const Cells = () => {
             </div>
           </CardHeader>
 
-          {isMobile ? (
+          {!showTable ? (
             renderMobileCards()
           ) : (
             <CardContent className="p-0">
@@ -259,11 +291,11 @@ const Cells = () => {
                     <TableHead>Endereço</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{CELLS_LIST_TEXTS.columnStatus}</TableHead>
                     {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody aria-busy={refreshing}>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : isError ? (
@@ -272,17 +304,17 @@ const Cells = () => {
                     <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
                   ) : (
                     cells.map((c) => (
-                      <TableRow key={c.id} className={isPlaceholderData ? "opacity-60" : undefined}>
+                      <TableRow key={c.id} className={refreshing ? "opacity-60" : undefined}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium">{c.leader_name}</span>
+                            {renderLeader(c, "text-sm font-medium")}
                             <div className="flex flex-col text-xs text-muted-foreground italic">
                               {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
                               {c.host_name && <span>Anfitrião: {c.host_name}</span>}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{formatG12Label(c)}</TableCell>
+                        <TableCell className="text-sm">{renderG12(c)}</TableCell>
                         <TableCell className="text-sm">
                           <div className="flex flex-col">
                             <span className="font-medium">{c.street ? `${c.street}, ${c.number || "s/n"}` : "—"}</span>
@@ -315,7 +347,7 @@ const Cells = () => {
           )}
         </Card>
 
-        <Dialog open={formOpen} onOpenChange={handleClose}>
+        <Dialog open={formOpen} onOpenChange={(open) => !open && !cellSaving && handleClose()}>
           <DialogContent
             className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
@@ -323,7 +355,7 @@ const Cells = () => {
             <DialogHeader>
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
-            <CellForm cell={editingCell} onClose={handleClose} />
+            <CellForm cell={editingCell} onClose={handleClose} onPendingChange={setCellSaving} />
           </DialogContent>
         </Dialog>
 

@@ -8,6 +8,7 @@ import {
   type MemberRestoreResult,
   type RestoreResult,
 } from "@/lib/deletion/restore";
+import { refreshAfterMemberWrite } from "@/lib/query-refresh";
 
 // Restauração pelas RPCs `restore_*` (E2.01, RN-15 a RN-17), só para quem tem
 // `manage_roles`. Os hooks não lançam: resolvem com o resultado já
@@ -16,17 +17,13 @@ import {
 
 /**
  * Recarrega o que muda quando um membro volta: Membros (lista, seletores,
- * árvore de Ministérios e Excluídos, todos em `["members", …]`), o Dashboard
- * e a lista de células excluídas, que marca as pessoas excluídas.
+ * árvore de Ministérios e Excluídos), Células (inclusive as excluídas, que
+ * marcam as pessoas excluídas), Relatórios e o Dashboard, sem mostrar o valor
+ * de antes (E2.06, P44 e AQ-6).
  */
 function useRefreshAfterMemberRestore() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["members"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-      queryClient.invalidateQueries({ queryKey: ["cells", "deleted"] }),
-    ]);
+  return () => refreshAfterMemberWrite(queryClient);
 }
 
 /**

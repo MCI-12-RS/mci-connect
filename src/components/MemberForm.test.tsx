@@ -83,6 +83,7 @@ const member: MemberRow = {
   baptism_date: null,
   is_active: true,
   g12_level: 2,
+  g12_name: null,
   total_disciples: 0,
   total_cells: 0,
   auth_user_id: "u1",

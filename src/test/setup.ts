@@ -1,9 +1,20 @@
 import "@testing-library/jest-dom";
 
+// `matchMedia` com `min-width` e `max-width` medidos contra `window.innerWidth`:
+// os testes trocam a largura com `innerWidth` (P45, `use-min-width`). As demais
+// consultas não casam.
+function mediaMatches(query: string): boolean {
+  const min = /\(min-width:\s*(\d+)px\)/.exec(query);
+  if (min) return window.innerWidth >= Number(min[1]);
+  const max = /\(max-width:\s*(\d+)px\)/.exec(query);
+  if (max) return window.innerWidth <= Number(max[1]);
+  return false;
+}
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
-    matches: false,
+    matches: mediaMatches(query),
     media: query,
     onchange: null,
     addListener: () => {},

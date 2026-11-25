@@ -128,3 +128,25 @@ export async function readFunctionErrorBody(error: unknown): Promise<unknown> {
     return null;
   }
 }
+
+/** Código da falha no recálculo da hierarquia (E2.06, AQ-5 e DT-14). */
+export const RECALC_FAILURE_CODE = "hierarchy_update_failed";
+
+/**
+ * SQLSTATEs de falha transitória numa gravação que recalcula a hierarquia
+ * (E2.06, "Formato dos erros"): *deadlock*, serialização, trava indisponível,
+ * tempo-limite e erro interno. A classe 53 (recursos) entra inteira.
+ */
+const TRANSIENT_RECALC_STATES: ReadonlySet<string> = new Set(["40P01", "40001", "55P03", "57014", "XX000"]);
+
+/**
+ * A gravação falhou no recálculo da hierarquia ou por uma falha transitória
+ * (E2.06, RN-08 e DT-14): a tela mostra "Não foi possível salvar as
+ * alterações. Tente de novo.", nunca o texto técnico. A queda de conexão não
+ * entra: continua com o texto do E2.04.
+ */
+export function isRecalcFailure(error: unknown): boolean {
+  if (parseAppError(error)?.code === RECALC_FAILURE_CODE) return true;
+  if (!isJsonObject(error) || typeof error.code !== "string") return false;
+  return TRANSIENT_RECALC_STATES.has(error.code) || error.code.startsWith("53");
+}
