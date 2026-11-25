@@ -173,6 +173,8 @@ export const ROLE_TEXTS = {
   editLabel: (name: string) => `Editar a função ${name}`,
   actionsLabel: (name: string) => `Ações da função ${name}`,
   deleteLabel: (name: string) => `Excluir a função ${name}`,
+  /** Cabeçalhos da tabela (desktop). "Ações" não está no spec: só para leitor de tela. */
+  columns: { role: "Função", description: "Descrição", permissions: "Permissões", members: "Membros", actions: "Ações" },
   loadFailed: "Não foi possível carregar as funções.",
   tryAgain: "Tentar de novo",
   // Formulário
@@ -197,9 +199,15 @@ export const ROLE_TEXTS = {
   keepEditing: "Continuar editando",
   // Exclusão
   deleteTitle: (name: string) => `Excluir a função ${name}?`,
-  deleteUnused: "Nenhum membro usa esta função. Depois de excluída, ela não pode ser recuperada.",
+  /** O texto da T4 ("Nenhum membro usa esta função. Depois de excluída, …") em dois tópicos, no `ConfirmDeleteContent` do E2.01. */
+  deleteNoMembers: "Nenhum membro usa esta função.",
+  /** Sem a contagem de membros, a confirmação diz só esta frase. */
+  deleteIrreversible: "Depois de excluída, ela não pode ser recuperada.",
   deleteAction: "Excluir função",
   deleting: "Excluindo…",
+  /** Queda de conexão e falha técnica na exclusão: os textos do E2.01. */
+  deleteNetworkError: DELETION_TEXTS.deleteNetworkError,
+  deleteFailed: DELETION_TEXTS.deleteFailed,
   deleteBlockedTitle: (name: string) => `Não é possível excluir a função ${name}`,
   close: "Fechar",
   // Toasts
@@ -209,4 +217,6 @@ export const ROLE_TEXTS = {
   updatedAsDefault: (name: string) => `Função atualizada. ${name} agora é a função padrão.`,
   changedElsewhere: "Esta função foi alterada em outra tela.",
   saveNetworkError: "Não foi possível salvar a função. Verifique a conexão e tente de novo.",
+  /** Não está no spec: falha que não é de conexão nem de regra (derivado de `saveNetworkError` e do `deleteFailed` do E2.01). */
+  saveFailed: "Não foi possível salvar a função. Tente de novo.",
 } as const;
