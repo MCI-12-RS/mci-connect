@@ -20,12 +20,14 @@ vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
 
-const auth = vi.hoisted(() => ({ permissions: new Set<string>() }));
+const auth = vi.hoisted(() => ({
+  permissions: new Set<string>(),
+  access: null as import("@/lib/access/access").Access | null,
+}));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "u-self" },
-    member: { id: "me" },
-    isSystem: false,
+    access: auth.access,
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
 }));
@@ -54,6 +56,7 @@ const carlos: CellRow = {
   timothy_name: null,
   host_name: null,
   g12_leader_name: "Vera",
+  can_submit_report: true,
 };
 
 function renderCells(rows: CellRow[] = [carlos]) {
@@ -234,5 +237,46 @@ describe("Células: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2
     fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => expect(edit).toHaveFocus());
+  });
+});
+
+// "Novo relatório" pela cells_view e subtítulo (E2.02, T7, UX-23, UX-15). Os demais critérios ficam com o QA.
+describe("Células: quem lança e o alcance (E2.02)", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set(["submit_own_cell_report"]);
+    setWidth(1280);
+  });
+  afterEach(() => {
+    setWidth(originalWidth);
+    auth.access = null;
+  });
+
+  it("'Novo relatório' segue can_submit_report de cada célula, e sem 'Editar Célula' não há 'Editar'", async () => {
+    renderCells([carlos, { ...carlos, id: "c2", leader_name: "Diego Reis", can_submit_report: false }]);
+
+    expect(await screen.findByRole("button", { name: "Novo relatório da célula de Carlos Lima" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo relatório da célula de Diego Reis" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Editar/ })).not.toBeInTheDocument();
+  });
+
+  it("O subtítulo diz o alcance de quem vê só o ministério", async () => {
+    auth.access = {
+      member_id: "m-pedro",
+      role_id: "r-lider",
+      role_name: "Líder",
+      role_is_protected: false,
+      permissions: ["view_own_ministry"],
+      sees_whole_church: false,
+      sees_ministry: true,
+      sees_whole_church_reports: false,
+      sees_ministry_reports: true,
+      can_create_member: false,
+      can_assign_roles: false,
+      can_submit_some_report: true,
+    };
+    renderCells();
+
+    expect(await screen.findByText("Células do seu ministério")).toBeInTheDocument();
   });
 });

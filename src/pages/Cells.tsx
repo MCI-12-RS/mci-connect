@@ -24,6 +24,7 @@ import { formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
+import { listSubtitle } from "@/lib/access/access";
 
 const Cells = () => {
   const list = useListSearchParams();
@@ -32,7 +33,7 @@ const Cells = () => {
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
   const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
-  const { hasPermission, member: currentMember } = useAuth();
+  const { hasPermission, access } = useAuth();
   const isMobile = useIsMobile();
 
   const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
@@ -58,11 +59,10 @@ const Cells = () => {
   };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
-  const isOwnCell = (c: CellRow) => !!currentMember && (c.leader_id === currentMember.id || c.timothy_id === currentMember.id);
+  // "Novo relatório" (RN-13, UX-23): a mesma regra do banco, calculada na cells_view (AQ-4).
+  const canSubmitReport = (c: CellRow) => c.can_submit_report === true;
 
-  const canSubmitReport = (c: CellRow) =>
-    hasPermission("submit_any_visible_report") || (hasPermission("submit_own_cell_report") && isOwnCell(c));
-
+  // "Editar" só com "Editar Célula": ser líder ou timóteo não basta (RN-12).
   const canEditCell = hasPermission("edit_cell");
   const canDeleteCell = hasPermission("delete_cell");
 
@@ -81,6 +81,7 @@ const Cells = () => {
     />
   );
   const canCreate = hasPermission("create_cell");
+  const subtitle = listSubtitle(access, "cells");
 
   const startDeletion = (c: CellRow, opener: HTMLElement | null) => {
     returnFocus.setOpener(opener);
@@ -207,7 +208,7 @@ const Cells = () => {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-2xl md:text-3xl font-bold">Células</h1>
-              <p className="text-muted-foreground text-sm">Gerenciar células</p>
+              {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
           </div>
