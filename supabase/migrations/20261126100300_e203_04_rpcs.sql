@@ -43,7 +43,8 @@
 -- para ninguém além do dono. Idempotente: CREATE OR REPLACE e GRANT/REVOKE.
 
 -- ---------------------------------------------------------------------------
--- 0. Pré-requisito: migration 3 deste passo.
+-- 0. Pré-requisitos: migration 3 deste passo e a members_view do E2.06
+--    (nível, totais e G12 em private.member_hierarchy), base da seção 6.
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -51,6 +52,10 @@ BEGIN
      OR to_regprocedure('private.write_password(uuid,uuid,text,uuid)') IS NULL
      OR to_regprocedure('private.throttle_lock(text,text,interval)') IS NULL THEN
     RAISE EXCEPTION 'e203_04_rpcs depende da e203_03_vault.';
+  END IF;
+  IF to_regclass('private.member_hierarchy') IS NULL
+     OR pg_get_viewdef('public.members_view'::regclass) !~ 'member_hierarchy' THEN
+    RAISE EXCEPTION 'e203_04_rpcs depende da e206_02_read.';
   END IF;
 END $$;
 
@@ -597,7 +602,8 @@ GRANT EXECUTE ON FUNCTION public.my_password_status() TO authenticated;
 --    limite: NULL (sem a permissão) | self | role_not_covered | no_account |
 --    allowed. A conta indisponível da DA-3 (banida, não confirmada) só aparece
 --    na resposta da redefinição. O resto da view é a da
---    20261125200000_e202_05_close_roles, igual e na mesma ordem. Sem coluna
+--    20261125230100_e206_02_read (E2.06: nível, totais e G12 vêm de
+--    private.member_hierarchy), igual e na mesma ordem. Sem coluna
 --    nova em members (nenhum GRANT por coluna muda). Continua security
 --    definer de propósito (CLAUDE.md, armadilhas).
 -- ---------------------------------------------------------------------------
@@ -622,11 +628,11 @@ SELECT
   m.is_baptized,
   m.baptism_date,
   m.is_active,
-  m.g12_level,
-  m.total_disciples,
-  m.total_cells,
-  m.male_cells,
-  m.female_cells,
+  hr.g12_level,
+  coalesce(hr.total_disciples, 0) AS total_disciples,
+  coalesce(hr.total_cells, 0) AS total_cells,
+  coalesce(hr.male_cells, 0) AS male_cells,
+  coalesce(hr.female_cells, 0) AS female_cells,
   CASE WHEN s.role_visible THEN m.role_id END AS role_id,
   m.auth_user_id,
   m.created_at,
@@ -657,6 +663,9 @@ SELECT
     CASE WHEN s.sensitive_visible THEN regexp_replace(m.cpf, '\D', '', 'g') END
   )) AS search_text,
   sp.name AS spouse_name,
+  -- E2.06, no fim (AQ-1, RN-10): o G12 da pessoa, como nome de referência.
+  hr.g12_id,
+  g12.name AS g12_name,
   -- E2.03 (AQ-2): a recusa previsível da redefinição, na ordem da RN-02.
   CASE WHEN NOT (SELECT public.viewer_has('change_member_password'::public.permission_action)) THEN NULL
        WHEN m.id = (SELECT public.viewer_member_id())                                       THEN 'self'
@@ -667,6 +676,8 @@ SELECT
 FROM public.members m
 LEFT JOIN public.members l ON l.id = m.leader_id
 LEFT JOIN public.members sp ON sp.id = m.spouse_id
+LEFT JOIN private.member_hierarchy hr ON hr.member_id = m.id
+LEFT JOIN public.members g12 ON g12.id = hr.g12_id
 CROSS JOIN LATERAL (
   SELECT coalesce(m.auth_user_id = (SELECT auth.uid()), false)
       OR (SELECT public.viewer_has('view_sensitive_data'::public.permission_action)) AS sensitive_visible,
