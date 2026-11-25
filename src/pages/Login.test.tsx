@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import type { SignInOutcome } from "@/lib/auth/sign-in-result";
 import { LOGIN_TEXTS, lockedMessage } from "@/lib/auth/session";
 import { requestSignIn } from "@/services/auth/sign-in";
@@ -586,5 +586,47 @@ describe("Sessão encerrada (T10 do E2.01)", () => {
   it("sem o estado, não há mensagem", () => {
     renderLogin();
     expect(message()).toBeNull();
+    expect(identifierInput()).not.toHaveFocus();
+    expect(identifierInput()).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("Dado o aviso, então o foco vai para a Identificação, descrita pelo aviso, para o leitor de tela lê-lo", () => {
+    renderLogin({ reason: "session_ended" });
+    expect(identifierInput()).toHaveFocus();
+    expect(identifierInput()).toHaveAttribute("aria-describedby", "login-message");
+    expect(passwordInput()).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("Dado o aviso, então o estado sai do histórico (recarregar não o mostra de novo) e o aviso continua na tela", () => {
+    function StateProbe() {
+      const location = useLocation();
+      return <p data-testid="nav-state">{JSON.stringify(location.state)}</p>;
+    }
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/login", state: { reason: "session_ended" } }]}>
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <>
+                <Login />
+                <StateProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("nav-state")).toHaveTextContent("null");
+    expect(message()).toHaveTextContent(LOGIN_TEXTS.sessionEnded);
+  });
+
+  it("Dado o aviso e uma tentativa que falha, então o aviso é trocado e a Identificação deixa de ser descrita por ele", async () => {
+    signInMock.mockResolvedValue({ result: "invalid_credentials" });
+    renderLogin({ reason: "session_ended" });
+    fill(EMAIL, "errada");
+    await submit();
+    expect(message()).not.toHaveTextContent(LOGIN_TEXTS.sessionEnded);
+    expect(identifierInput()).not.toHaveAttribute("aria-describedby");
   });
 });

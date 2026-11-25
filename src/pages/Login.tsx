@@ -59,14 +59,16 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // Aviso de sessão encerrada (E2.01, PR 6): chega pelo estado da navegação.
+  // Aviso de sessão encerrada (E2.01, PR 6): chega pelo estado da navegação e é lido uma vez só.
+  const [arrivedAfterSessionEnd] = useState(() => isSessionEndedState(location.state));
   const [notice, setNotice] = useState<LoginNotice | null>(() =>
-    isSessionEndedState(location.state) ? { kind: "session_ended" } : null,
+    arrivedAfterSessionEnd ? { kind: "session_ended" } : null,
   );
   // Monta a mensagem de novo a cada resposta, para ser anunciada mesmo com o mesmo texto (UX-04).
   const [attempt, setAttempt] = useState(0);
   const [invalid, setInvalid] = useState<InvalidFields>(NO_INVALID_FIELDS);
-  const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
+  // Com o aviso, o foco começa na Identificação, que é descrita por ele: o leitor de tela lê os dois.
+  const [focusTarget, setFocusTarget] = useState<FocusTarget>(() => (arrivedAfterSessionEnd ? "identifier" : null));
 
   const identifierRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -74,6 +76,11 @@ const Login = () => {
   const submittingRef = useRef(false);
 
   const indicator = identifierIndicatorLabel(identifier);
+
+  // O aviso fica no estado da tela; tirado do histórico, recarregar ou voltar não o mostra de novo.
+  useEffect(() => {
+    if (isSessionEndedState(location.state)) navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
 
   // O foco vai para o que a pessoa faz em seguida (UXD-3), depois de a mensagem estar na tela.
   useEffect(() => {
@@ -221,7 +228,7 @@ const Login = () => {
                 enterKeyHint="next"
                 required
                 aria-invalid={invalid.identifier || undefined}
-                aria-describedby={invalid.identifier ? MESSAGE_ID : undefined}
+                aria-describedby={invalid.identifier || notice?.kind === "session_ended" ? MESSAGE_ID : undefined}
                 className="h-11"
               />
             </div>

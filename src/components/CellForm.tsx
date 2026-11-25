@@ -17,6 +17,7 @@ import { applyHostAddress } from "@/lib/cells/host-address";
 import type { CellRow } from "@/lib/cells/fields";
 import { WEEKDAYS } from "@/lib/cells/weekdays";
 import { CELL_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
+import { requestSessionCheck } from "@/lib/auth/session-check";
 
 type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
 type CellField = keyof CellInsert;
@@ -136,6 +137,8 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     onSuccess: (result) => {
       if (result === "gone") {
         setDeletedWhileEditing(true);
+        // "0 linhas" também é o que um membro excluído recebe (RN-14): confere a própria sessão.
+        requestSessionCheck();
         // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem a célula.
         queryClient.invalidateQueries({ queryKey: ["cells", "list"] });
         return;

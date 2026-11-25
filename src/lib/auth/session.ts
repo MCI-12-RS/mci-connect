@@ -106,3 +106,20 @@ export function isSessionEndedState(state: unknown): state is SessionEndedState 
     typeof state === "object" && state !== null && "reason" in state && state.reason === SESSION_ENDED_REASON
   );
 }
+
+/** O resultado da releitura do próprio cadastro na `members_view` (`{ data, error }` do supabase-js). */
+export interface OwnMemberReadResult {
+  data: unknown;
+  error: unknown;
+}
+
+/**
+ * A sessão deve ser encerrada (E2.01, RN-14 e DT-20)? Só quando a releitura
+ * do próprio cadastro respondeu sem erro e sem linha: o cadastro foi excluído
+ * (as views ignoram quem consulta com o cadastro excluído). Qualquer erro
+ * (queda de conexão, 5xx, token recusado, 42501) não encerra: a resposta não
+ * prova que o cadastro sumiu.
+ */
+export function shouldEndSession(result: OwnMemberReadResult): boolean {
+  return (result.error === null || result.error === undefined) && (result.data === null || result.data === undefined);
+}

@@ -21,6 +21,7 @@ import DeletedMatchesDialog, { type RestoredFromWarning } from "@/components/Del
 import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { memberRestoreNotices } from "@/lib/deletion/restore";
 import { readFunctionErrorBody, isJsonObject } from "@/lib/errors";
+import { requestSessionCheck } from "@/lib/auth/session-check";
 import {
   deletedMatchesWarning,
   parseCreateMemberRefusal,
@@ -343,6 +344,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       }
       if (result.kind === "gone") {
         setDeletedWhileEditing(true);
+        // "0 linhas" também é o que um membro excluído recebe (RN-14): confere a própria sessão.
+        requestSessionCheck();
         // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem o cadastro.
         queryClient.invalidateQueries({ queryKey: ["members", "list"] });
         return;
