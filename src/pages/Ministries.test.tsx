@@ -50,6 +50,11 @@ function node(overrides: Partial<MinistryTreeNode>): MinistryTreeNode {
     direct_disciples: 0,
     total_disciples: 0,
     total_cells: 0,
+    kind: "node",
+    level_member_id: "x",
+    level_gender: "M",
+    level_is_pastor: false,
+    spouse_is_pastor: false,
     ...overrides,
   };
 }

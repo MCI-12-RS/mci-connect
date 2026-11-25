@@ -42,6 +42,9 @@ export type MemberRow = Omit<
   | "role_id"
   | "created_at"
   | "updated_at"
+  // E2.06 (PR 1): colunas novas da view que a lista ainda não pede (PR 2).
+  | "g12_id"
+  | "g12_name"
 >;
 
 /**

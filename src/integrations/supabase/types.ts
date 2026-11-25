@@ -378,8 +378,6 @@ export type Database = {
           deleted_at: string | null
           deleted_by: string | null
           email: string | null
-          female_cells: number | null
-          g12_level: number
           gender: string
           has_leadership: boolean
           id: string
@@ -388,7 +386,6 @@ export type Database = {
           is_baptized: boolean
           is_pastor: boolean
           leader_id: string | null
-          male_cells: number | null
           mobile_whatsapp: string | null
           name: string
           neighborhood: string | null
@@ -399,8 +396,6 @@ export type Database = {
           spouse_id: string | null
           state: string | null
           street: string | null
-          total_cells: number
-          total_disciples: number
           updated_at: string
           zip_code: string | null
         }
@@ -416,8 +411,6 @@ export type Database = {
           deleted_at?: string | null
           deleted_by?: string | null
           email?: string | null
-          female_cells?: number | null
-          g12_level?: number
           gender: string
           has_leadership: boolean
           id?: string
@@ -426,7 +419,6 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
-          male_cells?: number | null
           mobile_whatsapp?: string | null
           name: string
           neighborhood?: string | null
@@ -437,8 +429,6 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          total_cells?: number
-          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
@@ -454,8 +444,6 @@ export type Database = {
           deleted_at?: string | null
           deleted_by?: string | null
           email?: string | null
-          female_cells?: number | null
-          g12_level?: number
           gender?: string
           has_leadership?: boolean
           id?: string
@@ -464,7 +452,6 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
-          male_cells?: number | null
           mobile_whatsapp?: string | null
           name?: string
           neighborhood?: string | null
@@ -475,8 +462,6 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          total_cells?: number
-          total_disciples?: number
           updated_at?: string
           zip_code?: string | null
         }
@@ -1192,7 +1177,9 @@ export type Database = {
           created_at: string | null
           email: string | null
           female_cells: number | null
+          g12_id: string | null
           g12_level: number | null
+          g12_name: string | null
           gender: string | null
           has_leadership: boolean | null
           id: string | null
@@ -1463,10 +1450,15 @@ export type Database = {
           direct_disciples: number
           g12_level: number
           is_pastor: boolean
+          kind: string
+          level_gender: string
+          level_is_pastor: boolean
+          level_member_id: string
           member_gender: string
           member_id: string
           member_name: string
           spouse_id: string
+          spouse_is_pastor: boolean
           spouse_name: string
           total_cells: number
           total_disciples: number
