@@ -88,4 +88,38 @@ SELECT 'META G12: 21 ids misturados (ms, meta 20)', pg_temp.ms(format('SELECT * 
 SELECT 'RESULTADO G12: ids devolvidos (profundos)', count(*) FROM public.member_descendants_among(:p3::uuid, ARRAY[:cands_deep]::uuid[]);
 RESET ROLE;
 
+-- ---------------------------------------------------------------------------
+-- PR 2 (risco 11): PATCH de membro com os triggers novos (a0_ e ad_) e o cadastro (ensaio e INSERT)
+-- no mesmo volume. Metas: PATCH < 20 ms; a create-user-admin (< 800 ms) é medida na stack, com a
+-- função servida (o banco responde por uma fração disso).
+-- ---------------------------------------------------------------------------
+\echo
+\echo '######## PATCH de membro (PR 2): Administrador e G12 ########'
+SELECT set_config('request.jwt.claims', '{"sub":"a2041400-0000-0000-0000-000000000001","role":"authenticated"}', true);
+SET LOCAL ROLE authenticated;
+\echo '--- Administrador: observações (os triggers novos leem e não mudam nada)'
+EXPLAIN (ANALYZE, BUFFERS) UPDATE public.members SET notes = 'editado' WHERE id = 'c2041400-0000-0000-0000-000000000200';
+SELECT 'META PR2 admin PATCH observações (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET notes = 'editado ' || clock_timestamp() WHERE id = 'c2041400-0000-0000-0000-000000000200'$q$, 20) AS ms;
+\echo '--- Administrador: e-mail novo (a unicidade consulta o índice parcial, com a trava por valor)'
+EXPLAIN (ANALYZE, BUFFERS) UPDATE public.members SET email = 'novo1@exemplo.com' WHERE id = 'c2041400-0000-0000-0000-000000000200';
+SELECT 'META PR2 admin PATCH e-mail novo (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET email = 'v' || replace(clock_timestamp()::text, ' ', '') || '@exemplo.com' WHERE id = 'c2041400-0000-0000-0000-000000000200'$q$, 20) AS ms;
+\echo '--- Administrador: celular, CPF e nome novos de uma vez'
+SELECT 'META PR2 admin PATCH celular+nome (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET mobile_whatsapp = '5197' || lpad(floor(random() * 10000000)::int::text, 7, '0'), name = 'Membro Volume ' || clock_timestamp()::text WHERE id = 'c2041400-0000-0000-0000-000000000201'$q$, 20) AS ms;
+\echo '--- Administrador: troca de líder (a subida da árvore até a raiz, na profundidade 10)'
+EXPLAIN (ANALYZE, BUFFERS) UPDATE public.members SET leader_id = 'c2041400-0000-0000-0000-000000000600' WHERE id = 'c2041400-0000-0000-0000-000000019990';
+SELECT 'META PR2 admin PATCH troca de líder, subida de 10 níveis (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET leader_id = CASE WHEN leader_id = 'c2041400-0000-0000-0000-000000000600' THEN 'c2041400-0000-0000-0000-000000000601'::uuid ELSE 'c2041400-0000-0000-0000-000000000600'::uuid END WHERE id = 'c2041400-0000-0000-0000-000000019990'$q$, 20) AS ms;
+\echo '--- Administrador: ensaio do cadastro (check_member_insert) e INSERT (a create-user-admin faz os dois)'
+SELECT 'META PR2 admin ensaio check_member_insert (ms, meta 50)', pg_temp.ms($q$SELECT public.check_member_insert(jsonb_build_object('name', 'Novo Volume', 'gender', 'F', 'is_pastor', true, 'mobile_whatsapp', '5198' || lpad(floor(random() * 10000000)::int::text, 7, '0'), 'email', 'n' || replace(clock_timestamp()::text, ' ', '') || '@exemplo.com', 'cpf', '39053344705'))$q$, 20) AS ms;
+SELECT 'META PR2 admin INSERT de cadastro (ms, meta 50)', pg_temp.ms($q$INSERT INTO public.members (name, gender, is_pastor, mobile_whatsapp, email) VALUES ('Novo Volume', 'F', true, '5198' || lpad(floor(random() * 10000000)::int::text, 7, '0'), 'i' || replace(clock_timestamp()::text, ' ', '') || '@exemplo.com')$q$, 10) AS ms;
+RESET ROLE;
+
+SELECT set_config('request.jwt.claims', '{"sub":"a2041400-0000-0000-0000-000000000003","role":"authenticated"}', true);
+SET LOCAL ROLE authenticated;
+\echo '--- G12 (Pedro): observações de um membro do ministério'
+EXPLAIN (ANALYZE, BUFFERS) UPDATE public.members SET notes = 'editado' WHERE id = 'c2041400-0000-0000-0000-000000000013';
+SELECT 'META PR2 G12 PATCH observações (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET notes = 'editado ' || clock_timestamp() WHERE id = 'c2041400-0000-0000-0000-000000000013'$q$, 20) AS ms;
+\echo '--- G12 (Pedro): troca de líder dentro do ministério'
+SELECT 'META PR2 G12 PATCH troca de líder (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET leader_id = CASE WHEN leader_id = 'c2041400-0000-0000-0000-000000000006' THEN 'c2041400-0000-0000-0000-000000000007'::uuid ELSE 'c2041400-0000-0000-0000-000000000006'::uuid END WHERE id = 'c2041400-0000-0000-0000-000000000013'$q$, 20) AS ms;
+RESET ROLE;
+
 ROLLBACK;

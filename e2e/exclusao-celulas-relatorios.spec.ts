@@ -32,6 +32,8 @@ const NAME = "QA E2E Cel";
 const PASSWORD = "QaE2eCel#2026";
 const id = (kind: number, n: number) => `${PREFIX}-${String(kind).padStart(4, "0")}-0000-0000-${String(n).padStart(12, "0")}`;
 const member = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193201${String(n).padStart(4, "0")}`;
 const cell = (n: number) => id(2, n);
 const report = (n: number) => id(3, n);
 const role = (n: number) => id(4, n);
@@ -111,8 +113,8 @@ test.beforeAll(async () => {
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, auth_user_id, role_id, email) VALUES
        (${lit(member(90))}, '${NAME} Lia Lopes', 'F', false, true, ${lit(authIds.le)}, ${lit(role(1))}, ${lit(LE.email)}),
        (${lit(member(91))}, '${NAME} Mauro Melo', 'M', false, true, ${lit(authIds.mb)}, ${lit(role(2))}, ${lit(MB.email)});
-     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id) VALUES
-       ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true, ${lit(role(3))})`).join(",\n       ")};
+     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, mobile_whatsapp) VALUES
+       ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true, ${lit(role(3))}, ${lit(mobileOf(n))})`).join(",\n       ")};
      INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time, street, number, neighborhood) VALUES
        (${lit(cell(1))}, ${lit(member(5))}, ${lit(member(5))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '1', 'Centro'),
        (${lit(cell(2))}, ${lit(member(6))}, ${lit(member(6))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '2', 'Centro'),

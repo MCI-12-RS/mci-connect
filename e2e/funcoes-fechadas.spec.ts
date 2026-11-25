@@ -55,12 +55,12 @@ test.beforeAll(async () => {
   authId = await createAuthUser(env, LIDER.email, PASSWORD);
   sql(
     env,
-    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, auth_user_id, email, role_id) VALUES
+    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, auth_user_id, email, role_id, mobile_whatsapp) VALUES
        (${lit(LIDER.id)}, ${lit(LIDER.name)}, 'M', true, false, ${lit(authId)}, ${lit(LIDER.email)},
-        (SELECT id FROM public.roles WHERE name = 'Líder')),
-       (${lit(OUTRO.id)}, ${lit(OUTRO.name)}, 'M', false, true, NULL, NULL,
-        (SELECT id FROM public.roles WHERE name = 'Membro'));
-     UPDATE public.members SET leader_id = ${lit(LIDER.id)} WHERE id = ${lit(OUTRO.id)};`,
+        (SELECT id FROM public.roles WHERE name = 'Líder'), '51932050001');
+     INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, auth_user_id, email, role_id, mobile_whatsapp) VALUES
+       (${lit(OUTRO.id)}, ${lit(OUTRO.name)}, 'M', false, true, ${lit(LIDER.id)}, NULL, NULL,
+        (SELECT id FROM public.roles WHERE name = 'Membro'), '51932050002');`,
   );
 });
 

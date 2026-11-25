@@ -16,6 +16,8 @@ const NAME = "QA Escopo";
 const PASSWORD = "QaEscopo#2026";
 const id = (kind: number, n: number) => `${PREFIX}-000${kind}-0000-0000-${String(n).padStart(12, "0")}`;
 const person = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193206${String(n).padStart(4, "0")}`;
 const ROLE_SECRETARIA = id(2, 1);
 const ROLE_COORDENACAO = id(2, 2);
 
@@ -123,9 +125,9 @@ test.beforeAll(async () => {
 
   const row = (w: Who) =>
     `(${lit(memberId(w))}, ${lit(w.name)}, ${lit(w.gender)}, ${!!w.pastor}, ${w.leader !== null}, ${w.leader === null ? "NULL" : lit(person(w.leader))}, ${!w.inactive}, ` +
-    `${w.login ? lit(authIds[w.name]!) : "NULL"}, ${roleRef(w.role)}, ${w.login ? lit(emailOf(w)) : "NULL"})`;
+    `${w.login ? lit(authIds[w.name]!) : "NULL"}, ${roleRef(w.role)}, ${w.login ? lit(emailOf(w)) : "NULL"}, ${lit(mobileOf(w.n))})`;
   const tier = (members: Who[]) =>
-    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, auth_user_id, role_id, email)
+    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, auth_user_id, role_id, email, mobile_whatsapp)
      VALUES ${members.map(row).join(",\n            ")};`;
   const byLeader = (leaders: Array<number | null>) => PEOPLE.filter((p) => leaders.includes(p.leader));
   sql(
@@ -215,7 +217,8 @@ async function createMember(page: Page, email: string, memberData: object): Prom
   const token = await accessToken(page);
   const response = await page.request.post(`${env.apiUrl}/functions/v1/create-user-admin`, {
     headers: { apikey: env.publishableKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    data: { email, password: "Senha#2026", memberData: { gender: "M", is_active: true, ...memberData } },
+    // Contrato do E2.04: o e-mail real vai em `memberData.email`; todo cadastro tem um identificador (RN-08).
+    data: { password: "Senha#2026", memberData: { gender: "M", is_active: true, email, mobile_whatsapp: `5193209${String(Date.now()).slice(-4)}`, ...memberData } },
   });
   return reply(response);
 }
@@ -372,6 +375,10 @@ test.describe("RN-10, RN-19, UX-17: cadastro novo por quem vê só o ministério
     expect(await dialog.locator("input:disabled").count()).toBe(0);
 
     await dialog.getByLabel("Nome *").fill(`${NAME} Igor Teixeira`);
+    // E2.04 (RN-03, RN-08): o sexo e um identificador (aqui o celular) são obrigatórios.
+    await dialog.getByLabel("Gênero").click();
+    await page.getByRole("option", { name: "Masculino" }).click();
+    await dialog.getByLabel("Celular / WhatsApp").fill("51932090001");
     await pickPerson(page, dialog, "leader", "André", ANDRE.name);
     await dialog.getByRole("button", { name: /^Criar membro$/i }).click();
     await expect(toast(page, "Membro criado com sucesso")).toBeVisible();

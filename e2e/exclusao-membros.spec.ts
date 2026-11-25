@@ -32,6 +32,8 @@ const NAME = "QA E2E Mem";
 const PASSWORD = "QaE2eMem#2026";
 const id = (kind: number, n: number) => `${PREFIX}-${String(kind).padStart(4, "0")}-0000-0000-${String(n).padStart(12, "0")}`;
 const member = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193203${String(n).padStart(4, "0")}`;
 const cell = (n: number) => id(2, n);
 const report = (n: number) => id(3, n);
 const role = (n: number) => id(4, n);
@@ -78,7 +80,7 @@ test.beforeAll(async () => {
   await removeAccounts();
   authIds.le = await createAuthUser(env, LE.email, LE.password);
   authIds.mb = await createAuthUser(env, MB.email, MB.password);
-  const pages = Array.from({ length: 11 }, (_, i) => `(${lit(member(21 + i))}, ${lit(`${NAME} Pag ${String(i + 1).padStart(2, "0")}`)}, 'M', false, true, ${lit(role(3))})`);
+  const pages = Array.from({ length: 11 }, (_, i) => `(${lit(member(21 + i))}, ${lit(`${NAME} Pag ${String(i + 1).padStart(2, "0")}`)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(21 + i))})`);
   sql(
     env,
     `BEGIN;
@@ -94,19 +96,19 @@ test.beforeAll(async () => {
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, auth_user_id, role_id, email) VALUES
        (${lit(member(90))}, '${NAME} Lia Lopes', 'F', false, true, ${lit(authIds.le)}, ${lit(role(1))}, ${lit(LE.email)}),
        (${lit(member(91))}, '${NAME} Mauro Melo', 'M', false, true, ${lit(authIds.mb)}, ${lit(role(2))}, ${lit(MB.email)});
-     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id) VALUES
-       (${lit(member(1))}, ${lit(GIL)}, 'M', false, true, ${lit(role(3))}),
-       (${lit(member(6))}, '${NAME} Carlos Lima', 'M', false, true, ${lit(role(3))}),
-       (${lit(member(7))}, '${NAME} Marcos Dias', 'M', false, true, ${lit(role(3))}),
-       (${lit(member(8))}, '${NAME} Bruno Almeida', 'M', false, true, ${lit(role(3))}),
-       (${lit(member(9))}, '${NAME} Nina Prado', 'F', false, true, ${lit(role(3))}),
-       (${lit(member(10))}, '${NAME} Otto Vaz', 'M', false, true, ${lit(role(3))}),
+     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, mobile_whatsapp) VALUES
+       (${lit(member(1))}, ${lit(GIL)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(1))}),
+       (${lit(member(6))}, '${NAME} Carlos Lima', 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(6))}),
+       (${lit(member(7))}, '${NAME} Marcos Dias', 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(7))}),
+       (${lit(member(8))}, '${NAME} Bruno Almeida', 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(8))}),
+       (${lit(member(9))}, '${NAME} Nina Prado', 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(9))}),
+       (${lit(member(10))}, '${NAME} Otto Vaz', 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(10))}),
        ${pages.join(",\n       ")};
-     INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, role_id) VALUES
-       (${lit(member(2))}, '${NAME} Hugo Lima', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}),
-       (${lit(member(3))}, '${NAME} Ivo Reis', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}),
-       (${lit(member(4))}, '${NAME} João Alves', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}),
-       (${lit(member(5))}, '${NAME} Léo Martins', 'M', ${lit(member(1))}, true, false, ${lit(role(3))});
+     INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, role_id, mobile_whatsapp) VALUES
+       (${lit(member(2))}, '${NAME} Hugo Lima', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}, ${lit(mobileOf(2))}),
+       (${lit(member(3))}, '${NAME} Ivo Reis', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}, ${lit(mobileOf(3))}),
+       (${lit(member(4))}, '${NAME} João Alves', 'M', ${lit(member(1))}, true, true, ${lit(role(3))}, ${lit(mobileOf(4))}),
+       (${lit(member(5))}, '${NAME} Léo Martins', 'M', ${lit(member(1))}, true, false, ${lit(role(3))}, ${lit(mobileOf(5))});
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number) VALUES
        (${lit(cell(1))}, ${lit(member(6))}, ${lit(member(1))}, ${lit(member(6))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua das Flores', '120'),
        (${lit(cell(2))}, ${lit(member(7))}, NULL, ${lit(member(1))}, 'Discipulado', 'Sexta', '19:30', false, 'Rua do Sol', '45');

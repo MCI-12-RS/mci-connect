@@ -219,8 +219,15 @@ for i in 1 2 3 4 5; do
   pair s3b "$U_ANA" "SELECT pg_sleep_until('$T'); UPDATE public.members SET role_id = '$LIDER' WHERE id = '$M_BETO';" \
            "$U_BETO" "SELECT pg_sleep_until('$T'); UPDATE public.members SET role_id = '$LIDER' WHERE id = '$M_ANA';" 0
   echo "  rodada $i: A=$(outcome "$TMP/s3b.A" | cut -c1-48) / B=$(outcome "$TMP/s3b.B" | cut -c1-48)"
-  check "rodada $i: sobra pelo menos um administrador entre Ana e Beto (nunca zero)" \
-    "SELECT (SELECT count(*) FROM public.members WHERE id IN ('$M_ANA', '$M_BETO') AND role_id = (SELECT id FROM public.roles WHERE is_system)) >= 1"
+  # Com outros administradores no banco (por exemplo, a conta do E2E), a invariante é deles e os dois podem
+  # mesmo se tirar a função: a conferência é então sobre o banco todo (nunca zero administradores).
+  if [ "$ADM_OTHERS" -eq 0 ]; then
+    check "rodada $i: sobra pelo menos um administrador entre Ana e Beto (nunca zero)" \
+      "SELECT (SELECT count(*) FROM public.members WHERE id IN ('$M_ANA', '$M_BETO') AND role_id = (SELECT id FROM public.roles WHERE is_system)) >= 1"
+  else
+    check "rodada $i: sobra pelo menos um administrador no banco (os de fora da massa seguram a invariante)" \
+      "SELECT (SELECT count(*) FROM public.members WHERE role_id = (SELECT id FROM public.roles WHERE is_system) AND deleted_at IS NULL) >= 1"
+  fi
   check "rodada $i: a recusa é last_admin, 42501/role_change_not_allowed (já sem permissão) ou 40P01" \
     "SELECT $(yes_if bash -c "o1='$(outcome "$TMP/s3b.A" | cut -c1-60)'; o2='$(outcome "$TMP/s3b.B" | cut -c1-60)'; for o in \"\$o1\" \"\$o2\"; do case \"\$o\" in OK*|*last_admin*|42501*|*role_change_not_allowed*|40P01*) ;; *) exit 1;; esac; done")"
 done

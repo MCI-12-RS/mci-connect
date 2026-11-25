@@ -37,6 +37,8 @@ const NAME = "QA3 Exc Mem";
 const PASSWORD = "Qa3ExcMem#2026";
 const id = (kind: number, n: number) => `${PREFIX}-${String(kind).padStart(4, "0")}-0000-0000-${String(n).padStart(12, "0")}`;
 const member = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193208${String(n).padStart(4, "0")}`;
 const role = (n: number) => id(4, n);
 const who = (name: string) => `${NAME} ${name}`;
 
@@ -73,7 +75,7 @@ function cleanup() {
      DELETE FROM public.cell_report_participants WHERE member_id::text LIKE '${PREFIX}%';
      DELETE FROM public.cells WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
-     UPDATE public.members SET leader_id = NULL, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE '${PREFIX}%';
+     UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM public.role_permissions WHERE role_id::text LIKE '${PREFIX}%';
      DELETE FROM public.roles WHERE id::text LIKE '${PREFIX}%';
@@ -103,7 +105,7 @@ test.beforeAll(async () => {
     ana: await createAuthUser(env, ANA.email, ANA.password),
     bia: await createAuthUser(env, BIA.email, BIA.password),
   };
-  const pages = PAGES.map((n) => `(${lit(pageMember(n))}, ${lit(pageName(n))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL)`);
+  const pages = PAGES.map((n) => `(${lit(pageMember(n))}, ${lit(pageName(n))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(500 + n))}, NULL)`);
   sql(
     env,
     `BEGIN;
@@ -119,24 +121,24 @@ test.beforeAll(async () => {
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, auth_user_id, email, mobile_whatsapp, cpf) VALUES
        (${lit(member(90))}, ${lit(who("Lia Lopes"))}, 'F', false, true, ${lit(role(1))}, ${lit(auth.le)}, ${lit(LE.email)}, NULL, NULL),
        (${lit(member(91))}, ${lit(who("Ada Dutra"))}, 'F', false, true, ${lit(role(2))}, ${lit(auth.ad2)}, ${lit(AD2.email)}, NULL, NULL),
-       (${lit(member(1))}, ${lit(who("Gil Souza"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(3))}, ${lit(who("Hugo Lima"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
+       (${lit(member(1))}, ${lit(who("Gil Souza"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(1))}, NULL),
+       (${lit(member(3))}, ${lit(who("Hugo Lima"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(3))}, NULL),
        (${lit(member(4))}, ${lit(who("Carla Dias"))}, 'F', false, true, ${lit(role(4))}, NULL, NULL, ${lit(SHARED_MOBILE)}, NULL),
-       (${lit(member(6))}, ${lit(who("Fábio Reis"))}, 'M', false, true, ${lit(role(3))}, NULL, NULL, NULL, NULL),
+       (${lit(member(6))}, ${lit(who("Fábio Reis"))}, 'M', false, true, ${lit(role(3))}, NULL, NULL, ${lit(mobileOf(6))}, NULL),
        (${lit(member(7))}, ${lit(who("Bia Lopes"))}, 'F', false, true, ${lit(role(5))}, ${lit(auth.bia)}, ${lit(BIA.email)}, NULL, NULL),
-       (${lit(member(8))}, ${lit(who("Ivone Prado"))}, 'F', false, false, ${lit(role(4))}, NULL, NULL, NULL, NULL),
+       (${lit(member(8))}, ${lit(who("Ivone Prado"))}, 'F', false, false, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(8))}, NULL),
        (${lit(member(9))}, ${lit(who("Ana Costa"))}, 'F', false, true, ${lit(role(4))}, ${lit(auth.ana)}, ${lit(ANA.email)}, NULL, NULL),
-       (${lit(member(10))}, ${lit(who("Otto Vaz"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(11))}, ${lit(who("Ordem Alfa"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(12))}, ${lit(who("Ordem Beta"))}, 'F', false, false, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(13))}, ${lit(who("Ordem Gama"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(14))}, ${lit(who("Rita Auditoria"))}, 'F', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(15))}, ${lit(who("Nara Estreita"))}, 'F', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
-       (${lit(member(16))}, ${lit(who("Leo Martins"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, NULL, NULL),
+       (${lit(member(10))}, ${lit(who("Otto Vaz"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(10))}, NULL),
+       (${lit(member(11))}, ${lit(who("Ordem Alfa"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(11))}, NULL),
+       (${lit(member(12))}, ${lit(who("Ordem Beta"))}, 'F', false, false, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(12))}, NULL),
+       (${lit(member(13))}, ${lit(who("Ordem Gama"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(13))}, NULL),
+       (${lit(member(14))}, ${lit(who("Rita Auditoria"))}, 'F', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(14))}, NULL),
+       (${lit(member(15))}, ${lit(who("Nara Estreita"))}, 'F', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(15))}, NULL),
+       (${lit(member(16))}, ${lit(who("Leo Martins"))}, 'M', false, true, ${lit(role(4))}, NULL, NULL, ${lit(mobileOf(16))}, NULL),
        (${lit(member(40))}, ${lit(who("Busca Teles"))}, 'M', false, true, ${lit(role(4))}, NULL, ${lit(SEARCH_EMAIL)}, NULL, ${lit(SEARCH_CPF)}),
        ${pages.join(",\n       ")};
      INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, role_id, email, mobile_whatsapp) VALUES
-       (${lit(member(2))}, ${lit(who("Bruno Almeida"))}, 'M', ${lit(member(1))}, true, true, ${lit(role(4))}, NULL, NULL),
+       (${lit(member(2))}, ${lit(who("Bruno Almeida"))}, 'M', ${lit(member(1))}, true, true, ${lit(role(4))}, NULL, ${lit(mobileOf(2))}),
        (${lit(member(17))}, ${lit(who("Dario Neves"))}, 'M', ${lit(member(16))}, true, true, ${lit(role(3))}, ${lit(DARIO_EMAIL)}, '(51) 98888-0202');
      COMMIT;`,
   );
@@ -353,7 +355,7 @@ test("RN-15 (AD): Dario, excluído por engano, volta às listas com o líder Leo
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page.getByText("Nenhum cadastro excluído encontrado para esta busca.")).toBeVisible();
   expect(state(member(17))).toBe(`true|true|${member(16)}|true|${role(3)}`);
-  expect(data()).toBe(`${DARIO_EMAIL}|(51) 98888-0202|M`);
+  expect(data()).toBe(`${DARIO_EMAIL}|51988880202|M`);
   expect(disciplesOfLeo(), "restaurado, ele volta ao total do líder").toBe("1");
   await openList(page, "/members", dario);
   await expect(page.getByRole("row", { name: new RegExp(dario) })).toBeVisible();

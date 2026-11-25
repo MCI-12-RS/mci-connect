@@ -28,6 +28,8 @@ import {
 const PREFIX = "e2e201d0";
 const NAME = "QA3 Exc Cel";
 const id = (kind: number, n: number) => `${PREFIX}-${String(kind).padStart(4, "0")}-0000-0000-${String(n).padStart(12, "0")}`;
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193202${String(n).padStart(4, "0")}`;
 const member = (n: number) => id(1, n);
 const cell = (n: number) => id(2, n);
 const report = (n: number) => id(3, n);
@@ -100,8 +102,8 @@ test.beforeAll(() => {
   sql(
     env,
     `BEGIN;
-     INSERT INTO public.members (id, name, gender, has_leadership, is_active) VALUES
-       ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true)`).join(",\n       ")};
+     INSERT INTO public.members (id, name, gender, has_leadership, is_active, mobile_whatsapp) VALUES
+       ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true, ${lit(mobileOf(n))})`).join(",\n       ")};
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number, neighborhood) VALUES
        (${lit(cell(1))}, ${lit(member(1))}, ${lit(member(2))}, ${lit(member(3))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA3 das Flores', '120', 'Centro'),
        (${lit(cell(2))}, ${lit(member(4))}, NULL, ${lit(member(4))}, 'Discipulado', 'Sexta', '19:30', true, 'Rua QA3 do Sol', '45', 'Centro'),
