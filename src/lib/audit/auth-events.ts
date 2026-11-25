@@ -21,7 +21,8 @@ export type LoginFailureReason =
   | "member_deleted"
   | "no_account"
   | "account_unavailable"
-  | "wrong_password";
+  | "wrong_password"
+  | "temp_password_expired";
 
 /** Motivos da falha (só para quem audita), da tabela de motivos do spec. */
 export const LOGIN_FAILURE_REASON_LABELS: Record<LoginFailureReason, string> = {
@@ -32,6 +33,7 @@ export const LOGIN_FAILURE_REASON_LABELS: Record<LoginFailureReason, string> = {
   no_account: "Sem conta de acesso",
   account_unavailable: "Conta de acesso indisponível",
   wrong_password: "Senha incorreta",
+  temp_password_expired: "Senha temporária vencida",
 };
 
 export type BlockScope = "identifier" | "origin";

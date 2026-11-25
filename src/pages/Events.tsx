@@ -31,7 +31,12 @@ const ACTION_LABELS: Record<EventAction, string> = {
   delete: "Exclusão",
   restore: "Restauração",
   ...AUTH_ACTION_LABELS,
+  password_reset: "Senha redefinida",
+  password_reset_refused: "Senha redefinida (recusa)",
   password_changed: "Senha alterada",
+  password_change_failed: "Senha alterada (falha)",
+  password_change_blocked: "Senha alterada (bloqueio)",
+  password_change_required: "Troca de senha exigida",
 };
 
 const ENTITY_LABELS: Record<EventEntity, string> = {
