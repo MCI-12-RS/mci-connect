@@ -3,9 +3,11 @@
 // Segurança (passo E1.02 de docs/migracao.md no repositório apps-mci):
 // - quem chama precisa estar autenticado e ter a permissão `create_member`;
 // - só as colunas de cadastro listadas em MEMBER_FIELDS são aceitas;
-// - sem `assign_role` (ou `manage_roles`), o membro só recebe o perfil padrão.
-//   Com elas, não é possível atribuir um perfil com permissões que quem chama
-//   não tem;
+// - antes de criar a conta, o banco ensaia o cadastro com a sessão de quem
+//   chama (`check_member_insert`, E2.02 DT-21): permissão, escopo (RN-09),
+//   pastor e sem liderança (RN-10) e função (RN-18, RN-19) são conferidos lá,
+//   e nenhuma conta de acesso é criada quando o ensaio recusa. A regra de
+//   função fica só no banco: quem não atribui funções cadastra com a padrão;
 // - erros do banco e do Auth viram mensagens genéricas, sem detalhes internos.
 //   As recusas de regra do banco (`app_error`) saem com a mensagem, o `code` e o
 //   campo, nunca com o DETAIL cru (lib/errors.ts);
@@ -22,6 +24,8 @@
 // vale para o e-mail da conta de um excluído (lib/deleted-matches.ts).
 //
 // Corpo: `{ email, password, memberData, confirmDeletedMatches? }`.
+//
+// Ordem (E2.02): JWT → entrada → cadastros excluídos → ensaio → conta → cadastro.
 //
 // A verificação do JWT é feita aqui dentro (auth.getUser), e não no gateway
 // (`verify_jwt` no config.toml), porque ela funciona tanto com as chaves antigas
@@ -68,40 +72,21 @@ interface CreateMemberInput {
   confirmDeletedMatches: boolean
 }
 
-async function hasPermission(admin: SupabaseClient, userId: string, permission: string): Promise<boolean> {
-  const { data, error } = await admin.rpc('user_has_permission', { _user_id: userId, _permission: permission })
-  if (error) throw error
-  return data === true
-}
-
-async function rolePermissions(admin: SupabaseClient, roleId: string): Promise<Set<string>> {
-  const { data, error } = await admin.from('role_permissions').select('permission').eq('role_id', roleId)
-  if (error) throw error
-  return new Set((data ?? []).map((row: { permission: string }) => row.permission))
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 // ---------------------------------------------------------------------------
 // Passos, na ordem em que rodam. O E2.04 (DT-11) acrescenta "tentativa
-// repetida" e "ensaio" entre readInput/resolveRole e checkDeletedMatches.
+// repetida" entre readInput e checkDeletedMatches.
 // ---------------------------------------------------------------------------
 
 /** 1. Quem está chamando (JWT). */
-async function authenticate(admin: SupabaseClient, req: Request): Promise<{ callerId: string; token: string }> {
+async function authenticate(admin: SupabaseClient, req: Request): Promise<{ token: string }> {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!token) throw unauthenticated()
   const { data: { user }, error } = await admin.auth.getUser(token)
   if (error || !user) throw unauthenticated()
-  return { callerId: user.id, token }
+  return { token }
 }
 
-/** 2. Permissão para cadastrar membros, antes de qualquer outra consulta. */
-async function requireCreateMember(admin: SupabaseClient, callerId: string): Promise<void> {
-  if (!(await hasPermission(admin, callerId, 'create_member'))) throw forbidden()
-}
-
-/** 3. Entrada: corpo, lista branca de colunas e a confirmação do aviso. */
+/** 2. Entrada: corpo, lista branca de colunas e a confirmação do aviso. */
 async function readInput(req: Request): Promise<CreateMemberInput> {
   const raw: unknown = await req.json().catch(() => null)
   const body: Record<string, unknown> = isRecord(raw) ? raw : {}
@@ -117,6 +102,9 @@ async function readInput(req: Request): Promise<CreateMemberInput> {
     if (field in input) memberRow[field] = input[field]
   }
   memberRow.email = email
+  // Função vazia = sem pedido de função: o banco usa a padrão (ou nenhuma, para
+  // quem atribui funções), como o formulário espera.
+  if (memberRow.role_id === '') memberRow.role_id = null
   return {
     email,
     password,
@@ -126,54 +114,8 @@ async function readInput(req: Request): Promise<CreateMemberInput> {
   }
 }
 
-/** 4. Função do membro novo: a padrão, ou uma que quem chama pode atribuir. */
-async function resolveRole(
-  admin: SupabaseClient,
-  callerId: string,
-  requested: unknown,
-): Promise<string | null> {
-  // Vazio ou ausente = sem pedido de perfil (usa o padrão).
-  let requestedRoleId: string | null = null
-  if (requested !== undefined && requested !== null && requested !== '') {
-    if (typeof requested !== 'string' || !UUID_RE.test(requested)) {
-      throw new HttpError(400, 'Função inválida.')
-    }
-    requestedRoleId = requested
-  }
-
-  const { data: defaultRole, error } = await admin.from('roles').select('id').eq('is_default', true).maybeSingle()
-  if (error) throw error
-
-  const roleId = requestedRoleId ?? defaultRole?.id ?? null
-  if (!roleId || roleId === defaultRole?.id) return roleId
-
-  const { data: role, error: roleError } = await admin.from('roles').select('id').eq('id', roleId).maybeSingle()
-  if (roleError) throw roleError
-  if (!role) throw new HttpError(400, 'Função inválida.')
-
-  // O formulário libera a escolha de função para assign_role ou manage_roles.
-  const canAssign = (await hasPermission(admin, callerId, 'assign_role'))
-    || (await hasPermission(admin, callerId, 'manage_roles'))
-  if (!canAssign) {
-    throw forbidden('Você não tem permissão para definir a função do membro.')
-  }
-
-  const { data: callerMember, error: callerError } = await admin
-    .from('members').select('role_id').eq('auth_user_id', callerId).maybeSingle()
-  if (callerError) throw callerError
-
-  const [target, own] = await Promise.all([
-    rolePermissions(admin, roleId),
-    callerMember?.role_id ? rolePermissions(admin, callerMember.role_id) : Promise.resolve(new Set<string>()),
-  ])
-  if ([...target].some((permission) => !own.has(permission))) {
-    throw forbidden('Você não pode atribuir uma função com mais permissões do que a sua.')
-  }
-  return roleId
-}
-
 /**
- * 5. Aviso de cadastro excluído (E2.01, RN-18), com a sessão de quem chama: o
+ * 3. Aviso de cadastro excluído (E2.01, RN-18), com a sessão de quem chama: o
  * banco devolve nome, id e data só para o administrador que veria o excluído
  * (DA-8). Recusa com 409 antes de existir qualquer conta.
  */
@@ -188,7 +130,18 @@ async function checkDeletedMatches(asCaller: SupabaseClient, input: CreateMember
   if (refusal) throw refusal
 }
 
-/** 6. Conta de acesso. Devolve o id da conta criada. */
+/**
+ * 4. Ensaio do cadastro no banco (E2.02, DT-21), com a sessão de quem chama:
+ * as mesmas regras do INSERT (create_member, escopo, pastor e sem liderança,
+ * função), sem gravar nada. Recusa antes de existir qualquer conta: 403 no
+ * 42501, 400 com `{ error, code, field? }` nas regras (`app_error`).
+ */
+async function checkMemberInsert(asCaller: SupabaseClient, memberRow: Record<string, unknown>): Promise<void> {
+  const { error } = await asCaller.rpc('check_member_insert', { _member: memberRow })
+  if (error) throw insertErrorToHttp(error)
+}
+
+/** 5. Conta de acesso. Devolve o id da conta criada. */
 async function createAccount(admin: SupabaseClient, input: CreateMemberInput): Promise<string> {
   const { data, error } = await admin.auth.admin.createUser({
     email: input.email,
@@ -202,14 +155,14 @@ async function createAccount(admin: SupabaseClient, input: CreateMemberInput): P
   return data.user.id
 }
 
-/** 7. Cadastro do membro com a sessão de quem chamou (RLS, triggers e autor na Auditoria). */
+/** 6. Cadastro do membro com a sessão de quem chamou (RLS, triggers e autor na Auditoria). */
 async function insertMember(asCaller: SupabaseClient, memberRow: Record<string, unknown>, authUserId: string): Promise<void> {
   const { error } = await asCaller.from('members').insert({ ...memberRow, auth_user_id: authUserId })
   if (error) throw insertErrorToHttp(error)
 }
 
 /**
- * 8. Desfaz a conta criada nesta chamada quando o cadastro falha. Nunca lança:
+ * 7. Desfaz a conta criada nesta chamada quando o cadastro falha. Nunca lança:
  * a resposta de erro original precisa sair, e a conta órfã fica no log.
  */
 async function undoAccount(admin: SupabaseClient, authUserId: string): Promise<void> {
@@ -242,16 +195,15 @@ serve(async (req) => {
   let createdUserId: string | null = null
 
   try {
-    const { callerId, token } = await authenticate(admin, req)
-    await requireCreateMember(admin, callerId)
+    const { token } = await authenticate(admin, req)
     const input = await readInput(req)
-    input.memberRow.role_id = await resolveRole(admin, callerId, input.memberRow.role_id)
 
     const asCaller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false },
     })
     await checkDeletedMatches(asCaller, input)
+    await checkMemberInsert(asCaller, input.memberRow)
 
     createdUserId = await createAccount(admin, input)
     await insertMember(asCaller, input.memberRow, createdUserId)
