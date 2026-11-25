@@ -164,8 +164,8 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- Massa. Triggers desligados: níveis, cônjuges e totais (total_disciples,
--- total_cells) explícitos, para conferir as somas do casal.
+-- Massa. Triggers desligados na carga; depois dela, rebuild_member_hierarchy() calcula níveis
+-- e totais (E2.06: não há mais colunas calculadas em members; a massa não tem células).
 -- ---------------------------------------------------------------------------
 SET LOCAL session_replication_role = replica;
 
@@ -186,7 +186,7 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(4), 'view_all_reports'),
   (pg_temp.role(4), 'view_own_reports');
 
--- Árvore (nível entre parênteses; td/tc = total_disciples/total_cells guardados):
+-- Árvore:
 --   Raízes: Paulo (01) & Priscila (02), pastores casados; Pedro (03), pastor
 --     inativo; Silas (04), pastor com a cônjuge Sara (05) inativa; Xavier (06),
 --     sem líder e sem ser pastor.
@@ -198,59 +198,58 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 --     Joana (25) é casada com Alice (26), discípula da Lídia (27).
 --   Ministério B, G12 Bruno (41), sem cônjuge: Bia, Wagner (42, casado com
 --     Valter 43, discípulo do Otávio), Katia (44) & Karla (45), os dois Sam
---     Igual (46, 47, os dois homens: o sexo é obrigatório desde o E2.04), Otávio (48, lidera a esposa Olga 49, com td
---     desatualizado em 0) e Hugo (50), que lidera Ary (53) e dois Davi Duplo (51, 52).
+--     Igual (46, 47, os dois homens: o sexo é obrigatório desde o E2.04), Otávio (48, lidera a esposa Olga 49) e Hugo (50), que lidera Ary (53) e dois Davi Duplo (51, 52).
 INSERT INTO public.members
-  (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, spouse_id, is_active,
-   total_disciples, total_cells, auth_user_id, role_id)
+  (id, name, gender, is_pastor, leader_id, has_leadership, spouse_id, is_active, auth_user_id, role_id)
 VALUES
-  (pg_temp.m(1),  'Paulo Pastor',          'M',  true,  0, NULL, false,          pg_temp.m(2),  true,  30, 8, pg_temp.u(5), NULL),
-  (pg_temp.m(2),  'Priscila Pastora',      'F',  true,  0, NULL, false,          pg_temp.m(1),  true,  25, 7, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(3),  'Pedro Pastor Inativo',  'M',  true,  0, NULL, false,          NULL,          false,  0, 0, NULL,         NULL),
-  (pg_temp.m(4),  'Silas Pastor',          'M',  true,  0, NULL, false,          pg_temp.m(5),  true,   3, 2, NULL,         NULL),
-  (pg_temp.m(5),  'Sara Silas',            'F',  false, 0, NULL, false,          pg_temp.m(4),  false,  9, 9, NULL,         NULL),
-  (pg_temp.m(6),  'Xavier Sem Líder',      'M',  false, 0, NULL, false,          NULL,          true,   0, 0, NULL,         NULL),
+  (pg_temp.m(1),  'Paulo Pastor',          'M',  true, NULL, false,          pg_temp.m(2),  true, pg_temp.u(5), NULL),
+  (pg_temp.m(2),  'Priscila Pastora',      'F',  true, NULL, false,          pg_temp.m(1),  true, pg_temp.u(1), pg_temp.role(1)),
+  (pg_temp.m(3),  'Pedro Pastor Inativo',  'M',  true, NULL, false,          NULL,          false, NULL,         NULL),
+  (pg_temp.m(4),  'Silas Pastor',          'M',  true, NULL, false,          pg_temp.m(5),  true, NULL,         NULL),
+  (pg_temp.m(5),  'Sara Silas',            'F',  false, NULL, false,          pg_temp.m(4),  false, NULL,         NULL),
+  (pg_temp.m(6),  'Xavier Sem Líder',      'M',  false, NULL, false,          NULL,          true, NULL,         NULL),
   -- Ministério A
-  (pg_temp.m(10), 'André Alves',           'M',  false, 1, pg_temp.m(1), true,  pg_temp.m(11), true,  20, 5, NULL,         NULL),
-  (pg_temp.m(11), 'Ana Alves',             'F',  false, 1, pg_temp.m(2), true,  pg_temp.m(10), true,  15, 4, NULL,         NULL),
-  (pg_temp.m(12), 'Marta Moura',           'F',  false, 2, pg_temp.m(11), true, pg_temp.m(13), true,   3, 2, NULL,         NULL),
-  (pg_temp.m(13), 'Mateus Moura',          'M',  false, 2, pg_temp.m(10), true, pg_temp.m(12), true,   2, 1, NULL,         NULL),
-  (pg_temp.m(14), 'Tiago Teles',           'M',  false, 2, pg_temp.m(10), true, pg_temp.m(15), true,   1, 1, NULL,         NULL),
-  (pg_temp.m(15), 'Tânia Teles',           'F',  false, 2, pg_temp.m(11), true, pg_temp.m(14), false,  7, 3, NULL,         NULL),
-  (pg_temp.m(16), 'João Jesus',            'M',  false, 2, pg_temp.m(10), true, pg_temp.m(40), true,   0, 1, NULL,         NULL),
-  (pg_temp.m(17), 'Lucas Lima',            'M',  false, 2, pg_temp.m(10), true, NULL,          true,   4, 1, pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(18), 'Felipe Faria',          'M',  false, 2, pg_temp.m(10), true, pg_temp.m(19), true,   3, 4, NULL,         NULL),
-  (pg_temp.m(19), 'Fernanda Faria',        'F',  false, 3, pg_temp.m(18), true, pg_temp.m(18), true,   1, 1, NULL,         NULL),
-  (pg_temp.m(20), 'Fábio Faria',           'M',  false, 3, pg_temp.m(18), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(21), 'Flávio Faria',          'M',  false, 3, pg_temp.m(18), true, NULL,          false,  0, 0, NULL,         NULL),
-  (pg_temp.m(22), 'Fabiana Faria',         'F',  false, 4, pg_temp.m(19), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(23), 'Igor Inativo',          'M',  false, 2, pg_temp.m(10), true, NULL,          false,  0, 0, NULL,         NULL),
-  (pg_temp.m(24), 'Maria Mendes',          'F',  false, 2, pg_temp.m(11), true, NULL,          true,   0, 0, pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(25), 'Joana Jardim',          'F',  false, 2, pg_temp.m(11), true, pg_temp.m(26), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(26), 'Alice Jardim',          'F',  false, 3, pg_temp.m(27), true, pg_temp.m(25), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(27), 'Lídia Lopes',           'F',  false, 2, pg_temp.m(11), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(28), 'Rute Ramos',            'F',  false, 2, pg_temp.m(11), true, NULL,          true,   0, 0, pg_temp.u(4), pg_temp.role(4)),
-  (pg_temp.m(29), 'Débora Dias',           'F',  false, 2, pg_temp.m(11), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(30), 'Célia Castro',          'F',  false, 2, pg_temp.m(11), true, pg_temp.m(31), true,   5, 3, NULL,         NULL),
-  (pg_temp.m(31), 'Cássio Castro',         'M',  false, 3, pg_temp.m(30), true, pg_temp.m(30), true,   2, 1, NULL,         NULL),
-  (pg_temp.m(32), 'Cecília Castro',        'F',  false, 3, pg_temp.m(30), true, NULL,          true,   0, 0, NULL,         NULL),
+  (pg_temp.m(10), 'André Alves',           'M',  false, pg_temp.m(1), true,  pg_temp.m(11), true, NULL,         NULL),
+  (pg_temp.m(11), 'Ana Alves',             'F',  false, pg_temp.m(2), true,  pg_temp.m(10), true, NULL,         NULL),
+  (pg_temp.m(12), 'Marta Moura',           'F',  false, pg_temp.m(11), true, pg_temp.m(13), true, NULL,         NULL),
+  (pg_temp.m(13), 'Mateus Moura',          'M',  false, pg_temp.m(10), true, pg_temp.m(12), true, NULL,         NULL),
+  (pg_temp.m(14), 'Tiago Teles',           'M',  false, pg_temp.m(10), true, pg_temp.m(15), true, NULL,         NULL),
+  (pg_temp.m(15), 'Tânia Teles',           'F',  false, pg_temp.m(11), true, pg_temp.m(14), false, NULL,         NULL),
+  (pg_temp.m(16), 'João Jesus',            'M',  false, pg_temp.m(10), true, pg_temp.m(40), true, NULL,         NULL),
+  (pg_temp.m(17), 'Lucas Lima',            'M',  false, pg_temp.m(10), true, NULL,          true, pg_temp.u(3), pg_temp.role(3)),
+  (pg_temp.m(18), 'Felipe Faria',          'M',  false, pg_temp.m(10), true, pg_temp.m(19), true, NULL,         NULL),
+  (pg_temp.m(19), 'Fernanda Faria',        'F',  false, pg_temp.m(18), true, pg_temp.m(18), true, NULL,         NULL),
+  (pg_temp.m(20), 'Fábio Faria',           'M',  false, pg_temp.m(18), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(21), 'Flávio Faria',          'M',  false, pg_temp.m(18), true, NULL,          false, NULL,         NULL),
+  (pg_temp.m(22), 'Fabiana Faria',         'F',  false, pg_temp.m(19), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(23), 'Igor Inativo',          'M',  false, pg_temp.m(10), true, NULL,          false, NULL,         NULL),
+  (pg_temp.m(24), 'Maria Mendes',          'F',  false, pg_temp.m(11), true, NULL,          true, pg_temp.u(2), pg_temp.role(2)),
+  (pg_temp.m(25), 'Joana Jardim',          'F',  false, pg_temp.m(11), true, pg_temp.m(26), true, NULL,         NULL),
+  (pg_temp.m(26), 'Alice Jardim',          'F',  false, pg_temp.m(27), true, pg_temp.m(25), true, NULL,         NULL),
+  (pg_temp.m(27), 'Lídia Lopes',           'F',  false, pg_temp.m(11), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(28), 'Rute Ramos',            'F',  false, pg_temp.m(11), true, NULL,          true, pg_temp.u(4), pg_temp.role(4)),
+  (pg_temp.m(29), 'Débora Dias',           'F',  false, pg_temp.m(11), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(30), 'Célia Castro',          'F',  false, pg_temp.m(11), true, pg_temp.m(31), true, NULL,         NULL),
+  (pg_temp.m(31), 'Cássio Castro',         'M',  false, pg_temp.m(30), true, pg_temp.m(30), true, NULL,         NULL),
+  (pg_temp.m(32), 'Cecília Castro',        'F',  false, pg_temp.m(30), true, NULL,          true, NULL,         NULL),
   -- Ministério B
-  (pg_temp.m(40), 'Bia Barros',            'F',  false, 2, pg_temp.m(41), true, pg_temp.m(16), true,   2, 1, NULL,         NULL),
-  (pg_temp.m(41), 'Bruno Borges',          'M',  false, 1, pg_temp.m(1), true,  NULL,          true,  12, 6, NULL,         NULL),
-  (pg_temp.m(42), 'Wagner Weber',          'M',  false, 2, pg_temp.m(41), true, pg_temp.m(43), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(43), 'Valter Vaz',            'M',  false, 3, pg_temp.m(48), true, pg_temp.m(42), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(44), 'Katia Klein',           'F',  false, 2, pg_temp.m(41), true, pg_temp.m(45), true,   0, 0, pg_temp.u(6), pg_temp.role(3)),
-  (pg_temp.m(45), 'Karla Klein',           'F',  false, 2, pg_temp.m(41), true, pg_temp.m(44), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(46), 'Sam Igual',             'M',  false, 2, pg_temp.m(41), true, pg_temp.m(47), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(47), 'Sam Igual',             'M',  false, 2, pg_temp.m(41), true, pg_temp.m(46), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(48), 'Otávio Ortiz',          'M',  false, 2, pg_temp.m(41), true, pg_temp.m(49), true,   0, 2, NULL,         NULL),
-  (pg_temp.m(49), 'Olga Ortiz',            'F',  false, 3, pg_temp.m(48), true, pg_temp.m(48), true,   0, 0, NULL,         NULL),
-  (pg_temp.m(50), 'Hugo Horta',            'M',  false, 2, pg_temp.m(41), true, NULL,          true,   3, 0, NULL,         NULL),
-  (pg_temp.m(52), 'Davi Duplo',            'M',  false, 3, pg_temp.m(50), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(51), 'Davi Duplo',            'M',  false, 3, pg_temp.m(50), true, NULL,          true,   0, 0, NULL,         NULL),
-  (pg_temp.m(53), 'Ary Alves',             'M',  false, 3, pg_temp.m(50), true, NULL,          true,   0, 0, NULL,         NULL);
+  (pg_temp.m(40), 'Bia Barros',            'F',  false, pg_temp.m(41), true, pg_temp.m(16), true, NULL,         NULL),
+  (pg_temp.m(41), 'Bruno Borges',          'M',  false, pg_temp.m(1), true,  NULL,          true, NULL,         NULL),
+  (pg_temp.m(42), 'Wagner Weber',          'M',  false, pg_temp.m(41), true, pg_temp.m(43), true, NULL,         NULL),
+  (pg_temp.m(43), 'Valter Vaz',            'M',  false, pg_temp.m(48), true, pg_temp.m(42), true, NULL,         NULL),
+  (pg_temp.m(44), 'Katia Klein',           'F',  false, pg_temp.m(41), true, pg_temp.m(45), true, pg_temp.u(6), pg_temp.role(3)),
+  (pg_temp.m(45), 'Karla Klein',           'F',  false, pg_temp.m(41), true, pg_temp.m(44), true, NULL,         NULL),
+  (pg_temp.m(46), 'Sam Igual',             'M',  false, pg_temp.m(41), true, pg_temp.m(47), true, NULL,         NULL),
+  (pg_temp.m(47), 'Sam Igual',             'M',  false, pg_temp.m(41), true, pg_temp.m(46), true, NULL,         NULL),
+  (pg_temp.m(48), 'Otávio Ortiz',          'M',  false, pg_temp.m(41), true, pg_temp.m(49), true, NULL,         NULL),
+  (pg_temp.m(49), 'Olga Ortiz',            'F',  false, pg_temp.m(48), true, pg_temp.m(48), true, NULL,         NULL),
+  (pg_temp.m(50), 'Hugo Horta',            'M',  false, pg_temp.m(41), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(52), 'Davi Duplo',            'M',  false, pg_temp.m(50), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(51), 'Davi Duplo',            'M',  false, pg_temp.m(50), true, NULL,          true, NULL,         NULL),
+  (pg_temp.m(53), 'Ary Alves',             'M',  false, pg_temp.m(50), true, NULL,          true, NULL,         NULL);
 
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Os nós de [André, Ana], na forma (principal, cônjuge), para P1 e P3.
 CREATE TEMP TABLE a_nodes_p1 (member_id uuid, spouse_id uuid);
@@ -279,13 +278,14 @@ SELECT is(pg_get_function_arguments('public.ministry_tree_nodes(uuid[])'::regpro
   'ministry_tree_nodes: _parent_ids opcional, NULL por padrão (as raízes)');
 SELECT is(pg_get_function_result('public.ministry_tree_nodes(uuid[])'::regprocedure),
   'TABLE(member_id uuid, member_name text, member_gender text, g12_level integer, is_pastor boolean, '
-  || 'spouse_id uuid, spouse_name text, direct_disciples bigint, total_disciples integer, total_cells integer)',
-  'ministry_tree_nodes: colunas e tipos do contrato, na ordem');
+  || 'spouse_id uuid, spouse_name text, direct_disciples bigint, total_disciples integer, total_cells integer, '
+  || 'kind text, level_member_id uuid, level_gender text, level_is_pastor boolean, spouse_is_pastor boolean)',
+  'ministry_tree_nodes: colunas e tipos do contrato novo (E2.06), as antigas na mesma ordem e as novas no fim');
 SELECT results_eq(
   $$ SELECT prosecdef, provolatile::text COLLATE "default", proconfig::text COLLATE "default"
        FROM pg_proc WHERE oid = 'public.ministry_tree_nodes(uuid[])'::regprocedure $$,
-  $$ VALUES (false, 's', '{search_path=public}') $$,
-  'ministry_tree_nodes: SECURITY INVOKER (prosecdef = false), STABLE e search_path=public');
+  $$ VALUES (true, 's', '{search_path=public}') $$,
+  'ministry_tree_nodes: SECURITY DEFINER desde o E2.06 (lê a cadeia em private), STABLE e search_path=public');
 SELECT ok(prosrc !~ 'public\.(members|cells|cell_reports|cell_report_participants)\y',
   'ministry_tree_nodes: não lê as tabelas diretamente (herda escopo e máscara da members_view, RN-05)')
   FROM pg_proc WHERE oid = 'public.ministry_tree_nodes(uuid[])'::regprocedure;
@@ -323,8 +323,8 @@ SELECT results_eq(
   format($$ SELECT member_id, member_name, member_gender, g12_level, is_pastor, spouse_id, spouse_name,
                    direct_disciples, total_disciples, total_cells
               FROM public.ministry_tree_nodes(%L) $$, pg_temp.ms(1, 2)),
-  format($$ VALUES (%L::uuid, 'André Alves'::text, 'M'::text, 1, false, %L::uuid, 'Ana Alves'::text, 12::bigint, 35, 9),
-                   (%L::uuid, 'Bruno Borges'::text, 'M'::text, 1, false, NULL::uuid, NULL::text, 8::bigint, 12, 6) $$,
+  format($$ VALUES (%L::uuid, 'André Alves'::text, 'M'::text, 1, false, %L::uuid, 'Ana Alves'::text, 12::bigint, 18, 0),
+                   (%L::uuid, 'Bruno Borges'::text, 'M'::text, 1, false, NULL::uuid, NULL::text, 8::bigint, 13, 0) $$,
          pg_temp.m(10), pg_temp.m(11), pg_temp.m(41)),
   'RN-10/P1: abrir Paulo & Priscila traz o casal André & Ana (12 discípulos diretos ativos; totais somados) e Bruno, em ordem de nome');
 
@@ -366,25 +366,25 @@ SELECT is(
 SELECT results_eq(
   format($$ SELECT member_name, member_gender, g12_level, is_pastor
               FROM public.ministry_tree_nodes(%L) WHERE member_id = %L $$, pg_temp.ms(10, 11), pg_temp.m(31)),
-  $$ VALUES ('Cássio Castro'::text, 'M'::text, 3, false) $$,
-  'RN-10/P1: nome, gênero, nível e is_pastor são os do principal (Cássio, nível 3, cônjuge de uma discípula de nível 2)');
+  $$ VALUES ('Cássio Castro'::text, 'M'::text, 2, false) $$,
+  'RN-10/P1: nome, gênero e is_pastor são do principal; o nível é o da posição (Cássio é de nível 3, mas a posição é a da Célia, discípula de Ana: 2) (E2.06 UXD-7)');
 
 -- Contagens de cada nó do nível (o pai já foi conferido acima).
 SELECT results_eq(
   format($$ SELECT member_name, spouse_name, direct_disciples, total_disciples, total_cells
               FROM public.ministry_tree_nodes(%L) $$, pg_temp.ms(10, 11)),
   $$ SELECT * FROM (VALUES
-       ('Cássio Castro'::text,  'Célia Castro'::text,   1::bigint, 4, 3),
+       ('Cássio Castro'::text,  'Célia Castro'::text,   1::bigint, 1, 0),
        ('Débora Dias'::text,    NULL::text,             0::bigint, 0, 0),
-       ('Felipe Faria'::text,   'Fernanda Faria'::text, 2::bigint, 2, 4),
+       ('Felipe Faria'::text,   'Fernanda Faria'::text, 2::bigint, 2, 0),
        ('Joana Jardim'::text,   'Alice Jardim'::text,   0::bigint, 0, 0),
-       ('João Jesus'::text,     'Bia Barros'::text,     0::bigint, 2, 2),
-       ('Lídia Lopes'::text,    NULL::text,             1::bigint, 0, 0),
-       ('Lucas Lima'::text,     NULL::text,             0::bigint, 4, 1),
+       ('João Jesus'::text,     'Bia Barros'::text,     0::bigint, 0, 0),
+       ('Lídia Lopes'::text,    NULL::text,             1::bigint, 1, 0),
+       ('Lucas Lima'::text,     NULL::text,             0::bigint, 0, 0),
        ('Maria Mendes'::text,   NULL::text,             0::bigint, 0, 0),
-       ('Mateus Moura'::text,   'Marta Moura'::text,    0::bigint, 5, 3),
+       ('Mateus Moura'::text,   'Marta Moura'::text,    0::bigint, 0, 0),
        ('Rute Ramos'::text,     NULL::text,             0::bigint, 0, 0),
-       ('Tiago Teles'::text,    NULL::text,             0::bigint, 1, 1)
+       ('Tiago Teles'::text,    NULL::text,             0::bigint, 0, 0)
      ) v(a, b, c, d, e) ORDER BY a $$,
   'RN-10/P1: os 11 nós de André & Ana, com discípulos diretos e totais (soma do casal; só o do líder quando um lidera o outro)');
 
@@ -392,8 +392,8 @@ SELECT results_eq(
 SELECT results_eq(
   $$ SELECT member_name, spouse_name, is_pastor, direct_disciples, total_disciples, total_cells
        FROM public.ministry_tree_nodes() WHERE member_id::text LIKE 'c1084000%' $$,
-  $$ VALUES ('Paulo Pastor'::text, 'Priscila Pastora'::text, true, 3::bigint, 55, 15),
-            ('Silas Pastor'::text, NULL::text,               true, 0::bigint,  3,  2) $$,
+  $$ VALUES ('Paulo Pastor'::text, 'Priscila Pastora'::text, true, 3::bigint, 34, 0),
+            ('Silas Pastor'::text, NULL::text,               true, 0::bigint,  0, 0) $$,
   'RN-10/P1: raízes da massa = os pastores ativos (casal Paulo & Priscila uma vez; Silas sem a cônjuge inativa)');
 SELECT is_empty(
   format('SELECT g FROM pg_temp.ids(NULL) g WHERE g = ANY(%L)', pg_temp.ms(3, 5, 6)),
@@ -427,7 +427,7 @@ SELECT is_empty(format('SELECT 1 FROM public.members WHERE id = %L', pg_temp.m(4
 SELECT results_eq(
   format($$ SELECT spouse_id, spouse_name, direct_disciples, total_disciples, total_cells
               FROM public.ministry_tree_nodes(%L) WHERE member_id = %L $$, pg_temp.ms(10, 11), pg_temp.m(16)),
-  $$ VALUES (NULL::uuid, NULL::text, 0::bigint, 0, 1) $$,
+  $$ VALUES (NULL::uuid, NULL::text, 0::bigint, 0, 0) $$,
   'Cônjuge/P3: João aparece sozinho, sem o id, o nome nem os totais da cônjuge invisível');
 SELECT is_empty(
   format($$ SELECT 1 FROM (SELECT * FROM public.ministry_tree_nodes(%L)
@@ -485,29 +485,29 @@ SELECT is(
   'Esposa liderada pelo marido: a contagem do nó (2) é o número de filhos, sem contar a esposa');
 SELECT results_eq(
   format('SELECT total_disciples, total_cells FROM public.ministry_tree_nodes(%L) WHERE member_id = %L', pg_temp.ms(10, 11), pg_temp.m(18)),
-  $$ VALUES (2, 4) $$,
-  'Esposa liderada pelo marido: totais só do líder (3 − 1 = 2 discípulos; 4 células), sem somar os da esposa');
+  $$ VALUES (2, 0) $$,
+  'Esposa liderada pelo marido: totais só do líder (3 − 1 = 2 discípulos), sem somar os da esposa (a massa não tem células: cada nó dá 0)');
 SELECT results_eq(
   format('SELECT member_name, spouse_name, direct_disciples FROM public.ministry_tree_nodes(%L)', pg_temp.ms(30, 31)),
   $$ VALUES ('Cecília Castro'::text, NULL::text, 0::bigint) $$,
   'Marido liderado pela esposa: abrir Cássio & Célia traz só Cecília; Cássio não reaparece');
 SELECT results_eq(
   format('SELECT total_disciples, total_cells FROM public.ministry_tree_nodes(%L) WHERE member_id = %L', pg_temp.ms(10, 11), pg_temp.m(31)),
-  $$ VALUES (4, 3) $$,
-  'Marido liderado pela esposa: totais só da líder (5 − 1 = 4; 3 células)');
+  $$ VALUES (1, 0) $$,
+  'Marido liderado pela esposa: totais só da líder (2 − 1 = 1 discípulo)');
 SELECT results_eq(
   format($$ SELECT member_name, spouse_name, direct_disciples, total_disciples, total_cells
               FROM public.ministry_tree_nodes(%L) WHERE member_id = %L $$, pg_temp.ms(41), pg_temp.m(48)),
-  $$ VALUES ('Otávio Ortiz'::text, 'Olga Ortiz'::text, 1::bigint, 0, 2) $$,
-  'Um lidera o outro com total_disciples desatualizado em 0: o total não fica negativo (piso 0)');
+  $$ VALUES ('Otávio Ortiz'::text, 'Olga Ortiz'::text, 1::bigint, 1, 0) $$,
+  'Um lidera o outro: totais só do líder (Otávio tem 2: Olga e Valter; 2 − 1 = 1 discípulo)');
 SELECT results_eq(
   format('SELECT member_name, spouse_name FROM public.ministry_tree_nodes(%L)', pg_temp.ms(48, 49)),
   $$ VALUES ('Valter Vaz'::text, 'Wagner Weber'::text) $$,
   'Um lidera o outro: abrir Otávio & Olga traz Valter (com o cônjuge Wagner); Olga não reaparece');
 SELECT results_eq(
   format('SELECT total_disciples, total_cells FROM public.ministry_tree_nodes(%L) WHERE member_id = %L', pg_temp.ms(10, 11), pg_temp.m(13)),
-  $$ VALUES (5, 3) $$,
-  'Casal sem liderança entre si: totais somados (2 + 3 discípulos; 1 + 2 células)');
+  $$ VALUES (0, 0) $$,
+  'Casal sem liderança entre si: totais somados (0 + 0: nenhum dos dois tem discípulos)');
 RESET ROLE;
 
 -- ===========================================================================
@@ -688,12 +688,13 @@ RESET ROLE;
 -- Confere o resultado (nada cortado), não o desempenho, que é medido à parte
 -- com o volume de referência.
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, g12_level, leader_id, has_leadership, is_active, total_disciples)
-VALUES (pg_temp.m(60), 'Vera Volume', 'F', 3, pg_temp.m(50), true, true, 1100);
-INSERT INTO public.members (id, name, gender, g12_level, leader_id, has_leadership, is_active)
-SELECT pg_temp.m(1000 + n), 'Volume ' || lpad(n::text, 4, '0'), 'F', 4, pg_temp.m(60), true, n % 12 <> 0
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active)
+VALUES (pg_temp.m(60), 'Vera Volume', 'F', pg_temp.m(50), true, true);
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active)
+SELECT pg_temp.m(1000 + n), 'Volume ' || lpad(n::text, 4, '0'), 'F', pg_temp.m(60), true, n % 12 <> 0
   FROM generate_series(1, 1200) n;
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 SELECT pg_temp.login(1);
 SET LOCAL ROLE authenticated;

@@ -228,24 +228,25 @@ ALTER TABLE public.members
 -- 22: e-mail fictício; 23: e-mail com caixa e espaços; 24: celular com máscara; 25: nome com
 -- espaços; 26: pastor com a chave ligada; 27: líder sem a chave).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, g12_level, mobile_whatsapp, email, cpf, phone, instagram, avatar_url, notes, street, number, complement, neighborhood, city, state, zip_code) VALUES
-  (pg_temp.m(10), 'Cpf Vazio', 'M', true, false, NULL, 0, '51911110010', NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(11), 'Cpf Espacos', 'M', true, false, NULL, 0, '51911110011', NULL, '   ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(12), 'Celular Vazio', 'M', true, false, NULL, 0, '', 'cel@exemplo.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(13), 'Telefone Espacos', 'M', true, false, NULL, 0, '51911110013', NULL, NULL, '  ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(14), 'Email Vazio', 'M', true, false, NULL, 0, '51911110014', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(15), 'Email Espacos', 'M', true, false, NULL, 0, '51911110015', '  ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(16), 'Insta Obs', 'M', true, false, NULL, 0, '51911110016', NULL, NULL, NULL, ' ', NULL, E'\t', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(17), 'Endereco Vazio', 'M', true, false, NULL, 0, '51911110017', NULL, NULL, NULL, NULL, '  ', NULL, '', ' ', '  ', '', ' ', '  ', ''),
-  (pg_temp.m(20), 'Cpf Mascara', 'M', true, false, NULL, 0, '51911110020', NULL, '529.982.247-25', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(21), 'Cpf Letras', 'M', true, false, NULL, 0, '51911110021', NULL, '5299822472a', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(22), 'Email Ficticio', 'M', true, false, NULL, 0, '51911110022', 'x_ab12@mci12fakemail.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(23), 'Email Caixa', 'M', true, false, NULL, 0, '51911110023', ' Caixa@Exemplo.COM ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(24), 'Celular Mascara', 'M', true, false, NULL, 0, '+55 (51) 98888-0024', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(25), 'Nome   Espacos', 'M', true, false, NULL, 0, '51911110025', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(26), 'Pastor Chave', 'M', true, true, NULL, 0, '51911110026', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-  (pg_temp.m(27), 'Lider Sem Chave', 'M', false, false, pg_temp.m(10), 1, '51911110027', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, mobile_whatsapp, email, cpf, phone, instagram, avatar_url, notes, street, number, complement, neighborhood, city, state, zip_code) VALUES
+  (pg_temp.m(10), 'Cpf Vazio', 'M', true, false, NULL, '51911110010', NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(11), 'Cpf Espacos', 'M', true, false, NULL, '51911110011', NULL, '   ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(12), 'Celular Vazio', 'M', true, false, NULL, '', 'cel@exemplo.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(13), 'Telefone Espacos', 'M', true, false, NULL, '51911110013', NULL, NULL, '  ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(14), 'Email Vazio', 'M', true, false, NULL, '51911110014', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(15), 'Email Espacos', 'M', true, false, NULL, '51911110015', '  ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(16), 'Insta Obs', 'M', true, false, NULL, '51911110016', NULL, NULL, NULL, ' ', NULL, E'\t', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(17), 'Endereco Vazio', 'M', true, false, NULL, '51911110017', NULL, NULL, NULL, NULL, '  ', NULL, '', ' ', '  ', '', ' ', '  ', ''),
+  (pg_temp.m(20), 'Cpf Mascara', 'M', true, false, NULL, '51911110020', NULL, '529.982.247-25', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(21), 'Cpf Letras', 'M', true, false, NULL, '51911110021', NULL, '5299822472a', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(22), 'Email Ficticio', 'M', true, false, NULL, '51911110022', 'x_ab12@mci12fakemail.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(23), 'Email Caixa', 'M', true, false, NULL, '51911110023', ' Caixa@Exemplo.COM ', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(24), 'Celular Mascara', 'M', true, false, NULL, '+55 (51) 98888-0024', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(25), 'Nome   Espacos', 'M', true, false, NULL, '51911110025', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(26), 'Pastor Chave', 'M', true, true, NULL, '51911110026', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (pg_temp.m(27), 'Lider Sem Chave', 'M', false, false, pg_temp.m(10), '51911110027', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Antes das correções: o vazio e a máscara aparecem como violação do CPF (pendência do PR 1).
 CREATE FUNCTION pg_temp.of(_rule text) RETURNS int[] LANGUAGE sql STABLE AS

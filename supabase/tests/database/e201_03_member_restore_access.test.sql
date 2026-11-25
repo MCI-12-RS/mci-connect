@@ -92,8 +92,12 @@ CREATE FUNCTION pg_temp.code(_r jsonb) RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE WHEN _r ->> 'state' = '22023' AND _r ->> 'hint' = 'app_error'
               THEN _r -> 'detail' ->> 'code' ELSE _r ->> 'state' END
 $$;
-CREATE FUNCTION pg_temp.mem(_n int) RETURNS public.members LANGUAGE sql STABLE AS
-$$ SELECT * FROM public.members WHERE id = pg_temp.m(_n) $$;
+-- E2.06: o nível e os totais saíram de members; a linha de teste junta a tabela nova.
+CREATE TEMP VIEW mem_h AS
+  SELECT m.*, h.g12_level, h.total_disciples, h.total_cells, h.male_cells, h.female_cells
+    FROM public.members m LEFT JOIN private.member_hierarchy h ON h.member_id = m.id;
+CREATE FUNCTION pg_temp.mem(_n int) RETURNS pg_temp.mem_h LANGUAGE sql STABLE AS
+$$ SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(_n) $$;
 -- Linhas de find_deleted_member_matches como o usuário _n, num JSON ordenado.
 CREATE FUNCTION pg_temp.matches(_n int, _email text, _mobile text, _cpf text) RETURNS jsonb LANGUAGE sql AS $$
   SELECT pg_temp.jv(_n, format(
@@ -186,6 +190,7 @@ SELECT pg_temp.r(k), pg_temp.c(1), public.week_start(public.sp_today()) - 7 * k 
 INSERT INTO public.cell_report_participants (report_id, member_id)
 SELECT pg_temp.r(k), pg_temp.m(23) FROM generate_series(1, 12) k;
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Ana: duas sessões com refresh tokens e um refresh token órfão (sem sessão).
 INSERT INTO auth.sessions (id, user_id, created_at) VALUES
@@ -391,13 +396,13 @@ SELECT ok((pg_temp.mem(42)).deleted_at IS NULL AND (pg_temp.mem(42)).deleted_by 
 -- ===========================================================================
 -- 4. RN-16: restaurar um membro — 34
 -- ===========================================================================
-CREATE TEMP TABLE bruno0 AS SELECT * FROM public.members WHERE id = pg_temp.m(23);
-CREATE TEMP TABLE tot0 AS SELECT id, total_disciples FROM public.members WHERE id IN (pg_temp.m(1), pg_temp.m(2), pg_temp.m(5));
+CREATE TEMP TABLE bruno0 AS SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(23);
+CREATE TEMP TABLE tot0 AS SELECT member_id AS id, total_disciples FROM private.member_hierarchy WHERE member_id IN (pg_temp.m(1), pg_temp.m(2), pg_temp.m(5));
 
 -- (a) com o líder Gil não excluído: volta como estava.
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(23)))), '00000',
   'RN-16: AD exclui Bruno (12 participações, líder Gil)');
-SELECT is((SELECT total_disciples FROM public.members WHERE id = pg_temp.m(5)), 0, 'RN-10: Gil fica com 0 discípulos');
+SELECT is((SELECT total_disciples FROM private.member_hierarchy WHERE member_id = pg_temp.m(5)), 0, 'RN-10: Gil fica com 0 discípulos');
 SELECT is(pg_temp.jv(1, format('SELECT to_jsonb(r) FROM public.restore_member(%L) r', pg_temp.m(23))),
   '{"restored_without_leader": false, "previous_leader_name": null, "role_reset_to_default": false,
     "role_name": "E201-03 Líder (será apagada)"}'::jsonb,
@@ -409,7 +414,7 @@ SELECT is(
 SELECT is((SELECT count(*)::int FROM public.cell_report_participants WHERE member_id = pg_temp.m(23)), 12,
   'RN-15: com as 12 participações');
 SELECT set_eq(
-  format('SELECT id, total_disciples FROM public.members WHERE id IN (%L, %L, %L)', pg_temp.m(1), pg_temp.m(2), pg_temp.m(5)),
+  format('SELECT member_id, total_disciples FROM private.member_hierarchy WHERE member_id IN (%L, %L, %L)', pg_temp.m(1), pg_temp.m(2), pg_temp.m(5)),
   'SELECT id, total_disciples FROM tot0',
   'RN-15/RN-10: o total de discípulos de Gil e dos ancestrais volta (aumenta 1 na restauração)');
 
@@ -419,7 +424,7 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', 
 SELECT is(pg_temp.code(pg_temp.try(6, format($$INSERT INTO public.members (id, name, gender, leader_id, mobile_whatsapp)
                                               VALUES (%L, 'Caio Campos', 'M', %L, '51999990000')$$, pg_temp.m(10), pg_temp.m(2)))),
   '00000', 'RN-18: CM cadastra Caio com o celular de Bruno (permitido: "Cadastrar mesmo assim")');
-CREATE TEMP TABLE bruno_del AS SELECT * FROM public.members WHERE id = pg_temp.m(23);
+CREATE TEMP TABLE bruno_del AS SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(23);
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(23)))), 'restore_value_in_use',
   'RN-16 e: restaurar Bruno com o celular em uso por Caio é recusado');
 SELECT is(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(23))) ->> 'message',
@@ -462,7 +467,7 @@ SELECT is(pg_temp.jv(1, format('SELECT to_jsonb(r) FROM public.restore_member(%L
     "role_name": "E201-03 Padrão"}'::jsonb,
   'RN-16 a/d: Bruno volta sem líder (Gil excluído) e com a função padrão; o retorno diz os dois');
 SELECT is(ARRAY[(pg_temp.mem(23)).leader_id::text, (pg_temp.mem(23)).has_leadership::text, (pg_temp.mem(23)).g12_level::text],
-  ARRAY[NULL, 'false', '0'], 'DA-3: sem líder, "Tem Liderança?" desligado e nível 0 recalculado');
+  ARRAY[NULL, 'false', NULL], 'DA-3: sem líder, "Tem Liderança?" desligado e sem nível (RN-01 do E2.06: sem liderança não tem nível)');
 SELECT is((pg_temp.mem(23)).role_id, pg_temp.role(10), 'DA-2: com a função padrão');
 SELECT is(pg_temp.val(1, 'SELECT members_without_leader FROM public.dashboard_summary()')::int,
   (SELECT n + 1 FROM no_leader0), 'RN-16 d: até definir o líder, Bruno conta em "sem liderança"');
@@ -571,6 +576,7 @@ SELECT is(pg_temp.code(pg_temp.try(1, format($$UPDATE public.members SET email =
 SET LOCAL session_replication_role = replica;
 UPDATE public.members SET email = 'bruno@e201-03.invalid' WHERE id = pg_temp.m(18);
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(23)))), 'restore_value_in_use',
   'RN-16 e: com o e-mail de Bruno em outro cadastro, restaurá-lo é recusado');
 

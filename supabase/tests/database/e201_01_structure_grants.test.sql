@@ -352,29 +352,29 @@ SELECT ok(EXISTS (SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND tgrelid = 
                ('public.cells', 'aa_enforce_cell_links'),
                ('public.cell_reports', 'aa_enforce_cell_report_rules'),
                ('public.cell_report_participants', 'aa_enforce_participant_rules')) AS t(rel, trg);
-SELECT ok(pg_get_triggerdef(t.oid) LIKE '%UPDATE OF leader_id, is_active, deleted_at%',
-          t.tgname || ': totais também em UPDATE OF deleted_at (DT-24)')
-  FROM pg_trigger t WHERE t.tgname IN ('trg_refresh_stats_members', 'trg_refresh_stats_cells');
+SELECT ok(pg_get_triggerdef(t.oid) ~ 'UPDATE OF .*deleted_at',
+          t.tgname || ': totais também em UPDATE OF deleted_at (DT-24; E2.06: os triggers da hierarquia)')
+  FROM pg_trigger t WHERE t.tgname IN ('trg_member_hierarchy', 'trg_cell_hierarchy');
 SELECT ok(pg_get_triggerdef(t.oid) LIKE 'CREATE TRIGGER aa_enforce_participant_rules BEFORE INSERT OR DELETE%',
           'aa_enforce_participant_rules: BEFORE INSERT OR DELETE (RN-13)')
   FROM pg_trigger t WHERE t.tgname = 'aa_enforce_participant_rules';
 SELECT ok('restore' = ANY(enum_range(NULL::public.event_action)::text[]),
   'event_action tem o valor restore (AQ-9)');
-SELECT ok((SELECT prosecdef FROM pg_proc WHERE oid = 'public.refresh_member_stats_v2()'::regprocedure)
+SELECT ok((SELECT prosecdef FROM pg_proc WHERE oid = 'public._hierarchy_on_member()'::regprocedure)
           AND (SELECT 'search_path=public' = ANY(proconfig) FROM pg_proc
-                WHERE oid = 'public.refresh_member_stats_v2()'::regprocedure),
-  'refresh_member_stats_v2: SECURITY DEFINER com search_path fixo (DT-24)');
+                WHERE oid = 'public._hierarchy_on_member()'::regprocedure),
+  '_hierarchy_on_member: SECURITY DEFINER com search_path fixo (DT-24; E2.06 no lugar de refresh_member_stats_v2)');
 
 -- ===========================================================================
 -- 9. Violações diretas como postgres (critério de pronto 2) — 14
 -- ===========================================================================
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, spouse_id, is_active) VALUES
-  (pg_temp.m(1), 'E201 Est Líder',    'M', false, 1, NULL, false,         NULL,         true),
-  (pg_temp.m(2), 'E201 Est Discípulo','M', false, 2, pg_temp.m(1), true, NULL,         true),
-  (pg_temp.m(3), 'E201 Est Marido',   'M', false, 0, NULL, false,         pg_temp.m(4), true),
-  (pg_temp.m(4), 'E201 Est Esposa',   'F', false, 0, NULL, false,         pg_temp.m(3), true),
-  (pg_temp.m(5), 'E201 Est Solo',     'M', false, 0, NULL, false,         NULL,         true);
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, spouse_id, is_active) VALUES
+  (pg_temp.m(1), 'E201 Est Líder',    'M', false, NULL, false,         NULL,         true),
+  (pg_temp.m(2), 'E201 Est Discípulo','M', false, pg_temp.m(1), true, NULL,         true),
+  (pg_temp.m(3), 'E201 Est Marido',   'M', false, NULL, false,         pg_temp.m(4), true),
+  (pg_temp.m(4), 'E201 Est Esposa',   'F', false, NULL, false,         pg_temp.m(3), true),
+  (pg_temp.m(5), 'E201 Est Solo',     'M', false, NULL, false,         NULL,         true);
 INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time) VALUES
   (pg_temp.c(1), pg_temp.m(1), 'Evangelística', 'Quarta', '20:00'),
   (pg_temp.c(2), pg_temp.m(5), 'Evangelística', 'Quinta', '20:00');
@@ -409,6 +409,7 @@ SELECT lives_ok(format($$INSERT INTO public.cell_reports (id, cell_id, date, tim
                          VALUES (%L, %L, '2026-11-08', '20:00', 'Semana seguinte', true)$$, pg_temp.r(4), pg_temp.c(1)),
   'índice único: domingo seguinte é outra semana (limite domingo 00:00)');
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- FK do autor (as FKs não valem com replica: conferidas depois do origin).
 SELECT throws_ok(format('UPDATE public.cells SET deleted_by = %L WHERE id = %L', gen_random_uuid(), pg_temp.c(2)),

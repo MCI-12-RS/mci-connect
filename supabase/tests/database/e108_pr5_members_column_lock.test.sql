@@ -50,7 +50,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(134);
+SELECT plan(129);
 
 -- ---------------------------------------------------------------------------
 -- Ids fixos da massa: a(uth), b (roles), c (membros), d (células), e (relatórios).
@@ -76,13 +76,12 @@ $$;
 CREATE FUNCTION pg_temp.sensitive_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
 $$ SELECT ARRAY['complement', 'cpf', 'email', 'mobile_whatsapp', 'number', 'phone', 'street', 'zip_code'] $$;
 
--- As 25 colunas não sensíveis que a trava libera (lista do spec, PR 5, sem a
--- role_id desde o E2.02 PR 6).
+-- As 20 colunas não sensíveis que a trava libera (lista do spec, PR 5, sem a
+-- role_id desde o E2.02 PR 6 e sem as cinco calculadas desde o E2.06 PR 1).
 CREATE FUNCTION pg_temp.readable_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
 $$ SELECT ARRAY['id', 'name', 'gender', 'birth_date', 'instagram', 'avatar_url', 'notes',
                 'neighborhood', 'city', 'state', 'is_pastor', 'has_leadership', 'leader_id', 'spouse_id',
-                'is_baptized', 'baptism_date', 'is_active', 'g12_level', 'total_disciples', 'total_cells',
-                'male_cells', 'female_cells', 'auth_user_id', 'created_at', 'updated_at'] $$;
+                'is_baptized', 'baptism_date', 'is_active', 'auth_user_id', 'created_at', 'updated_at'] $$;
 
 -- A coluna da função (E2.02 PR 6, RN-23): sem SELECT, mascarada na view por
 -- "Atribuir Função"/"Gerenciar Funções".
@@ -214,25 +213,25 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 --   Ministério B: Bruno (05, G12, P2) → Bento (10), Bia (11), Davi (12),
 --     Clara (13, cadastra), Pedro (14, sem função), Nuno (16), Rui (17)
 INSERT INTO public.members
-  (id, name, gender, is_pastor, g12_level, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id)
+  (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id)
 VALUES
-  (pg_temp.m(1),  'Paulo Pastor',      'M', true,  0, NULL,         pg_temp.m(2), true, false, NULL,         NULL),
-  (pg_temp.m(2),  'Priscila Pastora',  'F', true,  0, NULL,         pg_temp.m(1), true, false, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(3),  'André Alves',       'M', false, 1, pg_temp.m(1), pg_temp.m(4), true, true,  pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(4),  'Ana Alves',         'F', false, 1, pg_temp.m(2), pg_temp.m(3), true, true,  NULL,         NULL),
-  (pg_temp.m(5),  'Bruno Borges',      'M', false, 1, pg_temp.m(1), NULL,         true, true,  pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(6),  'Antônio Araújo',    'M', false, 2, pg_temp.m(3), NULL,         true, true,  pg_temp.u(4), pg_temp.role(4)),
-  (pg_temp.m(7),  'Xênia Completa',    'F', false, 2, pg_temp.m(4), pg_temp.m(8), true, true,  pg_temp.u(8), pg_temp.role(4)),
-  (pg_temp.m(8),  'Marcos Moura',      'M', false, 2, pg_temp.m(3), pg_temp.m(7), true, true,  NULL,         NULL),
-  (pg_temp.m(9),  'Edite Edição',      'F', false, 2, pg_temp.m(3), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(10), 'Bento Barros',      'M', false, 2, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(11), 'Bia Barros',        'F', false, 2, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(12), 'Davi Delete',       'M', false, 2, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(13), 'Clara Cadastro',    'F', false, 2, pg_temp.m(5), NULL,         true, true,  pg_temp.u(5), pg_temp.role(5)),
-  (pg_temp.m(14), 'Pedro Sem Função',  'M', false, 2, pg_temp.m(5), NULL,         true, true,  pg_temp.u(6), NULL),
-  (pg_temp.m(15), 'Lia Lista',         'F', false, 2, pg_temp.m(3), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(16), 'Nuno Notas',        'M', false, 2, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
-  (pg_temp.m(17), 'Rui Retorno',       'M', false, 2, pg_temp.m(5), NULL,         true, true,  NULL,         NULL);
+  (pg_temp.m(1),  'Paulo Pastor',      'M', true, NULL,         pg_temp.m(2), true, false, NULL,         NULL),
+  (pg_temp.m(2),  'Priscila Pastora',  'F', true, NULL,         pg_temp.m(1), true, false, pg_temp.u(1), pg_temp.role(1)),
+  (pg_temp.m(3),  'André Alves',       'M', false, pg_temp.m(1), pg_temp.m(4), true, true,  pg_temp.u(3), pg_temp.role(3)),
+  (pg_temp.m(4),  'Ana Alves',         'F', false, pg_temp.m(2), pg_temp.m(3), true, true,  NULL,         NULL),
+  (pg_temp.m(5),  'Bruno Borges',      'M', false, pg_temp.m(1), NULL,         true, true,  pg_temp.u(2), pg_temp.role(2)),
+  (pg_temp.m(6),  'Antônio Araújo',    'M', false, pg_temp.m(3), NULL,         true, true,  pg_temp.u(4), pg_temp.role(4)),
+  (pg_temp.m(7),  'Xênia Completa',    'F', false, pg_temp.m(4), pg_temp.m(8), true, true,  pg_temp.u(8), pg_temp.role(4)),
+  (pg_temp.m(8),  'Marcos Moura',      'M', false, pg_temp.m(3), pg_temp.m(7), true, true,  NULL,         NULL),
+  (pg_temp.m(9),  'Edite Edição',      'F', false, pg_temp.m(3), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(10), 'Bento Barros',      'M', false, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(11), 'Bia Barros',        'F', false, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(12), 'Davi Delete',       'M', false, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(13), 'Clara Cadastro',    'F', false, pg_temp.m(5), NULL,         true, true,  pg_temp.u(5), pg_temp.role(5)),
+  (pg_temp.m(14), 'Pedro Sem Função',  'M', false, pg_temp.m(5), NULL,         true, true,  pg_temp.u(6), NULL),
+  (pg_temp.m(15), 'Lia Lista',         'F', false, pg_temp.m(3), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(16), 'Nuno Notas',        'M', false, pg_temp.m(5), NULL,         true, true,  NULL,         NULL),
+  (pg_temp.m(17), 'Rui Retorno',       'M', false, pg_temp.m(5), NULL,         true, true,  NULL,         NULL);
 
 -- Dados sensíveis (fictícios; os CPFs têm dígitos verificadores válidos).
 UPDATE public.members SET email = 'priscila.pr5@teste.invalid', cpf = '10850000289', mobile_whatsapp = '51990000002'
@@ -246,8 +245,7 @@ UPDATE public.members SET
   street = 'Rua Sigilosa', number = '700', complement = 'Apto 7', zip_code = '90000-007',
   birth_date = '1990-07-07', notes = 'Observação da Xênia', instagram = '@xenia.pr5',
   avatar_url = 'https://exemplo.invalid/xenia.png', neighborhood = 'Centro', city = 'Porto Alegre', state = 'RS',
-  is_baptized = true, baptism_date = '2010-07-07',
-  total_disciples = 0, total_cells = 0, male_cells = 0, female_cells = 0
+  is_baptized = true, baptism_date = '2010-07-07'
  WHERE id = pg_temp.m(7);
 UPDATE public.members SET email = 'edite.pr5@teste.invalid', cpf = '10850000955', mobile_whatsapp = '51990000009'
  WHERE id = pg_temp.m(9);
@@ -269,6 +267,7 @@ VALUES (pg_temp.r(1), pg_temp.c(1), '2026-11-02', '20:00', true, 'Tema PR5', ARR
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (pg_temp.r(1), pg_temp.m(7));
 
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Os valores sensíveis da Xênia, lidos como dono da tabela (P1 compara com a view).
 CREATE TEMP TABLE xenia_sensitive AS
@@ -307,7 +306,7 @@ SELECT ok(NOT has_table_privilege('authenticated', 'public.members', 'DELETE'),
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.members'::regclass),
   'members: o RLS continua ligado');
 
-SELECT * FROM pg_temp.column_privilege_checks();   -- 25 + 8 + 1
+SELECT * FROM pg_temp.column_privilege_checks();   -- 20 + 8 + 1
 
 SELECT is(
   ARRAY(SELECT c FROM pg_temp.member_columns() c WHERE has_column_privilege('anon', 'public.members', c, 'SELECT')),
@@ -347,7 +346,7 @@ SELECT is(
 SELECT is(
   ARRAY(SELECT c FROM unnest(pg_temp.readable_columns() || pg_temp.sensitive_columns() || pg_temp.role_columns()) c
          WHERE coalesce((SELECT j FROM pg_temp.xenia_row) -> c, 'null'::jsonb) = 'null'::jsonb ORDER BY c),
-  '{}'::text[], 'massa: a Xênia tem as 34 colunas (25 liberadas, 8 sensíveis e a role_id) preenchidas');
+  '{}'::text[], 'massa: a Xênia tem as 29 colunas (20 liberadas, 8 sensíveis e a role_id) preenchidas');
 
 -- P2, sem view_sensitive_data nem "Atribuir Função"
 SELECT pg_temp.login(2);
@@ -517,8 +516,9 @@ SELECT throws_ok(
 RESET ROLE;
 
 SELECT results_eq(
-  format($$ SELECT name, email, cpf, mobile_whatsapp, street, zip_code, auth_user_id, g12_level
-              FROM public.members WHERE id = %L $$, pg_temp.m(20)),
+  format($$ SELECT m.name, m.email, m.cpf, m.mobile_whatsapp, m.street, m.zip_code, m.auth_user_id, h.g12_level
+              FROM public.members m JOIN private.member_hierarchy h ON h.member_id = m.id
+             WHERE m.id = %L $$, pg_temp.m(20)),
   format($$ VALUES ('Nina Nova'::text, 'nina.pr5@teste.invalid'::text, '10850002060'::text, '51990000020'::text,
                     'Rua Nova'::text, '90000-020'::text, %L::uuid, 2) $$, pg_temp.u(7)),
   'Cadastro: todos os campos gravados, inclusive os sensíveis, com g12_level calculado (RN-12)');
@@ -585,12 +585,12 @@ SELECT lives_ok(format($$ UPDATE public.members SET leader_id = %L WHERE id = %L
 SELECT lives_ok(format($$ UPDATE public.members SET spouse_id = %L WHERE id = %L $$, pg_temp.m(11), pg_temp.m(10)),
   'P1: definir a Bia como cônjuge do Bento é aceito');
 RESET ROLE;
-SELECT is((SELECT g12_level FROM public.members WHERE id = pg_temp.m(10)), 3,
-  'compute_g12_level: o Bento passa ao nível 3');
+SELECT is((SELECT g12_level FROM private.member_hierarchy WHERE member_id = pg_temp.m(10)), 3,
+  'hierarquia (E2.06): o Bento passa ao nível 3');
 SELECT is((SELECT spouse_id FROM public.members WHERE id = pg_temp.m(11)), pg_temp.m(10),
   'sync_spouse_relationship: a Bia passa a ter o Bento como cônjuge');
-SELECT is((SELECT total_disciples FROM public.members WHERE id = pg_temp.m(6)), 1,
-  'refresh_member_stats_v2: o Antônio passa a ter 1 discípulo');
+SELECT is((SELECT total_disciples FROM private.member_hierarchy WHERE member_id = pg_temp.m(6)), 1,
+  'hierarquia (E2.06): o Antônio passa a ter 1 discípulo');
 SELECT ok(EXISTS (SELECT 1 FROM public.events
                    WHERE action = 'update' AND entity = 'member' AND entity_id = pg_temp.m(10)
                      AND actor_user_id = pg_temp.u(1) AND 'leader_id' = ANY (changed_fields)),

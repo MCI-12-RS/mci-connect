@@ -119,44 +119,45 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 --     Hugo (29) com a cônjuge Helena (30) inativa. Carlos & Clara (31, 32).
 --     Júlia & Joana (33, 34), duas mulheres de nível 1.
 INSERT INTO public.members
-  (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, spouse_id, is_active, is_baptized, auth_user_id, role_id)
+  (id, name, gender, is_pastor, leader_id, has_leadership, spouse_id, is_active, is_baptized, auth_user_id, role_id)
 VALUES
-  (pg_temp.m(1),  'Paulo Pastor',        'M', true,  0, NULL, false,          pg_temp.m(2),  true,  true,  NULL,          NULL),
-  (pg_temp.m(2),  'Priscila Pastora',    'F', true,  0, NULL, false,          pg_temp.m(1),  true,  true,  pg_temp.u(1),  pg_temp.role(1)),
-  (pg_temp.m(3),  'André Alencar',       'M', false, 1, pg_temp.m(1), true,  pg_temp.m(4),  true,  true,  NULL,          NULL),
-  (pg_temp.m(4),  'Ana Alencar',         'F', false, 1, pg_temp.m(2), true,  pg_temp.m(3),  true,  true,  NULL,          NULL),
-  (pg_temp.m(5),  'Arthur Assis',        'M', false, 2, pg_temp.m(3), true,  NULL,          true,  true,  pg_temp.u(3),  pg_temp.role(3)),
-  (pg_temp.m(6),  'Lia Lima',            'F', false, 2, pg_temp.m(4), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(7),  'Tito Teixeira',       'M', false, 2, pg_temp.m(3), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(8),  'Hana Hora',           'F', false, 2, pg_temp.m(4), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(9),  'Paulo Trinta',        'M', false, 2, pg_temp.m(3), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(10), 'Pedro Trinta e Um',   'M', false, 2, pg_temp.m(3), true,  NULL,          true,  false, NULL,          NULL),
-  (pg_temp.m(11), 'Iara Ivo',            'F', false, 2, pg_temp.m(4), true,  NULL,          true,  false, NULL,          NULL),
-  (pg_temp.m(12), 'Nina Nunes',          'F', false, 2, pg_temp.m(4), true,  NULL,          true,  false, pg_temp.u(10), pg_temp.role(10)),
-  (pg_temp.m(13), 'Igor Inácio',         'M', false, 2, pg_temp.m(3), true,  NULL,          false, true,  NULL,          NULL),
-  (pg_temp.m(14), 'Bruno Barros',        'M', false, 1, pg_temp.m(1), true,  NULL,          true,  true,  pg_temp.u(2),  pg_temp.role(2)),
-  (pg_temp.m(15), 'Breno Batista',       'M', false, 2, pg_temp.m(14), true, NULL,          true,  true,  pg_temp.u(4),  pg_temp.role(4)),
-  (pg_temp.m(16), 'Rui Ramos',           'M', false, 1, pg_temp.m(1), true,  pg_temp.m(17), true,  true,  NULL,          NULL),
-  (pg_temp.m(17), 'Rita Ramos',          'F', false, 1, pg_temp.m(2), true,  pg_temp.m(16), true,  true,  NULL,          NULL),
-  (pg_temp.m(18), 'Renan Rocha',         'M', false, 2, pg_temp.m(16), true, NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(19), 'Rosa Reis',           'F', false, 2, pg_temp.m(17), true, NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(20), 'Raquel Rios',         'F', false, 3, pg_temp.m(18), true, NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(21), 'Eduardo Esteves',     'M', false, 1, pg_temp.m(1), true,  pg_temp.m(22), true,  true,  pg_temp.u(7),  pg_temp.role(7)),
-  (pg_temp.m(22), 'Lea Esteves',         'F', false, 1, pg_temp.m(2), true,  pg_temp.m(21), true,  true,  NULL,          NULL),
-  (pg_temp.m(23), 'Rafael Rangel',       'M', false, 2, pg_temp.m(21), true, NULL,          true,  true,  pg_temp.u(9),  NULL),
-  (pg_temp.m(24), 'Carla Costa',         'F', false, 1, pg_temp.m(2), true,  pg_temp.m(25), true,  true,  NULL,          NULL),
-  (pg_temp.m(25), 'Davi Costa',          'M', false, 3, pg_temp.m(27), true, pg_temp.m(24), true,  true,  NULL,          NULL),
-  (pg_temp.m(26), 'Fábio Freitas',       'M', false, 1, pg_temp.m(1), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(27), 'Gil Gomes',           'M', false, 2, pg_temp.m(26), true, NULL,          true,  true,  pg_temp.u(6),  pg_temp.role(6)),
-  (pg_temp.m(28), 'Eva Elias',           'F', false, 1, pg_temp.m(2), true,  NULL,          true,  true,  NULL,          NULL),
-  (pg_temp.m(29), 'Hugo Horta',          'M', false, 1, pg_temp.m(1), true,  pg_temp.m(30), true,  true,  NULL,          NULL),
-  (pg_temp.m(30), 'Helena Horta',        'F', false, 1, pg_temp.m(2), true,  pg_temp.m(29), false, true,  NULL,          NULL),
-  (pg_temp.m(31), 'Carlos Cunha',        'M', false, 1, pg_temp.m(1), true,  pg_temp.m(32), true,  true,  pg_temp.u(5),  pg_temp.role(5)),
-  (pg_temp.m(32), 'Clara Cunha',         'F', false, 1, pg_temp.m(2), true,  pg_temp.m(31), true,  true,  NULL,          NULL),
-  (pg_temp.m(33), 'Júlia Jardim',        'F', false, 1, pg_temp.m(2), true,  pg_temp.m(34), true,  true,  NULL,          NULL),
-  (pg_temp.m(34), 'Joana Jardim',        'F', false, 1, pg_temp.m(2), true,  pg_temp.m(33), true,  true,  NULL,          NULL);
+  (pg_temp.m(1),  'Paulo Pastor',        'M', true, NULL, false,          pg_temp.m(2),  true,  true,  NULL,          NULL),
+  (pg_temp.m(2),  'Priscila Pastora',    'F', true, NULL, false,          pg_temp.m(1),  true,  true,  pg_temp.u(1),  pg_temp.role(1)),
+  (pg_temp.m(3),  'André Alencar',       'M', false, pg_temp.m(1), true,  pg_temp.m(4),  true,  true,  NULL,          NULL),
+  (pg_temp.m(4),  'Ana Alencar',         'F', false, pg_temp.m(2), true,  pg_temp.m(3),  true,  true,  NULL,          NULL),
+  (pg_temp.m(5),  'Arthur Assis',        'M', false, pg_temp.m(3), true,  NULL,          true,  true,  pg_temp.u(3),  pg_temp.role(3)),
+  (pg_temp.m(6),  'Lia Lima',            'F', false, pg_temp.m(4), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(7),  'Tito Teixeira',       'M', false, pg_temp.m(3), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(8),  'Hana Hora',           'F', false, pg_temp.m(4), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(9),  'Paulo Trinta',        'M', false, pg_temp.m(3), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(10), 'Pedro Trinta e Um',   'M', false, pg_temp.m(3), true,  NULL,          true,  false, NULL,          NULL),
+  (pg_temp.m(11), 'Iara Ivo',            'F', false, pg_temp.m(4), true,  NULL,          true,  false, NULL,          NULL),
+  (pg_temp.m(12), 'Nina Nunes',          'F', false, pg_temp.m(4), true,  NULL,          true,  false, pg_temp.u(10), pg_temp.role(10)),
+  (pg_temp.m(13), 'Igor Inácio',         'M', false, pg_temp.m(3), true,  NULL,          false, true,  NULL,          NULL),
+  (pg_temp.m(14), 'Bruno Barros',        'M', false, pg_temp.m(1), true,  NULL,          true,  true,  pg_temp.u(2),  pg_temp.role(2)),
+  (pg_temp.m(15), 'Breno Batista',       'M', false, pg_temp.m(14), true, NULL,          true,  true,  pg_temp.u(4),  pg_temp.role(4)),
+  (pg_temp.m(16), 'Rui Ramos',           'M', false, pg_temp.m(1), true,  pg_temp.m(17), true,  true,  NULL,          NULL),
+  (pg_temp.m(17), 'Rita Ramos',          'F', false, pg_temp.m(2), true,  pg_temp.m(16), true,  true,  NULL,          NULL),
+  (pg_temp.m(18), 'Renan Rocha',         'M', false, pg_temp.m(16), true, NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(19), 'Rosa Reis',           'F', false, pg_temp.m(17), true, NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(20), 'Raquel Rios',         'F', false, pg_temp.m(18), true, NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(21), 'Eduardo Esteves',     'M', false, pg_temp.m(1), true,  pg_temp.m(22), true,  true,  pg_temp.u(7),  pg_temp.role(7)),
+  (pg_temp.m(22), 'Lea Esteves',         'F', false, pg_temp.m(2), true,  pg_temp.m(21), true,  true,  NULL,          NULL),
+  (pg_temp.m(23), 'Rafael Rangel',       'M', false, pg_temp.m(21), true, NULL,          true,  true,  pg_temp.u(9),  NULL),
+  (pg_temp.m(24), 'Carla Costa',         'F', false, pg_temp.m(2), true,  pg_temp.m(25), true,  true,  NULL,          NULL),
+  (pg_temp.m(25), 'Davi Costa',          'M', false, pg_temp.m(27), true, pg_temp.m(24), true,  true,  NULL,          NULL),
+  (pg_temp.m(26), 'Fábio Freitas',       'M', false, pg_temp.m(1), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(27), 'Gil Gomes',           'M', false, pg_temp.m(26), true, NULL,          true,  true,  pg_temp.u(6),  pg_temp.role(6)),
+  (pg_temp.m(28), 'Eva Elias',           'F', false, pg_temp.m(2), true,  NULL,          true,  true,  NULL,          NULL),
+  (pg_temp.m(29), 'Hugo Horta',          'M', false, pg_temp.m(1), true,  pg_temp.m(30), true,  true,  NULL,          NULL),
+  (pg_temp.m(30), 'Helena Horta',        'F', false, pg_temp.m(2), true,  pg_temp.m(29), false, true,  NULL,          NULL),
+  (pg_temp.m(31), 'Carlos Cunha',        'M', false, pg_temp.m(1), true,  pg_temp.m(32), true,  true,  pg_temp.u(5),  pg_temp.role(5)),
+  (pg_temp.m(32), 'Clara Cunha',         'F', false, pg_temp.m(2), true,  pg_temp.m(31), true,  true,  NULL,          NULL),
+  (pg_temp.m(33), 'Júlia Jardim',        'F', false, pg_temp.m(2), true,  pg_temp.m(34), true,  true,  NULL,          NULL),
+  (pg_temp.m(34), 'Joana Jardim',        'F', false, pg_temp.m(2), true,  pg_temp.m(33), true,  true,  NULL,          NULL);
 
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Semana de referência W: domingo 2026-03-01 a sábado 2026-03-07.
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active) VALUES
@@ -209,8 +210,8 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
 
 SET LOCAL session_replication_role = replica;
 
--- Eva com male_cells nulo (o ranking trata como 0).
-UPDATE public.members SET male_cells = NULL WHERE id = pg_temp.m(28);
+-- (E2.06: os totais saíram de members e são NOT NULL em private.member_hierarchy; o caso
+-- "male_cells nulo" do ranking não existe mais, e o coalesce da RPC fica só como proteção.)
 
 -- Relatórios. 01 a 05 em datas fixas, sem participantes; 06 a 08 relativos a
 -- hoje (vínculo celular, MEM-14), em células que nunca contam como pendentes.
@@ -233,6 +234,7 @@ INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(8), pg_temp.m(11));  -- Iara: célula do ministério B, invisível para P3 (conta)
 
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- ---------------------------------------------------------------------------
 -- Conjuntos calculados como postgres, sem escopo, para a paridade (RN-05):
@@ -323,8 +325,8 @@ BEGIN
   RETURN NEXT set_eq(
     $q$ SELECT k::uuid
           FROM public.dashboard_g12_ranking() g, unnest(string_to_array(g.couple_key, '|')) k
-         WHERE k::uuid IN (SELECT id FROM public.members WHERE g12_level = 1 AND is_active) $q$,
-    'SELECT id FROM public.members WHERE g12_level = 1 AND is_active',
+         WHERE k::uuid IN (SELECT id FROM public.members_view WHERE g12_level = 1 AND is_active) $q$,
+    'SELECT id FROM public.members_view WHERE g12_level = 1 AND is_active',
     _who || ': ranking traz cada G12 ativo e visível em members sob RLS (RN-05)');
 
   RETURN NEXT is_empty(
@@ -336,7 +338,7 @@ BEGIN
   RETURN NEXT is(
     (SELECT coalesce(sum(total_cells), 0)::numeric FROM public.dashboard_g12_ranking()),
     (SELECT coalesce(sum(coalesce(male_cells, 0) + coalesce(female_cells, 0)), 0)::numeric
-       FROM public.members WHERE g12_level = 1 AND is_active),
+       FROM public.members_view WHERE g12_level = 1 AND is_active),
     _who || ': total do ranking = soma das células dos G12 ativos e visíveis, sem dupla contagem (RN-05)');
 END $$;
 
@@ -442,7 +444,9 @@ RESET ROLE;
 
 -- A massa ficou como planejado (o trigger de estatísticas calculou as células).
 SELECT results_eq(
-  format($$ SELECT name, male_cells, female_cells FROM public.members WHERE id = ANY(%L::uuid[]) ORDER BY name $$,
+  format($$ SELECT m.name, h.male_cells, h.female_cells FROM public.members m
+              JOIN private.member_hierarchy h ON h.member_id = m.id
+             WHERE m.id = ANY(%L::uuid[]) ORDER BY m.name $$,
          pg_temp.ms(3, 4, 16, 17, 18, 19)),
   $$ VALUES ('Ana Alencar'::text, 0, 1), ('André Alencar'::text, 12, 0), ('Renan Rocha'::text, 2, 1),
             ('Rita Ramos'::text, 0, 3), ('Rosa Reis'::text, 0, 3), ('Rui Ramos'::text, 3, 1) $$,
@@ -810,20 +814,21 @@ RESET ROLE;
 -- Sem líder: um pastor ativo, um não pastor ativo e um não pastor inativo.
 -- Mais 1.100 membros, 1.100 células e 1.100 relatórios em W (RN-02).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, is_active, is_baptized) VALUES
-  (pg_temp.m(40), 'Pastor Sem Líder',     'M', true,  0, NULL, false, true,  true),
-  (pg_temp.m(41), 'Membro Sem Líder',     'F', false, 0, NULL, false, true,  false),
-  (pg_temp.m(42), 'Inativo Sem Líder',    'M', false, 0, NULL, false, false, false);
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active, is_baptized) VALUES
+  (pg_temp.m(40), 'Pastor Sem Líder',     'M', true, NULL, false, true,  true),
+  (pg_temp.m(41), 'Membro Sem Líder',     'F', false, NULL, false, true,  false),
+  (pg_temp.m(42), 'Inativo Sem Líder',    'M', false, NULL, false, false, false);
 -- As células de volume são de segunda 20:00: na quarta ao meio-dia já estariam
 -- pendentes, se não fosse o relatório de quarta.
-INSERT INTO public.members (id, name, gender, g12_level, leader_id, has_leadership, is_active, is_baptized)
-SELECT pg_temp.m(1000 + n), 'Volume ' || n, 'F', 3, pg_temp.m(19), true, true, true FROM generate_series(1, 1100) n;
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, is_baptized)
+SELECT pg_temp.m(1000 + n), 'Volume ' || n, 'F', pg_temp.m(19), true, true, true FROM generate_series(1, 1100) n;
 INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time, is_active)
 SELECT pg_temp.c(1000 + n), pg_temp.m(1000 + n), 'Evangelística', 'Segunda', '20:00', true FROM generate_series(1, 1100) n;
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, visitors, was_held)
 SELECT pg_temp.r(1000 + n), pg_temp.c(1000 + n), '2026-03-04', '20:00', 'Volume', ARRAY['V'], true
   FROM generate_series(1, 1100) n;
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Os conjuntos da paridade, recalculados com o volume.
 TRUNCATE pg_temp.linked_members, pg_temp.cell_last_report;

@@ -176,15 +176,15 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
  (pg_temp.c(3), pg_temp.m(13), pg_temp.m(20), pg_temp.m(21), 'Evangelística', 'Terça', '19:30');
 -- Casos extras, isolados da árvore principal (só Rita e eles mesmos os veem).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, auth_user_id, role_id, is_active, has_leadership, g12_level) VALUES
- (pg_temp.m(30),'Ciclo1','M',false,pg_temp.m(31),NULL,pg_temp.u(30),pg_temp.role('Membro'),true,true,1),
- (pg_temp.m(31),'Ciclo2','F',false,pg_temp.m(30),NULL,NULL,NULL,true,true,1),
- (pg_temp.m(32),'Assim1','M',false,NULL,pg_temp.m(33),pg_temp.u(32),pg_temp.role('Membro'),true,false,0),
- (pg_temp.m(33),'Assim2','F',false,NULL,NULL,NULL,NULL,true,false,0),
- (pg_temp.m(35),'Isolado','M',false,NULL,NULL,NULL,NULL,true,false,0),
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, auth_user_id, role_id, is_active, has_leadership) VALUES
+ (pg_temp.m(30),'Ciclo1','M',false,pg_temp.m(31),NULL,pg_temp.u(30),pg_temp.role('Membro'),true,true),
+ (pg_temp.m(31),'Ciclo2','F',false,pg_temp.m(30),NULL,NULL,NULL,true,true),
+ (pg_temp.m(32),'Assim1','M',false,NULL,pg_temp.m(33),pg_temp.u(32),pg_temp.role('Membro'),true,false),
+ (pg_temp.m(33),'Assim2','F',false,NULL,NULL,NULL,NULL,true,false),
+ (pg_temp.m(35),'Isolado','M',false,NULL,NULL,NULL,NULL,true,false),
 -- E2.04 (RN-11): pastor com líder deixou de existir (members_leadership_check vale
 -- também em replica). PastorComLider fica pastor sem líder, ao lado de Isolado.
- (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false,0);
+ (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false);
 -- Relatórios da semana passada (a semana atual fica livre para os lançamentos).
 INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
  (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1'),
@@ -193,6 +193,7 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUE
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
  (pg_temp.r(2), pg_temp.m(14)), (pg_temp.r(2), pg_temp.m(15)), (pg_temp.r(1), pg_temp.m(9));
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 
 -- Cenário isolado: roda _setup (como postgres), avalia cada sonda (SQL que

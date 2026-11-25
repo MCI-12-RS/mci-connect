@@ -213,6 +213,7 @@ INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(71), pg_temp.m(32)),
   (pg_temp.r(72), pg_temp.m(28)), (pg_temp.r(72), pg_temp.m(27));
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- ===========================================================================
 -- 1. RN-01 e RN-02: excluir célula e relatório — 14
@@ -532,12 +533,12 @@ SELECT is(pg_temp.try(1, format('SELECT public.restore_cell(%L)', pg_temp.c(2)))
   'DA-5: os detalhes trazem todas');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(26)))), '00000', 'RN-17: Rui é restaurado');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(25)))), '00000', 'RN-17: Quintino é restaurado');
-CREATE TEMP TABLE rui0 AS SELECT total_cells FROM public.members WHERE id = pg_temp.m(26);
+CREATE TEMP TABLE rui0 AS SELECT total_cells FROM private.member_hierarchy WHERE member_id = pg_temp.m(26);
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.restore_cell(%L)', pg_temp.c(2)))), '00000',
   'RN-17: com líder, timóteo e anfitrião não excluídos, a célula é restaurada');
 SELECT is(pg_temp.val(4, format('SELECT count(*) FROM public.cells_view WHERE id = %L', pg_temp.c(2))), '1',
   'RN-17: ela volta às listas');
-SELECT is((SELECT total_cells FROM public.members WHERE id = pg_temp.m(26)), (SELECT total_cells + 1 FROM rui0),
+SELECT is((SELECT total_cells FROM private.member_hierarchy WHERE member_id = pg_temp.m(26)), (SELECT total_cells + 1 FROM rui0),
   'RN-17/RN-10: e aos totais');
 SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Editável de novo' WHERE id = %L$$, pg_temp.r(20))) ->> 'rows',
   '1', 'RN-17: os relatórios dela voltam a poder ser editados');
@@ -598,6 +599,7 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_cell_report(%
 SET LOCAL session_replication_role = replica;
 UPDATE public.members SET leader_id = pg_temp.m(27) WHERE id = pg_temp.m(37);
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 SELECT is(pg_temp.try(1, format($$UPDATE public.members SET notes = 'Dado do legado' WHERE id = %L$$, pg_temp.m(37))) ->> 'rows',
   '1', 'RN-06: um cadastro do legado com líder excluído pode ter outros campos editados (só o que muda é conferido)');
 

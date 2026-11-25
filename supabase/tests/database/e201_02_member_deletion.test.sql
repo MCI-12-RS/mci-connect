@@ -122,9 +122,10 @@ $$;
 -- Estado da massa deste arquivo (para "nada muda").
 CREATE FUNCTION pg_temp.snap() RETURNS text LANGUAGE sql STABLE AS $$
   SELECT md5(
-    coalesce((SELECT string_agg(concat_ws('|', id, name, leader_id, spouse_id, role_id, is_active,
-                                          deleted_at, deleted_by, total_disciples, total_cells), ';' ORDER BY id)
-                FROM public.members WHERE id::text LIKE 'c2010200%'), '')
+    coalesce((SELECT string_agg(concat_ws('|', m.id, m.name, m.leader_id, m.spouse_id, m.role_id, m.is_active,
+                                          m.deleted_at, m.deleted_by, h.total_disciples, h.total_cells), ';' ORDER BY id)
+                FROM public.members m LEFT JOIN private.member_hierarchy h ON h.member_id = m.id
+               WHERE m.id::text LIKE 'c2010200%'), '')
  || coalesce((SELECT string_agg(concat_ws('|', id, leader_id, timothy_id, host_id, is_active, deleted_at, deleted_by), ';' ORDER BY id)
                 FROM public.cells WHERE id::text LIKE 'd2010200%'), '')
  || coalesce((SELECT string_agg(concat_ws('|', id, cell_id, date, deleted_at, deleted_by), ';' ORDER BY id)
@@ -132,8 +133,12 @@ CREATE FUNCTION pg_temp.snap() RETURNS text LANGUAGE sql STABLE AS $$
  || coalesce((SELECT count(*)::text FROM public.cell_report_participants WHERE report_id::text LIKE 'e2010200%'), ''))
 $$;
 
-CREATE FUNCTION pg_temp.mem(_n int) RETURNS public.members LANGUAGE sql STABLE AS
-$$ SELECT * FROM public.members WHERE id = pg_temp.m(_n) $$;
+-- E2.06: os totais e o nível saíram de members; a linha de teste junta a tabela nova.
+CREATE TEMP VIEW mem_h AS
+  SELECT m.*, h.g12_level, h.total_disciples, h.total_cells, h.male_cells, h.female_cells
+    FROM public.members m LEFT JOIN private.member_hierarchy h ON h.member_id = m.id;
+CREATE FUNCTION pg_temp.mem(_n int) RETURNS pg_temp.mem_h LANGUAGE sql STABLE AS
+$$ SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(_n) $$;
 
 -- ---------------------------------------------------------------------------
 -- Massa. Como postgres e com os triggers ligados: níveis, cônjuges e totais
@@ -238,6 +243,7 @@ SELECT pg_temp.r(k), pg_temp.c(3), public.week_start(public.sp_today()) - 7 * k 
 INSERT INTO public.cell_report_participants (report_id, member_id)
 SELECT pg_temp.r(k), pg_temp.m(12) FROM generate_series(1, 20) k;
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Rita tem uma sessão aberta e um refresh token (RN-20).
 INSERT INTO auth.sessions (id, user_id, created_at) VALUES ('f2010200-0000-0000-0000-000000000009', pg_temp.u(9), now());
@@ -273,7 +279,7 @@ SELECT is(pg_temp.snap(), (SELECT s FROM snap0), 'RN-02: nenhuma das recusas gra
 -- ===========================================================================
 -- 2. RN-02 e RN-01: quem tem a permissão exclui o que vê — 13
 -- ===========================================================================
-CREATE TEMP TABLE bruno0 AS SELECT * FROM public.members WHERE id = pg_temp.m(23);
+CREATE TEMP TABLE bruno0 AS SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(23);
 
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_member(%L)', pg_temp.m(23)))), '00000',
   'RN-02: LE exclui Bruno, que ele vê e que não tem ligações');
@@ -476,7 +482,7 @@ SELECT is((pg_temp.mem(36)).deleted_at, NULL, 'RN-01: Raul continua não excluí
 -- ===========================================================================
 SELECT is(ARRAY[(pg_temp.mem(2)).total_disciples, (pg_temp.mem(3)).total_disciples], ARRAY[2, 1],
   'RN-10 (antes): Vera soma 2 discípulos e Wagner 1 (Iara inativa fora, D2)');
-CREATE TEMP TABLE paulo0 AS SELECT total_disciples, total_cells, male_cells FROM public.members WHERE id = pg_temp.m(1);
+CREATE TEMP TABLE paulo0 AS SELECT total_disciples, total_cells, male_cells FROM private.member_hierarchy WHERE member_id = pg_temp.m(1);
 
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(4)))), '00000',
   'RN-10: AD exclui Xavier');
@@ -502,12 +508,12 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.restore_cell(%L)', p
 SELECT is(ARRAY[(pg_temp.mem(3)).total_cells, (pg_temp.mem(3)).male_cells, (pg_temp.mem(2)).total_cells, (pg_temp.mem(2)).male_cells],
   ARRAY[1, 1, 1, 1], 'RN-10: restaurada a célula, os totais voltam');
 
-CREATE TEMP TABLE tot_d2 AS SELECT id, total_disciples, total_cells, male_cells, female_cells
-  FROM public.members WHERE id IN (pg_temp.m(1), pg_temp.m(2), pg_temp.m(3));
+CREATE TEMP TABLE tot_d2 AS SELECT member_id AS id, total_disciples, total_cells, male_cells, female_cells
+  FROM private.member_hierarchy WHERE member_id IN (pg_temp.m(1), pg_temp.m(2), pg_temp.m(3));
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(31)))), '00000',
   'RN-10: AD exclui Iara, inativa e sem ligações');
 SELECT set_eq(
-  format('SELECT id, total_disciples, total_cells, male_cells, female_cells FROM public.members WHERE id IN (%L, %L, %L)',
+  format('SELECT member_id, total_disciples, total_cells, male_cells, female_cells FROM private.member_hierarchy WHERE member_id IN (%L, %L, %L)',
          pg_temp.m(1), pg_temp.m(2), pg_temp.m(3)),
   'SELECT * FROM tot_d2',
   'RN-10/D2: excluir um inativo não muda nenhum total');

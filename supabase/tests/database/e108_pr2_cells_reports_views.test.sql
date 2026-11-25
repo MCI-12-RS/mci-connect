@@ -106,23 +106,23 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 --     Bruno → Breno (11); Bruno → Hélio (15)
 --   Xavier (12): sem líder e sem ser pastor (nível 0).
 INSERT INTO public.members
-  (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, spouse_id, is_active, auth_user_id, role_id)
+  (id, name, gender, is_pastor, leader_id, has_leadership, spouse_id, is_active, auth_user_id, role_id)
 VALUES
-  (pg_temp.m(1),  'Paulo Pastor',      'M', true,  0, NULL, false,          pg_temp.m(2), true,  pg_temp.u(9), pg_temp.role(9)),
-  (pg_temp.m(2),  'Priscila Pastora',  'F', true,  0, NULL, false,          pg_temp.m(1), true,  pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(3),  'André Gonçalves',   'M', false, 1, pg_temp.m(1), true,  pg_temp.m(4), true,  NULL,         NULL),
-  (pg_temp.m(4),  'Ana Gonçalves',     'F', false, 1, pg_temp.m(2), true,  pg_temp.m(3), true,  NULL,         NULL),
-  (pg_temp.m(5),  'Bruno Brandão',     'M', false, 1, pg_temp.m(1), true,  NULL,         true,  pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(6),  'Antônio Araújo',    'M', false, 2, pg_temp.m(3), true,  NULL,         true,  NULL,         NULL),
-  (pg_temp.m(7),  'Alberto Alves',     'M', false, 2, pg_temp.m(3), true,  NULL,         true,  pg_temp.u(4), pg_temp.role(4)),
-  (pg_temp.m(8),  'Arthur Assis',      'M', false, 3, pg_temp.m(6), true,  NULL,         true,  pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(9),  'Amanda Azevedo',    'F', false, 2, pg_temp.m(4), true,  NULL,         true,  pg_temp.u(5), pg_temp.role(5)),
-  (pg_temp.m(10), 'Bento Barros',      'M', false, 2, pg_temp.m(5), true,  NULL,         true,  pg_temp.u(7), NULL),
-  (pg_temp.m(11), 'Breno Batista',     'M', false, 2, pg_temp.m(5), true,  NULL,         true,  pg_temp.u(6), pg_temp.role(6)),
-  (pg_temp.m(12), 'Xavier Xisto',      'M', false, 0, NULL, false,          NULL,         true,  NULL,         NULL),
-  (pg_temp.m(13), 'Bia Bastos',        'F', false, 3, pg_temp.m(10), true, NULL,         false, NULL,         NULL),
-  (pg_temp.m(14), 'João da Silva',     'M', false, 2, pg_temp.m(4), true,  NULL,         true,  NULL,         NULL),
-  (pg_temp.m(15), 'Hélio Hospedeiro',  'M', false, 2, pg_temp.m(5), true,  NULL,         true,  NULL,         NULL);
+  (pg_temp.m(1),  'Paulo Pastor',      'M', true, NULL, false,          pg_temp.m(2), true,  pg_temp.u(9), pg_temp.role(9)),
+  (pg_temp.m(2),  'Priscila Pastora',  'F', true, NULL, false,          pg_temp.m(1), true,  pg_temp.u(1), pg_temp.role(1)),
+  (pg_temp.m(3),  'André Gonçalves',   'M', false, pg_temp.m(1), true,  pg_temp.m(4), true,  NULL,         NULL),
+  (pg_temp.m(4),  'Ana Gonçalves',     'F', false, pg_temp.m(2), true,  pg_temp.m(3), true,  NULL,         NULL),
+  (pg_temp.m(5),  'Bruno Brandão',     'M', false, pg_temp.m(1), true,  NULL,         true,  pg_temp.u(2), pg_temp.role(2)),
+  (pg_temp.m(6),  'Antônio Araújo',    'M', false, pg_temp.m(3), true,  NULL,         true,  NULL,         NULL),
+  (pg_temp.m(7),  'Alberto Alves',     'M', false, pg_temp.m(3), true,  NULL,         true,  pg_temp.u(4), pg_temp.role(4)),
+  (pg_temp.m(8),  'Arthur Assis',      'M', false, pg_temp.m(6), true,  NULL,         true,  pg_temp.u(3), pg_temp.role(3)),
+  (pg_temp.m(9),  'Amanda Azevedo',    'F', false, pg_temp.m(4), true,  NULL,         true,  pg_temp.u(5), pg_temp.role(5)),
+  (pg_temp.m(10), 'Bento Barros',      'M', false, pg_temp.m(5), true,  NULL,         true,  pg_temp.u(7), NULL),
+  (pg_temp.m(11), 'Breno Batista',     'M', false, pg_temp.m(5), true,  NULL,         true,  pg_temp.u(6), pg_temp.role(6)),
+  (pg_temp.m(12), 'Xavier Xisto',      'M', false, NULL, false,          NULL,         true,  NULL,         NULL),
+  (pg_temp.m(13), 'Bia Bastos',        'F', false, pg_temp.m(10), true, NULL,         false, NULL,         NULL),
+  (pg_temp.m(14), 'João da Silva',     'M', false, pg_temp.m(4), true,  NULL,         true,  NULL,         NULL),
+  (pg_temp.m(15), 'Hélio Hospedeiro',  'M', false, pg_temp.m(5), true,  NULL,         true,  NULL,         NULL);
 
 INSERT INTO public.cells
   (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time,
@@ -186,6 +186,7 @@ INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(11), pg_temp.m(10));
 
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- ===========================================================================
 -- 1. Grants, dono e opções das views (risco 2) — 30 verificações
@@ -509,8 +510,8 @@ SELECT results_eq(
   'G12: líder pastor → nulo, com leader_g12_level 0 (a tela mostra "Pastores")');
 SELECT results_eq(
   format('SELECT g12_leader_id, g12_leader_name, leader_g12_level FROM public.cells_view WHERE id = %L', pg_temp.c(5)),
-  $$ VALUES (NULL::uuid, NULL::text, 0) $$,
-  'G12: líder sem líder (nível 0, não pastor) → nulo');
+  $$ VALUES (NULL::uuid, NULL::text, NULL::int) $$,
+  'G12: líder sem líder (não pastor) → nulo, e sem nível (E2.06 RN-01: sem liderança)');
 SELECT results_eq(
   format('SELECT leader_name, g12_leader_id, g12_leader_name, leader_g12_level FROM public.cells_view WHERE id = %L', pg_temp.c(8)),
   $$ VALUES (NULL::text, NULL::uuid, NULL::text, NULL::int) $$,
