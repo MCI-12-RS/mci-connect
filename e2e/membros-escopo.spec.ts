@@ -357,6 +357,9 @@ test.describe("RN-10, RN-19, UX-17: cadastro novo por quem vê só o ministério
       if (request.url().includes("/functions/v1/create-user-admin")) calls.push(request.url());
     });
     await dialog.getByLabel("Nome *").fill(`${NAME} Igor Sem Lider`);
+    // E2.04: o sexo e um identificador são conferidos antes do líder (ordem da tela); só o Líder fica com erro.
+    await dialog.getByRole("radio", { name: "Masculino" }).click();
+    await dialog.getByLabel("Celular / WhatsApp").fill("51932090099");
     await dialog.getByRole("button", { name: "Limpar seleção" }).click();
     await dialog.getByRole("button", { name: /^Criar membro$/i }).click();
     await expect(dialog.getByText("Escolha o líder.")).toBeVisible();
@@ -376,8 +379,7 @@ test.describe("RN-10, RN-19, UX-17: cadastro novo por quem vê só o ministério
 
     await dialog.getByLabel("Nome *").fill(`${NAME} Igor Teixeira`);
     // E2.04 (RN-03, RN-08): o sexo e um identificador (aqui o celular) são obrigatórios.
-    await dialog.getByLabel("Gênero").click();
-    await page.getByRole("option", { name: "Masculino" }).click();
+    await dialog.getByRole("radio", { name: "Masculino" }).click();
     await dialog.getByLabel("Celular / WhatsApp").fill("51932090001");
     await pickPerson(page, dialog, "leader", "André", ANDRE.name);
     await dialog.getByRole("button", { name: /^Criar membro$/i }).click();
@@ -439,6 +441,9 @@ test.describe("RN-19, UX-16: função padrão acima de quem cadastra", () => {
       await signIn(page, PEDRO);
       const dialog = await openNew(page);
       await dialog.getByLabel("Nome *").fill(`${NAME} Igor Secretaria`);
+      // E2.04: o sexo e um identificador são conferidos na tela; com eles, a recusa do servidor chega ao Alert.
+      await dialog.getByRole("radio", { name: "Masculino" }).click();
+      await dialog.getByLabel("Celular / WhatsApp").fill("51932090098");
       await dialog.getByRole("button", { name: /^Criar membro$/i }).click();
 
       const alert = dialog.getByRole("alert").filter({ hasText: MSG.defaultRoleNotCovered });

@@ -198,8 +198,7 @@ async function fillNewMember(page: Page, data: NewMember) {
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Nome *").fill(data.name);
   // E2.04 (RN-03, RN-12): o sexo é obrigatório, e quem vê a igreja toda sem escolher líder marca "É Pastor(a)?".
-  await dialog.getByLabel("Gênero").click();
-  await page.getByRole("option", { name: "Masculino" }).click();
+  await dialog.getByRole("radio", { name: "Masculino" }).click();
   const pastor = dialog.getByRole("switch", { name: "É Pastor(a)?" });
   if ((await pastor.count()) > 0) await pastor.click();
   if (data.email) await dialog.getByLabel("E-mail").fill(data.email);
@@ -247,7 +246,7 @@ test.describe("RN-18 / UX-31 (AD)", () => {
     await expect(aviso).toBeHidden();
     await expect(dialog.getByLabel("Nome *")).toHaveValue(novo);
     await expect(dialog.getByLabel("E-mail")).toHaveValue(BRUNO.email);
-    await expect(dialog.getByLabel("Celular / WhatsApp")).toHaveValue("(51)96666-0501");
+    await expect(dialog.getByLabel("Celular / WhatsApp")).toHaveValue("(51) 96666-0501");
 
     expect(membersNamed(novo), "nada foi gravado").toBe(0);
     expect(isDeleted(member(1)), "Bruno continua excluído").toBe("true");
@@ -312,10 +311,10 @@ test.describe("RN-18 / UX-32 (AD): restaurar pelo aviso", () => {
     await expect(status).toContainText(`Cadastro de ${who("Dora Reis")} restaurado. Confira os dados e, se precisar, altere e salve.`);
     await expect(status).toBeFocused();
     await expect(edit.getByLabel("Nome *")).toHaveValue(who("Dora Reis"));
-    // O banco guarda só os dígitos (RN-06), e a tela atual mostra o valor gravado.
-    await expect(edit.getByLabel("Celular / WhatsApp")).toHaveValue("51977770501");
+    // O banco guarda só os dígitos (RN-06), e a tela mostra o celular com a máscara (E2.04, P23).
+    await expect(edit.getByLabel("Celular / WhatsApp")).toHaveValue("(51) 97777-0501");
     await expect(edit.getByLabel("CPF")).toHaveValue("");
-    await expect(edit.getByRole("button", { name: "Salvar", exact: true })).toBeVisible();
+    await expect(edit.getByRole("button", { name: "Salvar alterações", exact: true })).toBeVisible();
 
     expect(isDeleted(member(2)), "Dora voltou").toBe("false");
     expect(membersNamed(digitado), "o que foi digitado não é gravado").toBe(0);
@@ -323,7 +322,7 @@ test.describe("RN-18 / UX-32 (AD): restaurar pelo aviso", () => {
 
     // Salvar edita o cadastro restaurado (não cria outro).
     await edit.getByLabel("Observações").fill("Conferido após restaurar");
-    await edit.getByRole("button", { name: "Salvar", exact: true }).click();
+    await edit.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await expect(edit).toBeHidden();
     expect(sql(env, `SELECT notes FROM public.members WHERE id = ${lit(member(2))}`)).toBe("Conferido após restaurar");
     expect(sql(env, `SELECT count(*) FROM public.members WHERE name = ${lit(who("Dora Reis"))}`)).toBe("1");
@@ -342,7 +341,7 @@ test.describe("RN-18 / UX-33 (LE e CM)", () => {
     await expect(dialog.locator("#email-error")).toHaveText(message);
     const email = dialog.getByLabel("E-mail");
     await expect(email).toHaveAttribute("aria-invalid", "true");
-    await expect(email).toHaveAttribute("aria-describedby", "email-error");
+    await expect(email).toHaveAttribute("aria-describedby", /^email-error\b/) // o erro vem primeiro; a dica do grupo Identificação vem depois (P21);
     await expect(email).toBeFocused();
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect(page.getByText("Bruno Almeida")).toHaveCount(0);
@@ -384,7 +383,7 @@ test.describe("RN-18 / UX-33 (LE e CM)", () => {
     await aviso.getByRole("button", { name: "Voltar ao formulário", exact: true }).click();
     await expect(aviso).toBeHidden();
     await expect(dialog.getByLabel("Nome *")).toHaveValue(novo);
-    await expect(dialog.getByLabel("Celular / WhatsApp")).toHaveValue("(51)97777-0502");
+    await expect(dialog.getByLabel("Celular / WhatsApp")).toHaveValue("(51) 97777-0502");
     expect(membersNamed(novo)).toBe(0);
   });
 

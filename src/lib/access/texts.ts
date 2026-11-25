@@ -44,8 +44,6 @@ export const MENU_TEXTS = {
 /** "Meus dados" só para leitura (T6, UXD-13, UX-09). */
 export const OWN_DATA_TEXTS = {
   title: "Meus dados",
-  /** Não está no spec: o título do diálogo de quem pode editar, como era antes. */
-  editTitle: "Editar Meus Dados",
   readOnlyNotice:
     "Você pode consultar os seus dados, mas não alterá-los. Para corrigir alguma informação, fale com o seu líder.",
   close: "Fechar",
@@ -127,6 +125,8 @@ export const MEMBER_FORM_TEXTS = {
   newMember: "Novo membro",
   /** Botão de envio do cadastro novo (fluxo F4). */
   createMember: "Criar membro",
+  /** O botão "Criar membro" desabilitado enquanto as funções carregam (Estados, coluna Membros; backlog 5, PO em 2026-11-25). */
+  createMemberLoading: "Carregando…",
   /** O seletor de função enquanto `role_options` carrega (Estados, coluna Membros). */
   roleLoading: "Carregando…",
   /** Não está no spec: falha ao ler as opções de função (o texto de antes do E2.02). */

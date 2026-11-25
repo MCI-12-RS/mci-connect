@@ -297,8 +297,9 @@ describe("Membros excluídos: restaurar (T5)", () => {
     respondWith({ data: brunoRestored });
     fireEvent.click(within(result).getByRole("button", { name: "Definir líder" }));
 
-    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
-    const leader = await within(form).findByLabelText("Líder");
+    // O diálogo do carregando dá lugar ao do formulário (E2.04, T1).
+    const leader = await screen.findByLabelText(/^Líder/);
+    const form = screen.getByRole("dialog", { name: "Editar membro" });
     expect(within(form).getByRole("switch", { name: "Tem Liderança?" })).toBeChecked();
     await waitFor(() => expect(leader).toHaveFocus());
     expect(fakeQueries().some((query) => query.table === "members_view")).toBe(true);

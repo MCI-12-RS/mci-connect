@@ -18,3 +18,14 @@ Object.defineProperty(window, "matchMedia", {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// O jsdom não tem ResizeObserver, que o Radix usa para medir o Switch, o
+// RadioGroup e o Checkbox (o formulário de membro tem os três).
+if (!("ResizeObserver" in window)) {
+  class NoopResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, "ResizeObserver", { writable: true, configurable: true, value: NoopResizeObserver });
+}

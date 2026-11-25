@@ -160,8 +160,10 @@ describe("MemberDeletionFlow", () => {
     respondWith({ data: { id: "d1", name: "Ana", is_active: true, sensitive_visible: false } }, { data: [] });
     fireEvent.click(within(dialog).getByRole("button", { name: "Abrir o cadastro de Ana" }));
 
-    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
-    expect(await within(form).findByLabelText("Nome *")).toHaveValue("Ana");
+    // O diálogo do carregando dá lugar ao do formulário (E2.04, T1).
+    const name = await screen.findByLabelText("Nome *");
+    expect(screen.getByRole("dialog", { name: "Editar membro" })).toContainElement(name);
+    expect(name).toHaveValue("Ana");
     const read = fakeQueries().find((query) => query.table === "members_view");
     expect(read?.calls).toContainEqual(["eq", "id", "d1"]);
   });

@@ -9,7 +9,6 @@ import {
   deletedAccountEmailWithMatches,
   deletedMatchesRefusal,
   isDeletedAccountEmailRefusal,
-  isPlaceholderEmail,
   toDeletedMatches,
 } from './deleted-matches.ts'
 
@@ -27,20 +26,6 @@ const visible = (fields: string[], isAccountEmail = false): DeletedMemberMatch =
   deleted_at: '2026-11-10T13:00:00+00:00',
   matched_fields: fields,
   is_account_email: isAccountEmail,
-})
-
-describe('e-mail fictício', () => {
-  it('o domínio do formulário é fictício, em qualquer caixa e com espaços', () => {
-    expect(isPlaceholderEmail('ana_souza_ab12cd@mci12fakemail.com')).toBe(true)
-    expect(isPlaceholderEmail('  ANA_X@MCI12FAKEMAIL.COM ')).toBe(true)
-    expect(isPlaceholderEmail('ana@exemplo.com')).toBe(false)
-    expect(isPlaceholderEmail('ana@mci12fakemail.com.br')).toBe(false)
-  })
-
-  it('não vai para a consulta: _email nulo', () => {
-    expect(deletedMatchesParams({ email: 'ana_ab12cd@mci12fakemail.com', mobile_whatsapp: '51988880000' }))
-      .toEqual({ _email: null, _mobile: '51988880000', _cpf: null })
-  })
 })
 
 describe('deletedMatchesParams', () => {

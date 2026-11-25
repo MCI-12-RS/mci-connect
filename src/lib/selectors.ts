@@ -15,6 +15,11 @@ export const OPTIONS_STALE_TIME_MS = 60_000;
 export interface SelectOption {
   value: string;
   label: string;
+  /**
+   * Por que a opção não pode ser escolhida (P5 de Escolas): ela aparece
+   * desabilitada, com o motivo escrito embaixo do nome.
+   */
+  disabledReason?: string;
 }
 
 /** As opções de uma página e o `offset` da próxima, ou `null` quando acabou. */

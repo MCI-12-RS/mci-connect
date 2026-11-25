@@ -6,9 +6,15 @@
 // Tudo aqui só mostra, esconde ou adianta uma validação: quem decide é o banco
 // (triggers de `members`, `check_member_insert` e `role_options`).
 
-import { isPermissionDenied, isJsonObject, parseAppError } from "@/lib/errors";
+import { isPermissionDenied, isJsonObject, parseAppError, type AppError } from "@/lib/errors";
 import { refusalField } from "./codes";
-import { valueInUseFromUniqueViolation } from "@/lib/members/codes";
+import {
+  isMemberRuleCode,
+  memberRefusalFromCheckViolation,
+  memberRefusalMessages,
+  valueInUseFromUniqueViolation,
+} from "@/lib/members/codes";
+import type { MemberFormErrorField } from "@/lib/members/form-errors";
 import { ACCESS_TEXTS, MEMBER_FORM_TEXTS, MENU_TEXTS } from "./texts";
 
 // --- `role_options` (AQ-3) ---
@@ -201,11 +207,6 @@ export function initialLeaderId(view: MinistryFieldsView, isNew: boolean, viewer
   return isNew && view.leader === "required" ? viewerMemberId : null;
 }
 
-/** O Líder obrigatório ficou vazio? A tela avisa "Escolha o líder." sem chamar o servidor (UX-17). */
-export function isLeaderMissing(view: MinistryFieldsView, leaderId: string | null | undefined): boolean {
-  return view.leader === "required" && !leaderId;
-}
-
 /**
  * "Tem Liderança?" e o líder que vão para o banco:
  * - com o interruptor (igreja toda), desligado apaga o líder. Sem isso, o
@@ -225,79 +226,89 @@ export function leadershipValues(
   return { has_leadership: leaderId ? true : form.has_leadership === true, leader_id: leaderId };
 }
 
-// --- Recusas do servidor (T11, UX-22) ---
-
-/** Campos do formulário que mostram a recusa embaixo deles. */
-export type MemberFormField = "leader_id" | "spouse_id" | "role_id";
+// --- Recusas do servidor (T11 do E2.02; T5 e AQ-1 do E2.04) ---
 
 export interface MemberFormRefusal {
   message: string;
-  /** Onde a recusa aparece: embaixo do campo ou, com `null`, no `Alert` do topo. */
-  field: MemberFormField | null;
-  /** A tela relê o acesso (P13): no 42501 e na RN-10. */
+  /**
+   * Os campos em que a recusa aparece, cada um com a sua mensagem (E2.04,
+   * T5): embaixo do campo, no resumo e com o foco. Vazio: no `Alert` do topo.
+   */
+  fields: Partial<Record<MemberFormErrorField, string>>;
+  /** A tela relê o acesso (P13): no 42501 e na RN-10 do E2.02. */
   rereadAccess: boolean;
 }
 
 const ROLE_REFUSALS: ReadonlySet<string> = new Set(["own_role", "role_change_not_allowed", "role_not_assignable"]);
 
-function personField(field: string | null): MemberFormField | null {
+function personField(field: string | null): "leader_id" | "spouse_id" | null {
   return field === "leader_id" || field === "spouse_id" ? field : null;
 }
 
 /**
  * A recusa de regra, pelo código:
- * - função (RN-18): embaixo do campo Função;
- * - pessoa fora do que se vê (RN-09 b): embaixo do Líder ou do Cônjuge, quando o servidor diz qual;
- * - RN-10: no topo, e a tela relê o acesso;
- * - as demais (RN-09 c, RN-11, RN-19, E2.01): no topo.
+ * - função (RN-18 do E2.02): embaixo do campo Função;
+ * - pessoa fora do que se vê (RN-09 b do E2.02): embaixo do Líder ou do Cônjuge, quando o servidor diz qual;
+ * - RN-10 do E2.02: no topo, e a tela relê o acesso;
+ * - as regras do E2.04: no campo que o servidor aponta (`field` ou `fields`), cada um com a sua mensagem;
+ * - as demais (RN-09 c, RN-11, RN-19 do E2.02, E2.01): no topo.
  */
-function ruleRefusal(code: string, message: string, field: string | null): MemberFormRefusal {
-  if (ROLE_REFUSALS.has(code)) return { message, field: "role_id", rereadAccess: false };
-  if (code === "person_not_visible") return { message, field: personField(field), rereadAccess: false };
-  return {
-    message,
-    field: null,
-    rereadAccess: code === "pastor_or_no_leadership_requires_church",
-  };
+function ruleRefusal(error: AppError): MemberFormRefusal {
+  const { code, message } = error;
+  if (ROLE_REFUSALS.has(code)) return { message, fields: { role_id: message }, rereadAccess: false };
+  if (code === "person_not_visible") {
+    const field = personField(refusalField(error));
+    return { message, fields: field ? { [field]: message } : {}, rereadAccess: false };
+  }
+  if (isMemberRuleCode(code)) return { message, fields: memberRefusalMessages(error), rereadAccess: false };
+  return { message, fields: {}, rereadAccess: code === "pastor_or_no_leadership_requires_church" };
 }
 
 const permissionRefusal = (): MemberFormRefusal => ({
   message: ACCESS_TEXTS.permissionDenied,
-  field: null,
+  fields: {},
   rereadAccess: true,
 });
 
 /**
  * A recusa de uma gravação em `members` (PostgREST). `null` para o que não é
- * recusa (rede, erro técnico): a tela usa o aviso genérico dela.
+ * recusa (rede, 40P01, erro técnico): a tela usa o aviso genérico dela.
+ * O `23505` e o `23514` crus viram a recusa que o trigger daria (E2.04,
+ * "Formato dos erros"), sem o texto técnico.
  */
 export function memberRefusalFromError(error: unknown): MemberFormRefusal | null {
   if (isPermissionDenied(error)) return permissionRefusal();
-  // Um `23505` cru (índice único de e-mail, celular ou CPF) vira a mesma
-  // recusa do trigger (E2.04, "Formato dos erros"), sem o texto técnico.
-  const appError = parseAppError(error) ?? valueInUseFromUniqueViolation(error);
-  if (!appError) return null;
-  return ruleRefusal(appError.code, appError.message, refusalField(appError));
+  const appError = parseAppError(error) ?? valueInUseFromUniqueViolation(error) ?? memberRefusalFromCheckViolation(error);
+  return appError ? ruleRefusal(appError) : null;
 }
 
 /**
- * O toast de uma gravação que falhou sem recusa (rede, 40P01, erro técnico):
+ * O aviso de uma gravação que falhou sem recusa (rede, 40P01, erro técnico):
  * só "tente de novo", nunca o texto técnico.
  */
 export function memberSaveFailureMessage(networkError: boolean): string {
   return networkError ? MEMBER_FORM_TEXTS.saveNetworkError : MEMBER_FORM_TEXTS.saveFailed;
 }
 
-/** Códigos da `create-user-admin` que não são recusa de regra. */
-const CREATE_TECHNICAL_CODES: ReadonlySet<string> = new Set(["unauthenticated", "server_error"]);
+/** Códigos da `create-user-admin` que não são recusa de regra: o aviso genérico. */
+const CREATE_TECHNICAL_CODES: ReadonlySet<string> = new Set(["unauthenticated", "server_error", "invalid_request"]);
+
+/** Uma recusa da `create-user-admin` (`{ error, code, field, fields }`). */
+export interface CreateRefusalBody {
+  message: string;
+  code: string | null;
+  field: string | null;
+  fields?: readonly string[];
+}
 
 /**
- * A recusa da `create-user-admin` (`{ error, code, field }`): 403
- * (`forbidden`) é a falta de permissão; os demais códigos vêm das regras do
- * banco, pelo ensaio (`check_member_insert`). Sem código, `null`.
+ * A recusa da `create-user-admin`: 403 (`forbidden`) é a falta de permissão;
+ * os demais códigos vêm das regras do banco, pelo ensaio
+ * (`check_member_insert`). Sem código, ou com um código técnico, `null`.
  */
-export function memberRefusalFromCreate(refusal: { message: string; code: string | null; field: string | null }): MemberFormRefusal | null {
+export function memberRefusalFromCreate(refusal: CreateRefusalBody): MemberFormRefusal | null {
   if (refusal.code === "forbidden") return permissionRefusal();
   if (!refusal.code || CREATE_TECHNICAL_CODES.has(refusal.code)) return null;
-  return ruleRefusal(refusal.code, refusal.message, refusal.field);
+  const detail = { code: refusal.code, field: refusal.field, fields: refusal.fields ? [...refusal.fields] : undefined };
+  return ruleRefusal({ code: refusal.code, message: refusal.message, detail });
 }

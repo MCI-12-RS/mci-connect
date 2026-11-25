@@ -382,7 +382,7 @@ test("RN-16 (d) e UX-22 (AD): Bruno, cujo líder Gil foi excluído depois, volta
   await result.getByRole("button", { name: "Definir líder" }).click();
   const form = page.getByRole("dialog", { name: "Editar Membro" });
   await expect(form.getByLabel("Nome *")).toHaveValue(bruno);
-  const leader = form.getByLabel("Líder", { exact: true });
+  const leader = form.getByLabel("Líder *", { exact: true });
   await expect(leader).toBeVisible();
   await expect(leader).toBeFocused();
   await leader.pressSequentially(who("Hugo"));

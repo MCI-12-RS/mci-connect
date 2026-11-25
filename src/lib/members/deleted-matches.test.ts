@@ -235,18 +235,27 @@ describe("parseCreateMemberRefusal", () => {
     ).toEqual({ kind: "deletedMatches", matches: [], accountEmail: true });
   });
 
-  it("outra recusa: a mensagem, o código e o campo", () => {
+  it("outra recusa: a mensagem, o código e os campos", () => {
     expect(parseCreateMemberRefusal({ error: "Já existe…", code: "x", field: "cpf" })).toEqual({
       kind: "message",
       message: "Já existe…",
       code: "x",
       field: "cpf",
+      fields: [],
+    });
+    expect(parseCreateMemberRefusal({ error: "Este e-mail…", code: "value_in_use", fields: ["email", 3, "cpf"] })).toEqual({
+      kind: "message",
+      message: "Este e-mail…",
+      code: "value_in_use",
+      field: null,
+      fields: ["email", "cpf"],
     });
     expect(parseCreateMemberRefusal({ error: "Falhou" })).toEqual({
       kind: "message",
       message: "Falhou",
       code: null,
       field: null,
+      fields: [],
     });
   });
 

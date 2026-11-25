@@ -241,7 +241,9 @@ test.describe("UX-36: a sessão de um membro excluído termina", () => {
     await page.getByRole("button", { name: "Editar meus dados" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     deleteMember(FABIO);
-    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    // Sem mudança, o formulário fecha sem gravar (E2.04, DA-9): a próxima gravação precisa de uma alteração.
+    await page.getByLabel("Observações").fill("Mudou depois de excluído");
+    await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(sessionNotice(page)).toBeVisible();
     await context.close();

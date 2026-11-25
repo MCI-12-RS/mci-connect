@@ -44,6 +44,10 @@ const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 
 const ROLE = "Função *";
+const SAVE = "Salvar alterações";
+
+/** Muda as Observações: sem mudança, a edição não chama o servidor (E2.04, DT-19 e DA-9). */
+const changeNotes = (text = "Nova observação") => fireEvent.change(screen.getByLabelText("Observações"), { target: { value: text } });
 
 const roleOptions = (current: { id: string; name: string } | null) => ({
   current,
@@ -116,7 +120,7 @@ describe("MemberForm: campo Função", () => {
     auth.memberId = "me";
   });
 
-  it("Dado um membro em edição aberto antes de as funções carregarem, quando elas chegam, então a função atual continua escolhida e vai no Salvar", async () => {
+  it("Dado um membro em edição aberto antes de as funções carregarem, quando elas chegam, então a função atual continua escolhida e, sem mudança, não vai no PATCH (DT-19)", async () => {
     const releaseRoles = respondWithRolesLater();
     const onClose = vi.fn();
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
@@ -128,13 +132,14 @@ describe("MemberForm: campo Função", () => {
     const trigger = await screen.findByRole("combobox", { name: ROLE });
     expect(trigger).toHaveTextContent("Líder");
 
+    changeNotes();
     respondWith({ data: [{ id: "m1" }] });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" }));
     const save = fakeQueries().find((query) => query.table === "members");
-    expect(save?.calls).toContainEqual(["update", expect.objectContaining({ role_id: "role-lider" })]);
+    expect(save?.calls).toContainEqual(["update", { notes: "Nova observação" }]);
     expect(save?.calls).toContainEqual(["eq", "id", "m1"]);
     expect(fakeRpcs().find((call) => call.fn === "role_options")?.args).toEqual({ _member_id: "m1" });
   });
@@ -143,8 +148,9 @@ describe("MemberForm: campo Função", () => {
     const releaseRoles = respondWithRolesLater();
     render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
 
-    expect(screen.getByText("Carregando…")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Criar membro" })).toBeDisabled();
+    // Backlog 5 do E2.02: o botão desabilitado diz "Carregando…" enquanto as funções carregam.
+    expect(screen.getByRole("button", { name: "Carregando…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Criar membro" })).not.toBeInTheDocument();
 
     await releaseRoles();
 
@@ -167,8 +173,9 @@ describe("MemberForm: campo Função", () => {
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
 
     expect(screen.queryByText(/Função/)).not.toBeInTheDocument();
+    changeNotes();
     respondWith({ data: [{ id: "m1" }] });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const save = fakeQueries().find((query) => query.table === "members");
@@ -194,8 +201,9 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
     await screen.findByRole("combobox", { name: ROLE });
 
+    changeNotes();
     respondWith({ data: [{ id: "m1" }] });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const save = fakeQueries().find((query) => query.table === "members");
@@ -208,17 +216,18 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
     await screen.findByRole("combobox", { name: ROLE });
 
+    changeNotes();
     respondWith({ data: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Este cadastro não existe ou já foi excluído. As alterações não foram salvas.");
     expect(alert).toHaveFocus();
     expect(onClose).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: SAVE })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Fechar" }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -233,15 +242,18 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
     render(<MemberForm member={member} onClose={onClose} />, { wrapper });
     await screen.findByRole("combobox", { name: ROLE });
 
+    changeNotes();
     respondWith({ data: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
 
     const alert = await screen.findByRole("alert");
     // O texto fica na cor do texto (contraste, UX-38); o vermelho fica na borda e no ícone.
     expect(within(alert).getByText(/As alterações não foram salvas/).parentElement).toHaveClass("text-foreground");
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([["members", "list"]]);
 
+    // Com alteração, "Cancelar" pede a confirmação; "Descartar" volta para a lista (UX-26).
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Descartar" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
@@ -265,17 +277,20 @@ describe("MemberForm: Meus dados só para leitura (E2.02, UXD-13, UX-09)", () =>
     const name = screen.getByLabelText("Nome *");
     expect(name).toHaveAttribute("readonly");
     expect(name).not.toBeDisabled();
-    expect(screen.getByLabelText("Gênero")).toHaveValue("Feminino");
-    expect(screen.getByLabelText("Gênero")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Sexo *")).toHaveValue("Feminino");
+    expect(screen.getByLabelText("Sexo *")).toHaveAttribute("readonly");
     expect(screen.getByLabelText("Estado")).toHaveAttribute("readonly");
     // Sem função: o texto, com o motivo (P12), e nenhum Input desabilitado.
     expect(screen.getByText("Sem função")).toBeInTheDocument();
     expect(screen.getByText("Ninguém pode alterar a própria função.")).toBeInTheDocument();
     expect(document.querySelector("input:disabled")).toBeNull();
 
-    expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: SAVE })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancelar" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    // O "✕" do cabeçalho e o "Fechar" do rodapé fecham.
+    const closeButtons = screen.getAllByRole("button", { name: "Fechar" });
+    expect(closeButtons).toHaveLength(2);
+    fireEvent.click(closeButtons[1]);
     expect(onClose).toHaveBeenCalled();
     expect(fakeQueries().filter((q) => q.table === "roles")).toHaveLength(0);
     expect(fakeRpcs()).toHaveLength(0);
@@ -287,5 +302,47 @@ describe("MemberForm: Meus dados só para leitura (E2.02, UXD-13, UX-09)", () =>
     expect(form).not.toBeNull();
     if (form) fireEvent.submit(form);
     expect(fakeQueries().filter((q) => q.table === "members")).toHaveLength(0);
+  });
+});
+
+describe("MemberForm: envio (E2.04, DA-9 e P22)", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.permissions = new Set(["assign_role"]);
+    auth.canAssignRoles = true;
+    auth.memberId = "me";
+  });
+
+  it("Dada a edição sem mudança, 'Salvar alterações' fecha sem nenhuma requisição de gravação", async () => {
+    respondToRpc("role_options", { data: ANA_OPTIONS });
+    const onClose = vi.fn();
+    render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(fakeQueries().filter((query) => query.table === "members")).toHaveLength(0);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("Dado um erro de preenchimento, o resumo conta os campos, o foco vai ao primeiro e nada é enviado", async () => {
+    respondToRpc("role_options", { data: ANA_OPTIONS });
+    render(<MemberForm member={member} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    await screen.findByRole("combobox", { name: ROLE });
+
+    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("CPF"), { target: { value: "111.111.111-11" } });
+    fireEvent.click(screen.getByRole("button", { name: SAVE }));
+
+    expect(await screen.findByText("Confira os campos destacados (2).")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nome *")).toHaveFocus();
+    expect(screen.getByLabelText("Nome *")).toHaveAttribute("aria-invalid", "true");
+    expect(fakeQueries().filter((query) => query.table === "members")).toHaveLength(0);
+
+    // O erro some quando o valor fica certo, sem sair do campo (UX-09).
+    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Ana Alves" } });
+    expect(await screen.findByText("Confira os campos destacados (1).")).toBeInTheDocument();
   });
 });

@@ -130,7 +130,15 @@ function createRefusal(status: number, body: unknown) {
 }
 
 const submitNew = () => fireEvent.click(screen.getByRole("button", { name: "Criar membro" }));
-const submitEdit = () => fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+const submitEdit = () => fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+/** O mínimo que a tela confere no cadastro novo (E2.04): nome e sobrenome, sexo e um identificador. */
+async function fillRequired() {
+  fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
+  fireEvent.click(screen.getByRole("radio", { name: "Masculino" }));
+  fireEvent.change(screen.getByLabelText("Celular / WhatsApp"), { target: { value: "51988887777" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+}
 
 // O Switch e o Select do Radix medem o tamanho com ResizeObserver (o jsdom não tem).
 class NoopResizeObserver {
@@ -148,25 +156,25 @@ beforeEach(() => {
 });
 
 describe("UX-18: Rita (vê a igreja toda) vê os dados ministeriais como hoje", () => {
-  it("Dado Rita editando Caio, então 'É Pastor(a)?', 'Tem Liderança?' e o Líder aparecem, sem dica nem asterisco", async () => {
+  it("Dado Rita editando Caio, então 'É Pastor(a)?', 'Tem Liderança?' e o 'Líder *' aparecem, sem a dica do ministério (E2.04, T4)", async () => {
     actAs("rita", ["edit_member", "assign_role", "view_all_church"]);
     respondToRpc("role_options", { data: options({}) });
     render(<MemberForm member={CAIO} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
 
     expect(screen.getByRole("switch", { name: "É Pastor(a)?" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Tem Liderança?" })).toBeChecked();
-    expect(screen.getByLabelText("Líder")).toBeInTheDocument();
+    expect(screen.getByLabelText("Líder *")).toBeInTheDocument();
     expect(screen.queryByText(/O líder é obrigatório/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Líder *")).not.toBeInTheDocument();
   });
 
-  it("Dado Rita cadastrando, então o Líder não vem preenchido e 'Tem Liderança?' está desligado", async () => {
+  it("Dado Rita cadastrando, então 'Tem Liderança?' vem ligado e o 'Líder *' vem vazio (E2.04, RN-12, UX-15)", async () => {
     actAs("rita", ["create_member", "assign_role", "view_all_church"]);
     respondToRpc("role_options", { data: options({ current: null }) });
     render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
 
-    expect(screen.getByRole("switch", { name: "Tem Liderança?" })).not.toBeChecked();
-    expect(screen.queryByLabelText("Líder")).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Tem Liderança?" })).toBeChecked();
+    expect(screen.getByLabelText("Líder *")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
   });
 });
 
@@ -330,25 +338,27 @@ describe("UX-22: recusas do servidor na edição (Pedro, sem a igreja toda)", ()
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("erro técnico (sem regra): toast destrutivo com 'tente de novo', sem o texto técnico nem Alert de regra", async () => {
+  it("erro técnico ou 40P01 (DT-25): 'tente de novo' no rodapé (role=alert), sem o texto técnico, sem toast, e o foco no botão (T7)", async () => {
     await openAndFillNotes();
     refuse({ code: "40P01", message: "deadlock detected" });
     submitEdit();
 
-    await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ variant: "destructive", description: "Não foi possível salvar o cadastro. Tente de novo." }),
-      ),
-    );
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(alert.textContent ?? "").not.toMatch(/40P01|deadlock/);
+    expect(toast).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Salvar alterações" })).toHaveFocus());
   });
 
-  it("E2.04: 23505 cru do índice único mostra a mensagem amigável, nunca o texto técnico", async () => {
+  it("E2.04: 23505 cru do índice único mostra a mensagem amigável embaixo do E-mail, nunca o texto técnico", async () => {
     await openAndFillNotes();
     refuse({ code: "23505", message: 'duplicate key value violates unique constraint "members_email_key"', details: "Key (email)=(x) already exists." });
     submitEdit();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Este e-mail já está sendo usado por outro cadastro.");
+    const message = await screen.findByText("Este e-mail já está sendo usado por outro cadastro.");
+    expect(message.closest("p")).toHaveAttribute("id", "email-error");
+    expect(screen.getByLabelText("E-mail")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText(/duplicate key/)).not.toBeInTheDocument();
   });
 
@@ -373,8 +383,7 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
   async function fillNew() {
     const onClose = vi.fn();
     render(<MemberForm member={null} onClose={onClose} />, { wrapper: wrapperWith(newClient()) });
-    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+    await fillRequired();
     return onClose;
   }
 
@@ -398,8 +407,7 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     const client = newClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(client) });
-    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+    await fillRequired();
     createRefusal(400, {
       error: "Só quem vê a igreja toda pode marcar um membro como pastor ou como sem liderança.",
       code: "pastor_or_no_leadership_requires_church",
@@ -429,8 +437,7 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     const client = newClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(client) });
-    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+    await fillRequired();
     createRefusal(403, { error: "Sem permissão para criar membros.", code: "forbidden" });
     submitNew();
 
@@ -439,13 +446,14 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it("recusa sem código (erro técnico): toast destrutivo, sem Alert de regra", async () => {
+  it("recusa sem código (erro técnico): 'tente de novo' no rodapé, sem o texto do servidor e sem toast (T7)", async () => {
     await fillNew();
     createRefusal(500, { error: "Falha ao criar o usuário." });
     submitNew();
 
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive" })));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(screen.queryByText("Falha ao criar o usuário.")).not.toBeInTheDocument();
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("sucesso: toast 'Membro criado com sucesso' e o formulário fecha", async () => {
@@ -462,7 +470,10 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     await fillNew();
     createRefusal(409, { error: "Este celular já está sendo usado por outro cadastro.", code: "value_in_use", fields: ["mobile"] });
     submitNew();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Este celular já está sendo usado por outro cadastro.");
+    // Recusa com campo (T5): embaixo do Celular, com o foco nele.
+    const message = await screen.findByText("Este celular já está sendo usado por outro cadastro.");
+    expect(message.closest("p")).toHaveAttribute("id", "mobile_whatsapp-error");
+    await waitFor(() => expect(screen.getByLabelText("Celular / WhatsApp")).toHaveFocus());
 
     invoke.mockResolvedValueOnce({ data: { member: { id: "novo" }, replayed: true }, error: null });
     submitNew();
@@ -478,8 +489,7 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
 
   it("E2.04: uma nova abertura do formulário gera outro attemptId", async () => {
     const { unmount } = render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
-    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+    await fillRequired();
     invoke.mockResolvedValueOnce({ data: { member: { id: "a" }, replayed: false }, error: null });
     submitNew();
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
