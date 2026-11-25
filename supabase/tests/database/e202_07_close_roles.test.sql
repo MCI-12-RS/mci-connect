@@ -36,7 +36,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(74);
+SELECT plan(78);
 
 -- ---------------------------------------------------------------------------
 -- Ids fictícios: a(uth), c (membros).
@@ -322,6 +322,23 @@ SELECT lives_ok(format($$ SELECT public.check_member_insert(%L::jsonb) $$,
   'Rita: check_member_insert com role_id continua respondendo');
 RESET ROLE;
 SELECT is((SELECT role_id FROM public.members WHERE id = pg_temp.m(8)), pg_temp.role('E202-07 Visualiza'), 'Rita: o cadastro novo ficou com a função escolhida');
+
+-- Pedro (Líder) edita o André do escopo sem mexer na função: o PATCH com RETURNING id não toca role_id.
+SELECT pg_temp.login(2);
+SET LOCAL ROLE authenticated;
+SELECT results_eq(
+  format($$ UPDATE public.members SET notes = 'E202-07' WHERE id = %L RETURNING id $$, pg_temp.m(3)),
+  format($$ VALUES (%L::uuid) $$, pg_temp.m(3)),
+  'Pedro: UPDATE de campo comum do André com RETURNING id funciona');
+SELECT is((SELECT array_agg(a ORDER BY a) FROM public.member_names(ARRAY[pg_temp.m(3)]) t, jsonb_object_keys(to_jsonb(t)) a),
+  ARRAY['id', 'name'], 'Pedro: member_names devolve só id e nome (sem função)');
+RESET ROLE;
+SELECT is((SELECT role_id FROM public.members WHERE id = pg_temp.m(3)), pg_temp.role('E202-07 Básica'), 'Pedro: a função do André não mudou');
+-- members_deleted_view traz role_id, mas só para manage_roles: Pedro lê 0 linhas.
+SELECT pg_temp.login(2);
+SET LOCAL ROLE authenticated;
+SELECT is((SELECT count(*)::int FROM public.members_deleted_view), 0, 'Pedro: members_deleted_view vazia (só manage_roles)');
+RESET ROLE;
 
 -- ===========================================================================
 -- 8. RPCs e views definer continuam — 9
