@@ -242,6 +242,16 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
     return focusLeader ? { ...member, has_leadership: true } : { ...member };
   });
 
+  // O acesso chegou depois de o cadastro novo abrir (AQ-1): preenche o Líder uma vez, se ainda vazio.
+  const leaderPrefilled = useRef(!!form.leader_id);
+  const viewerMemberId = access?.member_id ?? null;
+  const prefillLeaderId = !isEditing && canEditMinistry ? initialLeaderId(ministryView, true, viewerMemberId) : null;
+  useEffect(() => {
+    if (leaderPrefilled.current || !prefillLeaderId) return;
+    leaderPrefilled.current = true;
+    setForm((prev) => (prev.leader_id ? prev : { ...prev, leader_id: prefillLeaderId, has_leadership: true }));
+  }, [prefillLeaderId]);
+
   // "Definir líder": o foco vai para o campo Líder, que já abre visível.
   const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
   const restoredAlertRef = useRef<HTMLDivElement>(null);
@@ -293,7 +303,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
 
   // O campo apontado precisa estar na tela; senão, a recusa vai para o topo.
   const isFieldShown = (field: MemberFormField): boolean => {
-    if (field === "role_id") return roleView.kind === "select" || roleView.kind === "text";
+    // Com a Função em texto não há campo para focar: a recusa vai para o topo.
+    if (field === "role_id") return roleView.kind === "select";
     if (!canEditMinistry) return false;
     if (field === "spouse_id") return true;
     return ministryView.leader === "toggle" ? form.has_leadership === true : ministryView.leader !== "hidden";
