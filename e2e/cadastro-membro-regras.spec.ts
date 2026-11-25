@@ -77,8 +77,7 @@ async function openNewMember(page: Page, name: string) {
   const dialog = page.getByRole("dialog", { name: "Novo membro" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Nome *").fill(name);
-  await dialog.getByLabel("Gênero").click();
-  await page.getByRole("option", { name: "Feminino" }).click();
+  await dialog.getByRole("radio", { name: "Feminino" }).click();
   await dialog.getByRole("switch", { name: "É Pastor(a)?" }).click();
   return dialog;
 }
@@ -130,7 +129,7 @@ test.describe("E2.04 PR 2: cadastro e edição de membro pela tela atual", () =>
     const dialog = page.getByRole("dialog", { name: "Editar Membro" });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel("Celular / WhatsApp").fill("(51) 8888-7701"); // o celular de Caio, sem o 9
-    await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
+    await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
 
     await expect(dialog.getByText("Este celular já está sendo usado por outro cadastro.").first()).toBeVisible();
     expect(await page.content()).not.toMatch(/duplicate key|23505|violates unique/i);

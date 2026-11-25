@@ -266,7 +266,7 @@ test("RN-04 e UX-10 (AD): o bloqueio de Gil lista os 4 discípulos (Léo inativo
   await dialog.getByRole("button", { name: `Abrir o cadastro de ${NAME} Hugo Lima` }).click();
   const memberForm = page.getByRole("dialog", { name: "Editar Membro" });
   await expect(memberForm.getByLabel("Nome *")).toHaveValue(`${NAME} Hugo Lima`);
-  const leader = memberForm.getByLabel("Líder", { exact: true });
+  const leader = memberForm.getByLabel("Líder *", { exact: true });
   await leader.click();
   await leader.pressSequentially(`${NAME} Carlos`);
   await page.getByRole("option", { name: `${NAME} Carlos Lima` }).click();

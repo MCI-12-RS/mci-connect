@@ -217,7 +217,7 @@ test("RN-06 (AD): os seletores de líder, timóteo, anfitrião, cônjuge, líder
   await page.getByRole("button", { name: `Editar ${ANA}` }).click();
   const memberForm = page.getByRole("dialog", { name: "Editar Membro" });
   await memberForm.getByLabel("Tem Liderança?").click();
-  for (const label of ["Cônjuge", "Líder"]) {
+  for (const label of ["Cônjuge", "Líder *"]) {
     const names = await optionsFor(page, memberForm.getByLabel(label, { exact: true }), `${NAME} Qui`);
     expect(names, label).toContain(QUIRINO);
     expect(names, label).not.toContain(QUINTINO);
