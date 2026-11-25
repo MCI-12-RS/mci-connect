@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,9 +21,27 @@ import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/
 import { memberRestoreNotices } from "@/lib/deletion/restore";
 import { readFunctionErrorBody, isJsonObject } from "@/lib/errors";
 import { requestSessionCheck } from "@/lib/auth/session-check";
-import { roleDisplayName } from "@/lib/access/access";
+import { memberSearchEmptyLabel } from "@/lib/access/access";
 import { GENDER_LABELS, genderLabel } from "@/lib/members/gender";
 import { MEMBER_FORM_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
+import {
+  initialLeaderId,
+  isLeaderMissing,
+  leadershipValues,
+  memberRefusalFromCreate,
+  memberRefusalFromError,
+  ministryFieldsView,
+  needsRoleOptions,
+  roleFieldView,
+  type MemberFormField,
+  type MemberFormRefusal,
+} from "@/lib/access/member-form";
+import { ROLE_OPTIONS_QUERY_KEY, useRoleOptions } from "@/hooks/use-role-options";
+import { refreshAccess } from "@/hooks/use-access";
+import { MemberRoleField } from "@/components/members/MemberRoleField";
+import { MemberMinistryFields } from "@/components/members/MemberMinistryFields";
+import { FieldError, FieldHint } from "@/components/members/FormFieldParts";
+import { describedBy } from "@/lib/a11y";
 import {
   deletedMatchesWarning,
   parseCreateMemberRefusal,
@@ -37,9 +54,15 @@ type MemberInsert = Database["public"]["Tables"]["members"]["Insert"];
 
 /**
  * - "gone": a edição não voltou com a linha, porque o cadastro foi excluído no meio tempo (E2.01, DT-19);
- * - "deletedMatches": o cadastro novo tem dados de um membro excluído (E2.01, RN-18).
+ * - "deletedMatches": o cadastro novo tem dados de um membro excluído (E2.01, RN-18);
+ * - "refused": a `create-user-admin` recusou pelas regras de escopo ou de função (E2.02, T11).
  */
-type SaveResult = { kind: "saved" } | { kind: "gone" } | { kind: "deletedMatches"; warning: DeletedMatchesWarning };
+type SaveResult =
+  | { kind: "saved" }
+  | { kind: "gone" }
+  | { kind: "deletedMatches"; warning: DeletedMatchesWarning }
+  /** Recusa de regra ou de permissão da `create-user-admin` (T11). */
+  | { kind: "refused"; refusal: MemberFormRefusal };
 
 interface SaveInput {
   data: MemberInsert;
@@ -132,68 +155,24 @@ const EMPTY_FORM: MemberInsert = {
   role_id: null,
 };
 
-type RoleOption = Pick<Database["public"]["Tables"]["roles"]["Row"], "id" | "name" | "is_default">;
-
-interface RoleFieldProps {
-  /** `undefined` enquanto as funções carregam. */
-  roles: RoleOption[] | undefined;
-  loadError: boolean;
-  value: string | null | undefined;
-  canAssign: boolean;
-  onChange: (roleId: string) => void;
-}
-
-/**
- * Campo Função. O Select só é montado com as funções já carregadas: dentro de
- * um <form>, o Select do Radix mantém um <select> nativo oculto, e um valor
- * sem a <option> correspondente vira "" nesse <select>, que avisa a mudança e
- * apaga a função escolhida.
- */
-const RoleField = ({ roles, loadError, value, canAssign, onChange }: RoleFieldProps) => {
-  let field: ReactNode;
-  if (!roles) {
-    const status = loadError ? "Não foi possível carregar as funções" : "Carregando funções…";
-    field = <Input id="role" value={status} disabled className="bg-muted" />;
-  } else if (!canAssign) {
-    field = <Input id="role" value={roles.find((r) => r.id === value)?.name ?? "—"} disabled className="bg-muted" />;
-  } else {
-    field = (
-      <Select value={value || ""} onValueChange={onChange}>
-        <SelectTrigger id="role"><SelectValue placeholder="Selecione a função" /></SelectTrigger>
-        <SelectContent>
-          {roles.map((r) => (
-            <SelectItem key={r.id} value={r.id}>{r.name}{r.is_default ? " (Padrão)" : ""}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="role">{canAssign ? "Função *" : "Função"}</Label>
-      {field}
-    </div>
-  );
-};
-
 const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restoredFrom, readOnly = false }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasPermission, access } = useAuth();
+  const { hasPermission, access, member: ownMember } = useAuth();
   const isEditing = !!member;
   const [cepLoading, setCepLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const canAssignRole = !readOnly && hasPermission("assign_role", "manage_roles");
   // Na edição, a members_view diz se os dados sensíveis deste membro estão
   // visíveis (o próprio cadastro ou view_sensitive_data). No cadastro, quem
   // tem create_member preenche todos os campos (E1.08, RN-11 e RN-12).
   const canViewSensitive = !isEditing || member?.sensitive_visible === true;
   const canChangePassword = !readOnly && hasPermission("change_member_password");
-  const canEditMinistry = !readOnly && hasPermission("edit_member");
+  // Os dados ministeriais: "Editar Membro" na edição e "Criar Membro" no
+  // cadastro, que exige o líder de quem vê só o ministério (RN-10).
+  const canEditMinistry = !readOnly && hasPermission(isEditing ? "edit_member" : "create_member");
   // Quem vê o nome e restaura os cadastros excluídos do aviso (RN-15, RN-18).
   const isAdmin = hasPermission("manage_roles");
 
@@ -225,27 +204,53 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
     }
   }, []);
 
-  const { data: roles, isError: rolesError } = useQuery({
-    queryKey: ["roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("roles").select("id, name, is_default").order("name");
-      if (error) throw error;
-      return data;
-    },
-    // Só para leitura, a função vem do próprio acesso (RN-23).
-    enabled: !readOnly,
-  });
+  // Campo Função (RN-18, UXD-12): a própria função vem do acesso; a de outra
+  // pessoa e as opções, de `role_options`. Nunca a `role_id` da linha do membro.
+  const isSelf = isEditing && !!access?.member_id && member.id === access.member_id;
+  const roleInput = {
+    isNew: !isEditing,
+    isSelf: readOnly || isSelf,
+    canAssignRoles: !readOnly && access?.can_assign_roles === true,
+    ownRoleName: access?.role_name ?? null,
+  };
+  const roleOptions = useRoleOptions(member?.id ?? null, { enabled: !readOnly && needsRoleOptions(roleInput) });
+  const roleView = roleFieldView({ ...roleInput, options: roleOptions.data });
+  // `undefined` até a pessoa escolher: vale a inicial que veio de `role_options`.
+  const [roleChoice, setRoleChoice] = useState<string | undefined>(undefined);
+  const roleValue = roleView.kind === "select" ? (roleChoice ?? roleView.initialValue) : null;
+  // O cadastro novo espera as opções: sem elas, quem atribui funções criaria o membro sem função.
+  const awaitingRoleOptions = !isEditing && roleView.kind === "pending" && !roleOptions.isError;
 
-  const defaultRoleId = roles?.find((r) => r.is_default)?.id || null;
+  // Pastor, sem liderança e Líder (RN-10, UXD-1, UXD-3).
+  // Recalculado a cada acesso relido (P13); o cadastro de referência é o da abertura.
+  const ministryView = ministryFieldsView({
+    seesWholeChurch: access?.sees_whole_church === true,
+    isNew: !isEditing,
+    saved: member,
+  });
+  const searchEmptyLabel = memberSearchEmptyLabel(access);
 
   // Os dados do membro entram já na montagem (o diálogo monta o formulário a
   // cada abertura; quem trocar de membro sem desmontar precisa passar `key`).
   // Preenchidos depois, num efeito, mudariam o valor dos Selects quando as
   // opções ainda não existem, e o Radix apagaria o valor.
   const [form, setForm] = useState<MemberInsert>(() => {
-    if (!member) return EMPTY_FORM;
+    if (!member) {
+      const leaderId = canEditMinistry ? initialLeaderId(ministryView, true, access?.member_id ?? null) : null;
+      return leaderId ? { ...EMPTY_FORM, leader_id: leaderId, has_leadership: true } : EMPTY_FORM;
+    }
     return focusLeader ? { ...member, has_leadership: true } : { ...member };
   });
+
+  // O acesso chegou depois de o cadastro novo abrir (AQ-1): preenche o Líder uma vez, se ainda vazio.
+  const leaderPrefilled = useRef(!!form.leader_id);
+  const viewerMemberId = access?.member_id ?? null;
+  const prefillLeaderId = !isEditing && canEditMinistry ? initialLeaderId(ministryView, true, viewerMemberId) : null;
+  useEffect(() => {
+    if (leaderPrefilled.current || !prefillLeaderId) return;
+    leaderPrefilled.current = true;
+    setForm((prev) => (prev.leader_id ? prev : { ...prev, leader_id: prefillLeaderId, has_leadership: true }));
+  }, [prefillLeaderId]);
 
   // "Definir líder": o foco vai para o campo Líder, que já abre visível.
   const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
@@ -275,12 +280,48 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
     if (deletedWhileEditing) deletedAlertRef.current?.focus();
   }, [deletedWhileEditing]);
 
-  // Auto-select default role for new members
+  // Recusas (T11, UX-22): no `Alert` do topo, com o foco e a rolagem até ele,
+  // ou embaixo do campo que o servidor apontou. A validação do Líder (UX-17) e
+  // a da Função usam o mesmo lugar.
+  const [topRefusal, setTopRefusal] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ field: MemberFormField; message: string } | null>(null);
+  const refusalAlertRef = useRef<HTMLDivElement>(null);
+  const spouseSelectRef = useRef<PaginatedSelectHandle>(null);
+  const roleTriggerRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
-    if (!isEditing && !form.role_id && defaultRoleId) {
-      setForm((prev) => ({ ...prev, role_id: defaultRoleId }));
+    if (!topRefusal) return;
+    refusalAlertRef.current?.focus();
+    refusalAlertRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [topRefusal]);
+
+  useEffect(() => {
+    if (fieldError?.field === "leader_id") leaderSelectRef.current?.focus();
+    else if (fieldError?.field === "spouse_id") spouseSelectRef.current?.focus();
+    else if (fieldError?.field === "role_id") roleTriggerRef.current?.focus();
+  }, [fieldError]);
+
+  // O campo apontado precisa estar na tela; senão, a recusa vai para o topo.
+  const isFieldShown = (field: MemberFormField): boolean => {
+    // Com a Função em texto não há campo para focar: a recusa vai para o topo.
+    if (field === "role_id") return roleView.kind === "select";
+    if (!canEditMinistry) return false;
+    if (field === "spouse_id") return true;
+    return ministryView.leader === "toggle" ? form.has_leadership === true : ministryView.leader !== "hidden";
+  };
+
+  const showRefusal = (refusal: MemberFormRefusal) => {
+    if (refusal.rereadAccess) void refreshAccess(queryClient);
+    if (refusal.field && isFieldShown(refusal.field)) {
+      setTopRefusal(null);
+      setFieldError({ field: refusal.field, message: refusal.message });
+    } else {
+      setFieldError(null);
+      setTopRefusal(refusal.message);
     }
-  }, [isEditing, defaultRoleId, form.role_id]);
+  };
+
+  const errorFor = (field: MemberFormField): string | null => (fieldError?.field === field ? fieldError.message : null);
 
   const mutation = useMutation({
     mutationFn: async ({ data, confirmDeletedMatches }: SaveInput): Promise<SaveResult> => {
@@ -308,9 +349,10 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
 
       // Só os campos que o usuário vê e pode editar (lista branca). O banco
       // também ignora os dados sensíveis enviados por quem não os vê.
+      const leadership = canEditMinistry ? leadershipValues(ministryView, data) : {};
       const payload = toMemberWritePayload(
-        { ...data, email },
-        { sensitiveVisible: canViewSensitive, canEditMinistry, includeRole: !isEditing || canAssignRole },
+        { ...data, ...leadership, email, role_id: roleValue },
+        { sensitiveVisible: canViewSensitive, canEditMinistry, includeRole: roleView.kind === "select" },
       );
 
       if (!isEditing) {
@@ -332,6 +374,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
               warning: deletedMatchesWarning(refusal.matches, { isAdmin, accountEmail: refusal.accountEmail }),
             };
           }
+          const formRefusal = refusal ? memberRefusalFromCreate(refusal) : null;
+          if (formRefusal) return { kind: "refused", refusal: formRefusal };
           throw new Error(refusal?.message ?? error.message);
         }
         if (isJsonObject(result) && typeof result.error === "string") throw new Error(result.error);
@@ -339,7 +383,9 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       }
 
       // Só o id de volta: pedir coluna sensível no RETURNING dá 42501 (E1.08, PR 5).
-      // Sem linha, o cadastro não existe mais ou foi excluído (DT-19).
+      // Sem linha, o cadastro não existe mais, foi excluído ou saiu do que a
+      // pessoa vê (DT-19, AQ-6): nunca um sucesso falso. O erro sobe para o
+      // `MutationCache` (42501 relê o acesso e confere a sessão).
       const { data: saved, error } = await supabase.from("members").update(payload).eq("id", member.id).select("id");
       if (error) throw error;
       return saved?.length ? { kind: "saved" } : { kind: "gone" };
@@ -354,6 +400,10 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         }
         return;
       }
+      if (result.kind === "refused") {
+        showRefusal(result.refusal);
+        return;
+      }
       if (result.kind === "gone") {
         setDeletedWhileEditing(true);
         // "0 linhas" também é o que um membro excluído recebe (RN-14): confere a própria sessão.
@@ -363,20 +413,30 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ROLE_OPTIONS_QUERY_KEY });
       toast({ title: isEditing ? "Membro atualizado com sucesso" : "Membro criado com sucesso" });
       onClose();
     },
     onError: (error: Error) => {
-      toast({ variant: "destructive", title: "Erro", description: error.message });
+      const refusal = memberRefusalFromError(error);
+      if (refusal) showRefusal(refusal);
+      else toast({ variant: "destructive", title: "Erro", description: error.message });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.role_id) {
-      toast({ variant: "destructive", title: "Erro", description: "Selecione uma função para o membro." });
+    setTopRefusal(null);
+    // Validações que não vão ao servidor: o Líder obrigatório (UX-17) e a Função.
+    if (canEditMinistry && isLeaderMissing(ministryView, form.leader_id)) {
+      setFieldError({ field: "leader_id", message: MEMBER_FORM_TEXTS.leaderRequired });
       return;
     }
+    if (roleView.kind === "select" && !roleValue) {
+      setFieldError({ field: "role_id", message: MEMBER_FORM_TEXTS.roleRequired });
+      return;
+    }
+    setFieldError(null);
     // O erro do e-mail some no reenvio; se voltar, o foco volta para o campo.
     setEmailError(null);
     mutation.mutate({ data: form, confirmDeletedMatches: false });
@@ -396,6 +456,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
 
   const update = (field: keyof MemberInsert, value: string | boolean | null) => {
     if (field === "email") setEmailError(null);
+    if (fieldError?.field === field) setFieldError(null);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -451,6 +512,13 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
               <p key={message}>{message}</p>
             ))}
           </AlertDescription>
+        </Alert>
+      )}
+
+      {topRefusal && (
+        <Alert ref={refusalAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="text-foreground">{topRefusal}</AlertDescription>
         </Alert>
       )}
 
@@ -554,11 +622,17 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
               <Label htmlFor="spouse">Cônjuge</Label>
               <AsyncMemberSelect
                 inputId="spouse"
+                focusRef={spouseSelectRef}
                 value={form.spouse_id || null}
                 onChange={(v) => update("spouse_id", v)}
                 excludeId={member?.id}
                 placeholder="Buscar cônjuge…"
+                savedLabel={member?.spouse_name}
+                noResultsLabel={searchEmptyLabel}
+                aria-describedby={describedBy(errorFor("spouse_id") && "spouse-error", ministryView.spouseHint && "spouse-hint")}
               />
+              {errorFor("spouse_id") && <FieldError id="spouse-error">{errorFor("spouse_id") ?? ""}</FieldError>}
+              {ministryView.spouseHint && <FieldHint id="spouse-hint">{ministryView.spouseHint}</FieldHint>}
             </div>
           )}
           {canViewSensitive && (
@@ -584,47 +658,16 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         <>
           <Separator />
 
-          {/* Ministry Data */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Dados Ministeriais</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <Label htmlFor="is_pastor">É Pastor(a)?</Label>
-                <Switch id="is_pastor" checked={form.is_pastor || false} onCheckedChange={(v) => update("is_pastor", v)} />
-              </div>
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <Label htmlFor="is_active">Ativo</Label>
-                <Switch id="is_active" checked={form.is_active !== false} onCheckedChange={(v) => update("is_active", v)} />
-              </div>
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <Label htmlFor="has_leadership">Tem Liderança?</Label>
-                <Switch id="has_leadership" checked={form.has_leadership || false} onCheckedChange={(v) => update("has_leadership", v)} />
-              </div>
-              {form.has_leadership && (
-                <div className="space-y-2">
-                  <Label htmlFor="leader">Líder</Label>
-                  <AsyncMemberSelect
-                    inputId="leader"
-                    focusRef={leaderSelectRef}
-                    value={form.leader_id || null}
-                    onChange={(v) => update("leader_id", v)}
-                    excludeId={member?.id}
-                    placeholder="Buscar líder…"
-                  />
-                </div>
-              )}
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <Label htmlFor="is_baptized">Batizado(a)?</Label>
-                <Switch id="is_baptized" checked={form.is_baptized || false} onCheckedChange={(v) => update("is_baptized", v)} />
-              </div>
-              {form.is_baptized && (
-                <div className="space-y-2">
-                  <Label htmlFor="baptism_date">Data do Batismo</Label>
-                  <Input id="baptism_date" type="date" value={form.baptism_date || ""} onChange={(e) => update("baptism_date", e.target.value)} />
-                </div>
-              )}
-            </div>
-          </div>
+          <MemberMinistryFields
+            view={ministryView}
+            values={form}
+            onChange={update}
+            memberId={member?.id}
+            leaderSavedLabel={isEditing ? member.leader_name : ownMember?.name}
+            leaderRef={leaderSelectRef}
+            leaderError={errorFor("leader_id")}
+            noResultsLabel={searchEmptyLabel}
+          />
         </>
       )}
 
@@ -691,39 +734,37 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         </>
       )}
 
-      <Separator />
-
-      {/* Access */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Acesso</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {readOnly ? (
-            // A própria função, como texto (P12, RN-23).
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{MEMBER_FORM_TEXTS.roleTextLabel}</p>
-              <p className="text-base">{access ? roleDisplayName(access) : "—"}</p>
-              <p className="text-sm text-muted-foreground">{MEMBER_FORM_TEXTS.ownRole}</p>
+      {/* Acesso: some sem Função (UXD-12) e sem "Alterar Senha". */}
+      {(roleView.kind !== "hidden" || (isEditing && canChangePassword)) && (
+        <>
+          <Separator />
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Acesso</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <MemberRoleField
+                view={roleView}
+                loadFailed={roleOptions.isError}
+                value={roleValue}
+                onChange={(roleId) => {
+                  setRoleChoice(roleId);
+                  if (fieldError?.field === "role_id") setFieldError(null);
+                }}
+                error={errorFor("role_id")}
+                triggerRef={roleTriggerRef}
+              />
+              {isEditing && canChangePassword && (
+                <div className="space-y-2">
+                  <Label>Senha</Label>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setPasswordDialogOpen(true)}>
+                    <Key className="w-4 h-4 mr-2" />
+                    Alterar Senha
+                  </Button>
+                </div>
+              )}
             </div>
-          ) : (
-            <RoleField
-              roles={roles}
-              loadError={rolesError}
-              value={form.role_id}
-              canAssign={canAssignRole}
-              onChange={(v) => update("role_id", v)}
-            />
-          )}
-          {isEditing && canChangePassword && (
-            <div className="space-y-2">
-              <Label>Senha</Label>
-              <Button type="button" variant="outline" className="w-full" onClick={() => setPasswordDialogOpen(true)}>
-                <Key className="w-4 h-4 mr-2" />
-                Alterar Senha
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       <div className="flex justify-end gap-3 pt-4">
         {readOnly ? (
@@ -735,8 +776,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
-              {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
+            <Button type="submit" disabled={mutation.isPending || deletedWhileEditing || awaitingRoleOptions}>
+              {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : MEMBER_FORM_TEXTS.createMember}
             </Button>
           </>
         )}

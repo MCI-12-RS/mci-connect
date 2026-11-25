@@ -25,8 +25,9 @@ vi.mock("@/components/AppLayout", () => ({
 const auth = vi.hoisted(() => ({ permissions: new Set<string>(), loaded: true }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
-    isSystem: false,
     permissionsLoaded: auth.loaded,
+    // Quem restaura vê a igreja toda; sem atribuir funções, o formulário não lê `role_options`.
+    access: { member_id: "me", role_name: "Administrador", sees_whole_church: true, can_assign_roles: false },
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
 }));
@@ -85,13 +86,13 @@ const brunoRestored: MemberRow = {
   leader_id: null,
   leader_name: null,
   spouse_id: null,
+  spouse_name: null,
   is_baptized: false,
   baptism_date: null,
   is_active: true,
   g12_level: 0,
   total_disciples: 0,
   total_cells: 0,
-  role_id: "role-lider",
   auth_user_id: "u-bruno",
   sensitive_visible: false,
   email: null,
@@ -292,8 +293,8 @@ describe("Membros excluídos: restaurar (T5)", () => {
     expect(within(result).getByRole("button", { name: "Agora não" })).toBeInTheDocument();
     expect(toast).not.toHaveBeenCalled();
 
-    // O cadastro restaurado, da members_view, e as funções do formulário.
-    respondWith({ data: brunoRestored }, { data: [{ id: "role-lider", name: "Líder", is_default: false }] });
+    // O cadastro restaurado, da members_view.
+    respondWith({ data: brunoRestored });
     fireEvent.click(within(result).getByRole("button", { name: "Definir líder" }));
 
     const form = await screen.findByRole("dialog", { name: "Editar Membro" });

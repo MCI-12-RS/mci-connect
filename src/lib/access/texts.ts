@@ -114,6 +114,16 @@ export const MEMBER_FORM_TEXTS = {
   roleChangeNotAllowed: "Você não tem permissão para alterar a função deste membro.",
   newMemberBlockedTitle: "Não é possível cadastrar membros",
   close: "Fechar",
+  /** Botão da lista e título do diálogo (T5, UX-10). */
+  newMember: "Novo membro",
+  /** Botão de envio do cadastro novo (fluxo F4). */
+  createMember: "Criar membro",
+  /** O seletor de função enquanto `role_options` carrega (Estados, coluna Membros). */
+  roleLoading: "Carregando…",
+  /** Não está no spec: falha ao ler as opções de função (o texto de antes do E2.02). */
+  roleLoadFailed: "Não foi possível carregar as funções.",
+  /** Não está no spec: seletor de função vazio no envio (o texto de antes do E2.02, agora embaixo do campo). */
+  roleRequired: "Selecione uma função para o membro.",
 } as const;
 
 /** Formulário de célula (T7). */

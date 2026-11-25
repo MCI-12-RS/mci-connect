@@ -14,11 +14,14 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
 /**
  * Colunas da `members_view` usadas nas telas de membro (lista, formulário e o
  * próprio cadastro no AuthContext). Ficam de fora as colunas de vínculo
- * celular e de busca, que custam uma subconsulta por linha.
+ * celular e de busca, que custam uma subconsulta por linha, e a `role_id`: a
+ * função vem de `my_access` (a própria) e de `role_options` (a de outra
+ * pessoa), nunca da linha do membro (E2.02, RN-23). `leader_name` e
+ * `spouse_name` são os nomes salvos dos seletores (DT-23).
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =
-  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, is_baptized, baptism_date, is_active, g12_level, total_disciples, total_cells, role_id, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
+  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
 
 export type MemberRow = Omit<
   MemberViewRow,
@@ -29,7 +32,7 @@ export type MemberRow = Omit<
   | "search_text"
   | "male_cells"
   | "female_cells"
-  | "spouse_name"
+  | "role_id"
   | "created_at"
   | "updated_at"
 >;

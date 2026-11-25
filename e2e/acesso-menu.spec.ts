@@ -243,7 +243,7 @@ test.describe("UX-11: rota sem permissão", () => {
 });
 
 test.describe("UX-10: o acesso muda com a sessão aberta (duas sessões)", () => {
-  test("Dado Caio (Membro) aberto, quando a função dele vira Líder, então 'Novo Membro' aparece ao voltar para a aba, sem sair e entrar, e o aviso sai uma vez", async ({ browser }) => {
+  test("Dado Caio (Membro) aberto, quando a função dele vira Líder, então 'Novo membro' aparece ao voltar para a aba, sem sair e entrar, e o aviso sai uma vez", async ({ browser }) => {
     const caio = await openSession(browser, CAIO.email);
     try {
       await caio.page.goto("/members");

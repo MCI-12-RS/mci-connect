@@ -9,6 +9,7 @@ import MemberDeletionFlow, { type MemberDeletionTarget } from "@/components/Memb
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
+import { BlockedActionDialog } from "@/components/BlockedActionDialog";
 import { MemberStatusBadge, NoLeadershipBadge } from "@/components/StatusBadges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,8 @@ import { useMembersList } from "@/hooks/use-members-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
 import { DELETED_LIST_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { listSubtitle } from "@/lib/access/access";
+import { MEMBER_FORM_TEXTS, RULE_TEXTS } from "@/lib/access/texts";
 
 type Member = MemberRow;
 
@@ -43,7 +46,9 @@ const Members = () => {
   // Cadastro novo com dados de um excluído: restaurado pelo aviso, o diálogo passa a editá-lo (RN-18, UX-32).
   const [restoredMember, setRestoredMember] = useState<RestoredFromWarning | null>(null);
   const [deletingMember, setDeletingMember] = useState<MemberDeletionTarget | null>(null);
-  const { hasPermission, user } = useAuth();
+  // "Novo membro" com a função padrão acima de quem cadastra (RN-19, UXD-2): o bloqueio, e não o formulário.
+  const [newMemberBlocked, setNewMemberBlocked] = useState(false);
+  const { hasPermission, user, access } = useAuth();
   const isMobile = useIsMobile();
 
   const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
@@ -112,6 +117,7 @@ const Members = () => {
     />
   );
   const canCreate = hasPermission("create_member");
+  const subtitle = listSubtitle(access, "members");
 
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
@@ -183,7 +189,7 @@ const Members = () => {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
-              <p className="text-muted-foreground text-sm">Gerenciar membros da igreja</p>
+              {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
           </div>
@@ -194,12 +200,14 @@ const Members = () => {
                 <Button
                   onClick={(e) => {
                     returnFocus.setOpener(e.currentTarget);
-                    setFormOpen(true);
+                    // Sem o acesso lido (AQ-1), o formulário abre e o servidor decide ao salvar.
+                    if (access && !access.can_create_member) setNewMemberBlocked(true);
+                    else setFormOpen(true);
                   }}
                   className="w-full sm:w-auto"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo Membro
+                  <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                  {MEMBER_FORM_TEXTS.newMember}
                 </Button>
               )}
             </div>
@@ -336,10 +344,11 @@ const Members = () => {
         <Dialog open={formOpen} onOpenChange={handleClose}>
           <DialogContent
             className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+            aria-describedby={undefined}
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
           >
             <DialogHeader>
-              <DialogTitle>{editingMember || restoredMember ? "Editar Membro" : "Novo Membro"}</DialogTitle>
+              <DialogTitle>{editingMember || restoredMember ? "Editar Membro" : MEMBER_FORM_TEXTS.newMember}</DialogTitle>
             </DialogHeader>
             {restoredMember ? (
               <MemberFormById
@@ -353,6 +362,15 @@ const Members = () => {
             )}
           </DialogContent>
         </Dialog>
+
+        <BlockedActionDialog
+          open={newMemberBlocked}
+          onOpenChange={setNewMemberBlocked}
+          onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          title={MEMBER_FORM_TEXTS.newMemberBlockedTitle}
+        >
+          <p>{RULE_TEXTS.defaultRoleNotCovered}</p>
+        </BlockedActionDialog>
 
         {deletingMember && (
           <MemberDeletionFlow

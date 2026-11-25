@@ -559,7 +559,7 @@ test("UX-13 (AD): 'Excluídos'/'Excluídas' no cabeçalho das três listas; em 3
 }) => {
   await login(page, env.admin);
   const lists = [
-    { path: "/members", label: "Ver membros excluídos", text: "Excluídos", primary: "Novo Membro" },
+    { path: "/members", label: "Ver membros excluídos", text: "Excluídos", primary: "Novo membro" },
     { path: "/cells", label: "Ver células excluídas", text: "Excluídas", primary: "Nova Célula" },
     { path: "/cell-reports", label: "Ver relatórios excluídos", text: "Excluídos", primary: "Novo Relatório" },
   ];
