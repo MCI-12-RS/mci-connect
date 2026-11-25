@@ -1,0 +1,181 @@
+-- E2.08 (PR 1): volume de referência e metas do risco 11.
+-- Spec: docs/specs/e2-08-cadastro-celulas.md (repositório apps-mci), Riscos, item 11:
+-- o volume do E1.08 (20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações).
+--
+-- Metas:
+--   - lançamento de relatório com o trigger novo: no máximo 1 ms a mais que sem ele;
+--   - PATCH de célula sem troca de líder nem de situação abaixo de 20 ms;
+--   - página da cells_view com contagem abaixo de 300 ms.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e208_volume.psql > e208_explain.txt
+-- A saída traz o EXPLAIN (ANALYZE, BUFFERS) de cada operação e uma linha "META" por medida, com o
+-- tempo (o melhor de várias rodadas, cada uma desfeita) e o limite.
+
+\set ON_ERROR_STOP on
+\set cell_cols 'id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, timothy_name, host_name, g12_leader_name, can_submit_report, is_mine'
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas (a árvore do volume do E2.02): 2 pastores casados (1 e 2), 12 G12 (3 a 14) e 12 discípulos por
+-- pessoa até 20.000. 1 = pastor (Líder, a árvore inteira), 2 = Administrador, 3 = G12 (Líder).
+INSERT INTO auth.users (id, email)
+SELECT ('a2080900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e208-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2080900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2080900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2080900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2080900-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       n % 10 <> 0,
+       n > 2,
+       CASE WHEN n <= 3 THEN ('a2080900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células com líder, timóteo e anfitrião espalhados pela árvore; 10% inativas.
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active)
+SELECT ('d2080900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2080900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2080900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2080900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0
+  FROM generate_series(1, 1500) n;
+
+-- 100 mil relatórios (semanas passadas; a semana atual fica livre) e 800 mil participações.
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2080900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2080900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', true, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT ('e2080900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('c2080900-0000-0000-0000-' || lpad((15 + ((i::bigint * 8 + k) * 7919) % 19980)::text, 12, '0'))::uuid
+  FROM generate_series(0, 99999) i, generate_series(0, 7) k;
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+ANALYZE private.member_hierarchy;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' (inativas=' || (SELECT count(*) FROM public.cells WHERE NOT is_active) || ') reports=' || (SELECT count(*) FROM public.cell_reports)
+    || ' participants=' || (SELECT count(*) FROM public.cell_report_participants) AS volume;
+
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2080900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+-- Tempo de uma gravação, em ms, como a pessoa n: o melhor de _rounds, cada rodada desfeita.
+CREATE FUNCTION pg_temp.undo_ms(_n int, _sql text, _rounds int DEFAULT 30) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    BEGIN
+      PERFORM pg_temp.as_member(_n);
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      _t := clock_timestamp();
+      EXECUTE _sql;
+      _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+      IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+      RAISE EXCEPTION 'undo' USING ERRCODE = 'P0099';
+    EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+    END;
+  END LOOP;
+  EXECUTE 'RESET ROLE';
+  RETURN round(_best, 2);
+END $$;
+-- Tempo de uma leitura, em ms (o melhor de _rounds), sob o papel e a sessão que o chamador já pôs.
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+    IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+  END LOOP;
+  RETURN round(_best, 1);
+END $$;
+
+-- Uma célula ativa que o pastor (1) vê e lança; uma inativa.
+SELECT id AS cell_active FROM public.cells WHERE is_active ORDER BY id LIMIT 1 \gset
+SELECT id AS cell_inactive FROM public.cells WHERE NOT is_active ORDER BY id LIMIT 1 \gset
+\set ins_active 'INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme) VALUES (\'' :cell_active '\', public.sp_today(), \'23:59\', true, \'Lançamento volume\')'
+\set patch_cell 'UPDATE public.cells SET meeting_time = \'19:30\', street = \'Rua editada\' WHERE id = \'' :cell_active '\''
+
+\echo
+\echo '######## LANÇAMENTO (pastor, função Líder) ########'
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+SELECT 'CONFERÊNCIA o pastor lança a célula ativa e não a inativa',
+       (SELECT can_submit_report FROM public.cells_view WHERE id = :'cell_active') AS ativa,
+       (SELECT can_submit_report FROM public.cells_view WHERE id = :'cell_inactive') AS inativa;
+SAVEPOINT s;
+\echo '--- INSERT do relatório da semana atual, com o trigger novo'
+EXPLAIN (ANALYZE, BUFFERS) :ins_active;
+ROLLBACK TO s;
+RESET ROLE;
+
+-- Com e sem o trigger, alternados para diluir o ruído (o melhor de cada lado em 5 blocos de 30 rodadas).
+CREATE TEMP TABLE launch (with_trigger boolean, ms numeric);
+SELECT format($f$
+  INSERT INTO launch SELECT true, pg_temp.undo_ms(1, %1$L);
+  ALTER TABLE public.cell_reports DISABLE TRIGGER ac_enforce_cell_report_active;
+  INSERT INTO launch SELECT false, pg_temp.undo_ms(1, %1$L);
+  ALTER TABLE public.cell_reports ENABLE TRIGGER ac_enforce_cell_report_active;
+$f$, :'ins_active') AS block \gset
+:block
+:block
+:block
+:block
+:block
+SELECT 'META lançamento com o trigger (ms)', min(ms) FROM launch WHERE with_trigger;
+SELECT 'META lançamento sem o trigger (ms)', min(ms) FROM launch WHERE NOT with_trigger;
+SELECT 'META diferença do trigger novo no lançamento (ms, meta 1)',
+       (SELECT min(ms) FROM launch WHERE with_trigger) - (SELECT min(ms) FROM launch WHERE NOT with_trigger) AS ms;
+SELECT 'CONFERÊNCIA o trigger está ligado de novo', tgenabled = 'O' AS ligado
+  FROM pg_trigger WHERE tgrelid = 'public.cell_reports'::regclass AND tgname = 'ac_enforce_cell_report_active';
+
+\echo
+\echo '######## PATCH DE CÉLULA (Administrador; sem troca de líder nem de situação) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SAVEPOINT s;
+EXPLAIN (ANALYZE, BUFFERS) :patch_cell;
+ROLLBACK TO s;
+RESET ROLE;
+SELECT 'META PATCH de célula, horário e rua (ms, meta 20)', pg_temp.undo_ms(2, :'patch_cell') AS ms;
+
+\echo
+\echo '######## cells_view: página e contagem ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cells_view;
+SELECT 'META Administrador: página de células + contagem (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META Administrador: my_access (ms)', pg_temp.ms($q$SELECT * FROM public.my_access()$q$, 20) AS ms;
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+SELECT 'META G12: página de células + contagem (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META G12: my_access (ms)', pg_temp.ms($q$SELECT * FROM public.my_access()$q$, 20) AS ms;
+RESET ROLE;
+
+ROLLBACK;
