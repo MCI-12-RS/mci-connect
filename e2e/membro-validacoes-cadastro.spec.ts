@@ -133,6 +133,8 @@ test.describe("UX-01, UX-02, UX-04, UX-28, UX-31: layout do formulário", () => 
     await login(page, env.admin);
     const geometry = async () => {
       const dialog = await openNew(page);
+      // O diálogo abre com animação de entrada (zoom/slide): medir no meio dela desloca as posições y.
+      await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))));
       const at = async (locator: Locator) => (await locator.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
       const result = {
         name: await at(dialog.getByLabel("Nome *")),
@@ -607,6 +609,27 @@ test.describe("UX-25: envio e queda de conexão", () => {
     await createButton(dialog).click();
     await expect(toast(page, "Membro criado com sucesso")).toBeVisible();
     expect(created(personName)).toBe(1);
+  });
+
+  test("Chamada que nunca responde: em cerca de 20 s o rodapé mostra o erro de conexão, os dados ficam e o botão volta", async ({ page }) => {
+    test.setTimeout(75_000);
+    await login(page, env.admin);
+    const dialog = await openNew(page);
+    const personName = who("Sem Resposta");
+    await fillBasics(dialog, personName, free(10));
+    // A requisição fica pendurada (nem resposta nem erro): quem encerra é o tempo-limite de 20 s do cliente.
+    await page.route("**/functions/v1/create-user-admin", () => undefined);
+    const startedAt = Date.now();
+    await createButton(dialog).click();
+    await expect(dialog.getByRole("button", { name: "Criando…", exact: true })).toBeDisabled();
+    const alert = dialog.getByRole("alert").filter({ hasText: "Não foi possível salvar o cadastro. Verifique a conexão e tente de novo." });
+    await expect(alert).toBeVisible({ timeout: 40_000 });
+    const elapsed = Date.now() - startedAt;
+    expect(elapsed, "não antes do tempo-limite").toBeGreaterThanOrEqual(19_000);
+    expect(elapsed, "não muito depois do tempo-limite").toBeLessThan(30_000);
+    await expect(dialog.getByLabel("Nome *")).toHaveValue(personName);
+    await expect(createButton(dialog)).toBeEnabled();
+    expect(created(personName)).toBe(0);
   });
 });
 
