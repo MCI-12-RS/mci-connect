@@ -1247,20 +1247,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "members_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "members_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles_view"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "members_spouse_id_fkey"
             columns: ["spouse_id"]
             isOneToOne: false

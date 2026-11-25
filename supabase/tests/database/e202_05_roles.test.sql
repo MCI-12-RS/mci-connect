@@ -18,6 +18,9 @@
 --     Hugo só com Enviar Relatório; Toda a Igreja vê Ministérios; Auditoria;
 --   - DA-3: quem salva a função só acrescenta o que tem; nome, descrição e
 --     concorrência da tela (role_changed).
+--   - DA-9 (PR 6, migration 5): authenticated não grava roles nem
+--     role_permissions direto (42501); os triggers de proteção são provados
+--     como service_role.
 --
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Rodar com: supabase test db
@@ -64,6 +67,25 @@ BEGIN
 END $$;
 CREATE FUNCTION pg_temp.code(_n int, _sql text) RETURNS text LANGUAGE sql AS
 $$ SELECT pg_temp.try(_n, _sql) ->> 'code' $$;
+-- Código do erro como service_role (sem o atalho da manutenção). Desde o PR 6
+-- (migration 5), authenticated não grava roles nem role_permissions direto, e
+-- os triggers de proteção (RN-17, RN-22) seguem valendo para quem ainda grava.
+CREATE FUNCTION pg_temp.svc(_sql text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE _state text; _detail text; _hint text;
+BEGIN
+  BEGIN
+    PERFORM set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+    EXECUTE 'SET LOCAL ROLE service_role';
+    EXECUTE _sql;
+    EXECUTE 'RESET ROLE';
+    PERFORM set_config('request.jwt.claims', '', true);
+    RETURN '00000';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS _state = RETURNED_SQLSTATE, _detail = PG_EXCEPTION_DETAIL, _hint = PG_EXCEPTION_HINT;
+    RETURN CASE WHEN _state = '22023' AND _hint = 'app_error' AND _detail LIKE '{%'
+                THEN _detail::jsonb ->> 'code' ELSE _state END;
+  END;
+END $$;
 CREATE FUNCTION pg_temp.msg(_n int, _sql text) RETURNS text LANGUAGE sql AS
 $$ SELECT pg_temp.try(_n, _sql) ->> 'message' $$;
 CREATE FUNCTION pg_temp.rows(_n int, _sql text) RETURNS text LANGUAGE sql AS
@@ -253,7 +275,7 @@ INSERT INTO universe
 GRANT SELECT ON universe TO authenticated;
 GRANT SELECT ON lbl TO authenticated;
 
-SELECT plan(101);
+SELECT plan(107);
 
 -- ===========================================================================
 -- 1. RN-16: as funções semeadas.
@@ -318,18 +340,33 @@ SELECT pg_temp.run('adm',
     /* 11 */ 'SELECT (SELECT count(*) FROM public.roles WHERE name = ''Administrador'' AND is_system AND NOT is_default)::text || (SELECT count(*) FROM public.role_permissions WHERE role_id = (SELECT id FROM public.roles WHERE is_system))::text',
     /* 12 */ pg_temp.pc(16, format('UPDATE public.members SET notes = ''x'' WHERE id = %L', pg_temp.m(17))),
     /* 13 */ pg_temp.pc(16, format('UPDATE public.members SET notes = ''x'' WHERE id = %L', pg_temp.m(13))),
-    /* 14 */ pg_temp.pc(16, format('UPDATE public.cells SET meeting_time = ''21:00'' WHERE id = %L', pg_temp.c(3)))
+    /* 14 */ pg_temp.pc(16, format('UPDATE public.cells SET meeting_time = ''21:00'' WHERE id = %L', pg_temp.c(3))),
+    -- 15 a 20: as mesmas escritas diretas de 5 a 10, como service_role (os triggers).
+    /* 15 */ format('SELECT pg_temp.svc(%L)', format('UPDATE public.roles SET name = ''Adm'' WHERE id = %L', pg_temp.role('Administrador'))),
+    /* 16 */ format('SELECT pg_temp.svc(%L)', format('UPDATE public.roles SET description = ''x'' WHERE id = %L', pg_temp.role('Administrador'))),
+    /* 17 */ format('SELECT pg_temp.svc(%L)', format('DELETE FROM public.roles WHERE id = %L', pg_temp.role('Administrador'))),
+    /* 18 */ format('SELECT pg_temp.svc(%L)', format('DELETE FROM public.role_permissions WHERE role_id = %L AND permission = ''view_dashboard''', pg_temp.role('Administrador'))),
+    /* 19 */ format('SELECT pg_temp.svc(%L)', format('INSERT INTO public.role_permissions (role_id, permission) VALUES (%L, ''view_dashboard'')', pg_temp.role('Administrador'))),
+    /* 20 */ format('SELECT pg_temp.svc(%L)', format('UPDATE public.roles SET is_default = true WHERE id = %L', pg_temp.role('Administrador')))
   ]);
 SELECT is(v[1], 'admin_role_protected', 'RN-17: Rita muda o nome, a descrição e as permissões da Administrador (save_role): admin_role_protected') FROM sb WHERE k = 'adm';
 SELECT is(v[2], 'A função Administrador não pode ser alterada.', 'RN-17: com a mensagem do spec') FROM sb WHERE k = 'adm';
 SELECT is(v[3], 'A função Administrador não pode ser a função padrão.', 'RN-17: marcar como padrão: mensagem do spec') FROM sb WHERE k = 'adm';
 SELECT is(v[4], 'A função Administrador não pode ser excluída.', 'RN-17: excluí-la: mensagem do spec') FROM sb WHERE k = 'adm';
-SELECT is(v[5], 'admin_role_protected', 'RN-17: UPDATE direto do nome da Administrador também é recusado') FROM sb WHERE k = 'adm';
-SELECT is(v[6], 'admin_role_protected', 'RN-17: e o da descrição') FROM sb WHERE k = 'adm';
-SELECT is(v[7], 'admin_role_protected', 'RN-17: e o DELETE direto') FROM sb WHERE k = 'adm';
-SELECT is(v[8], 'admin_role_protected', 'RN-17: e tirar uma permissão dela') FROM sb WHERE k = 'adm';
-SELECT is(v[9], 'admin_role_protected', 'RN-17: e dar uma permissão a ela') FROM sb WHERE k = 'adm';
-SELECT ok(v[10] IN ('admin_role_protected', '23514'), 'RN-17: e marcá-la como padrão por UPDATE direto (' || v[10] || ')') FROM sb WHERE k = 'adm';
+-- Desde o PR 6 (migration 5), authenticated não tem privilégio de escrita nas
+-- duas tabelas: a escrita direta de Rita para no 42501, antes dos triggers.
+SELECT is(v[5], '42501', 'RN-17/DA-9: UPDATE direto do nome da Administrador é recusado (42501, sem escrita direta)') FROM sb WHERE k = 'adm';
+SELECT is(v[6], '42501', 'RN-17/DA-9: e o da descrição') FROM sb WHERE k = 'adm';
+SELECT is(v[7], '42501', 'RN-17/DA-9: e o DELETE direto') FROM sb WHERE k = 'adm';
+SELECT is(v[8], '42501', 'RN-17/DA-9: e tirar uma permissão dela') FROM sb WHERE k = 'adm';
+SELECT is(v[9], '42501', 'RN-17/DA-9: e dar uma permissão a ela') FROM sb WHERE k = 'adm';
+SELECT is(v[10], '42501', 'RN-17/DA-9: e marcá-la como padrão por UPDATE direto') FROM sb WHERE k = 'adm';
+SELECT is(v[15], 'admin_role_protected', 'RN-17: como service_role, o trigger recusa mudar o nome da Administrador') FROM sb WHERE k = 'adm';
+SELECT is(v[16], 'admin_role_protected', 'RN-17: e a descrição') FROM sb WHERE k = 'adm';
+SELECT is(v[17], 'admin_role_protected', 'RN-17: e o DELETE') FROM sb WHERE k = 'adm';
+SELECT is(v[18], 'admin_role_protected', 'RN-17: e tirar uma permissão dela') FROM sb WHERE k = 'adm';
+SELECT is(v[19], 'admin_role_protected', 'RN-17: e dar uma permissão a ela') FROM sb WHERE k = 'adm';
+SELECT ok(v[20] IN ('admin_role_protected', '23514'), 'RN-17: e marcá-la como padrão (' || v[20] || ')') FROM sb WHERE k = 'adm';
 SELECT is(v[11], '122', 'RN-17: e nada mudou: continua a Administrador, não padrão, com as 22 linhas') FROM sb WHERE k = 'adm';
 SELECT is(v[12], '00000', 'RN-17: Rita edita Ester (fora de qualquer ministério)') FROM sb WHERE k = 'adm';
 SELECT is(v[13], '00000', 'RN-17: edita Débora') FROM sb WHERE k = 'adm';
@@ -434,8 +471,8 @@ BEGIN
   END;
 END $$;
 SELECT is(pg_temp.two_defaults(), 'unique_violation', 'RN-19: duas padrão ao mesmo tempo: o índice único recusa');
--- Só 42501 e nada gravado para quem não gerencia funções.
-SELECT is(pg_temp.rows(3, format('UPDATE public.roles SET is_default = true WHERE id = %L', pg_temp.role('Líder'))), '0', 'RN-19: Pedro não troca a padrão por UPDATE direto (0 linhas)');
+-- Sem privilégio de escrita desde o PR 6 (migration 5): 42501 e nada gravado.
+SELECT is(pg_temp.rows(3, format('UPDATE public.roles SET is_default = true WHERE id = %L', pg_temp.role('Líder'))), '42501', 'RN-19/DA-9: Pedro não troca a padrão por UPDATE direto (42501)');
 
 -- ===========================================================================
 -- 5. RN-20: excluir uma função.
@@ -489,10 +526,11 @@ SELECT is(v[1], '0', 'RN-22: Hugo com Visualizar Membros (legado) e Dashboard do
 SELECT is(v[2], '1', 'RN-22: e a members_view mostra só ele') FROM sb WHERE k = 'ret';
 SELECT is(v[3], '42501', 'RN-22: e o dashboard recusa (42501)') FROM sb WHERE k = 'ret';
 SELECT is(v[4], 'falsefalse', 'RN-22: e my_access não vê a igreja nem o ministério') FROM sb WHERE k = 'ret';
--- INSERT direto (fora da manutenção) também é recusado, como a API.
-SELECT is(pg_temp.try(16, format('INSERT INTO public.role_permissions (role_id, permission) VALUES (%L, ''view_members'')', pg_temp.role('Membro'))) ->> 'code', 'permission_retired',
-  'RN-22: dar view_members a uma função por INSERT é recusado (permission_retired)');
-SELECT is(pg_temp.try(16, format('INSERT INTO public.role_permissions (role_id, permission) VALUES (%L, ''view_own_ministry_dashboard'')', pg_temp.role('Membro'))) ->> 'code', 'permission_retired',
+-- INSERT direto (fora da manutenção) também é recusado, como a API. Desde o
+-- PR 6, só a service_role grava direto (authenticated para no 42501, DA-9).
+SELECT is(pg_temp.svc(format('INSERT INTO public.role_permissions (role_id, permission) VALUES (%L, ''view_members'')', pg_temp.role('Membro'))), 'permission_retired',
+  'RN-22: dar view_members a uma função por INSERT direto (service_role) é recusado (permission_retired)');
+SELECT is(pg_temp.svc(format('INSERT INTO public.role_permissions (role_id, permission) VALUES (%L, ''view_own_ministry_dashboard'')', pg_temp.role('Membro'))), 'permission_retired',
   'RN-22: idem view_own_ministry_dashboard');
 SELECT is((pg_temp.try(16, 'SELECT public.save_role(NULL, ''X'', NULL, ARRAY[''view_members'', ''view_own_ministry_dashboard'']::public.permission_action[], false)') -> 'detail' -> 'permissions'), '["view_members", "view_own_ministry_dashboard"]'::jsonb,
   'RN-22: save_role devolve as permissões aposentadas no detalhe');
