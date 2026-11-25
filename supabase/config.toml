@@ -23,3 +23,11 @@ verify_jwt = false
 # Limite de /verify por IP: alto aqui para os testes locais de login em rajada.
 [auth.rate_limit]
 token_verifications = 1000
+
+# Só para a stack local (E1.04, RN-14 e DT-13): desliga o login com e-mail e
+# senha direto no Auth (é o GOTRUE_EXTERNAL_EMAIL_ENABLED=false da stack local).
+# O app entra só pela função sign-in. Em produção, o equivalente é
+# `external_email_enabled = false`, aplicado pela Management API no roteiro de
+# implantação (passo B). Nunca use `supabase config push`.
+[auth.email]
+enable_signup = false
