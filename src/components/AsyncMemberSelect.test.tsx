@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { createQueryWrapper } from "@/test/query-wrapper";
-import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import AsyncMemberSelect from "./AsyncMemberSelect";
 
 // Seletor de membro com busca e paginação no servidor (E1.08, RN-07), pelo
@@ -409,5 +409,57 @@ describe("PaginatedSelect dentro de um Dialog (Esc)", () => {
     fireEvent.keyDown(input, { key: "Escape" });
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("AsyncMemberSelect: seletor limitado ao que se vê (E2.02, P11)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  function renderScoped(props: { value: string | null; savedLabel?: string; noResultsLabel?: string }) {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <>
+        <label htmlFor="leader">Líder</label>
+        <AsyncMemberSelect inputId="leader" onChange={onChange} aria-describedby="leader-hint" {...props} />
+        <p id="leader-hint">Dica de alcance</p>
+      </>,
+      { wrapper: createQueryWrapper() },
+    );
+    return { onChange, rerender, input: screen.getByLabelText("Líder") };
+  }
+
+  it("Dado o nome salvo vindo da view (fora do ministério), então aparece pelo nome, sem consultar a member_names", async () => {
+    renderScoped({ value: "m-samuel", savedLabel: "Samuel Colares" });
+
+    expect(await screen.findByText("Samuel Colares")).toBeInTheDocument();
+    expect(fakeRpcs().filter((rpc) => rpc.fn === "member_names")).toHaveLength(0);
+  });
+
+  it("Dada a dica, então ela fica ligada ao campo de busca por aria-describedby", () => {
+    const { input } = renderScoped({ value: null });
+
+    expect(input).toHaveAttribute("aria-describedby", expect.stringContaining("leader-hint"));
+    expect(input).toHaveAccessibleDescription(expect.stringContaining("Dica de alcance"));
+  });
+
+  it("Dado o texto de busca vazia do ministério, então o menu sem resultado o mostra", async () => {
+    respondWith({ data: [] });
+    const { input } = renderScoped({ value: null, noResultsLabel: "Nenhum membro do seu ministério encontrado." });
+
+    openMenu(input);
+
+    expect(await screen.findByText("Nenhum membro do seu ministério encontrado.")).toBeInTheDocument();
+  });
+
+  it("Dado o valor trocado, então o nome salvo deixa de valer e não volta às opções", async () => {
+    respondWith({ data: [{ id: "m-pedro", name: "Pedro Alves" }] });
+    const { input, onChange } = renderScoped({ value: "m-samuel", savedLabel: "Samuel Colares" });
+
+    openMenu(input);
+    fireEvent.click(await screen.findByRole("option", { name: "Pedro Alves" }));
+
+    expect(onChange).toHaveBeenCalledWith("m-pedro");
+    // As opções vêm só da members_view (o escopo de quem usa): Samuel não está entre elas.
+    expect(screen.queryByRole("option", { name: "Samuel Colares" })).not.toBeInTheDocument();
   });
 });
