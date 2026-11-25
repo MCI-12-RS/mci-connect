@@ -53,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // O próximo SIGNED_OUT foi pedido pela pessoa (botão Sair): sem aviso.
   const signOutRequestedRef = useRef(false);
   const lastFocusCheckRef = useRef<number | null>(null);
+  // O fim forçado está em andamento: um evento com sessão (renovação) até o SIGNED_OUT não apaga o aviso.
+  const endingRef = useRef(false);
 
   const loadMemberData = async (userId: string) => {
     try {
@@ -97,9 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Sem o pedido da pessoa (renovação recusada, outra aba, fim forçado): o login mostra o aviso.
           if (!signOutRequestedRef.current) setSessionEnded(true);
           signOutRequestedRef.current = false;
+          endingRef.current = false;
           // Nada do usuário anterior fica na memória para o próximo login.
           queryClient.clear();
-        } else if (session) {
+        } else if (session && !endingRef.current) {
           setSessionEnded(false);
         }
         setSession(session);
@@ -147,11 +150,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A sessão mudou durante a releitura (saída, outro login): a resposta não vale mais.
       if (userIdRef.current !== userId || !shouldEndSession(result)) return;
       // O aviso antes de a sessão sumir: o ProtectedRoute redireciona já com ele.
+      endingRef.current = true;
       setSessionEnded(true);
       // Sem log_auth_event: o banco não grava para cadastro excluído (DA-9).
       const { error } = await supabase.auth.signOut({ scope: "local" });
       if (error) {
         // O SIGNED_OUT não veio: limpa à mão.
+        endingRef.current = false;
         userIdRef.current = null;
         setSession(null);
         setUser(null);
