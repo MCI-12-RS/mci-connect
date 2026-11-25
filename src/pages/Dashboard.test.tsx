@@ -4,6 +4,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
 import { PERMISSION_DENIED } from "@/lib/errors";
+import { NO_ACCESS, type Access } from "@/lib/access/access";
 import Dashboard from "./Dashboard";
 
 vi.mock("@/integrations/supabase/client", async () => {
@@ -15,15 +16,24 @@ vi.mock("@/integrations/supabase/client", async () => {
 vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
-// Permissões do usuário logado; `null` = todas (o padrão dos testes).
+// O acesso do usuário logado (E2.02, `my_access`); `null` = o de quem vê a igreja toda (o padrão dos testes).
 const auth = vi.hoisted(() => {
-  const state: { permissions: ReadonlySet<string> | null } = { permissions: null };
+  const state: { access: Access | null } = { access: null };
   return state;
 });
+const CHURCH_ACCESS: Access = {
+  ...NO_ACCESS,
+  member_id: "m-rita",
+  role_id: "r-admin",
+  role_name: "Administrador",
+  permissions: ["view_dashboard", "view_all_church"],
+  sees_whole_church: true,
+  sees_ministry: true,
+  sees_whole_church_reports: true,
+  sees_ministry_reports: true,
+};
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({
-    hasPermission: (permission: string) => auth.permissions === null || auth.permissions.has(permission),
-  }),
+  useAuth: () => ({ access: auth.access ?? CHURCH_ACCESS, permissionsLoaded: true }),
 }));
 
 const summaryRow = {
@@ -78,7 +88,7 @@ function cardValue(title: string) {
 describe("Dashboard (RN-02, RN-08, RN-09)", () => {
   beforeEach(() => {
     resetFakeSupabase();
-    auth.permissions = null;
+    auth.access = null;
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
@@ -245,7 +255,7 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
 describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
   beforeEach(() => {
     resetFakeSupabase();
-    auth.permissions = null;
+    auth.access = null;
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
@@ -270,8 +280,13 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
     expect(screen.queryByText(/22\/11|29\/11/)).not.toBeInTheDocument();
   });
 
-  it("Dado um usuário só com view_own_ministry_dashboard, quando as RPCs respondem, então mostra o selo Meu Ministério e a visão do ministério", async () => {
-    auth.permissions = new Set(["view_own_ministry_dashboard"]);
+  it("Dado um usuário que vê só o ministério, quando as RPCs respondem, então mostra o selo Meu Ministério e a visão do ministério (E2.02, UX-12)", async () => {
+    auth.access = {
+      ...CHURCH_ACCESS,
+      permissions: ["view_dashboard", "view_own_ministry"],
+      sees_whole_church: false,
+      sees_whole_church_reports: false,
+    };
     respondAll();
 
     renderDashboard();
@@ -282,8 +297,8 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
     expect(cardValue("Total de Membros")).toBe("1.530");
   });
 
-  it("Dado um usuário com view_dashboard, então mostra a visão geral da igreja, sem o selo", async () => {
-    auth.permissions = new Set(["view_dashboard", "view_own_ministry_dashboard"]);
+  it("Dado um usuário que vê a igreja toda, então mostra a visão geral da igreja, sem o selo (E2.02, UX-12)", async () => {
+    auth.access = CHURCH_ACCESS;
     respondAll();
 
     renderDashboard();
@@ -305,5 +320,31 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
     expect(screen.queryByText(/\d/)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(fakeRpcs().filter((call) => call.fn === "dashboard_summary")).toHaveLength(1);
+  });
+
+  it("Dado um membro sem função, então mostra as duas linhas sem acesso, sem nenhum card e sem chamar as RPCs (E2.02, RN-07, UX-13)", async () => {
+    auth.access = { ...NO_ACCESS, member_id: "m-hugo" };
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
+    expect(screen.getByText("Sua conta ainda não tem uma função. Fale com um administrador.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Esta Semana/ })).not.toBeInTheDocument();
+    expect(fakeRpcs()).toHaveLength(0);
+  });
+
+  it("Dado o atalho 'Novo relatório', então aparece só para quem pode lançar algum relatório, com 44 px de altura (E2.02, UX-14)", async () => {
+    respondAll();
+    auth.access = { ...CHURCH_ACCESS, can_submit_some_report: false };
+    const { unmount } = renderDashboard();
+    await settle();
+    expect(screen.queryByRole("button", { name: "Novo relatório" })).not.toBeInTheDocument();
+    unmount();
+
+    auth.access = { ...CHURCH_ACCESS, can_submit_some_report: true };
+    renderDashboard();
+    await settle();
+    expect(screen.getByRole("button", { name: "Novo relatório" })).toHaveClass("h-11", "w-full");
   });
 });

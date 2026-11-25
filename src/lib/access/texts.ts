@@ -82,8 +82,15 @@ export const DASHBOARD_TEXTS = {
   newReport: "Novo relatório",
 } as const;
 
-/** Ministérios até o E2.15 (T10). */
+/**
+ * Ministérios (T10). Com a DA-6 (PR 1), a árvore começa no topo do escopo, e
+ * o estado vazio fica só para quem não vê ninguém (AQ-10). Os dois textos do
+ * vazio substituem os do E1.08 ("Nenhum pastor visível…"), que deixaram de
+ * valer; aguardam a revisão do `ux-designer`.
+ */
 export const MINISTRIES_TEXTS = {
+  emptyTitle: "Ninguém visível para você na árvore.",
+  emptyDescription: "As pessoas do seu ministério aparecem em Membros.",
   goToMembers: "Ver membros do seu ministério",
 } as const;
 

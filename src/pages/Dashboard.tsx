@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Users,
   UserCheck,
@@ -12,10 +12,14 @@ import {
   UserPlus,
   XCircle,
   User,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import CellReportForm from "@/components/CellReportForm";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,14 +31,18 @@ import {
   type DashboardG12Couple,
   type DashboardSummary,
 } from "@/hooks/use-dashboard";
+import { dashboardDeniedLines, dashboardHeader } from "@/lib/access/access";
+import { DASHBOARD_TEXTS } from "@/lib/access/texts";
 import { formatWeekRange } from "@/lib/dashboard/week";
 import { isPermissionDenied } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 
 // Todos os números vêm prontos das RPCs do dashboard (E1.08, RN-02 e RN-08);
-// a tela só exibe. Sem permissão no banco, mostra o acesso negado (RN-09).
+// a tela só exibe. Sem "Visualizar Dashboard" (pelo acesso, ou pela recusa do
+// banco), mostra o acesso negado sem nenhum card (E2.02, RN-07, T9).
 
-const ACCESS_DENIED_MESSAGE = "Você não tem acesso ao dashboard.";
+/** Título do diálogo do atalho: o mesmo das telas de Células e Relatórios. */
+const NEW_REPORT_DIALOG_TITLE = "Novo Relatório de Célula";
 const LOAD_ERROR_MESSAGE = "Erro ao carregar o dashboard.";
 const LOADING_MESSAGE = "Carregando…";
 
@@ -263,28 +271,44 @@ const G12RankingSection = ({ rows, failed }: G12RankingSectionProps) => {
  */
 const hasFailed = (query: { isError: boolean; data: unknown }) => query.isError && query.data === undefined;
 
+/** Sem acesso (RN-07, T9): a linha do Negócio e, sem cadastro ou sem função, a orientação. */
+const DeniedDashboard = ({ lines }: { lines: readonly string[] }) => (
+  <AppLayout>
+    <div className="space-y-8 animate-fade-in">
+      <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+      <div className="space-y-1">
+        {lines.map((line) => (
+          <p key={line} className="text-muted-foreground">
+            {line}
+          </p>
+        ))}
+      </div>
+    </div>
+  </AppLayout>
+);
+
 const Dashboard = () => {
-  const { hasPermission } = useAuth();
-  const isMinistryOnly = !hasPermission("view_dashboard") && hasPermission("view_own_ministry_dashboard");
+  const { access, permissionsLoaded } = useAuth();
+  const [reportFormOpen, setReportFormOpen] = useState(false);
 
-  const summary = useDashboardSummary();
-  const cellsByType = useDashboardCellsByType();
-  const g12Ranking = useDashboardG12Ranking();
+  // O acesso já diz que não há Dashboard: nenhuma consulta e nenhum card (UX-13).
+  const deniedByAccess = permissionsLoaded ? dashboardDeniedLines(access) : null;
+  const enabled = permissionsLoaded && deniedByAccess === null;
 
-  // RN-09: as três RPCs checam a mesma permissão; basta uma recusar.
-  const accessDenied = [summary, cellsByType, g12Ranking].some((query) => isPermissionDenied(query.error));
+  const summary = useDashboardSummary({ enabled });
+  const cellsByType = useDashboardCellsByType({ enabled });
+  const g12Ranking = useDashboardG12Ranking({ enabled });
 
-  if (accessDenied) {
-    return (
-      <AppLayout>
-        <div className="space-y-8 animate-fade-in">
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">{ACCESS_DENIED_MESSAGE}</p>
-        </div>
-      </AppLayout>
-    );
-  }
+  // RN-09: as três RPCs checam a mesma permissão; basta uma recusar. A recusa
+  // faz a tela reler o acesso (P13), e as linhas seguem o acesso relido.
+  const deniedByServer = [summary, cellsByType, g12Ranking].some((query) => isPermissionDenied(query.error));
 
+  if (deniedByAccess) return <DeniedDashboard lines={deniedByAccess} />;
+  if (deniedByServer) return <DeniedDashboard lines={[DASHBOARD_TEXTS.noAccess]} />;
+
+  const { subtitle, badge } = dashboardHeader(access);
+  // Atalho "Novo relatório" (RN-22, UXD-10): para quem pode lançar o relatório de pelo menos uma célula.
+  const canSubmitReport = access?.can_submit_some_report === true;
   const summaryRow = summary.data;
   const summaryFailed = hasFailed(summary);
   const cellsByTypeFailed = hasFailed(cellsByType);
@@ -292,18 +316,25 @@ const Dashboard = () => {
   return (
     <AppLayout>
       <div className="space-y-8 animate-fade-in">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-            {isMinistryOnly && (
-              <Badge variant="secondary" className="text-xs">Meu Ministério</Badge>
-            )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+              {badge && (
+                <Badge variant="secondary" className="text-xs">{badge}</Badge>
+              )}
+            </div>
+            {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
           </div>
-          <p className="text-muted-foreground text-sm">
-            {isMinistryOnly ? "Visão do seu ministério" : "Visão geral da igreja"}
-          </p>
+          {/* Enquanto o acesso carrega, o lugar do atalho fica reservado (Estados). */}
+          {!permissionsLoaded && <Skeleton className="h-11 w-full sm:w-40" aria-hidden="true" />}
+          {canSubmitReport && (
+            <Button className="h-11 w-full sm:w-auto shrink-0" onClick={() => setReportFormOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+              {DASHBOARD_TEXTS.newReport}
+            </Button>
+          )}
         </div>
-
         {/* SEMANAL */}
         <section className="space-y-4">
           <div className="flex flex-wrap items-center gap-x-2">
@@ -330,6 +361,16 @@ const Dashboard = () => {
 
         {/* G12 CELLS */}
         <G12RankingSection rows={g12Ranking.data} failed={hasFailed(g12Ranking)} />
+
+        {/* No sucesso, o formulário fecha com o toast, e a gravação recarrega os cards da semana (UX-14). */}
+        <Dialog open={reportFormOpen} onOpenChange={setReportFormOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+            <DialogHeader>
+              <DialogTitle>{NEW_REPORT_DIALOG_TITLE}</DialogTitle>
+            </DialogHeader>
+            {reportFormOpen && <CellReportForm onClose={() => setReportFormOpen(false)} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

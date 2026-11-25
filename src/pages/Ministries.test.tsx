@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
 import type { MinistryTreeNode } from "@/hooks/use-ministry-tree";
+import { NO_ACCESS, type Access } from "@/lib/access/access";
 import Ministries from "./Ministries";
 
 // Árvore de ministérios sem N+1 (E1.08, RN-10): abrir a tela é uma chamada à
@@ -19,6 +21,22 @@ vi.mock("@/integrations/supabase/client", async () => {
 vi.mock("@/components/AppLayout", () => ({
   default: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }));
+
+// O acesso de quem está logado: o botão do estado vazio (T10) só aparece para quem abre Membros.
+const auth = vi.hoisted(() => ({ access: null as Access | null }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ access: auth.access }),
+}));
+
+const MINISTRY_ACCESS: Access = {
+  ...NO_ACCESS,
+  member_id: "m-1",
+  role_id: "r-1",
+  role_name: "Membro",
+  permissions: ["view_own_ministry"],
+  sees_ministry: true,
+  sees_ministry_reports: true,
+};
 
 function node(overrides: Partial<MinistryTreeNode>): MinistryTreeNode {
   return {
@@ -62,7 +80,14 @@ const failure = { error: { code: "08006", message: "connection failure" } };
 const failures = [failure, failure, failure, failure];
 
 function renderMinistries() {
-  return render(<Ministries />, { wrapper: createQueryWrapper() });
+  const QueryWrapper = createQueryWrapper();
+  return render(<Ministries />, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <MemoryRouter>
+        <QueryWrapper>{children}</QueryWrapper>
+      </MemoryRouter>
+    ),
+  });
 }
 
 /** Deixa as respostas (e as novas tentativas, com os atrasos do padrão) acontecerem. */
@@ -197,18 +222,31 @@ describe("Ministérios (RN-10)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("Dado nenhum pastor visível, então explica que a árvore começa pelos pastores e aponta Membros, sem a dica de expandir", async () => {
+  it("Dado ninguém visível na árvore, então o estado vazio aponta Membros, sem a dica de expandir (E2.02, T10, AQ-10)", async () => {
+    auth.access = null;
     respondToRpc("ministry_tree_nodes", { data: [] });
 
     renderMinistries();
     await settle();
 
-    expect(screen.getByText("Nenhum pastor visível para você.")).toBeInTheDocument();
-    expect(
-      screen.getByText("Por enquanto, a árvore começa pelos pastores. As pessoas do seu ministério aparecem em Membros."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Ninguém visível para você na árvore.")).toBeInTheDocument();
+    expect(screen.getByText("As pessoas do seu ministério aparecem em Membros.")).toBeInTheDocument();
     expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+    // Sem acesso a Membros, nenhum caminho que levaria a uma tela sem acesso.
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("Dado o estado vazio para quem abre Membros, então o botão 'Ver membros do seu ministério' leva a /members (T10)", async () => {
+    auth.access = MINISTRY_ACCESS;
+    respondToRpc("ministry_tree_nodes", { data: [] });
+
+    renderMinistries();
+    await settle();
+
+    const link = screen.getByRole("link", { name: "Ver membros do seu ministério" });
+    expect(link).toHaveAttribute("href", "/members");
+    expect(link).toHaveClass("h-11");
   });
 
   it("Dada uma falha nas raízes, então mostra o erro e Tentar novamente refaz a chamada", async () => {

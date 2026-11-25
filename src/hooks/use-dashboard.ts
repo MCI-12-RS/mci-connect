@@ -16,9 +16,15 @@ export type DashboardCellsByType = DashboardFunctions["dashboard_cells_by_type"]
 /** Um casal G12, com as células da subárvore. `spouse_name` é nulo quando não há cônjuge visível e ativo. */
 export type DashboardG12Couple = DashboardFunctions["dashboard_g12_ranking"]["Returns"][number];
 
+/** `enabled`: falso para quem o acesso já diz que não tem o Dashboard (RN-07, T9): nenhuma consulta. */
+export interface DashboardQueryOptions {
+  enabled?: boolean;
+}
+
 /** Uma linha só; resultado vazio vira erro (PGRST116, via `.single()`). */
-export function useDashboardSummary() {
+export function useDashboardSummary({ enabled = true }: DashboardQueryOptions = {}) {
   return useQuery({
+    enabled,
     queryKey: ["dashboard", "summary"],
     retry: retryUnlessPermissionDenied,
     queryFn: async (): Promise<DashboardSummary> => {
@@ -30,8 +36,9 @@ export function useDashboardSummary() {
 }
 
 /** Já vem ordenado pelo tipo. */
-export function useDashboardCellsByType() {
+export function useDashboardCellsByType({ enabled = true }: DashboardQueryOptions = {}) {
   return useQuery({
+    enabled,
     queryKey: ["dashboard", "cells-by-type"],
     retry: retryUnlessPermissionDenied,
     queryFn: async (): Promise<DashboardCellsByType[]> => {
@@ -43,8 +50,9 @@ export function useDashboardCellsByType() {
 }
 
 /** Já vem ordenado pelo total de células (maior primeiro); inclui casais com 0 células. */
-export function useDashboardG12Ranking() {
+export function useDashboardG12Ranking({ enabled = true }: DashboardQueryOptions = {}) {
   return useQuery({
+    enabled,
     queryKey: ["dashboard", "g12-ranking"],
     retry: retryUnlessPermissionDenied,
     queryFn: async (): Promise<DashboardG12Couple[]> => {
