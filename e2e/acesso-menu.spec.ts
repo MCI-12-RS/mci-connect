@@ -49,6 +49,7 @@ function cleanup() {
      SET LOCAL session_replication_role = replica;
      DELETE FROM public.events WHERE entity_id::text LIKE '${PREFIX}%' OR actor_label LIKE 'QA Menu%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      DELETE FROM public.role_permissions WHERE role_id::text LIKE '${PREFIX}%';
      DELETE FROM public.roles WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM private.sign_in_throttle;

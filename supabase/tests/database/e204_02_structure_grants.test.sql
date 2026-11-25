@@ -47,23 +47,24 @@ SELECT ok((SELECT t.tgenabled = 'O' AND (t.tgtype & 2) = 2 AND (t.tgtype & 1) = 
              FROM pg_trigger t WHERE t.tgrelid = 'public.members'::regclass AND t.tgname = x.n),
   'trigger BEFORE por linha, habilitado: ' || x.n)
   FROM (VALUES ('a0_normalize_member'), ('aa_enforce_member_write_rules'), ('ab_enforce_member_links'),
-               ('ac_enforce_member_scope'), ('ad_enforce_member_rules'), ('compute_member_g12_level')) x(n);
+               ('ac_enforce_member_scope'), ('ac_lock_member_tree'), ('ad_enforce_member_rules')) x(n);
 SELECT is((SELECT array_agg(t.tgname::text ORDER BY t.tgname::text COLLATE "C")
              FROM pg_trigger t
             WHERE t.tgrelid = 'public.members'::regclass AND NOT t.tgisinternal AND (t.tgtype & 2) = 2
               AND t.tgname IN ('a0_normalize_member', 'aa_enforce_member_write_rules', 'ab_enforce_member_links',
-                               'ac_enforce_member_scope', 'ad_enforce_member_rules', 'compute_member_g12_level')),
+                               'ac_enforce_member_scope', 'ac_lock_member_tree', 'ad_enforce_member_rules')),
   ARRAY['a0_normalize_member', 'aa_enforce_member_write_rules', 'ab_enforce_member_links',
-        'ac_enforce_member_scope', 'ad_enforce_member_rules', 'compute_member_g12_level'],
-  'a0_ < aa_ < ab_ < ac_ < ad_ < compute_member_g12_level (ordem de disparo, por nome)');
+        'ac_enforce_member_scope', 'ac_lock_member_tree', 'ad_enforce_member_rules'],
+  'a0_ < aa_ < ab_ < ac_enforce < ac_lock_member_tree < ad_ (ordem de disparo, por nome; E2.06 trocou o compute_member_g12_level pela trava da árvore)');
 SELECT is((SELECT count(*)::int FROM pg_trigger t
             WHERE t.tgrelid = 'public.members'::regclass AND NOT t.tgisinternal AND (t.tgtype & 2) = 2
               AND t.tgname COLLATE "C" < 'a0_normalize_member'), 0,
   'nenhum trigger BEFORE de members dispara antes do a0_');
 SELECT is((SELECT count(*)::int FROM pg_trigger t
             WHERE t.tgrelid = 'public.members'::regclass AND NOT t.tgisinternal AND (t.tgtype & 2) = 2
-              AND t.tgname COLLATE "C" > 'ad_enforce_member_rules' AND t.tgname COLLATE "C" < 'compute_member_g12_level'), 0,
-  'nada entre o ad_ e o compute_member_g12_level');
+              AND t.tgname COLLATE "C" > 'ac_enforce_member_scope' AND t.tgname COLLATE "C" < 'ad_enforce_member_rules'
+              AND t.tgname <> 'ac_lock_member_tree'), 0,
+  'nada entre o ac_enforce_member_scope e o ad_ além da trava da árvore (E2.06)');
 -- Eventos de cada trigger novo: INSERT e UPDATE OF (as colunas que as regras leem).
 SELECT ok((t.tgtype & 4) = 4 AND (t.tgtype & 16) = 16, 'INSERT e UPDATE: ' || t.tgname)
   FROM pg_trigger t WHERE t.tgrelid = 'public.members'::regclass AND t.tgname IN ('a0_normalize_member', 'ad_enforce_member_rules');

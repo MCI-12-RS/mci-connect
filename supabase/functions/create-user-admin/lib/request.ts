@@ -6,7 +6,8 @@ import { invalidRequest, isRecord } from './errors.ts'
 /**
  * Colunas de `members` que podem vir do formulário. As demais são controladas
  * pelo servidor: `id` e `auth_user_id` são o `attemptId` (DT-01, DT-11), e
- * `g12_level`, totais e datas são do banco.
+ * as datas são do banco. Nível, cadeia, G12 e totais não são colunas de
+ * `members`: ficam em `private.member_hierarchy`, calculados pelo banco (E2.06).
  */
 export const MEMBER_FIELDS = [
   'name', 'email', 'cpf', 'gender', 'birth_date', 'mobile_whatsapp', 'phone', 'notes',

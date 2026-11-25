@@ -86,6 +86,7 @@ SET LOCAL session_replication_role = replica;
 DELETE FROM public.events WHERE entity_label LIKE 'E104 Edge%' OR actor_label LIKE 'E104 Edge%';
 UPDATE public.members SET leader_id = NULL WHERE name LIKE 'E104 Edge%';
 DELETE FROM public.members WHERE name LIKE 'E104 Edge%';
+DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);
 DELETE FROM private.sign_in_throttle;
 COMMIT;`)
   for (const id of users) await admin('DELETE', `users/${id}`).catch(() => {})

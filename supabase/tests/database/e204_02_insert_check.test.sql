@@ -59,17 +59,18 @@ SELECT pg_temp.m(20 + n), 'Nivel ' || n || ' Cadeia', 'M', false,
 -- Dado antigo (E2.01 e legado), carregado em replica: Fábio (RN-17), Bruno e Bruna (excluídos), X2
 -- (excluído, no meio da subida de X1 a X3) e Velho (nascimento antigo, RN-15).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, is_active, birth_date, mobile_whatsapp) VALUES
-  (pg_temp.m(12), 'Fábio', 'M', false, pg_temp.m(4), true, 3, false, '1920-03-10', '98887777'),
-  (pg_temp.m(20), 'Velho Antigo', 'M', false, pg_temp.m(1), true, 1, true, public.sp_today() - interval '100 years' - interval '5 days', pg_temp.mob(20));
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, email, mobile_whatsapp, cpf, deleted_at, auth_user_id) VALUES
-  (pg_temp.m(13), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 1, 'bruno@exemplo.com', '5188880000', '01234567890', now(), NULL),
-  (pg_temp.m(14), 'Bruna Alves', 'F', false, pg_temp.m(1), true, 1, 'bruna@exemplo.com', NULL, NULL, now(), pg_temp.u(14));
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, mobile_whatsapp, deleted_at) VALUES
-  (pg_temp.m(18), 'Xis Dois', 'M', false, pg_temp.m(17), true, 2, pg_temp.mob(18), now());
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, mobile_whatsapp) VALUES
-  (pg_temp.m(19), 'Xis Tres', 'M', false, pg_temp.m(18), true, 3, pg_temp.mob(19));
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active, birth_date, mobile_whatsapp) VALUES
+  (pg_temp.m(12), 'Fábio', 'M', false, pg_temp.m(4), true, false, '1920-03-10', '98887777'),
+  (pg_temp.m(20), 'Velho Antigo', 'M', false, pg_temp.m(1), true, true, public.sp_today() - interval '100 years' - interval '5 days', pg_temp.mob(20));
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, email, mobile_whatsapp, cpf, deleted_at, auth_user_id) VALUES
+  (pg_temp.m(13), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 'bruno@exemplo.com', '5188880000', '01234567890', now(), NULL),
+  (pg_temp.m(14), 'Bruna Alves', 'F', false, pg_temp.m(1), true, 'bruna@exemplo.com', NULL, NULL, now(), pg_temp.u(14));
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, mobile_whatsapp, deleted_at) VALUES
+  (pg_temp.m(18), 'Xis Dois', 'M', false, pg_temp.m(17), true, pg_temp.mob(18), now());
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, mobile_whatsapp) VALUES
+  (pg_temp.m(19), 'Xis Tres', 'M', false, pg_temp.m(18), true, pg_temp.mob(19));
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 CREATE TEMP TABLE ev0 ON COMMIT DROP AS SELECT count(*) AS n FROM public.events;
 

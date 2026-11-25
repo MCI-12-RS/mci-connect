@@ -68,6 +68,7 @@ function cleanup() {
          OR actor_user_id IN (SELECT id FROM auth.users WHERE email IN (${actors}));
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%' OR name LIKE '${NAME}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      DELETE FROM public.role_permissions WHERE role_id::text LIKE '${PREFIX}%';
      DELETE FROM public.roles WHERE id::text LIKE '${PREFIX}%';
      COMMIT;`,
@@ -101,6 +102,7 @@ async function releaseCreated(name: string) {
     `BEGIN; SET LOCAL session_replication_role = replica;
      DELETE FROM public.events WHERE entity_label = ${lit(name)};
      DELETE FROM public.members WHERE name = ${lit(name)};
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      COMMIT;`,
   );
   for (const userId of accountIds) await deleteAuthUser(env, userId);

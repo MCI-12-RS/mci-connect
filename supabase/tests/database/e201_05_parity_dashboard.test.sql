@@ -326,6 +326,7 @@ INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(12), pg_temp.m(7)), (pg_temp.r(12), pg_temp.m(19)),
   (pg_temp.r(13), pg_temp.m(15)), (pg_temp.r(14), pg_temp.m(6));
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Exclusões pela API (AD global): relatórios, células e depois membros.
 CREATE TEMP TABLE del_log AS

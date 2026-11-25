@@ -43,6 +43,7 @@ export function cleanup(env: E2EEnv) {
      DELETE FROM public.events WHERE entity_id::text LIKE '${PREFIX}%' OR entity_label LIKE '${NAME}%' OR entity_label = ${lit(FABIO.name)};
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%' OR name LIKE '${NAME}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      COMMIT;`,
   );
 }
@@ -85,8 +86,10 @@ export function seed(env: E2EEnv) {
     env,
     `BEGIN;
      SET LOCAL session_replication_role = replica;
-     INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, mobile_whatsapp, birth_date, role_id, g12_level)
-     VALUES (${lit(id(FABIO.n))}, ${lit(FABIO.name)}, 'M', false, true, ${lit(id(M.andre.n))}, false, '98887777', '1920-03-10', ${roleId}, 2);
+     INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, mobile_whatsapp, birth_date, role_id)
+     VALUES (${lit(id(FABIO.n))}, ${lit(FABIO.name)}, 'M', false, true, ${lit(id(M.andre.n))}, false, '98887777', '1920-03-10', ${roleId});
+     SET LOCAL session_replication_role = origin;
+     SELECT private.rebuild_member_hierarchy();
      COMMIT;`,
   );
   insert([row(M.lucia, { cpf: M.lucia.cpf, mobile: undefined })]);

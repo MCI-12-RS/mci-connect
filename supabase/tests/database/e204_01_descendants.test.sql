@@ -45,11 +45,12 @@ SELECT pg_temp.m(20 + n), 'Nivel ' || n || ' Cadeia', 'M', false,
   FROM generate_series(1, 8) n;
 -- Um ciclo antigo (dado fora das regras, só em replica): X <-> Y, e Z sob Y.
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level) VALUES
-  (pg_temp.m(40), 'Ciclo X', 'M', false, pg_temp.m(41), true, 1),
-  (pg_temp.m(41), 'Ciclo Y', 'F', false, pg_temp.m(40), true, 1),
-  (pg_temp.m(42), 'Ciclo Z', 'F', false, pg_temp.m(41), true, 2);
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership) VALUES
+  (pg_temp.m(40), 'Ciclo X', 'M', false, pg_temp.m(41), true),
+  (pg_temp.m(41), 'Ciclo Y', 'F', false, pg_temp.m(40), true),
+  (pg_temp.m(42), 'Ciclo Z', 'F', false, pg_temp.m(41), true);
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 CREATE TEMP TABLE ev0 ON COMMIT DROP AS SELECT count(*) AS n FROM public.events;
 

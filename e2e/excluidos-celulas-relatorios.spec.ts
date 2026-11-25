@@ -75,6 +75,7 @@ function cleanup() {
      DELETE FROM public.cells WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      COMMIT;`,
   );
 }
@@ -297,7 +298,7 @@ test("RN-17 e UX-23 (AD): o anfitrião Hélio é excluído depois de a lista car
 test("RN-17 (AD): a célula de Carlos, com as pessoas não excluídas, volta às listas e aos totais, e os relatórios dela voltam a poder ser editados", async ({
   page,
 }) => {
-  const totalCells = () => sql(env, `SELECT total_cells FROM public.members WHERE id = ${lit(member(4))}`);
+  const totalCells = () => sql(env, `SELECT total_cells FROM private.member_hierarchy WHERE member_id = ${lit(member(4))}`);
   const reportLabel = `Editar o relatório de ${reportDate(CARLOS_REPORT)} da célula de ${CARLOS}`;
   expect(totalCells(), "com a célula excluída, Carlos não tem célula").toBe("0");
   await login(page, env.admin);

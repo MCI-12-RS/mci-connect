@@ -63,6 +63,7 @@ function cleanup() {
      DELETE FROM public.cells WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      DELETE FROM public.role_permissions WHERE role_id::text LIKE '${PREFIX}%';
      DELETE FROM public.roles WHERE id::text LIKE '${PREFIX}%';
      COMMIT;`,

@@ -40,10 +40,11 @@ UPDATE public.members SET spouse_id = pg_temp.m(9) WHERE id = pg_temp.m(8);
 
 -- Bruno e Bruna: excluídos (E2.01), carregados direto (a exclusão pela RPC é testada no E2.01).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, email, mobile_whatsapp, cpf, deleted_at) VALUES
-  (pg_temp.m(11), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 1, 'bruno@exemplo.com', '(51) 8888-0000', '01234567890', now()),  -- CPF só com dígitos (CHECK do E2.04)
-  (pg_temp.m(12), 'Bruna Alves', 'F', false, pg_temp.m(1), true, 1, NULL, '51988882222', NULL, now());
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, email, mobile_whatsapp, cpf, deleted_at) VALUES
+  (pg_temp.m(11), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 'bruno@exemplo.com', '(51) 8888-0000', '01234567890', now()),  -- CPF só com dígitos (CHECK do E2.04)
+  (pg_temp.m(12), 'Bruna Alves', 'F', false, pg_temp.m(1), true, NULL, '51988882222', NULL, now());
 SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
 
 -- Tenta o comando e desfaz: 'accepted', 'unique:<índice>' ou 'error:<sqlstate>'.
 -- E2.04 (PR 2): o trigger ad_enforce_member_rules recusaria antes, com value_in_use. Aqui se
