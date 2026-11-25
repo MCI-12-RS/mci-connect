@@ -89,7 +89,7 @@ export type PreSubmitProblem =
 
 /**
  * Campos vazios primeiro: a identificação só com espaços conta como vazia; a
- * senha só com espaços não conta (RN-09). Depois, o formato: sem "@" e sem a
+ * senha não é aparada, então só a vazia conta como vazia (RN-09). Depois, o formato: sem "@" e sem a
  * forma de CPF nem de celular. Com "@", a tentativa é sempre enviada.
  */
 export function checkBeforeSubmit(identifier: string, password: string): PreSubmitProblem | null {
