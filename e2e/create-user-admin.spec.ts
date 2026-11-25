@@ -314,11 +314,17 @@ test.describe("RN-18 / critério de pronto 8: 409 antes de criar a conta, e a co
         expect(reply.body.field).toBe("email");
         expect(membersNamed(name)).toBe(0);
         expect(accounts(BRUNO.email), "nenhuma conta nova").toBe(before);
-        // E2.04 (DT-14): a recusa vem do ensaio (check_member_insert), antes do aviso de excluído:
-        // só `field: "email"`, sem a lista de correspondências e sem nome nem id, para AD e para CM.
-        expect(reply.text, "o nome do excluído não sai do servidor").not.toContain("Bruno");
-        expect(reply.text).not.toContain(member(1));
-        expect(reply.body.matches).toBeUndefined();
+        // E2.04: a recusa vem do ensaio (check_member_insert), e a função acrescenta as
+        // correspondências como no E2.01 (RN-18, UX-31): nome e id só para quem vê o excluído.
+        if (label === "CM") {
+          expect(reply.text, "o nome do excluído não sai do servidor").not.toContain("Bruno");
+          expect(reply.text).not.toContain(member(1));
+          expect(matchesOf(reply).length).toBeGreaterThan(0);
+          expect(matchesOf(reply).every((m) => m.name === null && m.member_id === null && m.deleted_at === null)).toBe(true);
+          expect(matchesOf(reply).some((m) => m.is_account_email === true)).toBe(true);
+        } else {
+          expect(matchesOf(reply)[0]).toMatchObject({ member_id: member(1), name: who("Bruno Almeida"), is_account_email: true });
+        }
         expect(reply.body.error).toBe("Este e-mail pertence a um cadastro excluído. Peça a um administrador para restaurá-lo ou use outro e-mail.");
       }
     }

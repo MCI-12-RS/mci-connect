@@ -16,7 +16,9 @@
 // - Ensaio: `check_member_insert` com a sessão de quem chama confere todas as
 //   regras (as do E2.02 e as do E2.04, na ordem da DA-11, inclusive
 //   `value_in_use` e `deleted_account_email`) sem gravar nada. Nenhuma conta é
-//   criada quando ele recusa.
+//   criada quando ele recusa. A recusa `deleted_account_email` (do ensaio ou do
+//   INSERT) leva as correspondências de `find_deleted_member_matches`, como no
+//   E2.01 (RN-18, UX-31).
 // - Aviso de cadastro excluído (E2.01, RN-18): `find_deleted_member_matches`,
 //   depois do ensaio (RN-10); "Cadastrar mesmo assim" é `confirmDeletedMatches`.
 // - O membro é gravado com a sessão de quem chama, então o RLS e os triggers
@@ -46,7 +48,14 @@ import {
   unauthenticated,
   valueInUseFromUniqueViolation,
 } from './lib/errors.ts'
-import { deletedMatchesParams, deletedMatchesRefusal, toDeletedMatches } from './lib/deleted-matches.ts'
+import {
+  deletedAccountEmailWithMatches,
+  type DeletedMemberMatch,
+  deletedMatchesParams,
+  deletedMatchesRefusal,
+  isDeletedAccountEmailRefusal,
+  toDeletedMatches,
+} from './lib/deleted-matches.ts'
 import { type CreateMemberRequest, parseCreateMemberRequest } from './lib/request.ts'
 
 const corsHeaders = {
@@ -128,7 +137,38 @@ async function checkMemberInsert(asCaller: SupabaseClient, input: CreateMemberRe
   const { error } = await asCaller.rpc('check_member_insert', { _member: rowWithId(input) })
   if (!error) return
   if (isMemberIdConflict(error)) throw new AttemptTaken()
-  throw insertErrorToHttp(error)
+  throw await withDeletedMatches(asCaller, input, insertErrorToHttp(error))
+}
+
+/**
+ * Cadastros excluídos com o e-mail, o celular ou o CPF do pedido, com a sessão
+ * de quem chama: nome, id e data só para o administrador que veria o excluído
+ * (DA-8 do E2.01).
+ */
+async function findDeletedMatches(asCaller: SupabaseClient, input: CreateMemberRequest): Promise<DeletedMemberMatch[]> {
+  const { data, error } = await asCaller.rpc('find_deleted_member_matches', deletedMatchesParams(input.memberRow))
+  if (error) {
+    if (error.code === '42501') throw forbidden()
+    console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code)
+    throw serverError()
+  }
+  return toDeletedMatches(data)
+}
+
+/**
+ * Recusa `deleted_account_email` do ensaio ou do INSERT → a mesma recusa com
+ * `matches` (lib/deleted-matches.ts). Se a consulta falhar, a recusa do banco
+ * sai como veio, só com `field`: ela continua valendo e nenhuma conta é criada.
+ */
+async function withDeletedMatches(asCaller: SupabaseClient, input: CreateMemberRequest, refusal: HttpError): Promise<HttpError> {
+  if (!isDeletedAccountEmailRefusal(refusal)) return refusal
+  let matches: DeletedMemberMatch[] | null = null
+  try {
+    matches = await findDeletedMatches(asCaller, input)
+  } catch (error) {
+    console.error('create-user-admin: recusa do e-mail de excluído sem as correspondências', error instanceof Error ? error.name : 'unknown')
+  }
+  return deletedAccountEmailWithMatches(refusal, matches)
 }
 
 /**
@@ -137,13 +177,7 @@ async function checkMemberInsert(asCaller: SupabaseClient, input: CreateMemberRe
  * (DA-8). Recusa com 409 antes de existir qualquer conta.
  */
 async function checkDeletedMatches(asCaller: SupabaseClient, input: CreateMemberRequest): Promise<void> {
-  const { data, error } = await asCaller.rpc('find_deleted_member_matches', deletedMatchesParams(input.memberRow))
-  if (error) {
-    if (error.code === '42501') throw forbidden()
-    console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code)
-    throw serverError()
-  }
-  const refusal = deletedMatchesRefusal(toDeletedMatches(data), input.confirmDeletedMatches)
+  const refusal = deletedMatchesRefusal(await findDeletedMatches(asCaller, input), input.confirmDeletedMatches)
   if (refusal) throw refusal
 }
 
@@ -208,9 +242,9 @@ async function insertFailure(asCaller: SupabaseClient, input: CreateMemberReques
   if (valueInUseFromUniqueViolation(error)) {
     const { error: again } = await asCaller.rpc('check_member_insert', { _member: rowWithId(input) })
     const refusal = again ? appErrorToHttp(again) : null
-    if (refusal) return refusal
+    if (refusal) return withDeletedMatches(asCaller, input, refusal)
   }
-  return insertErrorToHttp(error)
+  return withDeletedMatches(asCaller, input, insertErrorToHttp(error))
 }
 
 /**

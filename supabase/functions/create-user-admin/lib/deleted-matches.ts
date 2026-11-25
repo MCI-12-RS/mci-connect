@@ -106,3 +106,29 @@ export function deletedMatchesRefusal(matches: readonly DeletedMemberMatch[], co
   }
   return null
 }
+
+/** A recusa do ensaio ou do INSERT é a do e-mail da conta de um excluído? */
+export function isDeletedAccountEmailRefusal(refusal: HttpError): boolean {
+  return refusal.code === 'deleted_account_email'
+}
+
+/**
+ * E2.04: o trigger recusa o e-mail da conta de um excluído no fim das regras
+ * (depois de `value_in_use` e das demais, RN-10), então essa recusa chega pelo
+ * ensaio, antes do passo do aviso. Para manter o aviso do E2.01 (RN-18, UX-31),
+ * que nomeia o excluído e oferece "Restaurar" ao administrador, a resposta
+ * leva as correspondências de `find_deleted_member_matches`, como
+ * `deletedMatchesRefusal`.
+ * - Outra recusa: segue como está (não é deste aviso).
+ * - Sem a linha `is_account_email` (por exemplo, o excluído foi restaurado
+ *   entre a recusa e a consulta) ou sem a consulta (`null`, ela falhou): a
+ *   recusa do banco, só com `field`. Nunca libera o cadastro.
+ */
+export function deletedAccountEmailWithMatches(
+  refusal: HttpError,
+  matches: readonly DeletedMemberMatch[] | null,
+): HttpError {
+  if (!isDeletedAccountEmailRefusal(refusal) || matches === null) return refusal
+  if (!matches.some((match) => match.is_account_email)) return refusal
+  return deletedMatchesRefusal(matches, false) ?? refusal
+}
