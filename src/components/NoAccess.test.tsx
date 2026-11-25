@@ -78,6 +78,8 @@ describe("RouteAccess e NoAccess (T12)", () => {
     expect(pageMounted).not.toHaveBeenCalled();
     expect(screen.queryByText("Você não tem acesso a esta tela.")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Funções" })).toBeInTheDocument();
+    // O carregando tem texto para leitor de tela, não só aria-busy.
+    expect(screen.getByText("Carregando…")).toHaveClass("sr-only");
   });
 
   it("se a primeira leitura falhou, o aviso com 'Tentar de novo' fica no topo, sem a página", () => {

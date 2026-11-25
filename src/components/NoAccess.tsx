@@ -58,6 +58,7 @@ export function RouteAccess({ path, title, children }: RouteAccessProps) {
           <h1 className="text-2xl md:text-3xl font-bold">{title}</h1>
           {!accessLoadFailed && (
             <div className="space-y-3" aria-busy="true">
+              <span className="sr-only">{ACCESS_TEXTS.loading}</span>
               <Skeleton className="h-10 w-full max-w-sm" />
               <Skeleton className="h-24 w-full" />
             </div>

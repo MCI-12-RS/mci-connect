@@ -11,7 +11,7 @@ import MemberForm from "@/components/MemberForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { isNavItemActive } from "@/lib/navigation";
 import { menuItems, ownDataMode, roleDisplayName, type MenuItemKey } from "@/lib/access/access";
-import { MENU_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
+import { ACCESS_TEXTS, MENU_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
 
 const MENU_ICONS: Record<MenuItemKey, LucideIcon> = {
   dashboard: Home,
@@ -57,6 +57,7 @@ const AppSidebar = () => {
         {/* Falhou a primeira leitura: nenhum item, e o aviso fica na área principal (T12). */}
         {!permissionsLoaded && !accessLoadFailed ? (
           <div className="space-y-1" aria-busy="true" data-testid="menu-loading">
+            <span className="sr-only">{ACCESS_TEXTS.loading}</span>
             {Array.from({ length: LOADING_ITEMS }, (_, i) => (
               <Skeleton key={i} className="h-10 w-full bg-sidebar-accent/50" />
             ))}
@@ -71,7 +72,7 @@ const AppSidebar = () => {
                 key={item.path}
                 onClick={() => handleNavigate(item.path)}
                 aria-current={isActive ? "page" : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-left transition-colors ${isActive
+                className={`w-full flex items-center gap-3 min-h-11 md:min-h-10 px-3 py-2.5 rounded-md text-sm text-left transition-colors ${isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                   }`}
@@ -112,7 +113,7 @@ const AppSidebar = () => {
         )}
         <button
           onClick={() => { signOut(); setOpen(false); }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+          className="w-full flex items-center gap-3 min-h-11 md:min-h-10 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
         >
           <LogOut className="w-4 h-4" aria-hidden="true" />
           {MENU_TEXTS.signOut}
@@ -123,7 +124,7 @@ const AppSidebar = () => {
 
   const ownDataDialog = member && ownData ? (
     <Dialog open={ownDataOpen} onOpenChange={setOwnDataOpen}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto w-[95vw] sm:w-full">
         <DialogHeader>
           <DialogTitle>{ownData === "view" ? OWN_DATA_TEXTS.title : OWN_DATA_TEXTS.editTitle}</DialogTitle>
         </DialogHeader>
@@ -141,7 +142,12 @@ const AppSidebar = () => {
               <Menu className="w-5 h-5" aria-hidden="true" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64 bg-sidebar border-sidebar-border">
+          <SheetContent
+            side="left"
+            className="p-0 w-64 bg-sidebar border-sidebar-border"
+            // Ao abrir "Meus dados" pelo menu, o foco fica no diálogo, sem voltar ao gatilho do menu.
+            onCloseAutoFocus={(event) => { if (ownDataOpen) event.preventDefault(); }}
+          >
             {sidebarContent}
           </SheetContent>
         </Sheet>

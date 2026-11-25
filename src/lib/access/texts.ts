@@ -16,6 +16,8 @@ export const ACCESS_TEXTS = {
   goHome: "Ir para o início",
   loadFailed: "Não foi possível carregar o seu acesso. Verifique a conexão e tente de novo.",
   tryAgain: "Tentar de novo",
+  /** Não está no spec: texto para leitor de tela enquanto o acesso carrega (menu e rota). */
+  loading: "Carregando…",
   /** Recusa 42501 (UX-30): o texto do E2.01. */
   permissionDenied: DELETION_TEXTS.permissionDenied,
 } as const;

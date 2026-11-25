@@ -504,7 +504,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
             <Input 
               id="instagram" 
               readOnly={readOnly}
-              placeholder="@usuario" 
+              placeholder={readOnly ? undefined : "@usuario"} 
               value={form.instagram || ""} 
               onChange={(e) => {
                 let v = e.target.value;
@@ -516,7 +516,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
           {canViewSensitive && (
             <div className="space-y-2">
               <Label htmlFor="cpf">CPF</Label>
-              <Input id="cpf" readOnly={readOnly} value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
+              <Input id="cpf" readOnly={readOnly} value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder={readOnly ? undefined : "000.000.000-00"} />
             </div>
           )}
           {!isEditing && (
@@ -565,17 +565,17 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
             <>
               <div className="space-y-2">
                 <Label htmlFor="mobile">Celular / WhatsApp</Label>
-                <Input id="mobile" readOnly={readOnly} value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder="(00)00000-0000" />
+                <Input id="mobile" readOnly={readOnly} value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder={readOnly ? undefined : "(00)00000-0000"} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
-                <Input id="phone" readOnly={readOnly} value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder="(00)0000-0000" />
+                <Input id="phone" readOnly={readOnly} value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder={readOnly ? undefined : "(00)0000-0000"} />
               </div>
             </>
           )}
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notes">Observações</Label>
-            <Textarea id="notes" readOnly={readOnly} value={form.notes || ""} onChange={(e) => update("notes", e.target.value)} />
+            <Textarea id="notes" className="text-base md:text-sm" readOnly={readOnly} value={form.notes || ""} onChange={(e) => update("notes", e.target.value)} />
           </div>
         </div>
       </div>
@@ -648,7 +648,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
                       fetchAddressByCEP(masked);
                     }
                   }}
-                  placeholder="00000-000"
+                  placeholder={readOnly ? undefined : "00000-000"}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">

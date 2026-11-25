@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
 import { NO_ACCESS, type Access } from "@/lib/access/access";
@@ -22,9 +22,17 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ signOut: vi.fn(), ...auth }),
 }));
 
-// O formulário de "Meus dados" só mostra se veio só para leitura.
+const mobile = vi.hoisted(() => ({ value: false }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => mobile.value }));
+
+// O formulário de "Meus dados" só mostra se veio só para leitura (e um campo, para o foco).
 vi.mock("@/components/MemberForm", () => ({
-  default: ({ readOnly }: { readOnly?: boolean }) => <p>{readOnly ? "formulário só para leitura" : "formulário editável"}</p>,
+  default: ({ readOnly }: { readOnly?: boolean }) => (
+    <>
+      <p>{readOnly ? "formulário só para leitura" : "formulário editável"}</p>
+      <input aria-label="Nome" />
+    </>
+  ),
 }));
 
 const ITEMS = ["Dashboard", "Membros", "Células", "Relatórios", "Ministérios", "Funções", "Auditoria"];
@@ -74,6 +82,7 @@ const currentItems = () =>
   shownItems().filter((label) => screen.getByRole("button", { name: label }).getAttribute("aria-current") === "page");
 
 beforeEach(() => {
+  mobile.value = false;
   auth.access = RITA;
   auth.permissionsLoaded = true;
   auth.accessLoadFailed = false;
@@ -124,7 +133,10 @@ describe("UX-08: itens do menu por pessoa", () => {
     auth.permissionsLoaded = false;
     renderAt("/");
     expect(shownItems()).toEqual([]);
-    expect(screen.getByTestId("menu-loading").children).toHaveLength(4);
+    const loading = screen.getByTestId("menu-loading");
+    expect(loading.querySelectorAll(".animate-pulse")).toHaveLength(4);
+    // O carregando tem texto para leitor de tela, não só aria-busy.
+    expect(within(loading).getByText("Carregando…")).toHaveClass("sr-only");
   });
 
   it("se a primeira leitura falhou, nem itens nem Skeleton (o aviso fica na área principal)", () => {
@@ -210,5 +222,27 @@ describe("UX-18 (E2.01): item ativo do menu nas sub-rotas", () => {
   it("Dado uma rota que só começa com o mesmo texto (/membersx), então nenhum item acende", () => {
     renderAt("/membersx");
     expect(currentItems()).toEqual([]);
+  });
+});
+
+describe("Meus dados pelo menu do celular (revisão de UI do E2.02)", () => {
+  it("o menu fecha e o foco termina dentro do diálogo, não no botão que abre o menu", async () => {
+    mobile.value = true;
+    auth.access = CAIO;
+    auth.member = { id: "m-1", name: "Caio Lima" };
+    renderAt("/");
+    const menuTrigger = screen.getByRole("button", { name: "Abrir menu" });
+    fireEvent.click(menuTrigger);
+    const ownDataButton = await screen.findByRole("button", { name: "Editar meus dados" });
+    // O Sheet devolveria o foco ao gatilho ao fechar; com o diálogo abrindo, não devolve.
+    const triggerFocused = vi.fn();
+    menuTrigger.addEventListener("focus", triggerFocused);
+    fireEvent.click(ownDataButton);
+
+    const dialog = await screen.findByRole("dialog", { name: "Editar Meus Dados" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Editar meus dados" })).not.toBeInTheDocument());
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+    expect(menuTrigger).not.toHaveFocus();
+    expect(triggerFocused).not.toHaveBeenCalled();
   });
 });
