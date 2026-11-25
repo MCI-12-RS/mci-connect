@@ -297,7 +297,7 @@ SELECT is_empty($$ SELECT attname, a.grantee::regrole
 SELECT is(
   ARRAY(SELECT c FROM unnest(pg_temp.sensitive_columns()) c
          WHERE NOT has_column_privilege('service_role', 'public.members', c, 'SELECT')),
-  '{}'::text[], 'service_role: lê as 8 colunas sensíveis (get-user-email e create-user-admin)');
+  '{}'::text[], 'service_role: lê as 8 colunas sensíveis (create-user-admin)');
 SELECT ok(obj_description('public.members'::regclass, 'pg_class') ~ 'GRANT SELECT \(coluna\)',
   'members: o comentário da tabela documenta a regra do GRANT por coluna');
 
@@ -543,7 +543,7 @@ SELECT lives_ok(format($$ UPDATE public.members SET cpf = '10850009669' WHERE id
 SELECT results_eq(
   format($$ SELECT email, cpf, mobile_whatsapp FROM public.members WHERE id = %L $$, pg_temp.m(7)),
   'SELECT email, cpf, mobile_whatsapp FROM pg_temp.xenia_sensitive',
-  'service_role: lê as colunas sensíveis na tabela (get-user-email)');
+  'service_role: lê as colunas sensíveis na tabela (create-user-admin)');
 RESET ROLE;
 SELECT is((SELECT cpf FROM public.members WHERE id = pg_temp.m(9)), '10850009669',
   'service_role: o CPF muda (RN-12)');

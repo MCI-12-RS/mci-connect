@@ -1,9 +1,18 @@
 # Deploy de produção, parte 1 de 2: banco (Supabase).
 # Actions → "Deploy: banco (Supabase)" → Run workflow.
 #
-# Mostra as migrations pendentes no resumo da execução, aplica (`supabase db push`)
-# e publica as Edge Functions da lista. Com "somente plano", só mostra o que faria.
-# Depois rode "Deploy: promote (Vercel)" para colocar o front no ar.
+# Ordem:
+#   1. confere o Auth de produção (provedor de e-mail desligado, E1.04 RN-14 e
+#      DT-13); falha cedo, inclusive com "somente plano";
+#   2. mostra as migrations pendentes no resumo da execução;
+#   3. aplica as migrations (`supabase db push`);
+#   4. apaga as Edge Functions de EDGE_FUNCTIONS_REMOVED (idempotente);
+#   5. publica as Edge Functions de EDGE_FUNCTIONS.
+# Com "somente plano", só os passos 1 e 2 rodam. Depois rode "Deploy: promote
+# (Vercel)" para colocar o front no ar.
+#
+# Os passos 1 e 4 usam a Management API com SUPABASE_ACCESS_TOKEN. A resposta da
+# configuração do Auth tem segredos: o corpo nunca é impresso, só o campo lido.
 #
 # Configuração no GitHub (Settings → Secrets and variables → Actions):
 #   secrets:   SUPABASE_DB_URL (pooler, com senha), SUPABASE_ACCESS_TOKEN
@@ -41,7 +50,11 @@ env:
   SUPABASE_CLI_VERSION: 2.58.5
   # Lista explícita de funções publicadas. change-member-password fica de fora
   # até o passo E2.03 do plano de migração.
-  EDGE_FUNCTIONS: create-user-admin get-user-email sign-in
+  EDGE_FUNCTIONS: create-user-admin sign-in
+  # Funções apagadas do projeto a cada execução (E1.04, RN-16). Tirar uma função
+  # de EDGE_FUNCTIONS não apaga a versão publicada, e um rollback do app não a
+  # publica de novo. get-user-email saiu porque foi substituída pela sign-in.
+  EDGE_FUNCTIONS_REMOVED: get-user-email
 
 jobs:
   banco:
@@ -56,10 +69,47 @@ jobs:
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
 
+      # Sempre roda, também com "somente plano", e antes das migrations.
+      # Nunca imprime o corpo da resposta (tem segredos de SMTP e de provedores).
+      - name: Conferir o Auth (provedor de e-mail desligado)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        shell: bash
+        run: |
+          body=$(mktemp)
+          trap 'rm -f "$body"' EXIT
+          status=$(curl -sS -o "$body" -w '%{http_code}' \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth") || status=000
+          if [ "$status" != "200" ]; then
+            echo "::error::Não foi possível ler a configuração do Auth (HTTP $status)."
+            echo "Auth: não foi possível ler a configuração (HTTP $status)." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          email=$(jq -r '.external_email_enabled
+            | if . == false then "desligado"
+              elif . == true then "ligado"
+              elif . == null then "ausente"
+              else "valor inesperado" end' "$body" 2>/dev/null) || email="resposta ilegível"
+          if [ "$email" != "desligado" ]; then
+            echo "::error::O provedor de e-mail do Auth precisa estar desligado (external_email_enabled = false); está: $email."
+            echo "Auth: provedor de e-mail $email. Desligue antes de publicar (E1.04, RN-14)." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Auth: provedor de e-mail desligado." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Plano (dry run)
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
         run: |
+          for fn in $EDGE_FUNCTIONS_REMOVED; do
+            if [[ " $EDGE_FUNCTIONS " == *" $fn "* ]]; then
+              echo "::error::$fn está em EDGE_FUNCTIONS e em EDGE_FUNCTIONS_REMOVED."
+              exit 1
+            fi
+          done
           out=$(supabase db push --db-url "$DB_URL" --dry-run 2>&1)
           echo "$out"
           {
@@ -72,6 +122,7 @@ jobs:
             else
               echo "Edge Functions: não serão publicadas."
             fi
+            echo "Edge Functions a apagar (se existirem): \`${EDGE_FUNCTIONS_REMOVED}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Aplicar migrations
@@ -79,6 +130,48 @@ jobs:
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: supabase db push --db-url "$DB_URL" --yes
+
+      # Idempotente: função que já não existe (404) não é erro. Qualquer outro
+      # status falha o job. Roda mesmo sem "publicar_funcoes" (RN-16).
+      - name: Apagar Edge Functions retiradas
+        if: ${{ !inputs.somente_plano }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        shell: bash
+        run: |
+          body=$(mktemp)
+          trap 'rm -f "$body"' EXIT
+          api="https://api.supabase.com/v1/projects/$PROJECT_REF/functions"
+          call() {
+            local s
+            s=$(curl -sS -o "$body" -w '%{http_code}' -X "$1" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$api/$2") || s=000
+            echo "$s"
+          }
+          echo "### Edge Functions retiradas" >> "$GITHUB_STEP_SUMMARY"
+          for fn in $EDGE_FUNCTIONS_REMOVED; do
+            status=$(call GET "$fn")
+            case "$status" in
+              404)
+                echo "- \`$fn\`: já não existia." >> "$GITHUB_STEP_SUMMARY"
+                continue ;;
+              200) ;;
+              *)
+                echo "::error::Não foi possível consultar a função $fn (HTTP $status)."
+                echo "- \`$fn\`: falha ao consultar (HTTP $status)." >> "$GITHUB_STEP_SUMMARY"
+                exit 1 ;;
+            esac
+            status=$(call DELETE "$fn")
+            case "$status" in
+              200|204) echo "- \`$fn\`: apagada." >> "$GITHUB_STEP_SUMMARY" ;;
+              404) echo "- \`$fn\`: já não existia." >> "$GITHUB_STEP_SUMMARY" ;;
+              *)
+                echo "::error::Não foi possível apagar a função $fn (HTTP $status)."
+                echo "- \`$fn\`: falha ao apagar (HTTP $status)." >> "$GITHUB_STEP_SUMMARY"
+                exit 1 ;;
+            esac
+          done
 
       - name: Publicar Edge Functions
         if: ${{ !inputs.somente_plano && inputs.publicar_funcoes }}
