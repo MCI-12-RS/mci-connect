@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   MEMBER_FORM_ERROR_FIELDS,
@@ -42,7 +42,9 @@ const focusTarget = (field: MemberFormErrorField) => (field === "identification"
  */
 export function useMemberFormErrors(form: MemberForm, context: MemberFormContext) {
   const contextRef = useRef(context);
-  contextRef.current = context;
+  useLayoutEffect(() => {
+    contextRef.current = context;
+  });
 
   useEffect(() => {
     const subscription = form.watch((_values, { name }) => {
