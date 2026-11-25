@@ -71,6 +71,7 @@ function cleanup() {
          OR metadata ->> 'member_id' LIKE '${PREFIX}%'
          OR actor_user_id IN (SELECT id FROM auth.users WHERE email IN (${accounts}));
      DELETE FROM public.cell_report_participants WHERE member_id::text LIKE '${PREFIX}%';
+     DELETE FROM public.cells WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      UPDATE public.members SET leader_id = NULL, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
@@ -157,6 +158,8 @@ test.beforeAll(async () => {
     env,
     `BEGIN;
      SET LOCAL session_replication_role = replica;
+     INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time, is_active)
+     VALUES (${lit(id(3, 1))}, ${lit(member(1))}, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true);
      UPDATE public.members SET deleted_at = '2026-11-10T17:32:00Z', deleted_by = (SELECT id FROM public.members WHERE auth_user_id = ${lit(adminId)}) WHERE id = ${lit(member(11))};
      UPDATE public.members SET deleted_at = '2026-11-02T12:10:00Z', deleted_by = NULL WHERE id = ${lit(member(12))};
      UPDATE public.members SET deleted_at = '2026-11-20T11:00:00Z', deleted_by = ${lit(member(90))} WHERE id = ${lit(member(13))};
@@ -172,6 +175,7 @@ test.afterAll(async () => {
   const leftovers = sql(
     env,
     `SELECT (SELECT count(*) FROM public.members WHERE id::text LIKE '${PREFIX}%')
+          + (SELECT count(*) FROM public.cells WHERE id::text LIKE '${PREFIX}%')
           + (SELECT count(*) FROM public.roles WHERE id::text LIKE '${PREFIX}%')
           + (SELECT count(*) FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%')
           + (SELECT count(*) FROM public.events WHERE entity_id::text LIKE '${PREFIX}%')
