@@ -9,6 +9,7 @@ import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
 import { CellStatusBadge } from "@/components/StatusBadges";
+import LevelSuffix from "@/components/hierarchy/LevelSuffix";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,10 +18,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
-import { formatG12Label } from "@/lib/cells/labels";
+import { cellG12, cellLeaderLevel, formatG12Label } from "@/lib/cells/labels";
+import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -35,6 +38,8 @@ const Cells = () => {
   const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
   const { hasPermission, access } = useAuth();
   const isMobile = useIsMobile();
+  // Cartões até 1023 px e tabela a partir de 1024 px, já no primeiro render (P45).
+  const showTable = useMinWidth(TABLE_MIN_WIDTH);
 
   const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
   const cells = data?.rows ?? [];
@@ -150,6 +155,25 @@ const Cells = () => {
     </div>
   );
 
+  /** O G12 da célula (RN-11): o nome, "Pastores" ou "—", lido como "nenhum". */
+  const renderG12 = (c: CellRow) =>
+    cellG12(c).kind === "none" ? (
+      <>
+        <span aria-hidden="true">{CELLS_LIST_TEXTS.g12None}</span>
+        <span className="sr-only">{CELLS_LIST_TEXTS.g12NoneSpoken}</span>
+      </>
+    ) : (
+      formatG12Label(c)
+    );
+
+  /** "André Souza (144)": o líder com o nível do P40, que quebra entre as palavras. */
+  const renderLeader = (c: CellRow, className: string) => (
+    <span className={`${className} break-words`}>
+      {c.leader_name || "Sem líder"}
+      {c.leader_name && <LevelSuffix {...cellLeaderLevel(c)} />}
+    </span>
+  );
+
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar as células</p>;
@@ -162,8 +186,10 @@ const Cells = () => {
             {/* Header */}
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm">{c.leader_name || "Sem líder"}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">G12: {formatG12Label(c)}</p>
+                <p className="text-sm">{renderLeader(c, "font-semibold")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {CELLS_LIST_TEXTS.g12Label} {renderG12(c)}
+                </p>
               </div>
               {cellHasActions(c) && renderMobileActions(c)}
             </div>
@@ -247,7 +273,7 @@ const Cells = () => {
             </div>
           </CardHeader>
 
-          {isMobile ? (
+          {!showTable ? (
             renderMobileCards()
           ) : (
             <CardContent className="p-0">
@@ -259,7 +285,7 @@ const Cells = () => {
                     <TableHead>Endereço</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dia / Hora</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{CELLS_LIST_TEXTS.columnStatus}</TableHead>
                     {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
@@ -275,14 +301,14 @@ const Cells = () => {
                       <TableRow key={c.id} className={isPlaceholderData ? "opacity-60" : undefined}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium">{c.leader_name}</span>
+                            {renderLeader(c, "text-sm font-medium")}
                             <div className="flex flex-col text-xs text-muted-foreground italic">
                               {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
                               {c.host_name && <span>Anfitrião: {c.host_name}</span>}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{formatG12Label(c)}</TableCell>
+                        <TableCell className="text-sm">{renderG12(c)}</TableCell>
                         <TableCell className="text-sm">
                           <div className="flex flex-col">
                             <span className="font-medium">{c.street ? `${c.street}, ${c.number || "s/n"}` : "—"}</span>

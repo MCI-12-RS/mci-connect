@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MINISTRY_MEMBER_FIELDS, SENSITIVE_MEMBER_FIELDS, toMemberWritePayload } from "./fields";
+import { MEMBER_ROW_SELECT, MINISTRY_MEMBER_FIELDS, SENSITIVE_MEMBER_FIELDS, toMemberWritePayload } from "./fields";
 
 const form = {
   name: " Maria Souza ",
@@ -85,5 +85,12 @@ describe("SENSITIVE_MEMBER_FIELDS (RN-11)", () => {
       "street",
       "zip_code",
     ]);
+  });
+});
+
+describe("MEMBER_ROW_SELECT (E2.06, RN-10)", () => {
+  it("pede o nível, a marca de pastor, o sexo, o líder e o G12 da Liderança", () => {
+    const columns = MEMBER_ROW_SELECT.split(",").map((column) => column.trim());
+    expect(columns).toEqual(expect.arrayContaining(["g12_level", "is_pastor", "gender", "leader_name", "g12_name"]));
   });
 });

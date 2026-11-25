@@ -8,5 +8,4 @@ export const STATUS_TEXTS = {
   cellInactive: "Inativa",
   held: "Realizada",
   notHeld: "Não realizada",
-  noLeadership: "Sem liderança",
 } as const;
