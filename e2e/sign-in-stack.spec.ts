@@ -211,7 +211,7 @@ test.describe("RN-13: sessão persistida e renovada", () => {
   test("a resposta da função traz só a sessão mínima, sem dados do cadastro", async () => {
     const api = await signInApi(ANA.email, PASSWORD);
     expect(api.status).toBe(200);
-    expect(Object.keys(api.body).sort()).toEqual(["result", "session"]);
+    expect(Object.keys(api.body).sort()).toEqual(["must_change_password", "result", "session"]);  // E2.03: a marca da conta
     const session = api.body.session as Record<string, unknown>;
     expect(Object.keys(session).sort()).toEqual(["access_token", "expires_at", "expires_in", "refresh_token", "token_type"]);
     expect(api.text).not.toContain(ANA.name);

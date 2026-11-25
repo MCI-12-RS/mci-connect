@@ -220,7 +220,7 @@ async function createMember(page: Page, email: string, memberData: object): Prom
   const response = await page.request.post(`${env.apiUrl}/functions/v1/create-user-admin`, {
     headers: { apikey: env.publishableKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     // Contrato do E2.04: o e-mail real vai em `memberData.email`; todo cadastro tem um identificador (RN-08).
-    data: { password: "Senha#2026", memberData: { gender: "M", is_active: true, email, mobile_whatsapp: `5193209${String(Date.now()).slice(-4)}`, ...memberData } },
+    data: { password: "Caminho#2026x", memberData: { gender: "M", is_active: true, email, mobile_whatsapp: `5193209${String(Date.now()).slice(-4)}`, ...memberData } },
   });
   return reply(response);
 }
