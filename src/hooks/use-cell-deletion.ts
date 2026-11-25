@@ -2,22 +2,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyWriteError, refreshesList, type WriteResult } from "@/lib/deletion/outcome";
 import { CELL_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { refreshAfterCellWrite } from "@/lib/query-refresh";
 
 /**
- * Recarrega o que muda quando uma célula sai das listas ou fica inativa: a
- * lista e os seletores de Células, os relatórios (que mostram os dados da
- * célula), os membros (vínculo celular, totais e a árvore de Ministérios) e
- * os números do Dashboard.
+ * Recarrega o que muda quando uma célula sai das listas, fica inativa ou
+ * volta: a lista e os seletores de Células, os relatórios (que mostram os
+ * dados da célula), os membros (vínculo celular, totais e a árvore de
+ * Ministérios) e o Dashboard, sem mostrar o valor de antes (E2.06, P44 e AQ-6).
  */
 export function useRefreshCellData() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["cells"] }),
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
-      queryClient.invalidateQueries({ queryKey: ["members"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-    ]);
+  return () => refreshAfterCellWrite(queryClient);
 }
 
 /**

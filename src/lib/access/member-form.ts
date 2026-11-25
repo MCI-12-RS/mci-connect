@@ -16,6 +16,7 @@ import {
 } from "@/lib/members/codes";
 import type { MemberFormErrorField } from "@/lib/members/form-errors";
 import { ACCESS_TEXTS, MEMBER_FORM_TEXTS, MENU_TEXTS } from "./texts";
+import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
 
 // --- `role_options` (AQ-3) ---
 
@@ -283,11 +284,25 @@ export function memberRefusalFromError(error: unknown): MemberFormRefusal | null
 }
 
 /**
- * O aviso de uma gravação que falhou sem recusa (rede, 40P01, erro técnico):
- * só "tente de novo", nunca o texto técnico.
+ * Por que a gravação falhou sem recusa: queda de conexão (E2.04, T7), falha no
+ * recálculo da hierarquia ou falha transitória (E2.06, RN-08 e AQ-5), ou outro
+ * erro técnico.
  */
-export function memberSaveFailureMessage(networkError: boolean): string {
-  return networkError ? MEMBER_FORM_TEXTS.saveNetworkError : MEMBER_FORM_TEXTS.saveFailed;
+export type MemberSaveFailureCause = "network" | "recalc" | "other";
+
+/**
+ * O aviso de uma gravação que falhou sem recusa: só "tente de novo", nunca o
+ * texto técnico (UX-30 do E2.04, UX-19 do E2.06).
+ */
+export function memberSaveFailureMessage(cause: MemberSaveFailureCause): string {
+  switch (cause) {
+    case "network":
+      return MEMBER_FORM_TEXTS.saveNetworkError;
+    case "recalc":
+      return SAVE_TEXTS.recalcFailed;
+    case "other":
+      return MEMBER_FORM_TEXTS.saveFailed;
+  }
 }
 
 /** Códigos da `create-user-admin` que não são recusa de regra: o aviso genérico. */

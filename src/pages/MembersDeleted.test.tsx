@@ -91,6 +91,7 @@ const brunoRestored: MemberRow = {
   baptism_date: null,
   is_active: true,
   g12_level: 0,
+  g12_name: null,
   total_disciples: 0,
   total_cells: 0,
   auth_user_id: "u-bruno",

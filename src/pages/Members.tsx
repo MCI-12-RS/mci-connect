@@ -10,7 +10,10 @@ import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
 import { BlockedActionDialog } from "@/components/BlockedActionDialog";
-import { MemberStatusBadge, NoLeadershipBadge } from "@/components/StatusBadges";
+import { MemberStatusBadge } from "@/components/StatusBadges";
+import LevelBadge from "@/components/hierarchy/LevelBadge";
+import LeadershipText from "@/components/hierarchy/LeadershipText";
+import TotalsText from "@/components/hierarchy/TotalsText";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { TABLE_MIN_WIDTH, WIDE_TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
@@ -26,6 +30,9 @@ import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
 import { DELETED_LIST_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { listSubtitle } from "@/lib/access/access";
 import { MEMBER_FORM_TEXTS, RULE_TEXTS } from "@/lib/access/texts";
+import { memberLevel } from "@/lib/hierarchy/level";
+import { memberLeadership, showsLeadershipOnCard } from "@/lib/hierarchy/leadership";
+import { LEADERSHIP_TEXTS, MEMBERS_LIST_TEXTS } from "@/lib/hierarchy/texts";
 
 type Member = MemberRow;
 
@@ -49,8 +56,14 @@ const Members = () => {
   const [newMemberBlocked, setNewMemberBlocked] = useState(false);
   const { hasPermission, user, access } = useAuth();
   const isMobile = useIsMobile();
+  // Cartões até 1023 px, tabela a partir de 1024 px; foto e Celular a partir de 1280 px (P45).
+  const showTable = useMinWidth(TABLE_MIN_WIDTH);
+  const showWideColumns = useMinWidth(WIDE_TABLE_MIN_WIDTH);
 
-  const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
+  const { data, isLoading, isError, isPlaceholderData, isRefetching } = useMembersList(list.params);
+  // A lista na tela recarrega (troca de página ou depois de uma gravação): as
+  // linhas ficam em `opacity-60` e com `aria-busy` até a resposta (E1.08; E2.06, P44).
+  const refreshing = isPlaceholderData || isRefetching;
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
 
@@ -75,14 +88,11 @@ const Members = () => {
     setRestoredMember(null);
   };
 
-  const getLevelLabel = (level: number) => {
-    if (level === 0) return "Pastor";
-    return Math.pow(12, level).toString();
-  };
-
   const canEditAny = hasPermission("edit_member") || hasPermission("edit_own_data");
   const canDeleteAny = hasPermission("delete_member");
   const showActions = canEditAny || canDeleteAny;
+  // Nome, Nível, Liderança, Ministério e Situação; foto e Celular a partir de 1280 px.
+  const columnCount = 5 + (showWideColumns ? 2 : 0) + (showActions ? 1 : 0);
 
   const memberName = (m: Member) => m.name || UNNAMED_MEMBER_LABEL;
   const isSelf = (m: Member) => !!user && m.auth_user_id === user.id;
@@ -100,10 +110,11 @@ const Members = () => {
       ? [{ label: MEMBER_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(m, trigger) }]
       : [];
 
-  const LevelBadge = ({ m }: { m: Member }) => {
-    if (m.is_pastor) return <Badge variant="default">Pastor</Badge>;
-    if (!m.leader_id) return <NoLeadershipBadge />;
-    return <Badge variant="outline">{getLevelLabel(m.g12_level)}</Badge>;
+  // Contato embaixo do nome no cartão e na tabela estreita: Instagram, e-mail ou celular.
+  const contactLine = (m: Member) => {
+    if (m.instagram) return m.instagram;
+    if (!canSeeSensitive(m)) return "—";
+    return m.email || formatPhone(m.mobile_whatsapp) || "—";
   };
 
   // "Excluídos": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
@@ -118,30 +129,40 @@ const Members = () => {
   const canCreate = hasPermission("create_member");
   const subtitle = listSubtitle(access, "members");
 
+  /** "Liderança: …" no cartão (P41), só para quem tem líder (UXD-2). */
+  const renderCardLeadership = (m: Member) => {
+    const leadership = memberLeadership(m);
+    if (!showsLeadershipOnCard(leadership)) return null;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {LEADERSHIP_TEXTS.cardLabel} <LeadershipText leadership={leadership} className="text-foreground" />
+      </p>
+    );
+  };
+
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os membros</p>;
     if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
 
     return (
-      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {members.map((m) => (
           <div key={m.id} className="px-4 py-4 space-y-3">
             {/* Header: Avatar + Name + Actions */}
-            <div className="flex items-center gap-3">
+            {/* Com a fonte ampliada, as ações descem para a linha de baixo. */}
+            <div className="flex flex-wrap items-center gap-3">
               <Avatar className="w-11 h-11 border-2 border-muted shrink-0">
                 <AvatarImage src={m.avatar_url || ""} />
                 <AvatarFallback className="bg-muted">
                   <User className="w-5 h-5 text-muted-foreground" />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="grow basis-32 min-w-0">
                 <p className="font-semibold text-sm break-words">{m.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (canSeeSensitive(m) && m.email ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 break-all">{contactLine(m)}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="ml-auto flex items-center gap-2 shrink-0">
                 {canEdit(m) && (
                   <Button
                     variant="ghost"
@@ -157,24 +178,16 @@ const Members = () => {
               </div>
             </div>
 
-            {/* Info row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <LevelBadge m={m} />
-                <MemberStatusBadge active={m.is_active === true} />
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{m.total_disciples} disc.</span>
-                <span>{m.total_cells} cél.</span>
-              </div>
+            {/* Nível (P40) e situação (P6): a linha quebra entre os badges. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <LevelBadge {...memberLevel(m)} />
+              <MemberStatusBadge active={m.is_active === true} />
             </div>
 
-            {/* Leader */}
-            {m.leader_name && (
-              <p className="text-xs text-muted-foreground">
-                Líder: <span className="font-medium text-foreground">{m.leader_name}</span>
-              </p>
-            )}
+            {renderCardLeadership(m)}
+
+            {/* Totais da pessoa (P42), sempre, inclusive com zero. */}
+            <TotalsText disciples={m.total_disciples} cells={m.total_cells} className="block text-xs text-muted-foreground" />
           </div>
         ))}
       </div>
@@ -185,9 +198,9 @@ const Members = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
+              <h1 className="text-2xl md:text-3xl font-bold break-words">Membros</h1>
               {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
@@ -232,65 +245,74 @@ const Members = () => {
             </div>
           </CardHeader>
 
-          {isMobile ? (
+          {!showTable ? (
             renderMobileCards()
           ) : (
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Celular</TableHead>
-                    <TableHead>Nível G12</TableHead>
-                    <TableHead>Ministério</TableHead>
-                    <TableHead>Líder</TableHead>
-                    <TableHead>Status</TableHead>
-                    {showActions && <ActionsHead>Ações</ActionsHead>}
+                    {showWideColumns && <TableHead className="w-12"></TableHead>}
+                    <TableHead>{MEMBERS_LIST_TEXTS.columnName}</TableHead>
+                    {showWideColumns && <TableHead>{MEMBERS_LIST_TEXTS.columnMobile}</TableHead>}
+                    <TableHead>{MEMBERS_LIST_TEXTS.columnLevel}</TableHead>
+                    <TableHead>{MEMBERS_LIST_TEXTS.columnLeadership}</TableHead>
+                    <TableHead>{MEMBERS_LIST_TEXTS.columnMinistry}</TableHead>
+                    <TableHead>{MEMBERS_LIST_TEXTS.columnStatus}</TableHead>
+                    {showActions && <ActionsHead>{MEMBERS_LIST_TEXTS.columnActions}</ActionsHead>}
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody aria-busy={refreshing}>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                      <TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                     </TableRow>
                   ) : isError ? (
                     <TableRow>
-                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-destructive">Erro ao carregar os membros</TableCell>
+                      <TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar os membros</TableCell>
                     </TableRow>
                   ) : members.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={showActions ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
+                      <TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
                     </TableRow>
                   ) : (
                     members.map((m) => (
-                      <TableRow key={m.id} className={isPlaceholderData ? "opacity-60" : undefined}>
+                      <TableRow key={m.id} className={refreshing ? "opacity-60" : undefined}>
+                        {showWideColumns && (
+                          <TableCell>
+                            <Avatar className="w-10 h-10 border">
+                              <AvatarImage src={m.avatar_url || ""} />
+                              <AvatarFallback className="bg-muted">
+                                <User className="w-5 h-5 text-muted-foreground" />
+                              </AvatarFallback>
+                            </Avatar>
+                          </TableCell>
+                        )}
                         <TableCell>
-                          <Avatar className="w-10 h-10 border">
-                            <AvatarImage src={m.avatar_url || ""} />
-                            <AvatarFallback className="bg-muted">
-                              <User className="w-5 h-5 text-muted-foreground" />
-                            </AvatarFallback>
-                          </Avatar>
-                        </TableCell>
-                        <TableCell>
-                          <div>
+                          <div className="break-words">
                             <span className="font-medium">{m.name}</span>
-                            {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                            {!m.instagram && canSeeSensitive(m) && m.email && (
-                              <p className="text-xs text-muted-foreground">{m.email}</p>
+                            {showWideColumns ? (
+                              <>
+                                {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
+                                {!m.instagram && canSeeSensitive(m) && m.email && (
+                                  <p className="text-xs text-muted-foreground">{m.email}</p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">{contactLine(m)}</p>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
-                        <TableCell><LevelBadge m={m} /></TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">{m.total_disciples} Discípulo{m.total_disciples !== 1 ? "s" : ""}</span>
-                            <span className="text-sm text-muted-foreground">{m.total_cells} Célula{m.total_cells !== 1 ? "s" : ""}</span>
-                          </div>
+                        {showWideColumns && (
+                          <TableCell className="text-sm whitespace-nowrap">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
+                        )}
+                        <TableCell><LevelBadge {...memberLevel(m)} /></TableCell>
+                        <TableCell className="text-sm">
+                          <LeadershipText leadership={memberLeadership(m)} />
                         </TableCell>
-                        <TableCell className="text-sm">{m.leader_name || "—"}</TableCell>
+                        <TableCell>
+                          <TotalsText disciples={m.total_disciples} cells={m.total_cells} layout="stacked" />
+                        </TableCell>
                         <TableCell>
                           <MemberStatusBadge active={m.is_active === true} />
                         </TableCell>

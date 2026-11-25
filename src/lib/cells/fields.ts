@@ -7,12 +7,14 @@ export type CellViewRow = Database["public"]["Views"]["cells_view"]["Row"];
  * Linha da lista de Células, também usada pelo formulário de célula e como
  * célula inicial do formulário de relatório. Ficam de fora `search_text` (só
  * filtra), `last_report_date` (E2.09), `meeting_weekday` e `g12_leader_id`.
+ * `leader_is_pastor` e `leader_gender` dão o rótulo do nível do líder
+ * ("Pastor", "Pastora") e o G12 "Pastores" (E2.06, RN-11).
  * `can_submit_report` diz se quem consulta pode lançar o relatório da célula
  * (E2.02, RN-13, AQ-4): é a mesma regra da política e do trigger.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const CELL_ROW_SELECT =
-  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, timothy_name, host_name, g12_leader_name, can_submit_report";
+  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report";
 
 export type CellRow = Pick<
   CellViewRow,
@@ -33,6 +35,8 @@ export type CellRow = Pick<
   | "is_active"
   | "leader_name"
   | "leader_g12_level"
+  | "leader_is_pastor"
+  | "leader_gender"
   | "timothy_name"
   | "host_name"
   | "g12_leader_name"

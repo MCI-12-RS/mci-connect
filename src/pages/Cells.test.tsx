@@ -53,6 +53,8 @@ const carlos: CellRow = {
   is_active: true,
   leader_name: "Carlos Lima",
   leader_g12_level: 2,
+  leader_is_pastor: false,
+  leader_gender: "M",
   timothy_name: null,
   host_name: null,
   g12_leader_name: "Vera",

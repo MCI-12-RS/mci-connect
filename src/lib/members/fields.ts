@@ -17,7 +17,8 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  * celular e de busca, que custam uma subconsulta por linha, e a `role_id`: a
  * função vem de `my_access` (a própria) e de `role_options` (a de outra
  * pessoa), nunca da linha do membro (E2.02, RN-23). `leader_name` e
- * `spouse_name` são os nomes salvos dos seletores (DT-23).
+ * `spouse_name` são os nomes salvos dos seletores (DT-23). `g12_name` é o G12
+ * do membro, nome de referência da Liderança (E2.06, RN-10).
  *
  * A `role_id` é uma coluna mascarada à parte, ligada a "Atribuir Função" e
  * "Gerenciar Funções" (não a "Ver Dados Sensíveis"): desde o E2.02 (PR 6) o
@@ -31,7 +32,7 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =
-  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
+  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
 
 export type MemberRow = Omit<
   MemberViewRow,
@@ -45,9 +46,7 @@ export type MemberRow = Omit<
   | "role_id"
   | "created_at"
   | "updated_at"
-  // E2.06 (PR 1): colunas novas da view que a lista ainda não pede (PR 2).
   | "g12_id"
-  | "g12_name"
   | "password_reset_status"
 >;
 

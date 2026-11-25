@@ -306,8 +306,9 @@ describe("recusas do servidor (T11 do E2.02; T5 do E2.04)", () => {
   });
 
   it("falha sem recusa: só 'tente de novo', com o aviso de conexão na queda de rede", () => {
-    expect(memberSaveFailureMessage(false)).toBe("Não foi possível salvar o cadastro. Tente de novo.");
-    expect(memberSaveFailureMessage(true)).toBe("Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.");
+    expect(memberSaveFailureMessage("other")).toBe("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(memberSaveFailureMessage("network")).toBe("Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.");
+    expect(memberSaveFailureMessage("recalc")).toBe("Não foi possível salvar as alterações. Tente de novo.");
   });
 
   it("erro técnico, 40P01 ou de rede: null (a tela usa o aviso genérico)", () => {

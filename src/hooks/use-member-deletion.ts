@@ -8,22 +8,19 @@ import {
   type WriteResult,
 } from "@/lib/deletion/outcome";
 import { MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { refreshAfterMemberWrite } from "@/lib/query-refresh";
 
 /** Resultado de uma gravação do fluxo de exclusão: feita, ou a falha já classificada. */
 export type MemberWriteResult = WriteResult;
 
 /**
- * Recarrega o que muda quando um cadastro sai das listas ou fica inativo: a
- * lista de Membros, os seletores, a árvore de Ministérios (todos em
- * `["members", …]`) e os números do Dashboard.
+ * Recarrega o que muda quando um cadastro sai das listas ou fica inativo:
+ * Membros, os seletores, a árvore de Ministérios, Células, Relatórios e o
+ * Dashboard, sem mostrar o valor de antes (E2.06, P44 e AQ-6).
  */
 export function useRefreshMemberData() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["members"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-    ]);
+  return () => refreshAfterMemberWrite(queryClient);
 }
 
 /**

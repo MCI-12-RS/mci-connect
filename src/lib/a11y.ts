@@ -35,3 +35,8 @@ export function fieldA11yProps(
     "aria-describedby": describedBy(fieldMessageIds(id, texts), group.ids),
   };
 }
+
+/** A pessoa pediu menos movimento (`prefers-reduced-motion`): a rolagem é imediata, sem animação. */
+export function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}

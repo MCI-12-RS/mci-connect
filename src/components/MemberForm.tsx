@@ -239,7 +239,7 @@ const MemberForm = ({
         return;
       }
       case "failed":
-        setFailure(memberSaveFailureMessage(result.network));
+        setFailure(memberSaveFailureMessage(result.cause));
     }
   };
 
