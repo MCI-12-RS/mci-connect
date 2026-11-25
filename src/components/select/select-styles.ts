@@ -48,9 +48,10 @@ export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Op
       display: "flex",
       alignItems: "center",
       backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
-      color: "hsl(var(--foreground))",
+      // A opção desabilitada (P5) fica em `muted-foreground`, com o motivo escrito.
+      color: state.isDisabled ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))",
       fontWeight: state.isSelected ? 600 : 400,
-      cursor: "pointer",
+      cursor: state.isDisabled ? "not-allowed" : "pointer",
       "&:active": { backgroundColor: "hsl(var(--accent))" },
       [TOUCH_TARGET]: { minHeight: 44 },
     }),

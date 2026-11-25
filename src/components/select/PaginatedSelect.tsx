@@ -86,7 +86,10 @@ function usePaginatedMenu(): PaginatedMenuContextValue {
 
 type PaginatedOptionProps = OptionProps<SelectOption, boolean, GroupBase<SelectOption>>;
 
-/** Opção comum: o foco numa das últimas já carrega a próxima página. */
+/**
+ * Opção comum: o foco numa das últimas já carrega a próxima página. A opção
+ * que não pode ser escolhida mostra o motivo embaixo do nome (P5).
+ */
 function ItemOption(props: PaginatedOptionProps) {
   const { pagination, prefetchValues } = usePaginatedMenu();
   const { loadMore } = pagination;
@@ -94,7 +97,21 @@ function ItemOption(props: PaginatedOptionProps) {
   useEffect(() => {
     if (props.isFocused && nearEnd) loadMore();
   }, [props.isFocused, nearEnd, loadMore]);
-  return <components.Option {...props} />;
+  const reason = props.data.disabledReason;
+  if (!reason) return <components.Option {...props} />;
+  return (
+    <components.Option {...props}>
+      <span className="flex min-w-0 flex-col">
+        <span className="break-words">{props.children}</span>
+        <span className="text-sm">{reason}</span>
+      </span>
+    </components.Option>
+  );
+}
+
+/** Os itens de ação e as opções com motivo não são escolhidos (P5). */
+function isOptionDisabled(option: SelectOption): boolean {
+  return isActionOption(option) || option.disabledReason !== undefined;
 }
 
 /**
@@ -421,7 +438,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
           menuShouldScrollIntoView
           maxMenuHeight={isMobile ? MOBILE_MENU_MAX_HEIGHT : MENU_MAX_HEIGHT}
           filterOption={null}
-          isOptionDisabled={isActionOption}
+          isOptionDisabled={isOptionDisabled}
           closeMenuOnSelect={!isMulti}
           // No toque, o padrão tira o foco a cada escolha (fecha o teclado). Na
           // escolha única continua assim; na múltipla, o foco fica.

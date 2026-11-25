@@ -131,7 +131,8 @@ export const SELECT_ARIA_MESSAGES: AriaLiveMessages<SelectOption, boolean, Group
       // A falha diz o mesmo que o texto do item: "as opções" ou "mais opções".
       if (focused === RETRY_OPTION) return `${loadFailedLabel(options.some(isChoice))}. Tentar novamente.`;
       if (isActionOption(focused)) return `${label}.`;
-      return `${label}${isSelected ? ", selecionada" : ""}, ${position(options, focused)}.`;
+      const reason = focused.disabledReason ? `, indisponível: ${focused.disabledReason}` : "";
+      return `${label}${isSelected ? ", selecionada" : ""}${reason}, ${position(options, focused)}.`;
     }
     return "";
   },

@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Search, Pencil, Trash2, User } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -341,27 +340,24 @@ const Members = () => {
           )}
         </Card>
 
-        <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent
-            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
-            aria-describedby={undefined}
-            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
-          >
-            <DialogHeader>
-              <DialogTitle>{editingMember || restoredMember ? "Editar Membro" : MEMBER_FORM_TEXTS.newMember}</DialogTitle>
-            </DialogHeader>
-            {restoredMember ? (
-              <MemberFormById
-                key={restoredMember.memberId}
-                memberId={restoredMember.memberId}
-                restoredFrom={restoredMember}
-                onClose={handleClose}
-              />
-            ) : (
-              <MemberForm member={editingMember} onClose={handleClose} onRestored={setRestoredMember} />
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* O formulário traz o próprio diálogo (E2.04, T1 e T7: rodapé com o resumo e o descartar). */}
+        {formOpen &&
+          (restoredMember ? (
+            <MemberFormById
+              key={restoredMember.memberId}
+              memberId={restoredMember.memberId}
+              restoredFrom={restoredMember}
+              onClose={handleClose}
+              onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+            />
+          ) : (
+            <MemberForm
+              member={editingMember}
+              onClose={handleClose}
+              onRestored={setRestoredMember}
+              onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+            />
+          ))}
 
         <BlockedActionDialog
           open={newMemberBlocked}

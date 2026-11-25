@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
-import { fakeQueries, fakeRpcs, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
-import { useMemberName, useMemberOptions, type MemberOptionsParams } from "./use-member-options";
+import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { toMemberOption, useMemberName, useMemberOptions, type MemberOptionsParams } from "./use-member-options";
 
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
@@ -146,6 +146,48 @@ describe("useMemberName (RN-06)", () => {
   it("Sem valor, ou com o nome já conhecido, não consulta nada", () => {
     renderHook(() => useMemberName(null), { wrapper: createQueryWrapper() });
     renderHook(() => useMemberName("m1", { enabled: false }), { wrapper: createQueryWrapper() });
+
+    expect(fakeRpcs()).toHaveLength(0);
+  });
+});
+
+describe("useMemberOptions: discípulos no seletor de líder (E2.04, AQ-4, UX-19)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("Dado o cadastro de André, então a página pergunta à member_descendants_among quais são discípulos e os marca", async () => {
+    respondWith({ data: members(3) });
+    respondToRpc("member_descendants_among", { data: ["m1"] });
+
+    const { result } = renderOptions({ search: "", excludeId: "andre", descendantOf: "andre" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fakeRpcs()[0].fn).toBe("member_descendants_among");
+    expect(fakeRpcs()[0].args).toEqual({ _member_id: "andre", _candidate_ids: ["m0", "m1", "m2"] });
+    const options = result.current.data?.pages[0].items.map(toMemberOption);
+    expect(options).toEqual([
+      { value: "m0", label: "Membro 0" },
+      { value: "m1", label: "Membro 1", disabledReason: "Discípulo desta pessoa" },
+      { value: "m2", label: "Membro 2" },
+    ]);
+  });
+
+  it("Dada uma falha da RPC, então a página vem sem as marcas (a recusa do ciclo vem ao salvar)", async () => {
+    respondWith({ data: members(2) });
+    respondToRpc("member_descendants_among", { error: { code: "42501", message: "x" } });
+
+    const { result } = renderOptions({ search: "", descendantOf: "andre" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.pages[0].items.every((row) => !row.is_descendant)).toBe(true);
+  });
+
+  it("Dado o cadastro novo (sem descendantOf) ou a página vazia, então nada é perguntado", async () => {
+    respondWith({ data: members(2) }, { data: [] });
+
+    const first = renderOptions({ search: "" });
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    const empty = renderOptions({ search: "zz", descendantOf: "andre" });
+    await waitFor(() => expect(empty.result.current.isSuccess).toBe(true));
 
     expect(fakeRpcs()).toHaveLength(0);
   });

@@ -1,7 +1,7 @@
 // E2.04 (P23, RN-06, RN-07; UX-06 e UX-07): as máscaras nunca cortam dígitos
 // e preservam o cursor.
 import { describe, expect, it } from "vitest";
-import { applyMask, cpfDisplayValue, maskCpf, maskMobileOnBlur, maskMobileTyping, mobileDisplayValue } from "./masks";
+import { applyMask, cpfDisplayValue, maskCep, maskCpf, maskMobileOnBlur, maskMobileTyping, mobileDisplayValue } from "./masks";
 
 /** Digita caractere por caractere, com o cursor no fim, como no campo. */
 const type = (text: string, mask: (value: string) => string): string =>
@@ -93,5 +93,14 @@ describe("applyMask", () => {
 
   it("cursor antes de qualquer dígito vai para antes do primeiro dígito", () => {
     expect(applyMask("5133334444", 0, maskMobileTyping)).toEqual({ value: "(51) 3333-4444", caret: 1 });
+  });
+});
+
+describe("maskCep", () => {
+  it("formata até 8 dígitos e ignora o resto", () => {
+    expect(maskCep("90010")).toBe("90010");
+    expect(maskCep("900101")).toBe("90010-1");
+    expect(maskCep("90010-100")).toBe("90010-100");
+    expect(maskCep("900101009")).toBe("90010-100");
   });
 });

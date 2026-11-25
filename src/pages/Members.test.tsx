@@ -186,8 +186,9 @@ describe("Membros: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2.
     // O cadastro de Ana, da members_view, e as funções do formulário.
     respondWith({ data: { id: "d1", name: "Ana", is_active: true, sensitive_visible: false } }, { data: [] });
     fireEvent.click(await within(blocked).findByRole("button", { name: "Abrir o cadastro de Ana" }));
-    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
-    await within(form).findByLabelText("Nome *");
+    // O diálogo do carregando dá lugar ao do formulário (E2.04, T1).
+    await screen.findByLabelText("Nome *");
+    const form = screen.getByRole("dialog", { name: "Editar membro" });
     await flushFocusReturn();
     // O bloqueio fechou, mas o foco não volta para a lista: fica no formulário.
     expect(form).toContainElement(document.activeElement as HTMLElement);
@@ -203,7 +204,7 @@ describe("Membros: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2.
     respondWith({ data: [] });
     act(() => edit.focus());
     fireEvent.click(edit);
-    const form = await screen.findByRole("dialog", { name: "Editar Membro" });
+    const form = await screen.findByRole("dialog", { name: "Editar membro" });
 
     fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
 

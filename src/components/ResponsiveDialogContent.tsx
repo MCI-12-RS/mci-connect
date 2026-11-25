@@ -11,6 +11,8 @@ export interface ResponsiveDialogContentProps extends Omit<ComponentPropsWithout
   closeLabel: string;
   /** O rodapé fixo, com os botões. */
   footer: ReactNode;
+  /** Classes do corpo rolável (por exemplo, o `scroll-padding` do E2.04, T1). */
+  bodyClassName?: string;
 }
 
 /**
@@ -21,7 +23,7 @@ export interface ResponsiveDialogContentProps extends Omit<ComponentPropsWithout
  * respeita a área segura (`viewport-fit=cover` no `index.html`).
  */
 const ResponsiveDialogContent = forwardRef<ElementRef<typeof DialogPrimitive.Content>, ResponsiveDialogContentProps>(
-  ({ title, closeLabel, footer, className, children, ...props }, ref) => (
+  ({ title, closeLabel, footer, bodyClassName, className, children, ...props }, ref) => (
     <DialogPortal>
       <DialogOverlay className="motion-reduce:!animate-none" />
       <DialogPrimitive.Content
@@ -46,7 +48,7 @@ const ResponsiveDialogContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
           </DialogPrimitive.Close>
           <DialogPrimitive.Title className="min-w-0 break-words text-lg font-semibold leading-tight">{title}</DialogPrimitive.Title>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">{children}</div>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6", bodyClassName)}>{children}</div>
         <div className="flex shrink-0 flex-row justify-end gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-6">
           {footer}
         </div>

@@ -1,0 +1,143 @@
+import { useState, type ReactNode, type Ref } from "react";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
+import ResponsiveDialogContent from "@/components/ResponsiveDialogContent";
+import LongAlertDialogContent, { DIALOG_FOOTER_BUTTON } from "@/components/LongAlertDialogContent";
+import { MEMBER_FORM_LAYOUT_TEXTS as TEXTS } from "@/lib/members/texts";
+import { cn } from "@/lib/utils";
+import { FormErrorSummary } from "./FormErrorSummary";
+
+const FOOTER_BUTTON = "h-11 flex-1 md:h-10 md:flex-none";
+
+/** O rodapé do formulário que grava: resumo, falha de envio, "Cancelar" e a ação primária. */
+export interface MemberFormDialogActions {
+  /** O `id` do `<form>`, para o botão de envio ficar no rodapé. */
+  formId: string;
+  /** "Criar membro" ou "Salvar alterações". */
+  primaryLabel: string;
+  /** "Criando…" ou "Salvando…". */
+  busyLabel: string;
+  busy: boolean;
+  /** Desabilitada por outro motivo (cadastro excluído no meio tempo, funções carregando). */
+  disabled: boolean;
+  /** Quantos campos têm erro (P22). */
+  errorCount: number;
+  /** Queda de conexão ou falha do servidor (T7), com `role="alert"`. */
+  failure: string | null;
+  primaryRef?: Ref<HTMLButtonElement>;
+  /** Algo mudou: fechar pede a confirmação (UXD-14, UX-26). */
+  isDirty: () => boolean;
+}
+
+interface MemberFormDialogProps {
+  title: string;
+  onClose: () => void;
+  /** O foco ao abrir: o conteúdo do diálogo só existe a partir daqui (o `Portal` monta depois de quem o abre). */
+  onOpenAutoFocus?: (event: Event) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+  /** Sem ações: só "Fechar" ("Meus dados" só para leitura e o carregando). */
+  actions?: MemberFormDialogActions;
+  children: ReactNode;
+}
+
+/**
+ * O diálogo do formulário de membro (E2.04, T1 e T7; P1): tela cheia no
+ * celular e centralizado no desktop, com cabeçalho e rodapé fixos, fora da
+ * área que rola; o `scroll-padding` do corpo deixa o rótulo do campo em foco à
+ * vista (WCAG 2.4.11). Fechar com alterações ("Cancelar", "✕", `Esc` e o clique
+ * fora) pede "Descartar as alterações?".
+ */
+export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoFocus, actions, children }: MemberFormDialogProps) {
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const requestClose = () => {
+    if (actions?.busy) return;
+    if (actions?.isDirty()) setConfirmDiscard(true);
+    else onClose();
+  };
+
+  const footer = actions ? (
+    <div className="flex w-full flex-col gap-2 md:flex-row md:items-center">
+      <div className="flex min-w-0 flex-col gap-2 md:mr-auto">
+        <FormErrorSummary count={actions.errorCount} text={TEXTS.errorSummary} />
+        {actions.failure && (
+          <p role="alert" className="flex items-start gap-1.5 text-sm font-medium text-foreground">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+            <span>{actions.failure}</span>
+          </p>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" className={FOOTER_BUTTON} disabled={actions.busy} onClick={requestClose}>
+          {TEXTS.buttons.cancel}
+        </Button>
+        <Button
+          ref={actions.primaryRef}
+          type="submit"
+          form={actions.formId}
+          className={FOOTER_BUTTON}
+          disabled={actions.busy || actions.disabled}
+        >
+          {actions.busy && <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+          {actions.busy ? actions.busyLabel : actions.primaryLabel}
+        </Button>
+      </div>
+    </div>
+  ) : (
+    <Button type="button" variant="outline" className={cn(FOOTER_BUTTON, "md:flex-none")} onClick={onClose}>
+      {TEXTS.readOnlyClose}
+    </Button>
+  );
+
+  return (
+    <>
+      <Dialog
+        open
+        onOpenChange={(open) => {
+          if (!open) requestClose();
+        }}
+      >
+        <ResponsiveDialogContent
+          title={title}
+          closeLabel={TEXTS.close}
+          aria-describedby={undefined}
+          onOpenAutoFocus={onOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
+          className="md:max-w-3xl"
+          bodyClassName="scroll-pb-6 scroll-pt-12"
+          footer={footer}
+        >
+          {children}
+        </ResponsiveDialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <LongAlertDialogContent>
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle>{TEXTS.discard.title}</AlertDialogTitle>
+            <AlertDialogDescription>{TEXTS.discard.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogAction className={cn(buttonVariants({ variant: "destructive" }), DIALOG_FOOTER_BUTTON)} onClick={onClose}>
+              {TEXTS.discard.confirm}
+            </AlertDialogAction>
+            {/* O foco inicial do AlertDialog fica no "Continuar editando" (UX-26). */}
+            <AlertDialogCancel className={cn(DIALOG_FOOTER_BUTTON, "mt-0")}>
+              {TEXTS.discard.keepEditing}
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </LongAlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

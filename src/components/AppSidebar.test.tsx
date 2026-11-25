@@ -25,15 +25,22 @@ vi.mock("@/contexts/AuthContext", () => ({
 const mobile = vi.hoisted(() => ({ value: false }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => mobile.value }));
 
-// O formulário de "Meus dados" só mostra se veio só para leitura (e um campo, para o foco).
-vi.mock("@/components/MemberForm", () => ({
-  default: ({ readOnly }: { readOnly?: boolean }) => (
-    <>
-      <p>{readOnly ? "formulário só para leitura" : "formulário editável"}</p>
-      <input aria-label="Nome" />
-    </>
-  ),
-}));
+// O formulário de "Meus dados" traz o próprio diálogo (E2.04, T1): aqui, só o
+// título, se veio só para leitura e um campo, para o foco.
+vi.mock("@/components/MemberForm", async () => {
+  const { Dialog, DialogContent, DialogTitle } = await import("@/components/ui/dialog");
+  return {
+    default: ({ readOnly, title }: { readOnly?: boolean; title?: string }) => (
+      <Dialog open>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>{title}</DialogTitle>
+          <p>{readOnly ? "formulário só para leitura" : "formulário editável"}</p>
+          <input aria-label="Nome" />
+        </DialogContent>
+      </Dialog>
+    ),
+  };
+});
 
 const ITEMS = ["Dashboard", "Membros", "Células", "Relatórios", "Ministérios", "Funções", "Auditoria"];
 
@@ -239,7 +246,7 @@ describe("Meus dados pelo menu do celular (revisão de UI do E2.02)", () => {
     menuTrigger.addEventListener("focus", triggerFocused);
     fireEvent.click(ownDataButton);
 
-    const dialog = await screen.findByRole("dialog", { name: "Editar Meus Dados" });
+    const dialog = await screen.findByRole("dialog", { name: "Editar meus dados" });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Editar meus dados" })).not.toBeInTheDocument());
     await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
     expect(menuTrigger).not.toHaveFocus();

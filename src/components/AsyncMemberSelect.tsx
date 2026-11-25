@@ -8,7 +8,8 @@ import { SELECT_TEXTS } from "@/lib/access/texts";
 
 interface AsyncMemberSelectProps {
   value: string | null;
-  onChange: (value: string | null) => void;
+  /** O id escolhido e o nome dele (para avisos que citam a pessoa, como o P20 do E2.04). */
+  onChange: (value: string | null, label: string | null) => void;
   /** Membro que não pode ser escolhido (o próprio, ao escolher líder ou cônjuge). */
   excludeId?: string;
   placeholder?: string;
@@ -25,8 +26,15 @@ interface AsyncMemberSelectProps {
    * `member_names`. Vale só enquanto o valor for o de abertura.
    */
   savedLabel?: string | null;
-  /** Id da dica embaixo do campo (por exemplo, o alcance do P11), ligada ao campo de busca. */
+  /** Ids das mensagens embaixo do campo (erro, aviso e dica, P21), ligadas ao campo de busca. */
   "aria-describedby"?: string;
+  /** O campo tem erro; o texto dele vai em `aria-describedby`, na ordem do P21. */
+  "aria-invalid"?: boolean;
+  /**
+   * O cadastro cujo líder se escolhe (E2.04, AQ-4): os discípulos dele
+   * aparecem desabilitados, com o motivo (P5).
+   */
+  descendantOf?: string | null;
   /**
    * Texto da busca sem resultado. Quem chama decide pelo acesso, com
    * `memberSearchEmptyLabel` ("Nenhum membro do seu ministério encontrado."
@@ -50,10 +58,12 @@ const AsyncMemberSelect = ({
   focusRef,
   savedLabel,
   "aria-describedby": describedBy,
+  "aria-invalid": ariaInvalid,
   noResultsLabel = SELECT_TEXTS.noMembers,
+  descendantOf = null,
 }: AsyncMemberSelectProps) => {
   const search = useSelectSearch();
-  const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen });
+  const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen, descendantOf });
   const pagination = useOptionsPagination(options, toMemberOption);
 
   // A opção escolhida agora já tem o nome; o valor que veio de fora (edição)
@@ -80,11 +90,12 @@ const AsyncMemberSelect = ({
       value={selected}
       onChange={(option) => {
         setPicked(option);
-        onChange(option?.value ?? null);
+        onChange(option?.value ?? null, option?.label ?? null);
       }}
       placeholder={placeholder}
       noResultsLabel={noResultsLabel}
       aria-describedby={describedBy}
+      aria-invalid={ariaInvalid}
       isClearable
     />
   );

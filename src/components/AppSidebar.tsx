@@ -8,10 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MemberForm from "@/components/MemberForm";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { isNavItemActive } from "@/lib/navigation";
 import { menuItems, ownDataMode, roleDisplayName, type MenuItemKey } from "@/lib/access/access";
 import { ACCESS_TEXTS, MENU_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
+import { MEMBER_FORM_LAYOUT_TEXTS } from "@/lib/members/texts";
 
 const MENU_ICONS: Record<MenuItemKey, LucideIcon> = {
   dashboard: Home,
@@ -124,16 +124,15 @@ const AppSidebar = () => {
     </div>
   );
 
-  const ownDataDialog = member && ownData ? (
-    <Dialog open={ownDataOpen} onOpenChange={setOwnDataOpen}>
-      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto w-[95vw] sm:w-full" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle>{ownData === "view" ? OWN_DATA_TEXTS.title : OWN_DATA_TEXTS.editTitle}</DialogTitle>
-        </DialogHeader>
-        <MemberForm member={member} readOnly={ownData === "view"} onClose={() => setOwnDataOpen(false)} />
-      </DialogContent>
-    </Dialog>
-  ) : null;
+  const ownDataDialog =
+    member && ownData && ownDataOpen ? (
+      <MemberForm
+        member={member}
+        readOnly={ownData === "view"}
+        title={ownData === "view" ? OWN_DATA_TEXTS.title : MEMBER_FORM_LAYOUT_TEXTS.titles.own}
+        onClose={() => setOwnDataOpen(false)}
+      />
+    ) : null;
 
   if (isMobile) {
     return (

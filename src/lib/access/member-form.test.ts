@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   initialLeaderId,
-  isLeaderMissing,
   leadershipValues,
   memberRefusalFromCreate,
   memberRefusalFromError,
@@ -184,14 +183,11 @@ describe("dados ministeriais (T6, RN-10)", () => {
       spouseHint: "Escolha entre as pessoas do seu ministério. Se o cônjuge é de outro ministério, peça a um administrador.",
     });
     expect(initialLeaderId(view, true, "pedro")).toBe("pedro");
-    expect(isLeaderMissing(view, null)).toBe(true);
-    expect(isLeaderMissing(view, "pedro")).toBe(false);
   });
 
   it("Rita cadastrando: o Líder não vem preenchido (a MEM-15 para todos é do E2.07)", () => {
     const view = ministryFieldsView({ seesWholeChurch: true, isNew: true });
     expect(initialLeaderId(view, true, "rita")).toBeNull();
-    expect(isLeaderMissing(view, null)).toBe(false);
   });
 
   it("Pedro editando Caio: Líder obrigatório, sem preencher de novo", () => {
@@ -203,13 +199,11 @@ describe("dados ministeriais (T6, RN-10)", () => {
   it("UX-19: Samuel editando Magda (pastora): 'Pastor(a)' como texto, sem interruptor e sem o Líder", () => {
     const view = ministryFieldsView({ seesWholeChurch: false, isNew: false, saved: { is_pastor: true, leader_id: null } });
     expect(view).toMatchObject({ pastor: "text", leadership: "hidden", leader: "hidden" });
-    expect(isLeaderMissing(view, null)).toBe(false);
   });
 
   it("Diego editando Ester (sem liderança): 'Sem liderança' como texto e o Líder opcional (PO-UX-7)", () => {
     const view = ministryFieldsView({ seesWholeChurch: false, isNew: false, saved: { is_pastor: false, leader_id: null } });
     expect(view).toMatchObject({ pastor: "hidden", leadership: "text", leader: "optional", leaderHint: null });
-    expect(isLeaderMissing(view, null)).toBe(false);
   });
 });
 
@@ -235,62 +229,80 @@ const appError = (detail: Record<string, unknown>, message: string) => ({
   hint: "app_error",
 });
 
-describe("recusas do servidor (T11, UX-22)", () => {
+describe("recusas do servidor (T11 do E2.02; T5 do E2.04)", () => {
   it("pessoa fora do que se vê (RN-09 b): embaixo do campo que o servidor apontou", () => {
     const msg = "Você só pode escolher pessoas que você vê.";
     expect(memberRefusalFromError(appError({ code: "person_not_visible", field: "spouse_id" }, msg))).toEqual({
       message: msg,
-      field: "spouse_id",
+      fields: { spouse_id: msg },
       rereadAccess: false,
     });
-    expect(memberRefusalFromError(appError({ code: "person_not_visible", field: "member_id" }, msg))?.field).toBeNull();
+    expect(memberRefusalFromError(appError({ code: "person_not_visible", field: "member_id" }, msg))?.fields).toEqual({});
   });
 
   it("RN-10: no topo, e a tela relê o acesso", () => {
     const msg = "Só quem vê a igreja toda pode marcar um membro como pastor ou como sem liderança.";
     expect(
       memberRefusalFromError(appError({ code: "pastor_or_no_leadership_requires_church", field: "leader_id" }, msg)),
-    ).toEqual({ message: msg, field: null, rereadAccess: true });
+    ).toEqual({ message: msg, fields: {}, rereadAccess: true });
   });
 
   it("RN-09 c e RN-11: no topo, como vieram", () => {
     const msg = "Com esta alteração, você deixaria de ver este cadastro. As alterações não foram salvas.";
     expect(memberRefusalFromError(appError({ code: "would_leave_scope", entity: "member" }, msg))).toEqual({
       message: msg,
-      field: null,
+      fields: {},
       rereadAccess: false,
     });
   });
 
   it("função (RN-18): embaixo do campo Função", () => {
     for (const code of ["own_role", "role_change_not_allowed", "role_not_assignable"]) {
-      expect(memberRefusalFromError(appError({ code }, "x"))?.field).toBe("role_id");
+      expect(memberRefusalFromError(appError({ code }, "x"))?.fields).toEqual({ role_id: "x" });
     }
   });
 
   it("42501: 'Você não tem permissão para esta ação.', e relê o acesso", () => {
     expect(memberRefusalFromError({ code: "42501", message: "permission denied for table members" })).toEqual({
       message: "Você não tem permissão para esta ação.",
-      field: null,
+      fields: {},
       rereadAccess: true,
     });
   });
 
-  it("23505 cru do índice único (E2.04): a mensagem de value_in_use, nunca o texto técnico", () => {
+  it("23505 cru do índice único (E2.04): a mensagem de value_in_use no Celular, nunca o texto técnico", () => {
     const refusal = memberRefusalFromError({
       code: "23505",
       message: 'duplicate key value violates unique constraint "members_mobile_key"',
       details: "Key (mobile_whatsapp)=(51988887777) already exists.",
       hint: null,
     });
-    expect(refusal).toEqual({ message: "Este celular já está sendo usado por outro cadastro.", field: null, rereadAccess: false });
+    const msg = "Este celular já está sendo usado por outro cadastro.";
+    expect(refusal).toEqual({ message: msg, fields: { mobile_whatsapp: msg }, rereadAccess: false });
   });
 
-  it("regra do E2.04 pelo trigger: a mensagem pronta do banco", () => {
+  it("23514 cru (E2.04): o CHECK vira a recusa do campo", () => {
+    const refusal = memberRefusalFromError({
+      code: "23514",
+      message: 'new row for relation "members" violates check constraint "members_cpf_check"',
+    });
+    const msg = "CPF inválido. Se a pessoa não tem CPF, deixe o campo em branco.";
+    expect(refusal).toEqual({ message: msg, fields: { cpf: msg }, rereadAccess: false });
+  });
+
+  it("regra do E2.04 pelo trigger: no campo que o servidor apontou", () => {
     const msg = "Informe o e-mail, o celular ou o CPF. A pessoa usa um deles para entrar no sistema.";
     expect(
       memberRefusalFromError(appError({ code: "identifier_required", field: "identification", fields: ["mobile_whatsapp", "email", "cpf"] }, msg)),
-    ).toEqual({ message: msg, field: null, rereadAccess: false });
+    ).toEqual({ message: msg, fields: { identification: msg }, rereadAccess: false });
+  });
+
+  it("value_in_use com dois campos (RN-10): cada campo com a sua mensagem", () => {
+    const refusal = memberRefusalFromError(appError({ code: "value_in_use", fields: ["email", "cpf"] }, "Este e-mail já está sendo usado por outro cadastro."));
+    expect(refusal?.fields).toEqual({
+      email: "Este e-mail já está sendo usado por outro cadastro.",
+      cpf: "Este CPF já está sendo usado por outro cadastro.",
+    });
   });
 
   it("falha sem recusa: só 'tente de novo', com o aviso de conexão na queda de rede", () => {
@@ -298,25 +310,32 @@ describe("recusas do servidor (T11, UX-22)", () => {
     expect(memberSaveFailureMessage(true)).toBe("Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.");
   });
 
-  it("erro técnico ou de rede: null (a tela usa o aviso genérico)", () => {
+  it("erro técnico, 40P01 ou de rede: null (a tela usa o aviso genérico)", () => {
     expect(memberRefusalFromError({ code: "", message: "TypeError: Failed to fetch" })).toBeNull();
+    expect(memberRefusalFromError({ code: "40P01", message: "deadlock detected" })).toBeNull();
     expect(memberRefusalFromError(new Error("x"))).toBeNull();
   });
 
   it("create-user-admin: 403 é permissão; regras com o campo; sem código ou técnico, null", () => {
     expect(memberRefusalFromCreate({ message: "Você não tem permissão para cadastrar membros.", code: "forbidden", field: null })).toEqual({
       message: "Você não tem permissão para esta ação.",
-      field: null,
+      fields: {},
       rereadAccess: true,
     });
     expect(
       memberRefusalFromCreate({ message: "Você só pode escolher pessoas que você vê.", code: "person_not_visible", field: "leader_id" }),
-    ).toEqual({ message: "Você só pode escolher pessoas que você vê.", field: "leader_id", rereadAccess: false });
+    ).toEqual({ message: "Você só pode escolher pessoas que você vê.", fields: { leader_id: "Você só pode escolher pessoas que você vê." }, rereadAccess: false });
     const rn19 = "A função padrão tem permissões que você não tem. Peça a um administrador para fazer este cadastro.";
     expect(memberRefusalFromCreate({ message: rn19, code: "default_role_not_covered", field: null })).toEqual({
       message: rn19,
-      field: null,
+      fields: {},
       rereadAccess: false,
+    });
+    expect(
+      memberRefusalFromCreate({ message: "Este e-mail já está sendo usado por outro cadastro.", code: "value_in_use", field: null, fields: ["email", "mobile"] })?.fields,
+    ).toEqual({
+      mobile_whatsapp: "Este celular já está sendo usado por outro cadastro.",
+      email: "Este e-mail já está sendo usado por outro cadastro.",
     });
     expect(memberRefusalFromCreate({ message: "Já existe…", code: null, field: null })).toBeNull();
     expect(memberRefusalFromCreate({ message: "Erro inesperado", code: "server_error", field: null })).toBeNull();

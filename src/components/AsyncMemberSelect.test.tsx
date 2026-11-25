@@ -309,7 +309,7 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
 
     fireEvent.click(screen.getByRole("option", { name: "Membro 001" }));
 
-    expect(onChange).toHaveBeenCalledWith("m001");
+    expect(onChange).toHaveBeenCalledWith("m001", "Membro 001");
   });
 
   it("Dado um texto digitado e uma opção em foco, quando aperta Tab, então nada é escolhido", async () => {
@@ -459,8 +459,35 @@ describe("AsyncMemberSelect: seletor limitado ao que se vê (E2.02, P11)", () =>
     openMenu(input);
     fireEvent.click(await screen.findByRole("option", { name: "Pedro Alves" }));
 
-    expect(onChange).toHaveBeenCalledWith("m-pedro");
+    expect(onChange).toHaveBeenCalledWith("m-pedro", "Pedro Alves");
     // As opções vêm só da members_view (o escopo de quem usa): Samuel não está entre elas.
     expect(screen.queryByRole("option", { name: "Samuel Colares" })).not.toBeInTheDocument();
+  });
+});
+
+describe("AsyncMemberSelect: discípulos desabilitados no seletor de líder (E2.04, P5, UX-19)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("Dado o cadastro de André, então o discípulo aparece desabilitado, com o motivo escrito, e não pode ser escolhido", async () => {
+    respondWith({ data: members(3) });
+    respondToRpc("member_descendants_among", { data: ["m001"] });
+    const onChange = vi.fn();
+    render(
+      <>
+        <label htmlFor="leader">Líder *</label>
+        <AsyncMemberSelect inputId="leader" value={null} onChange={onChange} excludeId="andre" descendantOf="andre" />
+      </>,
+      { wrapper: createQueryWrapper() },
+    );
+    openMenu(screen.getByLabelText("Líder *"));
+
+    const disciple = await screen.findByRole("option", { name: /Membro 001/ });
+    expect(disciple).toHaveTextContent("Discípulo desta pessoa");
+    expect(disciple).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(disciple);
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("option", { name: "Membro 002" }));
+    expect(onChange).toHaveBeenCalledWith("m002", "Membro 002");
   });
 });

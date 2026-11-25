@@ -7,7 +7,7 @@
 // conferência na tela (antes de enviar), para os testes e para as reservas
 // (23505 e 23514), que não trazem texto amigável.
 
-import { MEMBER_FORM_TEXTS } from "@/lib/access/texts";
+import { MEMBER_FORM_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
 
 /** Mensagens das regras (RN-02 a RN-16; "Formato dos erros", AQ-1). */
 export const MEMBER_RULE_TEXTS = {
@@ -101,6 +101,8 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
     pastor: "É Pastor(a)?",
     hasLeadership: "Tem Liderança?",
     leader: MEMBER_FORM_TEXTS.leaderLabel,
+    /** Quem vê só o ministério e edita alguém já sem liderança (E2.02, PO-UX-7): opcional. */
+    leaderOptional: "Líder",
     active: "Ativo",
     baptized: "Batizado(a)?",
     baptismDate: "Data do batismo",
@@ -120,6 +122,41 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
     creating: "Criando…",
     saving: "Salvando…",
   },
+  /** O "✕" do cabeçalho, para o leitor de tela. */
+  close: MEMBER_FORM_TEXTS.close,
+  /** O rodapé de "Meus dados" só para leitura (E2.02). */
+  readOnlyClose: OWN_DATA_TEXTS.close,
+  /** Sucesso: como antes (toast). */
+  created: "Membro criado com sucesso",
+  updated: "Membro atualizado com sucesso",
+  /** Endereço: como antes. */
+  address: {
+    zipCode: "CEP",
+    zipCodeLoading: "Buscando...",
+    zipCodePlaceholder: "00000-000",
+    street: "Rua",
+    number: "Número",
+    complement: "Complemento",
+    neighborhood: "Bairro",
+    city: "Cidade",
+    state: "Estado",
+    statePlaceholder: "UF",
+  },
+  /** Senha: como antes (a política é do E2.03). */
+  password: {
+    initial: "Senha para Acesso",
+    initialPlaceholder: "Padrão: 123456",
+    label: "Senha",
+    change: "Alterar Senha",
+    dialogTitle: (name: string): string => `Alterar Senha - ${name}`,
+    newPassword: "Nova Senha",
+    newPasswordPlaceholder: "Mínimo 6 caracteres",
+    changing: "Alterando...",
+    tooShort: "A senha deve ter pelo menos 6 caracteres",
+    changed: "Senha alterada com sucesso",
+    failed: "Erro",
+  },
+  roleSelectPlaceholder: "Selecione a função",
   /** P22: o resumo no rodapé ao salvar com erro. */
   errorSummary: (count: number): string => `Confira os campos destacados (${count}).`,
   /** T7: queda de conexão ou 5xx ao salvar. */
