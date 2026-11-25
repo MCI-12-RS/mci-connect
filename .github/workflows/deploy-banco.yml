@@ -41,7 +41,7 @@ env:
   SUPABASE_CLI_VERSION: 2.58.5
   # Lista explícita de funções publicadas. change-member-password fica de fora
   # até o passo E2.03 do plano de migração.
-  EDGE_FUNCTIONS: create-user-admin get-user-email
+  EDGE_FUNCTIONS: create-user-admin get-user-email sign-in
 
 jobs:
   banco:

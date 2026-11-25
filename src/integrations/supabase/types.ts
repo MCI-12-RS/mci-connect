@@ -1354,6 +1354,8 @@ export type Database = {
         Args: { _candidate_id: string; _user_id: string }
         Returns: boolean
       }
+      is_placeholder_email: { Args: { _email: string }; Returns: boolean }
+      is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
       log_auth_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -1385,8 +1387,10 @@ export type Database = {
           total_disciples: number
         }[]
       }
+      mobile_match_key: { Args: { _value: string }; Returns: string }
       normalize_digits: { Args: { _value: string }; Returns: string }
       normalize_email: { Args: { _value: string }; Returns: string }
+      normalize_mobile: { Args: { _value: string }; Returns: string }
       restore_cell: { Args: { _cell_id: string }; Returns: undefined }
       restore_cell_report: { Args: { _report_id: string }; Returns: undefined }
       restore_member: {
@@ -1401,6 +1405,23 @@ export type Database = {
       search_normalize: { Args: { _value: string }; Returns: string }
       set_cell_report_participants: {
         Args: { _member_ids: string[]; _report_id: string }
+        Returns: undefined
+      }
+      sign_in_attempt: {
+        Args: { _identifier: string; _origin: string; _password: string }
+        Returns: Json
+      }
+      sign_in_discard_link: {
+        Args: { _auth_user_id: string }
+        Returns: undefined
+      }
+      sign_in_record_login: {
+        Args: {
+          _auth_user_id: string
+          _identifier_masked: string
+          _identifier_type: string
+          _member_id: string
+        }
         Returns: undefined
       }
       sp_now: { Args: never; Returns: string }
@@ -1441,6 +1462,7 @@ export type Database = {
         | "logout"
         | "password_changed"
         | "restore"
+        | "login_blocked"
       event_entity:
         | "member"
         | "cell"
@@ -1608,6 +1630,7 @@ export const Constants = {
         "logout",
         "password_changed",
         "restore",
+        "login_blocked",
       ],
       event_entity: [
         "member",
