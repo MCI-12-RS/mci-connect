@@ -12,7 +12,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(70);
+SELECT plan(72);
 
 CREATE TEMP TABLE login_cases (
   id text, input text, format text, email text, cpf text, mobile text, mobile_key text,
@@ -28,7 +28,7 @@ INSERT INTO login_cases VALUES
   ('email-incompleto', 'ana@', 'email', 'ana@', NULL, NULL, NULL, false, NULL),
   ('email-digitos-antes-do-arroba', '51988887777@exemplo.com', 'email', '51988887777@exemplo.com', NULL, NULL, NULL, true, '5***@exemplo.com'),
   ('email-254-caracteres', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.com', 'email', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.com', NULL, NULL, NULL, true, 'a***@x.com'),
-  ('email-255-caracteres', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.com', 'invalid', NULL, NULL, NULL, NULL, true, 'a***m'),
+  ('email-255-caracteres', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@x.com', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
   ('celular-mascara', '(51) 98888-7777', 'mobile', NULL, NULL, '51988887777', '5188887777', true, '***7777'),
   ('celular-com-mais-55', '+55 (51) 98888-7777', 'mobile', NULL, NULL, '51988887777', '5188887777', true, '***7777'),
   ('celular-55-colado', '5551988887777', 'mobile', NULL, NULL, '51988887777', '5188887777', true, '***7777'),
@@ -50,11 +50,12 @@ INSERT INTO login_cases VALUES
   ('celular-cpf-digito-errado', '529.982.247-26', 'mobile', NULL, NULL, '52998224726', '5298224726', true, '***4726'),
   ('celular-cpf-todos-iguais', '111.111.111-11', 'mobile', NULL, NULL, '11111111111', '11111111111', true, '***1111'),
   ('cpf-so-cpf', '000.000.001-91', 'cpf', NULL, '00000000191', NULL, NULL, true, '***0191'),
-  ('invalida-sem-ddd', '9888-7777', 'invalid', NULL, NULL, NULL, NULL, true, '9***7'),
-  ('invalida-sem-ddd-9-digitos', '98888-7777', 'invalid', NULL, NULL, NULL, NULL, true, '9***7'),
-  ('invalida-texto', 'ana.souza', 'invalid', NULL, NULL, NULL, NULL, true, 'a***a'),
-  ('invalida-12-digitos-sem-55', '123456789012', 'invalid', NULL, NULL, NULL, NULL, true, '1***2'),
-  ('invalida-longa-sem-arroba', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'invalid', NULL, NULL, NULL, NULL, true, 'a***a');
+  ('invalida-sem-ddd', '9888-7777', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
+  ('invalida-sem-ddd-9-digitos', '98888-7777', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
+  ('invalida-texto', 'ana.souza', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
+  ('invalida-12-digitos-sem-55', '123456789012', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
+  ('invalida-longa-sem-arroba', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'invalid', NULL, NULL, NULL, NULL, true, '***'),
+  ('invalida-senha-colada', 'Senha#Forte1', 'invalid', NULL, NULL, NULL, NULL, true, '***');
 
 -- Formato e formas normalizadas: uma asserção por caso.
 SELECT is(

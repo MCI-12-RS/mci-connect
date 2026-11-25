@@ -153,6 +153,17 @@ describe('sessão (RN-13, RN-14)', () => {
     assert.ok(!JSON.stringify(ev).includes(PW))
   })
 
+  it('RN-15 b, risco 17: a identificação inválida, inclusive a de mais de 254 caracteres, vai para a Auditoria só como "***"', async () => {
+    for (const id of ['Senha#Forte1', `Senha#Forte1${'z'.repeat(250)}`, `${'s'.repeat(250)}@x.com`]) {
+      const t0 = sql(`SELECT clock_timestamp()::text;`)
+      const r = await signIn(id, 'x')
+      assert.equal(r.status, 401, r.text)
+      const meta = JSON.parse(sql(`SELECT metadata FROM public.events WHERE entity = 'auth' AND action = 'login_failed'
+                                     AND occurred_at >= '${t0}'::timestamptz ORDER BY occurred_at DESC LIMIT 1;`))
+      assert.deepEqual(meta, { reason: 'invalid_identifier', identifier_masked: '***' }, `${id.length} caracteres`)
+    }
+  })
+
   it('DA-13: 6 logins simultâneos da mesma conta dão 200 (nova tentativa com otp_expired) e não deixam link pendente', async () => {
     const rs = await Promise.all(Array.from({ length: 6 }, () => signIn(ANA_EMAIL, PW)))
     for (const r of rs) assert.equal(r.status, 200, r.text)
@@ -203,13 +214,21 @@ describe('origem confiável (DT-06, RN-11)', () => {
     assert.equal(origemUsada('127.0.0.1'), 2)
   })
 
-  it('RN-11: 20 falhas da mesma origem, com identificações diferentes, bloqueiam a origem (429) e Ana não entra daquela origem', async () => {
+  it('RN-11: 50 falhas da mesma origem, com identificações diferentes, bloqueiam a origem (429) e Ana não entra daquela origem', async () => {
     const ip = '198.18.9.40'
     sql(`DELETE FROM private.sign_in_throttle;`)
+    // As 45 primeiras falhas são gravadas direto (50 pedidos em série levariam 35 s pelo piso);
+    // as 5 últimas passam pela função: a 46ª a 49ª dão 401 (o limite antigo, 20, já ficou para trás)
+    // e a 50ª bloqueia.
+    sql(`INSERT INTO private.sign_in_throttle (kind, key_hash, failures, expires_at)
+         SELECT 'origin', private.sign_in_key('origin', 'o:${ip}'),
+                array_agg(clock_timestamp() - interval '5 minutes' + (i || ' seconds')::interval ORDER BY i), now() + interval '15 minutes'
+           FROM generate_series(1, 45) i;`)
+    assert.equal(failuresOf('origin', `o:${ip}`), 45)
     const rs = []
-    for (let i = 1; i <= 20; i++) rs.push(await signIn(`ninguem${i}@e104edge.invalid`, 'x', { ip }))
-    assert.deepEqual(rs.slice(0, 19).map((r) => r.status), Array(19).fill(401))
-    assert.equal(rs[19].status, 429)
+    for (let i = 46; i <= 50; i++) rs.push(await signIn(`ninguem${i}@e104edge.invalid`, 'x', { ip }))
+    assert.deepEqual(rs.slice(0, 4).map((r) => r.status), Array(4).fill(401))
+    assert.equal(rs[4].status, 429)
     assert.equal((await signIn(ANA_EMAIL, PW, { ip })).status, 429)
     assert.equal((await signIn(ANA_EMAIL, PW, { ip: '198.18.9.41' })).status, 200, 'de outra origem, entra')
   })
