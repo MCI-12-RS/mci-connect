@@ -1,11 +1,15 @@
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider, type QueryKey } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute, PublicRoute } from "@/components/RouteGuards";
+import { RouteAccess } from "@/components/NoAccess";
 import { requestSessionCheckOnDenied } from "@/lib/auth/session-check";
+import { isPermissionDenied } from "@/lib/errors";
+import { SCREEN_TITLES } from "@/lib/access/texts";
+import { isAccessQueryKey, refreshAccess } from "@/hooks/use-access";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
@@ -19,11 +23,18 @@ import CellReportsDeleted from "./pages/CellReportsDeleted";
 import Events from "./pages/Events";
 import NotFound from "./pages/NotFound";
 
-// Toda recusa 42501 de leitura ou gravação pede a releitura do próprio cadastro:
-// a de um membro excluído encerra a sessão (E2.01, RN-14 e DT-20).
-const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: requestSessionCheckOnDenied }),
-  mutationCache: new MutationCache({ onError: requestSessionCheckOnDenied }),
+// Toda recusa 42501 de leitura ou gravação pede:
+//   - a releitura do próprio cadastro: a de um membro excluído encerra a sessão (E2.01, RN-14 e DT-20);
+//   - a releitura do acesso, que pode ter mudado (E2.02, RN-08 e P13). A recusa
+//     da própria leitura do acesso não pede outra, para não repetir sem fim.
+function onDenied(error: unknown, queryKey?: QueryKey) {
+  requestSessionCheckOnDenied(error);
+  if (isPermissionDenied(error) && !isAccessQueryKey(queryKey)) void refreshAccess(queryClient);
+}
+
+const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (error, query) => onDenied(error, query.queryKey) }),
+  mutationCache: new MutationCache({ onError: (error) => onDenied(error) }),
 });
 
 const App = () => (
@@ -36,15 +47,15 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/members" element={<ProtectedRoute><Members /></ProtectedRoute>} />
+            <Route path="/members" element={<ProtectedRoute><RouteAccess path="/members" title={SCREEN_TITLES.members}><Members /></RouteAccess></ProtectedRoute>} />
             <Route path="/members/deleted" element={<ProtectedRoute><MembersDeleted /></ProtectedRoute>} />
-            <Route path="/roles" element={<ProtectedRoute><Roles /></ProtectedRoute>} />
-            <Route path="/ministries" element={<ProtectedRoute><Ministries /></ProtectedRoute>} />
-            <Route path="/cells" element={<ProtectedRoute><Cells /></ProtectedRoute>} />
+            <Route path="/roles" element={<ProtectedRoute><RouteAccess path="/roles" title={SCREEN_TITLES.roles}><Roles /></RouteAccess></ProtectedRoute>} />
+            <Route path="/ministries" element={<ProtectedRoute><RouteAccess path="/ministries" title={SCREEN_TITLES.ministries}><Ministries /></RouteAccess></ProtectedRoute>} />
+            <Route path="/cells" element={<ProtectedRoute><RouteAccess path="/cells" title={SCREEN_TITLES.cells}><Cells /></RouteAccess></ProtectedRoute>} />
             <Route path="/cells/deleted" element={<ProtectedRoute><CellsDeleted /></ProtectedRoute>} />
-            <Route path="/cell-reports" element={<ProtectedRoute><CellReports /></ProtectedRoute>} />
+            <Route path="/cell-reports" element={<ProtectedRoute><RouteAccess path="/cell-reports" title={SCREEN_TITLES.cellReports}><CellReports /></RouteAccess></ProtectedRoute>} />
             <Route path="/cell-reports/deleted" element={<ProtectedRoute><CellReportsDeleted /></ProtectedRoute>} />
-            <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+            <Route path="/events" element={<ProtectedRoute><RouteAccess path="/events" title={SCREEN_TITLES.events}><Events /></RouteAccess></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

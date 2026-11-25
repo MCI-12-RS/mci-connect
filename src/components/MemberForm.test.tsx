@@ -18,10 +18,10 @@ vi.mock("@/integrations/supabase/client", async () => {
 
 // Permissões do usuário logado. Por padrão, só atribuir a função: sem os dados
 // ministeriais, que trariam os seletores de membro e as consultas deles.
-const auth = vi.hoisted(() => ({ permissions: new Set<string>() }));
+const auth = vi.hoisted(() => ({ permissions: new Set<string>(), roleName: "Líder" as string | null }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
-    isSystem: false,
+    access: { member_id: "m1", role_id: auth.roleName ? "role-lider" : null, role_name: auth.roleName, permissions: [] },
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
 }));
@@ -209,5 +209,48 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MemberForm: Meus dados só para leitura (E2.02, UXD-13, UX-09)", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set();
+    auth.roleName = null;
+  });
+
+  it("campos readOnly e focáveis, aviso no topo, função como texto, só 'Fechar' e nenhuma consulta de funções", () => {
+    const onClose = vi.fn();
+    render(<MemberForm member={member} readOnly onClose={onClose} />, { wrapper: createQueryWrapper() });
+
+    expect(
+      screen.getByText(
+        "Você pode consultar os seus dados, mas não alterá-los. Para corrigir alguma informação, fale com o seu líder.",
+      ),
+    ).toBeInTheDocument();
+    const name = screen.getByLabelText("Nome *");
+    expect(name).toHaveAttribute("readonly");
+    expect(name).not.toBeDisabled();
+    expect(screen.getByLabelText("Gênero")).toHaveValue("Feminino");
+    expect(screen.getByLabelText("Gênero")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Estado")).toHaveAttribute("readonly");
+    // Sem função: o texto, com o motivo (P12), e nenhum Input desabilitado.
+    expect(screen.getByText("Sem função")).toBeInTheDocument();
+    expect(screen.getByText("Ninguém pode alterar a própria função.")).toBeInTheDocument();
+    expect(document.querySelector("input:disabled")).toBeNull();
+
+    expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancelar" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(fakeQueries().filter((q) => q.table === "roles")).toHaveLength(0);
+  });
+
+  it("Enter num campo não envia nada", () => {
+    render(<MemberForm member={member} readOnly onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const form = screen.getByLabelText("Nome *").closest("form");
+    expect(form).not.toBeNull();
+    if (form) fireEvent.submit(form);
+    expect(fakeQueries().filter((q) => q.table === "members")).toHaveLength(0);
   });
 });

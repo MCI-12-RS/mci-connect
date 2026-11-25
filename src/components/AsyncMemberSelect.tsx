@@ -4,6 +4,7 @@ import { useMemberName, useMemberOptions, toMemberOption } from "@/hooks/use-mem
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
 import type { SelectOption } from "@/lib/selectors";
+import { SELECT_TEXTS } from "@/lib/access/texts";
 
 interface AsyncMemberSelectProps {
   value: string | null;
@@ -17,6 +18,21 @@ interface AsyncMemberSelectProps {
   inputId?: string;
   /** Leva o foco ao campo de busca (por exemplo, o Líder em "Definir líder", E2.01 T5). */
   focusRef?: Ref<PaginatedSelectHandle>;
+  /**
+   * O nome do valor com que o campo abriu, vindo da view (`leader_name`,
+   * `spouse_name`…; E2.02, DT-23 e P11). Com ele, a pessoa salva aparece pelo
+   * nome mesmo fora do ministério de quem edita, sem consultar a
+   * `member_names`. Vale só enquanto o valor for o de abertura.
+   */
+  savedLabel?: string | null;
+  /** Id da dica embaixo do campo (por exemplo, o alcance do P11), ligada ao campo de busca. */
+  "aria-describedby"?: string;
+  /**
+   * Texto da busca sem resultado. Quem chama decide pelo acesso, com
+   * `memberSearchEmptyLabel` ("Nenhum membro do seu ministério encontrado."
+   * para quem não vê a igreja toda, P11). Padrão: "Nenhum membro encontrado".
+   */
+  noResultsLabel?: string;
 }
 
 /**
@@ -32,6 +48,9 @@ const AsyncMemberSelect = ({
   activeOnly = false,
   inputId,
   focusRef,
+  savedLabel,
+  "aria-describedby": describedBy,
+  noResultsLabel = SELECT_TEXTS.noMembers,
 }: AsyncMemberSelectProps) => {
   const search = useSelectSearch();
   const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen });
@@ -40,12 +59,15 @@ const AsyncMemberSelect = ({
   // A opção escolhida agora já tem o nome; o valor que veio de fora (edição)
   // busca o nome no banco.
   const [picked, setPicked] = useState<SelectOption | null>(null);
-  const knownName = picked && picked.value === value ? picked.label : null;
-  const { data: savedName, isPending } = useMemberName(value, { enabled: !knownName });
+  // O valor de abertura, para o nome salvo valer só para ele.
+  const [initialValue] = useState(value);
+  const savedName = savedLabel && value === initialValue ? savedLabel : null;
+  const knownName = picked && picked.value === value ? picked.label : savedName;
+  const { data: fetchedName, isPending } = useMemberName(value, { enabled: !knownName });
 
   let selected: SelectOption | null = null;
   if (value) {
-    const label = knownName ?? (isPending ? "Carregando…" : savedName || UNNAMED_MEMBER_LABEL);
+    const label = knownName ?? (isPending ? "Carregando…" : fetchedName || UNNAMED_MEMBER_LABEL);
     selected = { value, label };
   }
 
@@ -61,7 +83,8 @@ const AsyncMemberSelect = ({
         onChange(option?.value ?? null);
       }}
       placeholder={placeholder}
-      noResultsLabel="Nenhum membro encontrado"
+      noResultsLabel={noResultsLabel}
+      aria-describedby={describedBy}
       isClearable
     />
   );

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, Key } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, Key } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
@@ -22,6 +22,9 @@ import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/
 import { memberRestoreNotices } from "@/lib/deletion/restore";
 import { readFunctionErrorBody, isJsonObject } from "@/lib/errors";
 import { requestSessionCheck } from "@/lib/auth/session-check";
+import { roleDisplayName } from "@/lib/access/access";
+import { GENDER_LABELS, genderLabel } from "@/lib/members/gender";
+import { MEMBER_FORM_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
 import {
   deletedMatchesWarning,
   parseCreateMemberRefusal,
@@ -61,6 +64,13 @@ interface MemberFormProps {
   onRestored?: (restored: RestoredFromWarning) => void;
   /** Aberto logo depois de restaurar pelo aviso: o `Alert` de restauração, com o foco (UX-32). */
   restoredFrom?: RestoredFromWarning;
+  /**
+   * "Meus dados" só para leitura (E2.02, UXD-13 e UX-09): para quem não tem
+   * "Editar Próprio Cadastro" nem "Editar Membro". Os campos ficam `readOnly`
+   * (focáveis e lidos pelo leitor de tela), sem "Salvar", com o aviso no topo
+   * e só "Fechar" no rodapé.
+   */
+  readOnly?: boolean;
 }
 
 const BRAZILIAN_STATES = [
@@ -167,25 +177,25 @@ const RoleField = ({ roles, loadError, value, canAssign, onChange }: RoleFieldPr
   );
 };
 
-const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restoredFrom }: MemberFormProps) => {
+const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restoredFrom, readOnly = false }: MemberFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasPermission, isSystem } = useAuth();
+  const { hasPermission, access } = useAuth();
   const isEditing = !!member;
   const [cepLoading, setCepLoading] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
-  const canAssignRole = isSystem || hasPermission("assign_role", "manage_roles");
+  const canAssignRole = !readOnly && hasPermission("assign_role", "manage_roles");
   // Na edição, a members_view diz se os dados sensíveis deste membro estão
   // visíveis (o próprio cadastro ou view_sensitive_data). No cadastro, quem
   // tem create_member preenche todos os campos (E1.08, RN-11 e RN-12).
   const canViewSensitive = !isEditing || member?.sensitive_visible === true;
-  const canChangePassword = isSystem || hasPermission("change_member_password");
-  const canEditMinistry = isSystem || hasPermission("edit_member");
+  const canChangePassword = !readOnly && hasPermission("change_member_password");
+  const canEditMinistry = !readOnly && hasPermission("edit_member");
   // Quem vê o nome e restaura os cadastros excluídos do aviso (RN-15, RN-18).
-  const isAdmin = isSystem || hasPermission("manage_roles");
+  const isAdmin = hasPermission("manage_roles");
 
   // Restaurado pelo aviso (UX-32): as mensagens da RN-16 e, se voltou sem líder, o foco no Líder.
   const restoredNotices = restoredFrom ? memberRestoreNotices(restoredFrom.outcome) : null;
@@ -222,6 +232,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       if (error) throw error;
       return data;
     },
+    // Só para leitura, a função vem do próprio acesso (RN-23).
+    enabled: !readOnly,
   });
 
   const defaultRoleId = roles?.find((r) => r.is_default)?.id || null;
@@ -423,7 +435,13 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={readOnly ? (event) => event.preventDefault() : handleSubmit} className="space-y-6">
+      {readOnly && (
+        <Alert>
+          <Info className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>{OWN_DATA_TEXTS.readOnlyNotice}</AlertDescription>
+        </Alert>
+      )}
       {restoredFrom && (
         <Alert ref={restoredAlertRef} role="status" tabIndex={-1} className="focus:outline-none">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -454,7 +472,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>
-            <Input id="name" value={form.name} onChange={(e) => update("name", e.target.value)} required />
+            <Input id="name" readOnly={readOnly} value={form.name} onChange={(e) => update("name", e.target.value)} required />
           </div>
           {canViewSensitive && (
             <div className="space-y-2">
@@ -464,10 +482,11 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
               <Input
                 ref={emailInputRef}
                 id="email"
+                readOnly={readOnly}
                 type="email"
                 value={isFakeEmail ? "" : (form.email || "")}
                 onChange={(e) => update("email", e.target.value)}
-                placeholder={isFakeEmail ? "Adicionar e-mail..." : ""}
+                placeholder={isFakeEmail && !readOnly ? "Adicionar e-mail..." : ""}
                 aria-invalid={emailError ? true : undefined}
                 aria-describedby={emailError ? "email-error" : undefined}
                 className={emailError ? "border-destructive" : undefined}
@@ -484,7 +503,8 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
             <Label htmlFor="instagram">Instagram (@)</Label>
             <Input 
               id="instagram" 
-              placeholder="@usuario" 
+              readOnly={readOnly}
+              placeholder={readOnly ? undefined : "@usuario"} 
               value={form.instagram || ""} 
               onChange={(e) => {
                 let v = e.target.value;
@@ -496,7 +516,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
           {canViewSensitive && (
             <div className="space-y-2">
               <Label htmlFor="cpf">CPF</Label>
-              <Input id="cpf" value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder="000.000.000-00" />
+              <Input id="cpf" readOnly={readOnly} value={form.cpf || ""} onChange={(e) => handleMaskedChange("cpf", e.target.value, maskCPF)} placeholder={readOnly ? undefined : "000.000.000-00"} />
             </div>
           )}
           {!isEditing && (
@@ -513,17 +533,21 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
           )}
           <div className="space-y-2">
             <Label htmlFor="gender">Gênero</Label>
-            <Select value={form.gender || ""} onValueChange={(v) => update("gender", v)}>
-              <SelectTrigger id="gender"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="M">Masculino</SelectItem>
-                <SelectItem value="F">Feminino</SelectItem>
-              </SelectContent>
-            </Select>
+            {readOnly ? (
+              <Input id="gender" readOnly value={genderLabel(form.gender)} />
+            ) : (
+              <Select value={form.gender || ""} onValueChange={(v) => update("gender", v)}>
+                <SelectTrigger id="gender"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="M">{GENDER_LABELS.M}</SelectItem>
+                  <SelectItem value="F">{GENDER_LABELS.F}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="birth_date">Data de Nascimento</Label>
-            <Input id="birth_date" type="date" value={form.birth_date || ""} onChange={(e) => update("birth_date", e.target.value)} />
+            <Input id="birth_date" readOnly={readOnly} type="date" value={form.birth_date || ""} onChange={(e) => update("birth_date", e.target.value)} />
           </div>
           {canEditMinistry && (
             <div className="space-y-2">
@@ -541,17 +565,17 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
             <>
               <div className="space-y-2">
                 <Label htmlFor="mobile">Celular / WhatsApp</Label>
-                <Input id="mobile" value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder="(00)00000-0000" />
+                <Input id="mobile" readOnly={readOnly} value={form.mobile_whatsapp || ""} onChange={(e) => handleMaskedChange("mobile_whatsapp", e.target.value, maskPhone)} placeholder={readOnly ? undefined : "(00)00000-0000"} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
-                <Input id="phone" value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder="(00)0000-0000" />
+                <Input id="phone" readOnly={readOnly} value={form.phone || ""} onChange={(e) => handleMaskedChange("phone", e.target.value, maskPhone)} placeholder={readOnly ? undefined : "(00)0000-0000"} />
               </div>
             </>
           )}
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notes">Observações</Label>
-            <Textarea id="notes" value={form.notes || ""} onChange={(e) => update("notes", e.target.value)} />
+            <Textarea id="notes" className="text-base md:text-sm" readOnly={readOnly} value={form.notes || ""} onChange={(e) => update("notes", e.target.value)} />
           </div>
         </div>
       </div>
@@ -615,6 +639,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
                 <Label htmlFor="zip_code">CEP {cepLoading && <span className="text-xs text-muted-foreground ml-1">Buscando...</span>}</Label>
                 <Input
                   id="zip_code"
+                  readOnly={readOnly}
                   value={form.zip_code || ""}
                   onChange={(e) => {
                     const masked = maskCEP(e.target.value);
@@ -623,39 +648,43 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
                       fetchAddressByCEP(masked);
                     }
                   }}
-                  placeholder="00000-000"
+                  placeholder={readOnly ? undefined : "00000-000"}
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="street">Rua</Label>
-                <Input id="street" value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
+                <Input id="street" readOnly={readOnly} value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="number">Número</Label>
-                <Input id="number" value={form.number || ""} onChange={(e) => update("number", e.target.value)} />
+                <Input id="number" readOnly={readOnly} value={form.number || ""} onChange={(e) => update("number", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="complement">Complemento</Label>
-                <Input id="complement" value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} />
+                <Input id="complement" readOnly={readOnly} value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="neighborhood">Bairro</Label>
-                <Input id="neighborhood" value={form.neighborhood || ""} onChange={(e) => update("neighborhood", e.target.value)} />
+                <Input id="neighborhood" readOnly={readOnly} value={form.neighborhood || ""} onChange={(e) => update("neighborhood", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">Cidade</Label>
-                <Input id="city" value={form.city || ""} onChange={(e) => update("city", e.target.value)} />
+                <Input id="city" readOnly={readOnly} value={form.city || ""} onChange={(e) => update("city", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="state">Estado</Label>
-                <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
-                  <SelectTrigger id="state"><SelectValue placeholder="UF" /></SelectTrigger>
-                  <SelectContent>
-                    {BRAZILIAN_STATES.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {readOnly ? (
+                  <Input id="state" readOnly value={form.state || ""} />
+                ) : (
+                  <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
+                    <SelectTrigger id="state"><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>
+                      {BRAZILIAN_STATES.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
           </div>
@@ -668,13 +697,22 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       <div>
         <h3 className="text-lg font-semibold mb-3">Acesso</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RoleField
-            roles={roles}
-            loadError={rolesError}
-            value={form.role_id}
-            canAssign={canAssignRole}
-            onChange={(v) => update("role_id", v)}
-          />
+          {readOnly ? (
+            // A própria função, como texto (P12, RN-23).
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{MEMBER_FORM_TEXTS.roleTextLabel}</p>
+              <p className="text-base">{access ? roleDisplayName(access) : "—"}</p>
+              <p className="text-sm text-muted-foreground">{MEMBER_FORM_TEXTS.ownRole}</p>
+            </div>
+          ) : (
+            <RoleField
+              roles={roles}
+              loadError={rolesError}
+              value={form.role_id}
+              canAssign={canAssignRole}
+              onChange={(v) => update("role_id", v)}
+            />
+          )}
           {isEditing && canChangePassword && (
             <div className="space-y-2">
               <Label>Senha</Label>
@@ -688,12 +726,20 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
-          {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
-        </Button>
+        {readOnly ? (
+          <Button type="button" variant="outline" className="h-11 md:h-10" onClick={onClose}>
+            {OWN_DATA_TEXTS.close}
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
+              {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Membro"}
+            </Button>
+          </>
+        )}
       </div>
 
       {deletedMatches && (
