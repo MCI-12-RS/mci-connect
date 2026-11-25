@@ -123,6 +123,7 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(4), 'manage_roles'), (pg_temp.role(4), 'view_own_ministry'), (pg_temp.role(4), 'create_member'),
   (pg_temp.role(5), 'view_all_church'), (pg_temp.role(5), 'view_dashboard'), (pg_temp.role(5), 'delete_member'),
   (pg_temp.role(5), 'create_member'), (pg_temp.role(5), 'edit_own_data'), (pg_temp.role(5), 'view_all_reports'),
+  (pg_temp.role(5), 'view_roles'),  -- E2.02 (PR 6, DA-9): para ler roles antes da exclusão
   (pg_temp.role(6), 'create_member'), (pg_temp.role(6), 'view_all_church'),
   (pg_temp.role(6), 'view_dashboard'),  -- E2.02 (RN-19): cobre a função padrão do arquivo
   (pg_temp.role(11), 'view_all_church');

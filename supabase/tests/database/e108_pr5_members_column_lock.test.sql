@@ -26,6 +26,13 @@
 --     dashboard_*, ministry_tree_nodes e as views de células e relatórios;
 --   - anon: nada de members.
 --
+-- E2.02 (PR 6, migration 5, RN-23): a role_id saiu da lista de legíveis e é
+-- uma categoria própria (pg_temp.role_columns): sem SELECT para authenticated
+-- e mascarada na members_view pela função ("Atribuir Função" ou "Gerenciar
+-- Funções"), não por view_sensitive_data. Toda coluna continua com uma decisão:
+-- legível, sensível ou da função. O comportamento da role_id por persona está
+-- em e202_07_close_roles.test.sql.
+--
 -- A lista das 8 colunas sensíveis está na members_view, na regra 6, em
 -- src/lib/members/fields.ts e na trava (migration do PR 5). Mudou uma, mude as
 -- outras e este teste.
@@ -69,12 +76,22 @@ $$;
 CREATE FUNCTION pg_temp.sensitive_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
 $$ SELECT ARRAY['complement', 'cpf', 'email', 'mobile_whatsapp', 'number', 'phone', 'street', 'zip_code'] $$;
 
--- As 26 colunas não sensíveis que a trava libera (lista do spec, PR 5).
+-- As 25 colunas não sensíveis que a trava libera (lista do spec, PR 5, sem a
+-- role_id desde o E2.02 PR 6).
 CREATE FUNCTION pg_temp.readable_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
 $$ SELECT ARRAY['id', 'name', 'gender', 'birth_date', 'instagram', 'avatar_url', 'notes',
                 'neighborhood', 'city', 'state', 'is_pastor', 'has_leadership', 'leader_id', 'spouse_id',
                 'is_baptized', 'baptism_date', 'is_active', 'g12_level', 'total_disciples', 'total_cells',
-                'male_cells', 'female_cells', 'role_id', 'auth_user_id', 'created_at', 'updated_at'] $$;
+                'male_cells', 'female_cells', 'auth_user_id', 'created_at', 'updated_at'] $$;
+
+-- A coluna da função (E2.02 PR 6, RN-23): sem SELECT, mascarada na view por
+-- "Atribuir Função"/"Gerenciar Funções".
+CREATE FUNCTION pg_temp.role_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
+$$ SELECT ARRAY['role_id'] $$;
+
+-- Todas as colunas sem SELECT para authenticated (sensíveis e da função), em ordem alfabética.
+CREATE FUNCTION pg_temp.locked_columns() RETURNS text[] LANGUAGE sql IMMUTABLE AS
+$$ SELECT array_agg(c ORDER BY c) FROM unnest(pg_temp.sensitive_columns() || pg_temp.role_columns()) c $$;
 
 -- As colunas atuais de members, lidas do catálogo.
 CREATE FUNCTION pg_temp.member_columns() RETURNS SETOF text LANGUAGE sql STABLE AS $$
@@ -96,12 +113,12 @@ CREATE FUNCTION pg_temp.unreadable_columns(_role text) RETURNS text[] LANGUAGE s
    WHERE NOT has_column_privilege(_role, 'public.members', c, 'SELECT')
 $$;
 
--- Risco 4: colunas que não são sensíveis e mesmo assim ficaram sem SELECT para
--- authenticated (o esperado é nenhuma).
+-- Risco 4: colunas que não são sensíveis nem da função e mesmo assim ficaram
+-- sem SELECT para authenticated (o esperado é nenhuma).
 CREATE FUNCTION pg_temp.ungranted_non_sensitive() RETURNS text[] LANGUAGE sql STABLE AS $$
   SELECT coalesce(array_agg(c ORDER BY c), '{}')
     FROM unnest(pg_temp.unreadable_columns('authenticated')) c
-   WHERE c <> ALL (pg_temp.sensitive_columns())
+   WHERE c <> ALL (pg_temp.locked_columns())
 $$;
 
 -- Colunas de _cols com o mesmo valor em _before e _after, em ordem alfabética.
@@ -119,7 +136,8 @@ CREATE FUNCTION pg_temp.masked_columns(_id uuid, _table_row jsonb) RETURNS text[
          = 'null'::jsonb
 $$;
 
--- Uma verificação por coluna: authenticated lê as não sensíveis e não lê as sensíveis.
+-- Uma verificação por coluna: authenticated lê as não sensíveis e não lê as
+-- sensíveis nem a da função.
 CREATE FUNCTION pg_temp.column_privilege_checks() RETURNS SETOF text LANGUAGE plpgsql AS $$
 DECLARE
   _c text;
@@ -131,6 +149,10 @@ BEGIN
   FOREACH _c IN ARRAY pg_temp.sensitive_columns() LOOP
     RETURN NEXT ok(NOT has_column_privilege('authenticated', 'public.members', _c, 'SELECT'),
       format('authenticated: sem SELECT na coluna sensível members.%s (RN-11)', _c));
+  END LOOP;
+  FOREACH _c IN ARRAY pg_temp.role_columns() LOOP
+    RETURN NEXT ok(NOT has_column_privilege('authenticated', 'public.members', _c, 'SELECT'),
+      format('authenticated: sem SELECT na coluna da função members.%s (RN-23, E2.02 PR 6)', _c));
   END LOOP;
 END $$;
 
@@ -285,7 +307,7 @@ SELECT ok(NOT has_table_privilege('authenticated', 'public.members', 'DELETE'),
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.members'::regclass),
   'members: o RLS continua ligado');
 
-SELECT * FROM pg_temp.column_privilege_checks();   -- 26 + 8
+SELECT * FROM pg_temp.column_privilege_checks();   -- 25 + 8 + 1
 
 SELECT is(
   ARRAY(SELECT c FROM pg_temp.member_columns() c WHERE has_column_privilege('anon', 'public.members', c, 'SELECT')),
@@ -310,38 +332,38 @@ SELECT ok(obj_description('public.members'::regclass, 'pg_class') ~ 'GRANT SELEC
 -- 2. Guarda do risco 4 (falha fechada) — 3 verificações
 -- ===========================================================================
 SELECT is(pg_temp.ungranted_non_sensitive(), '{}'::text[],
-  'Risco 4: toda coluna de members (do catálogo) é sensível ou tem SELECT para authenticated. '
+  'Risco 4: toda coluna de members (do catálogo) é sensível, é a da função ou tem SELECT para authenticated. '
   || 'Coluna nova não sensível? GRANT SELECT (coluna) ON public.members TO authenticated na migration que a cria');
-SELECT is(pg_temp.unreadable_columns('authenticated'), pg_temp.sensitive_columns(),
-  'Risco 4: as colunas sem SELECT para authenticated são exatamente as 8 sensíveis');
+SELECT is(pg_temp.unreadable_columns('authenticated'), pg_temp.locked_columns(),
+  'Risco 4: as colunas sem SELECT para authenticated são exatamente as 8 sensíveis e a role_id');
 SELECT is(
-  ARRAY(SELECT c FROM unnest(pg_temp.sensitive_columns()) c
+  ARRAY(SELECT c FROM unnest(pg_temp.locked_columns()) c
          WHERE c NOT IN (SELECT pg_temp.member_columns()) ORDER BY c),
-  '{}'::text[], 'As 8 colunas sensíveis da lista existem em members');
+  '{}'::text[], 'As 8 colunas sensíveis e a role_id da lista existem em members');
 
 -- ===========================================================================
 -- 3. Amarração das listas: trava × máscara da members_view × regra 6 — 9 verificações
 -- ===========================================================================
 SELECT is(
-  ARRAY(SELECT c FROM unnest(pg_temp.readable_columns() || pg_temp.sensitive_columns()) c
+  ARRAY(SELECT c FROM unnest(pg_temp.readable_columns() || pg_temp.sensitive_columns() || pg_temp.role_columns()) c
          WHERE coalesce((SELECT j FROM pg_temp.xenia_row) -> c, 'null'::jsonb) = 'null'::jsonb ORDER BY c),
-  '{}'::text[], 'massa: a Xênia tem as 34 colunas (26 liberadas e 8 sensíveis) preenchidas');
+  '{}'::text[], 'massa: a Xênia tem as 34 colunas (25 liberadas, 8 sensíveis e a role_id) preenchidas');
 
--- P2, sem view_sensitive_data
+-- P2, sem view_sensitive_data nem "Atribuir Função"
 SELECT pg_temp.login(2);
 SET LOCAL ROLE authenticated;
 SELECT is(pg_temp.masked_columns(pg_temp.m(7), (SELECT j FROM pg_temp.xenia_row)),
   pg_temp.unreadable_columns('authenticated'),
-  'Amarração/P2: as colunas que a members_view mascara = as colunas sem SELECT na tabela (RN-11)');
+  'Amarração/P2: as colunas que a members_view mascara = as colunas sem SELECT na tabela (RN-11, RN-23)');
 SELECT is((SELECT sensitive_visible FROM public.members_view WHERE id = pg_temp.m(7)), false,
   'P2: sensitive_visible = false para a Xênia');
 RESET ROLE;
 
--- P1, com view_sensitive_data
+-- P1, com view_sensitive_data e sem "Atribuir Função": só a função fica mascarada.
 SELECT pg_temp.login(1);
 SET LOCAL ROLE authenticated;
-SELECT is(pg_temp.masked_columns(pg_temp.m(7), (SELECT j FROM pg_temp.xenia_row)), '{}'::text[],
-  'Amarração/P1: com view_sensitive_data, a members_view não mascara nenhuma coluna (RN-11b)');
+SELECT is(pg_temp.masked_columns(pg_temp.m(7), (SELECT j FROM pg_temp.xenia_row)), pg_temp.role_columns(),
+  'Amarração/P1: com view_sensitive_data, a members_view mascara só a role_id (RN-11b; RN-23, sem assign_role)');
 SELECT results_eq(
   format($$ SELECT email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code
               FROM public.members_view WHERE id = %L $$, pg_temp.m(7)),
@@ -368,8 +390,8 @@ SELECT is(
   pg_temp.unchanged((SELECT j FROM pg_temp.lia_before),
                     (SELECT to_jsonb(m) FROM public.members m WHERE id = pg_temp.m(15)),
                     pg_temp.personal_columns()),
-  pg_temp.unreadable_columns('authenticated'),
-  'Amarração/regra 6: sem view_sensitive_data, as colunas preservadas = as colunas sem SELECT na tabela (RN-12)');
+  pg_temp.sensitive_columns(),
+  'Amarração/regra 6: sem view_sensitive_data, as colunas preservadas = as sensíveis, sem SELECT na tabela (RN-12)');
 
 -- P3, com view_sensitive_data: o mesmo UPDATE troca todas as 18.
 DROP TABLE pg_temp.lia_before;

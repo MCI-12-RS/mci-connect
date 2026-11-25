@@ -18,6 +18,13 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  * função vem de `my_access` (a própria) e de `role_options` (a de outra
  * pessoa), nunca da linha do membro (E2.02, RN-23). `leader_name` e
  * `spouse_name` são os nomes salvos dos seletores (DT-23).
+ *
+ * A `role_id` é uma coluna mascarada à parte, ligada a "Atribuir Função" e
+ * "Gerenciar Funções" (não a "Ver Dados Sensíveis"): desde o E2.02 (PR 6) o
+ * banco também a esconde, sem SELECT na tabela e nula na `members_view` para
+ * quem não atribui funções, a não ser no próprio cadastro. Por isso ela não
+ * entra em SENSITIVE_MEMBER_FIELDS. A gravação continua (`toMemberWritePayload`
+ * com `includeRole`), sem lê-la de volta.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =

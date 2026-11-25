@@ -21,7 +21,9 @@
 --   - índices e constraints de roles (uma Administrador, padrão nunca é a
 --     Administrador), members_role_id_idx e os triggers novos.
 --
--- Fora deste arquivo (depois do PR 6): select role_id from members dar 42501.
+-- Fora deste arquivo: o fechamento do PR 6 (select role_id from members dar
+-- 42501, roles só com Visualizar ou Gerenciar Funções) está em
+-- e202_07_close_roles.test.sql.
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Rodar com: supabase test db
 BEGIN;

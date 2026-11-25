@@ -13,7 +13,7 @@ import { test, expect, type Page, type Response } from "@playwright/test";
 const DASHBOARD_RPCS = ["dashboard_cells_by_type", "dashboard_g12_ranking", "dashboard_summary"];
 
 // O que o AuthContext lê depois do login, além do dashboard (o login em si é a função sign-in, que não passa pelo /rest/v1/; E1.04).
-const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/role_permissions", "/rest/v1/roles"];
+const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/rpc/my_access"];
 
 const WEEK_CARDS: Record<string, string> = {
   "Relatórios Enviados": "reports_sent",

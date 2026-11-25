@@ -4,7 +4,7 @@
 # Spec: docs/specs/e2-02-perfis-escopo.md (repositório apps-mci), RN-16, RN-17,
 # RN-22, DA-11, "Verificações obrigatórias (para o QA)" e critérios de pronto 1 e 2.
 #
-#   1. as quatro migrations rodam de novo, uma depois da outra e em bloco, sem
+#   1. as cinco migrations (a 5 é do PR 6) rodam de novo, uma depois da outra e em bloco, sem
 #      erro (cada vez dentro de uma transação desfeita no fim);
 #   2. num banco com duas funções is_system, a migration 1 falha com a lista e
 #      não muda nada;
@@ -33,11 +33,12 @@ M1=$MIG/20261125140000_e202_01_data.sql
 M2=$MIG/20261125140100_e202_02_scope.sql
 M3=$MIG/20261125140200_e202_03_read.sql
 M4=$MIG/20261125140300_e202_04_write.sql
+M5=$MIG/20261125200000_e202_05_close_roles.sql
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/e202mig.XXXXXX")
 FAILS=0
 trap 'rm -rf "$TMP"; $PSQL -X -q -c "DROP DATABASE IF EXISTS e202_scratch" >/dev/null 2>&1' EXIT
 
-for f in "$M1" "$M2" "$M3" "$M4"; do [ -f "$f" ] || { echo "migration não encontrada: $f"; exit 2; }; done
+for f in "$M1" "$M2" "$M3" "$M4" "$M5"; do [ -f "$f" ] || { echo "migration não encontrada: $f"; exit 2; }; done
 
 ok()   { echo "  PASS  $1"; }
 fail() { echo "  FAIL  $1"; FAILS=$((FAILS + 1)); }
@@ -48,13 +49,13 @@ expect() { # arquivo de saída, chave, valor esperado, descrição
 
 # ---------------------------------------------------------------------------
 echo "== 1. As migrations rodam de novo sem erro"
-for n in 1 2 3 4; do
+for n in 1 2 3 4 5; do
   eval f=\$M$n
   { echo "BEGIN;"; cat "$f"; cat "$f"; echo "ROLLBACK;"; } | $PSQL -X -q -v ON_ERROR_STOP=1 >"$TMP/rerun$n.out" 2>&1
   if [ $? -eq 0 ]; then ok "migration $n, duas vezes seguidas, sem erro"; else fail "migration $n repetida: $(grep -m1 ERROR "$TMP/rerun$n.out")"; fi
 done
-{ echo "BEGIN;"; for r in 1 2; do cat "$M1" "$M2" "$M3" "$M4"; done; echo "ROLLBACK;"; } | $PSQL -X -q -v ON_ERROR_STOP=1 >"$TMP/rerunall.out" 2>&1
-if [ $? -eq 0 ]; then ok "as quatro, em ordem, duas vezes, sem erro"; else fail "as quatro repetidas: $(grep -m1 ERROR "$TMP/rerunall.out")"; fi
+{ echo "BEGIN;"; for r in 1 2; do cat "$M1" "$M2" "$M3" "$M4" "$M5"; done; echo "ROLLBACK;"; } | $PSQL -X -q -v ON_ERROR_STOP=1 >"$TMP/rerunall.out" 2>&1
+if [ $? -eq 0 ]; then ok "as cinco, em ordem, duas vezes, sem erro"; else fail "as cinco repetidas: $(grep -m1 ERROR "$TMP/rerunall.out")"; fi
 q() { $PSQL -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 if [ "$(q "SELECT count(*) FROM public.roles WHERE is_system")" = "1" ]; then ok "o banco testado não foi alterado (uma função de sistema)"; else fail "o banco testado mudou"; fi
 
