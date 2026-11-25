@@ -17,7 +17,11 @@ import { MEMBER_FORM_LAYOUT_TEXTS as TEXTS } from "@/lib/members/texts";
 import { cn } from "@/lib/utils";
 import { FormErrorSummary } from "./FormErrorSummary";
 
-const FOOTER_BUTTON = "h-11 flex-1 md:h-10 md:flex-none";
+/**
+ * Lado a lado, meia largura cada, no celular; quando o texto não cabe (320 px
+ * com a fonte a 200%), cada botão vai para a sua linha, na largura toda (UX-28).
+ */
+const FOOTER_BUTTON = "h-11 grow basis-[calc(50%-0.25rem)] md:h-10 md:grow-0 md:basis-auto";
 
 /** O rodapé do formulário que grava: resumo, falha de envio, "Cancelar" e a ação primária. */
 export interface MemberFormDialogActions {
@@ -66,6 +70,19 @@ export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoF
     else onClose();
   };
 
+  /**
+   * O clique fora com alterações abre o aviso aqui mesmo, sem passar pelo
+   * fechamento do Radix, e cancela o `pointerdown`: sem isso, o `mousedown` que
+   * vem depois tira o foco do "Continuar editando" quando o aviso já abriu
+   * (UX-26). No toque, o Radix só avisa no `click`, depois do foco: nada muda.
+   */
+  const onPointerDownOutside = (event: CustomEvent<{ originalEvent: PointerEvent }>) => {
+    if (actions?.busy || !actions?.isDirty()) return;
+    event.preventDefault();
+    event.detail.originalEvent.preventDefault();
+    setConfirmDiscard(true);
+  };
+
   const footer = actions ? (
     <div className="flex w-full flex-col gap-2 md:flex-row md:items-center">
       <div className="flex min-w-0 flex-col gap-2 md:mr-auto">
@@ -77,7 +94,7 @@ export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoF
           </p>
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" className={FOOTER_BUTTON} disabled={actions.busy} onClick={requestClose}>
           {TEXTS.buttons.cancel}
         </Button>
@@ -112,6 +129,7 @@ export function MemberFormDialog({ title, onClose, onOpenAutoFocus, onCloseAutoF
           closeLabel={TEXTS.close}
           aria-describedby={undefined}
           onOpenAutoFocus={onOpenAutoFocus}
+          onPointerDownOutside={onPointerDownOutside}
           onCloseAutoFocus={onCloseAutoFocus}
           className="md:max-w-3xl"
           bodyClassName="scroll-pb-6 scroll-pt-12"

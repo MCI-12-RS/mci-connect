@@ -47,12 +47,15 @@ export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Op
       ...base,
       display: "flex",
       alignItems: "center",
-      backgroundColor: state.isFocused ? "hsl(var(--accent))" : "transparent",
-      // A opção desabilitada (P5) fica em `muted-foreground`, com o motivo escrito.
+      // A opção desabilitada (P5) fica em `muted-foreground`, com o motivo escrito,
+      // sempre sobre o fundo do menu: o `accent` baixaria o contraste (UX-27). Em
+      // foco, ela ganha só um contorno na mesma cor do texto (3:1 nos dois temas).
+      backgroundColor: state.isFocused && !state.isDisabled ? "hsl(var(--accent))" : "transparent",
+      boxShadow: state.isFocused && state.isDisabled ? "inset 0 0 0 2px hsl(var(--muted-foreground))" : undefined,
       color: state.isDisabled ? "hsl(var(--muted-foreground))" : "hsl(var(--foreground))",
       fontWeight: state.isSelected ? 600 : 400,
       cursor: state.isDisabled ? "not-allowed" : "pointer",
-      "&:active": { backgroundColor: "hsl(var(--accent))" },
+      "&:active": { backgroundColor: state.isDisabled ? "transparent" : "hsl(var(--accent))" },
       [TOUCH_TARGET]: { minHeight: 44 },
     }),
     loadingMessage: (base) => ({ ...base, color: "hsl(var(--muted-foreground))" }),

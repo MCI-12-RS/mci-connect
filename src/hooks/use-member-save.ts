@@ -48,6 +48,27 @@ export type MemberSaveResult =
 
 type CreateOutcome = Extract<MemberSaveResult, { kind: "saved" | "deletedMatches" | "refused" | "failed" }>;
 
+/**
+ * Tempo-limite do cadastro, o mesmo do login (`SIGN_IN_TIMEOUT_MS`). Sem rede a
+ * chamada pode nunca voltar; passado o limite, é uma queda de conexão (T7). A
+ * nova tentativa repete o mesmo `attemptId`, então um envio que chegou ao
+ * servidor não cria dois cadastros (DT-11).
+ */
+export const CREATE_MEMBER_TIMEOUT_MS = 20_000;
+
+/** A `create-user-admin` com tempo-limite: estourado, `{ kind: "failed", network: true }`. */
+async function createMemberWithTimeout(request: CreateMemberRequest): Promise<CreateOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<CreateOutcome>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: "failed", network: true }), CREATE_MEMBER_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([createMember(request), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function createMember({ attemptId, password, memberData, confirmDeletedMatches }: CreateMemberRequest): Promise<CreateOutcome> {
   const { data, error } = await supabase.functions.invoke("create-user-admin", {
     body: { attemptId, password, memberData, confirmDeletedMatches },
@@ -101,7 +122,7 @@ export function useMemberSave() {
   const sending = useRef(false);
   const mutation = useMutation({
     mutationFn: async (request: MemberSaveRequest): Promise<MemberSaveResult> => {
-      if (request.kind === "create") return createMember(request);
+      if (request.kind === "create") return createMemberWithTimeout(request);
       return { kind: await updateMember(request) };
     },
   });

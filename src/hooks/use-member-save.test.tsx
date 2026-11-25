@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
-import { useMemberSave, type MemberSaveRequest } from "./use-member-save";
+import { CREATE_MEMBER_TIMEOUT_MS, useMemberSave, type MemberSaveRequest } from "./use-member-save";
 
 // A gravação do formulário de membro (E2.04, T5 e T7; DT-11, DT-19, DT-25).
 
@@ -176,6 +176,45 @@ describe("useMemberSave: cadastro novo pela create-user-admin (DT-11)", () => {
     offline.name = "FunctionsFetchError";
     invoke.mockResolvedValueOnce({ data: null, error: offline });
     expect(await save(create())).toEqual({ kind: "failed", network: true });
+  });
+});
+
+describe("useMemberSave: tempo-limite do cadastro (T7)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("sem resposta em 20 s: queda de conexão, e a gravação é liberada para a nova tentativa", async () => {
+    vi.useFakeTimers();
+    const { save } = setup();
+    invoke.mockReturnValueOnce(new Promise(() => {}));
+
+    let outcome: unknown;
+    await act(async () => {
+      const pending = save(create());
+      await vi.advanceTimersByTimeAsync(CREATE_MEMBER_TIMEOUT_MS - 1);
+      expect(outcome).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      outcome = await pending;
+    });
+    expect(CREATE_MEMBER_TIMEOUT_MS).toBe(20_000);
+    expect(outcome).toEqual({ kind: "failed", network: true });
+
+    invoke.mockResolvedValueOnce({ data: { member: { id: "novo" }, replayed: true }, error: null });
+    await act(async () => {
+      outcome = await save(create());
+    });
+    expect(outcome).toEqual({ kind: "saved" });
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it("a resposta antes do limite vale", async () => {
+    vi.useFakeTimers();
+    const { save } = setup();
+    invoke.mockResolvedValueOnce({ data: { member: { id: "novo" } }, error: null });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await save(create());
+    });
+    expect(outcome).toEqual({ kind: "saved" });
   });
 });
 
