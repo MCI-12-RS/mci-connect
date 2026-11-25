@@ -6,9 +6,12 @@
 #      DT-13); falha cedo, inclusive com "somente plano";
 #   2. mostra as migrations pendentes no resumo da execução;
 #   3. aplica as migrations (`supabase db push`);
-#   4. apaga as Edge Functions de EDGE_FUNCTIONS_REMOVED (idempotente);
-#   5. publica as Edge Functions de EDGE_FUNCTIONS.
-# Com "somente plano", só os passos 1 e 2 rodam. Depois rode "Deploy: promote
+#   4. confere o cofre de senhas (E2.03, DT-19): falha se alguma conta tiver
+#      senha em auth.users ou se a guarda e203_guard_password_write não existir;
+#   5. apaga as Edge Functions de EDGE_FUNCTIONS_REMOVED (idempotente);
+#   6. publica as Edge Functions de EDGE_FUNCTIONS.
+# Com "somente plano", só os passos 1 e 2 rodam (o passo 4 confere o estado
+# DEPOIS das migrations, e a guarda nasce numa delas). Depois rode "Deploy: promote
 # (Vercel)" para colocar o front no ar.
 #
 # Os passos 1 e 4 usam a Management API com SUPABASE_ACCESS_TOKEN. A resposta da
@@ -48,13 +51,14 @@ permissions:
 
 env:
   SUPABASE_CLI_VERSION: 2.58.5
-  # Lista explícita de funções publicadas. change-member-password fica de fora
-  # até o passo E2.03 do plano de migração.
-  EDGE_FUNCTIONS: create-user-admin sign-in
+  # Lista explícita de funções publicadas.
+  EDGE_FUNCTIONS: create-user-admin sign-in change-own-password
   # Funções apagadas do projeto a cada execução (E1.04, RN-16). Tirar uma função
   # de EDGE_FUNCTIONS não apaga a versão publicada, e um rollback do app não a
-  # publica de novo. get-user-email saiu porque foi substituída pela sign-in.
-  EDGE_FUNCTIONS_REMOVED: get-user-email
+  # publica de novo. get-user-email saiu porque foi substituída pela sign-in;
+  # change-member-password, porque a senha de outro membro passou a ser
+  # redefinida pela RPC reset_member_password (E2.03, DA-10 e DT-19).
+  EDGE_FUNCTIONS_REMOVED: get-user-email change-member-password
 
 jobs:
   banco:
@@ -130,6 +134,43 @@ jobs:
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: supabase db push --db-url "$DB_URL" --yes
+
+      # E2.03, DT-19 e risco 2: a senha mora só no cofre (private.account_passwords).
+      # Uma senha em auth.users, ou a guarda ausente ou desligada, reabriria a
+      # troca direta pelo Auth (RN-14). Só leitura; imprime só contagens. Roda
+      # antes de mexer nas funções: com falha, nada é publicado.
+      - name: Conferir o cofre de senhas (auth.users sem senha e guarda ativa)
+        if: ${{ !inputs.somente_plano }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          result=$(psql "$DB_URL" -X -q -A -t -F ' ' -v ON_ERROR_STOP=1 -c "
+            SELECT (SELECT count(*) FROM auth.users
+                     WHERE coalesce(encrypted_password, '') <> ''),
+                   (SELECT count(*) FROM pg_trigger
+                     WHERE tgname = 'e203_guard_password_write'
+                       AND tgrelid = 'auth.users'::regclass
+                       AND NOT tgisinternal
+                       AND tgenabled IN ('O', 'A'))
+          " 2>/dev/null) || result=""
+          read -r with_password guards <<< "$result"
+          if ! [[ "$with_password" =~ ^[0-9]+$ && "$guards" =~ ^[0-9]+$ ]]; then
+            echo "::error::Não foi possível conferir o cofre de senhas no banco."
+            echo "Cofre de senhas: não foi possível conferir." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ "$guards" -ne 1 ]; then
+            echo "::error::A guarda e203_guard_password_write não existe ou está desligada em auth.users (E2.03, DT-19)."
+            echo "Cofre de senhas: guarda ausente ou desligada. Nada foi publicado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if [ "$with_password" -ne 0 ]; then
+            echo "::error::$with_password conta(s) com senha em auth.users (E2.03, DT-19 e risco 2)."
+            echo "Cofre de senhas: $with_password conta(s) com senha em auth.users. Nada foi publicado." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Cofre de senhas: auth.users sem senha e guarda ativa." >> "$GITHUB_STEP_SUMMARY"
 
       # Idempotente: função que já não existe (404) não é erro. Qualquer outro
       # status falha o job. Roda mesmo sem "publicar_funcoes" (RN-16).

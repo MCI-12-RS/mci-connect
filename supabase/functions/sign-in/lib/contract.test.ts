@@ -1,4 +1,4 @@
-// Vitest. E1.04: Contratos, DA-3, RN-07 (corpo e piso), RN-08, RN-13, DT-18.
+// Vitest. E1.04: Contratos, RN-07 (corpo e piso), RN-08, RN-13, DT-18; E2.03: must_change_password.
 import { describe, expect, it, vi } from 'vitest'
 import {
   FAILURE_FLOOR_MS,
@@ -6,18 +6,12 @@ import {
   isOtpExpired,
   isUserCreatedByLink,
   lockedReply,
-  MAX_BODY_BYTES,
   pickSession,
-  preflight,
   readCredentials,
-  readJsonBody,
   remainingFloorMs,
   reply,
   waitForFloor,
-} from './http.ts'
-
-const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
-  new Request('http://localhost/functions/v1/sign-in', { method: 'POST', body, headers })
+} from './contract.ts'
 
 const okAttempt = {
   result: 'ok',
@@ -27,6 +21,7 @@ const okAttempt = {
   identifier_type: 'cpf',
   identifier_masked: '***4725',
   password_action: null,
+  must_change_password: false,
 }
 
 describe('reply', () => {
@@ -35,8 +30,6 @@ describe('reply', () => {
     expect(res.status).toBe(401)
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
-    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS')
-    expect(res.headers.get('Content-Type')).toBe('application/json')
     expect(await res.json()).toEqual({ result: 'invalid_credentials' })
   })
 
@@ -46,51 +39,6 @@ describe('reply', () => {
     expect(res.headers.get('Retry-After')).toBe('601')
     expect(res.headers.get('Cache-Control')).toBe('no-store')
     expect(await res.json()).toEqual({ result: 'locked', retry_after_minutes: 11 })
-  })
-
-  it('preflight com CORS e no-store', () => {
-    const res = preflight()
-    expect(res.status).toBe(200)
-    expect(res.headers.get('Access-Control-Allow-Headers')).toContain('apikey')
-    expect(res.headers.get('Cache-Control')).toBe('no-store')
-  })
-})
-
-describe('readJsonBody', () => {
-  it('lê o JSON', async () => {
-    expect(await readJsonBody(post(JSON.stringify({ identifier: 'a', password: 'b' })))).toEqual({
-      kind: 'ok',
-      value: { identifier: 'a', password: 'b' },
-    })
-  })
-
-  it('JSON inválido ou corpo vazio viram null (DA-3)', async () => {
-    expect(await readJsonBody(post('{nao-e-json'))).toEqual({ kind: 'ok', value: null })
-    expect(await readJsonBody(post(''))).toEqual({ kind: 'ok', value: null })
-    expect(await readJsonBody(post(null))).toEqual({ kind: 'ok', value: null })
-  })
-
-  it('acima de 4 KB: too_large, pelo tamanho real', async () => {
-    const big = JSON.stringify({ identifier: 'a', password: 'x'.repeat(MAX_BODY_BYTES) })
-    expect(await readJsonBody(post(big))).toEqual({ kind: 'too_large' })
-  })
-
-  it('acima de 4 KB: too_large, pelo Content-Length, sem ler', async () => {
-    expect(await readJsonBody(post('{}', { 'Content-Length': String(MAX_BODY_BYTES + 1) }))).toEqual({
-      kind: 'too_large',
-    })
-  })
-
-  it('exatamente 4 KB passa', async () => {
-    const filler = 'x'.repeat(MAX_BODY_BYTES - JSON.stringify({ identifier: 'a', password: '' }).length)
-    const body = JSON.stringify({ identifier: 'a', password: filler })
-    expect(new TextEncoder().encode(body).byteLength).toBe(MAX_BODY_BYTES)
-    expect((await readJsonBody(post(body))).kind).toBe('ok')
-  })
-
-  it('conta bytes, não caracteres', async () => {
-    const body = JSON.stringify({ identifier: 'a', password: 'é'.repeat(MAX_BODY_BYTES / 2) })
-    expect(await readJsonBody(post(body))).toEqual({ kind: 'too_large' })
   })
 })
 
@@ -161,6 +109,7 @@ describe('isAttemptResult', () => {
     { ...okAttempt, identifier_type: 'email' },
     { ...okAttempt, identifier_type: 'mobile' },
     { ...okAttempt, identifier_type: 'cpf_or_mobile' },
+    { ...okAttempt, must_change_password: true },
   ])('aceita %j', (value) => {
     expect(isAttemptResult(value)).toBe(true)
   })
@@ -182,6 +131,9 @@ describe('isAttemptResult', () => {
     { ...okAttempt, identifier_masked: '' },
     { ...okAttempt, password_action: 'set' },
     { ...okAttempt, password_action: undefined },
+    { ...okAttempt, must_change_password: undefined },
+    { ...okAttempt, must_change_password: null },
+    { ...okAttempt, must_change_password: 'false' },
   ])('recusa %j (fora do contrato: 500)', (value) => {
     expect(isAttemptResult(value)).toBe(false)
   })

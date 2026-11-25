@@ -59,9 +59,19 @@ describe('parseCreateMemberRequest', () => {
     }
   })
 
-  it('senha ausente ou vazia → 400 invalid_request "Informe a senha."', () => {
-    for (const password of [undefined, '', 123456]) {
-      expect(refusal(body({ password })).body()).toEqual({ error: 'Informe a senha.', code: 'invalid_request' })
+  it('senha ausente, nula ou vazia → "" (a inicial 123456, E2.03 RN-07)', () => {
+    for (const password of [undefined, null, '']) {
+      expect(parseCreateMemberRequest(body({ password }), newId).password).toBe('')
+    }
+  })
+
+  it('senha como foi digitada, sem aparar', () => {
+    expect(parseCreateMemberRequest(body({ password: ' Fé 2024 ' }), newId).password).toBe(' Fé 2024 ')
+  })
+
+  it('senha que não é texto → 400 invalid_request', () => {
+    for (const password of [123456, true, {}, []]) {
+      expect(refusal(body({ password })).body()).toEqual({ error: INVALID_REQUEST_MESSAGE, code: 'invalid_request' })
     }
   })
 

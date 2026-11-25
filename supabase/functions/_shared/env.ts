@@ -1,4 +1,5 @@
-// Ambiente e chave da função `sign-in` (E1.04: DT-06, DA-1, DT-10, risco 7).
+// Ambiente e chave das funções `sign-in` (E1.04: DT-06, DA-1, DT-10, risco 7) e
+// `change-own-password` (E2.03, item 5 de "Trocas": a chave secreta nova).
 //
 // Módulo puro (sem Deno nem import remoto), testado pelo Vitest.
 //

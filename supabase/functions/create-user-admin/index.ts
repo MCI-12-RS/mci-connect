@@ -1,7 +1,7 @@
 // Cria a conta de acesso (Supabase Auth) e o cadastro do membro.
 //
-// Corpo (E2.04, "Contratos"):
-//   { attemptId?, password, memberData, confirmDeletedMatches? }
+// Corpo (E2.04, "Contratos"; E2.03, "Senha inicial"):
+//   { attemptId?, password?, memberData, confirmDeletedMatches? }
 // - `attemptId`: UUID v4 gerado pelo formulário ao abrir. É o id do membro e o da
 //   conta (DT-01, DT-11), e torna o cadastro idempotente: a mesma tentativa
 //   devolve o mesmo cadastro com `replayed: true`. Sem ele, a função gera um.
@@ -9,8 +9,9 @@
 //   se houver, vem em `memberData.email`; a conta usa sempre o e-mail técnico
 //   `member_account_email(id)` (DA-1), gerado só aqui.
 //
-// Ordem (DT-11): JWT → permissão → entrada → tentativa repetida → ensaio →
-// aviso de excluído → conta → cadastro → desfazimento.
+// Ordem (DT-11 do E2.04, DT-12 do E2.03): JWT → permissão → entrada → tentativa
+// repetida → ensaio → política da senha inicial → aviso de excluído → conta (sem
+// senha) → senha inicial no cofre → cadastro → desfazimento.
 // - Permissão: `viewer_has('create_member')` com a sessão de quem chama, antes de
 //   ler o corpo (RN-19).
 // - Ensaio: `check_member_insert` com a sessão de quem chama confere todas as
@@ -21,6 +22,18 @@
 //   E2.01 (RN-18, UX-31).
 // - Aviso de cadastro excluído (E2.01, RN-18): `find_deleted_member_matches`,
 //   depois do ensaio (RN-10); "Cadastrar mesmo assim" é `confirmDeletedMatches`.
+// - Senha inicial (E2.03, RN-07, AQ-8): vazia, ausente ou exatamente `123456`
+//   vale `123456` (D11); outra passa por `check_password_policy` com o CPF, o
+//   celular, o nascimento e o e-mail do formulário, depois do ensaio (que já
+//   conferiu o formato desses campos) e antes de existir qualquer conta. Recusa:
+//   400 `{ error, code, field: 'password' }`. A conta é criada SEM senha (a
+//   guarda `e203_guard_password_write` descarta a do Auth) e a senha vai para o
+//   cofre por `set_initial_password`, com a marca `initial`. O
+//   `password_already_set` não é erro: a conta tem o id da tentativa, então só
+//   outra chamada da mesma tentativa gravou aquela senha, e ela fica (a mesma
+//   tentativa nunca falha por isso).
+// - O 42501 do portão (E2.03, a partir do PR 4) sai como 403 com o `code`
+//   (`session_ended`, `password_change_required`).
 // - O membro é gravado com a sessão de quem chama, então o RLS e os triggers
 //   valem e a Auditoria registra o autor.
 // - Se a gravação falhar, a conta criada NESTA chamada é desfeita, a não ser que
@@ -39,11 +52,12 @@ import {
   attemptAlreadyUsed,
   authErrorToHttp,
   type DbError,
-  forbidden,
   HttpError,
   insertErrorToHttp,
+  isDefaultInitialPassword,
   isMemberIdConflict,
-  isWeakPassword,
+  passwordPolicyRefusal,
+  permissionErrorToHttp,
   serverError,
   unauthenticated,
   valueInUseFromUniqueViolation,
@@ -88,11 +102,11 @@ async function authenticate(admin: SupabaseClient, req: Request): Promise<string
 async function assertCanCreate(asCaller: SupabaseClient): Promise<void> {
   const { data, error } = await asCaller.rpc('viewer_has', { _permission: 'create_member' })
   if (error) {
-    if (error.code === '42501') throw forbidden()
+    if (error.code === '42501') throw permissionErrorToHttp(error)
     console.error('create-user-admin: falha ao conferir a permissão', error.code)
     throw serverError()
   }
-  if (data !== true) throw forbidden()
+  if (data !== true) throw permissionErrorToHttp({})
 }
 
 /** 3. Entrada. */
@@ -118,6 +132,7 @@ async function memberExists(admin: SupabaseClient, id: string): Promise<boolean>
 async function replayResponse(asCaller: SupabaseClient, id: string): Promise<Response> {
   const { data, error } = await asCaller.from('members_view').select('id').eq('id', id).maybeSingle()
   if (error) {
+    if (error.code === '42501') throw permissionErrorToHttp(error)
     console.error('create-user-admin: falha ao reler o cadastro da tentativa', error.code)
     throw serverError()
   }
@@ -148,7 +163,7 @@ async function checkMemberInsert(asCaller: SupabaseClient, input: CreateMemberRe
 async function findDeletedMatches(asCaller: SupabaseClient, input: CreateMemberRequest): Promise<DeletedMemberMatch[]> {
   const { data, error } = await asCaller.rpc('find_deleted_member_matches', deletedMatchesParams(input.memberRow))
   if (error) {
-    if (error.code === '42501') throw forbidden()
+    if (error.code === '42501') throw permissionErrorToHttp(error)
     console.error('create-user-admin: falha ao consultar cadastros excluídos', error.code)
     throw serverError()
   }
@@ -171,6 +186,36 @@ async function withDeletedMatches(asCaller: SupabaseClient, input: CreateMemberR
   return deletedAccountEmailWithMatches(refusal, matches)
 }
 
+/** Texto do formulário, ou nulo (o banco ignora o dado que o cadastro não tem). */
+const formText = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value : null)
+
+/** Os dados pessoais que a política confere (RN-13 g), como vieram do formulário. */
+const policyData = (input: CreateMemberRequest) => ({
+  _cpf: formText(input.memberRow.cpf),
+  _mobile: formText(input.memberRow.mobile_whatsapp),
+  _birth_date: formText(input.memberRow.birth_date),
+  _email: formText(input.memberRow.email),
+})
+
+/**
+ * 5b. Política da senha inicial (E2.03, RN-07, AQ-8), com a chave secreta, antes
+ * de existir qualquer conta. A `123456` e a vazia não passam por ela (D11).
+ */
+async function checkInitialPassword(admin: SupabaseClient, input: CreateMemberRequest): Promise<void> {
+  if (isDefaultInitialPassword(input.password)) return
+  const { data, error } = await admin.rpc('check_password_policy', { _password: input.password, ...policyData(input) })
+  if (error) {
+    console.error('create-user-admin: falha ao conferir a política da senha', error.code)
+    throw serverError()
+  }
+  if (data === null) return
+  if (typeof data !== 'string') {
+    console.error('create-user-admin: resposta da política fora do contrato')
+    throw serverError()
+  }
+  throw passwordPolicyRefusal(data)
+}
+
 /**
  * 6. Aviso de cadastro excluído (E2.01, RN-18), com a sessão de quem chama: o
  * banco devolve nome, id e data só para o administrador que veria o excluído
@@ -186,9 +231,10 @@ const accountName = (input: CreateMemberRequest): string =>
   typeof input.memberRow.name === 'string' ? input.memberRow.name.trim().replace(/\s+/g, ' ') : ''
 
 /**
- * 7. Conta de acesso com `id` = `attemptId` e o e-mail técnico (DA-1). A conta
- * criada nesta chamada é informada a `onCreated` (só ela pode ser desfeita); a
- * reaproveitada de uma tentativa anterior cujo cadastro falhou (risco 5), não.
+ * 7. Conta de acesso com `id` = `attemptId` e o e-mail técnico (DA-1), SEM senha
+ * (E2.03, DT-12: a senha mora só no cofre). A conta criada nesta chamada é
+ * informada a `onCreated` (só ela pode ser desfeita); a reaproveitada de uma
+ * tentativa anterior cujo cadastro falhou (risco 5), não.
  */
 async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, onCreated: (id: string) => void): Promise<void> {
   const id = input.attemptId
@@ -201,7 +247,6 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
   const { data, error } = await admin.auth.admin.createUser({
     id,
     email,
-    password: input.password,
     email_confirm: true,
     user_metadata: { name: accountName(input) },
   })
@@ -215,7 +260,6 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
     }
     return
   }
-  if (error && isWeakPassword(error)) throw authErrorToHttp(error)
 
   // A conta já existe com este id e o e-mail técnico: uma tentativa anterior a
   // criou e o cadastro falhou (ou outra chamada da mesma tentativa está em curso).
@@ -225,12 +269,37 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
   if (!sameAccount) throw authErrorToHttp(error ?? {})
   // Se o cadastro já foi gravado por outra chamada, a conta é dele: nada a mudar.
   if (await memberExists(admin, id)) throw new AttemptTaken()
-  // A senha e o nome passam a ser os deste pedido.
+  // O nome passa a ser o deste pedido. A senha não vai para o Auth (a guarda
+  // recusaria): ela é gravada no cofre pelo passo 8.
   const { error: updateError } = await admin.auth.admin.updateUserById(id, {
-    password: input.password,
     user_metadata: { name: accountName(input) },
   })
   if (updateError) throw authErrorToHttp(updateError)
+}
+
+/**
+ * 8. Senha inicial no cofre, com a marca `initial` (E2.03, RN-07, DT-12), com a
+ * chave secreta. A política já foi conferida no passo 5b; o banco confere de
+ * novo e recusa com o mesmo código.
+ *
+ * `password_already_set` segue para o cadastro: a conta tem o id da tentativa e
+ * a linha do cofre sai junto com a conta (`ON DELETE CASCADE`), então a senha
+ * que já está lá foi gravada por outra chamada da MESMA tentativa (reenvio ou
+ * corrida). Ela fica, e o cadastro devolve o mesmo membro (ou o grava agora).
+ */
+async function setInitialPassword(admin: SupabaseClient, input: CreateMemberRequest): Promise<void> {
+  const { error } = await admin.rpc('set_initial_password', {
+    _auth_user_id: input.attemptId,
+    _member_id: input.attemptId,
+    _password: input.password,
+    ...policyData(input),
+  })
+  if (!error) return
+  const refusal = appErrorToHttp(error)
+  if (refusal?.code === 'password_already_set') return
+  if (refusal) throw refusal
+  console.error('create-user-admin: falha ao gravar a senha inicial', error.code)
+  throw serverError()
 }
 
 /**
@@ -298,9 +367,11 @@ serve(async (req) => {
 
     if (input.attemptIdFromClient && await memberExists(admin, input.attemptId)) throw new AttemptTaken()
     await checkMemberInsert(asCaller, input)
+    await checkInitialPassword(admin, input)
     await checkDeletedMatches(asCaller, input)
 
     await ensureAccount(admin, input, (id) => { accountToUndo = id })
+    await setInitialPassword(admin, input)
 
     const { error } = await asCaller.from('members').insert({
       ...rowWithId(input),
