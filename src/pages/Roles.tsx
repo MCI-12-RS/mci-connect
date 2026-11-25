@@ -1,284 +1,310 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { AlertCircle, ChevronDown, Lock, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import RowActionsMenu from "@/components/RowActionsMenu";
+import StatusBadge from "@/components/StatusBadge";
+import RoleForm from "@/components/roles/RoleForm";
+import RoleDeleteFlow from "@/components/roles/RoleDeleteFlow";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Star } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMobileState } from "@/hooks/use-mobile";
+import { useReturnFocus } from "@/hooks/use-return-focus";
+import { useRoles } from "@/hooks/use-roles";
+import { permissionLabel } from "@/lib/access/permissions";
+import { ROLE_TEXTS } from "@/lib/access/texts";
+import { groupRolePermissions, roleCountsLine, type Role } from "@/lib/roles/roles";
 
-const ALL_PERMISSIONS = [
-  { value: "view_all_church", label: "Visualizar Toda Igreja" },
-  { value: "view_own_ministry", label: "Visualizar Seu Ministério" },
-  { value: "edit_own_data", label: "Editar Próprio Cadastro" },
-  { value: "view_sensitive_data", label: "Ver Dados Sensíveis" },
-  { value: "assign_role", label: "Atribuir Função aos Membros" },
-  { value: "change_member_password", label: "Alterar Senha de Membros" },
-  { value: "view_all_reports", label: "Visualizar Relatórios de Toda Igreja" },
-  { value: "view_own_reports", label: "Visualizar Meus Relatórios" },
-  { value: "submit_own_cell_report", label: "Enviar Relatório (Células que Lidera)" },
-  { value: "submit_any_visible_report", label: "Enviar Relatório (Qualquer Célula Visível)" },
-  { value: "edit_cell_report", label: "Editar Relatórios de Células" },
-  { value: "delete_cell_report", label: "Excluir Relatórios de Células" },
-  { value: "create_member", label: "Criar Membro" },
-  { value: "view_members", label: "Visualizar Membros (legado)" },
-  { value: "edit_member", label: "Editar Membro" },
-  { value: "delete_member", label: "Excluir Membro" },
-  { value: "manage_roles", label: "Gerenciar Funções" },
-  { value: "view_roles", label: "Visualizar Funções" },
-  { value: "view_dashboard", label: "Visualizar todos os dados do Dashboard" },
-  { value: "view_own_ministry_dashboard", label: "Visualizar Dashboard do seu ministério" },
-  { value: "create_cell", label: "Criar Célula" },
-  { value: "edit_cell", label: "Editar Célula" },
-  { value: "delete_cell", label: "Excluir Célula" },
-] as const;
+type RolesDialog = { kind: "form"; role: Role | null } | { kind: "delete"; role: Role };
 
-type PermissionAction = typeof ALL_PERMISSIONS[number]["value"];
+interface RoleActions {
+  canManage: boolean;
+  onEdit: (role: Role, opener: HTMLElement | null) => void;
+  onDelete: (role: Role, opener: HTMLElement | null) => void;
+}
 
-const Roles = () => {
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<any>(null);
-  const [roleName, setRoleName] = useState("");
-  const [roleDesc, setRoleDesc] = useState("");
-  const [selectedPerms, setSelectedPerms] = useState<PermissionAction[]>([]);
-  const [isDefault, setIsDefault] = useState(false);
-  const { hasPermission } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const isMobile = useIsMobile();
+const RoleName = ({ role }: { role: Role }) => (
+  <span className="flex flex-wrap items-center gap-2">
+    <span className="break-words font-semibold">{role.name}</span>
+    {role.isProtected && <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+    {role.isDefault && (
+      <StatusBadge tone="warning" icon={Star}>
+        {ROLE_TEXTS.defaultBadge}
+      </StatusBadge>
+    )}
+  </span>
+);
 
-  const { data: roles = [], isLoading } = useQuery({
-    queryKey: ["roles-with-perms"],
-    queryFn: async () => {
-      const { data: rolesData } = await supabase.from("roles").select("*").order("name");
-      const { data: permsData } = await supabase.from("role_permissions").select("*");
-      return (rolesData || []).map((role) => ({
-        ...role,
-        permissions: (permsData || []).filter((p) => p.role_id === role.id).map((p) => p.permission),
-      }));
-    },
-  });
+/** O que fica no lugar das permissões: a frase da Administrador ou a de função sem permissões (T2). */
+function permissionsPlaceholder(role: Role): string | null {
+  if (role.isProtected) return ROLE_TEXTS.adminDescription;
+  if (role.permissions.length === 0) return ROLE_TEXTS.noPermissions;
+  return null;
+}
 
-  const openEdit = (role: any) => { setEditingRole(role); setRoleName(role.name); setRoleDesc(role.description || ""); setSelectedPerms(role.permissions); setIsDefault(role.is_default || false); setFormOpen(true); };
-  const openNew = () => { setEditingRole(null); setRoleName(""); setRoleDesc(""); setSelectedPerms([]); setIsDefault(false); setFormOpen(true); };
+/** O chip de uma permissão (card e tabela): `bg-muted` com `text-foreground` para o contraste (UX-29). */
+const PermissionChip = ({ children }: { children: ReactNode }) => (
+  <Badge variant="outline" className="whitespace-normal break-words bg-muted font-normal text-foreground">
+    {children}
+  </Badge>
+);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // If setting as default, clear other defaults first
-      if (isDefault) {
-        await supabase.from("roles").update({ is_default: false } as any).eq("is_default", true);
-      }
-      if (editingRole) {
-        const { error } = await supabase.from("roles").update({ name: roleName, description: roleDesc, is_default: isDefault } as any).eq("id", editingRole.id);
-        if (error) throw error;
-        await supabase.from("role_permissions").delete().eq("role_id", editingRole.id);
-        if (selectedPerms.length > 0) {
-          const { error: permError } = await supabase.from("role_permissions").insert(selectedPerms.map((p) => ({ role_id: editingRole.id, permission: p as any })));
-          if (permError) throw permError;
-        }
-      } else {
-        const { data: newRole, error } = await supabase.from("roles").insert({ name: roleName, description: roleDesc, is_default: isDefault } as any).select().single();
-        if (error) throw error;
-        if (selectedPerms.length > 0) {
-          const { error: permError } = await supabase.from("role_permissions").insert(selectedPerms.map((p) => ({ role_id: newRole.id, permission: p as any })));
-          if (permError) throw permError;
-        }
-      }
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); queryClient.invalidateQueries({ queryKey: ["roles"] }); toast({ title: editingRole ? "Função atualizada" : "Função criada" }); setFormOpen(false); },
-    onError: (error: any) => { toast({ variant: "destructive", title: "Erro", description: error.message }); },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("roles").delete().eq("id", id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["roles-with-perms"] }); toast({ title: "Função excluída" }); },
-  });
-
-  const togglePerm = (perm: PermissionAction) => setSelectedPerms((prev) => prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]);
-  const getPermLabel = (value: string) => ALL_PERMISSIONS.find((p) => p.value === value)?.label || value;
-  const canManage = hasPermission("manage_roles");
-
-  const DeleteRoleButton = ({ role }: { role: any }) => (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-          <AlertDialogDescription>Tem certeza que deseja excluir a função "{role.name}"?</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => deleteMutation.mutate(role.id)}>Excluir</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-
-  const renderMobileCards = () => {
-    if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
-
-    return (
-      <div className="divide-y divide-border">
-        {roles.map((role) => (
-          <div key={role.id} className="px-4 py-4 space-y-3">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-sm">{role.name}</p>
-                  {role.is_system && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Sistema</Badge>}
-                  {role.is_default && <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
-                </div>
-                {role.description && <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>}
-              </div>
-              {canManage && (
-                <div className="flex items-center shrink-0">
-                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(role)}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  {!role.is_system && <DeleteRoleButton role={role} />}
-                </div>
-              )}
-            </div>
-
-            {/* Permissions */}
+/** "Ver permissões" do card (T2): as permissões nos grupos da T3. */
+const RolePermissionsCollapsible = ({ role }: { role: Role }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleContent className="space-y-3 pb-3">
+        {groupRolePermissions(role.permissions).map((group) => (
+          <div key={group.id} className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
             <div className="flex flex-wrap gap-1.5">
-              {role.permissions.map((p: string) => (
-                <Badge key={p} variant="secondary" className="text-[11px] font-normal">{getPermLabel(p)}</Badge>
+              {group.permissions.map((permission) => (
+                <PermissionChip key={permission.value}>{permission.label}</PermissionChip>
               ))}
-              {role.permissions.length === 0 && (
-                <span className="text-xs text-muted-foreground italic">Sem permissões</span>
-              )}
             </div>
           </div>
         ))}
+      </CollapsibleContent>
+      <CollapsibleTrigger asChild>
+        <Button variant="outline" className="h-11 w-full justify-between">
+          {open ? ROLE_TEXTS.hidePermissions : ROLE_TEXTS.showPermissions}
+          <ChevronDown
+            className={`h-4 w-4 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </Button>
+      </CollapsibleTrigger>
+    </Collapsible>
+  );
+};
+
+/** Card de uma função no celular (T2). */
+const RoleCard = ({ role, canManage, onEdit, onDelete }: RoleActions & { role: Role }) => {
+  const placeholder = permissionsPlaceholder(role);
+  const counts = roleCountsLine(role);
+  const hasActions = canManage && !role.isProtected;
+  return (
+    <li className="space-y-3 px-4 py-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <RoleName role={role} />
+          {role.description && <p className="break-words text-sm text-muted-foreground">{role.description}</p>}
+        </div>
+        {hasActions && (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              aria-label={ROLE_TEXTS.editLabel(role.name)}
+              onClick={(event: MouseEvent<HTMLButtonElement>) => onEdit(role, event.currentTarget)}
+            >
+              <Pencil className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <RowActionsMenu
+              label={ROLE_TEXTS.actionsLabel(role.name)}
+              actions={[{ label: ROLE_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => onDelete(role, trigger) }]}
+            />
+          </div>
+        )}
       </div>
+      {placeholder && <p className="break-words text-sm">{placeholder}</p>}
+      {counts && <p className="text-sm text-muted-foreground">{counts}</p>}
+      {!placeholder && <RolePermissionsCollapsible role={role} />}
+    </li>
+  );
+};
+
+/** Linha de uma função na tabela (desktop, T2). */
+const RoleRow = ({ role, canManage, onEdit, onDelete }: RoleActions & { role: Role }) => {
+  const placeholder = permissionsPlaceholder(role);
+  return (
+    <TableRow>
+      <TableCell className="align-top">
+        <RoleName role={role} />
+      </TableCell>
+      <TableCell className="align-top text-sm text-muted-foreground">{role.description}</TableCell>
+      <TableCell className="align-top">
+        {placeholder ? (
+          <p className="text-sm">{placeholder}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {role.permissions.map((permission) => (
+              <PermissionChip key={permission}>{permissionLabel(permission)}</PermissionChip>
+            ))}
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="align-top tabular-nums">{role.membersCount ?? ""}</TableCell>
+      {canManage && (
+        <TableCell className="align-top">
+          {!role.isProtected && (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={ROLE_TEXTS.editLabel(role.name)}
+                onClick={(event: MouseEvent<HTMLButtonElement>) => onEdit(role, event.currentTarget)}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                aria-label={ROLE_TEXTS.deleteLabel(role.name)}
+                onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(role, event.currentTarget)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          )}
+        </TableCell>
+      )}
+    </TableRow>
+  );
+};
+
+const LoadingSkeleton = ({ isMobile }: { isMobile: boolean | undefined }) => (
+  <div className="space-y-4 p-4" aria-busy="true">
+    {[0, 1, 2].map((index) => (
+      <div key={index} className="space-y-2">
+        <Skeleton className="h-5 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        {isMobile !== false && <Skeleton className="h-11 w-full" />}
+      </div>
+    ))}
+  </div>
+);
+
+/**
+ * Funções (E2.02, T2 a T4): a lista vem da `roles_view` (Administrador
+ * primeiro, contagens, badge "Padrão"); cards no celular e tabela a partir de
+ * 768 px. As ações ficam só com "Gerenciar Funções", e a Administrador nunca
+ * as tem (RN-17, P12). A rota sem permissão é tratada antes, no `RouteAccess`.
+ */
+const Roles = () => {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("manage_roles");
+  const isMobile = useMobileState();
+  const { data: roles, isLoading, isError, refetch, isRefetching } = useRoles();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const returnFocus = useReturnFocus(headingRef, roles);
+  const [dialog, setDialog] = useState<RolesDialog | null>(null);
+  const [dialogKey, setDialogKey] = useState(0);
+
+  const openDialog = (next: RolesDialog, opener: HTMLElement | null) => {
+    returnFocus.setOpener(opener);
+    setDialogKey((key) => key + 1);
+    setDialog(next);
+  };
+  const closeDialog = () => setDialog(null);
+
+  const actions: RoleActions = {
+    canManage,
+    onEdit: (role, opener) => openDialog({ kind: "form", role }, opener),
+    onDelete: (role, opener) => openDialog({ kind: "delete", role }, opener),
+  };
+
+  const renderList = () => {
+    if (isLoading || isMobile === undefined) return <LoadingSkeleton isMobile={isMobile} />;
+    if (!roles) {
+      if (!isError) return null;
+      return (
+        <div className="p-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription className="space-y-3 text-foreground">
+              <p>{ROLE_TEXTS.loadFailed}</p>
+              <Button variant="outline" className="min-h-11 md:min-h-10" disabled={isRefetching} onClick={() => void refetch()}>
+                {ROLE_TEXTS.tryAgain}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
+    if (isMobile) {
+      return (
+        <ul className="divide-y divide-border">
+          {roles.map((role) => (
+            <RoleCard key={role.id} role={role} {...actions} />
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{ROLE_TEXTS.columns.role}</TableHead>
+              <TableHead>{ROLE_TEXTS.columns.description}</TableHead>
+              <TableHead>{ROLE_TEXTS.columns.permissions}</TableHead>
+              <TableHead>{ROLE_TEXTS.columns.members}</TableHead>
+              {canManage && (
+                <TableHead className="w-24">
+                  <span className="sr-only">{ROLE_TEXTS.columns.actions}</span>
+                </TableHead>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {roles.map((role) => (
+              <RoleRow key={role.id} role={role} {...actions} />
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
     );
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="animate-fade-in space-y-6 motion-reduce:animate-none">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Funções</h1>
-            <p className="text-muted-foreground text-sm">Gerenciar funções e permissões</p>
+            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold focus:outline-none md:text-3xl">
+              {ROLE_TEXTS.title}
+            </h1>
+            <p className="text-sm text-muted-foreground">{ROLE_TEXTS.subtitle}</p>
           </div>
           {canManage && (
-            <Button onClick={openNew} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Função
+            <Button
+              className="h-11 w-full sm:w-auto md:h-10"
+              onClick={(event: MouseEvent<HTMLButtonElement>) => openDialog({ kind: "form", role: null }, event.currentTarget)}
+            >
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              {ROLE_TEXTS.newRole}
             </Button>
           )}
         </div>
 
-        <Card>
-          {isMobile ? (
-            renderMobileCards()
-          ) : (
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Permissões</TableHead>
-                    {canManage && <TableHead className="w-24">Ações</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : (
-                    roles.map((role) => (
-                      <TableRow key={role.id}>
-                        <TableCell className="font-medium">
-                          {role.name}
-                          {role.is_system && <Badge variant="outline" className="ml-2 text-xs">Sistema</Badge>}
-                          {role.is_default && <Badge className="ml-2 text-xs bg-amber-500/15 text-amber-600 border-amber-300"><Star className="w-3 h-3 mr-0.5" />Padrão</Badge>}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{role.description}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {role.permissions.map((p: string) => (
-                              <Badge key={p} variant="secondary" className="text-xs">{getPermLabel(p)}</Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        {canManage && (
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => openEdit(role)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              {!role.is_system && <DeleteRoleButton role={role} />}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          )}
-        </Card>
+        <Card>{renderList()}</Card>
 
-        <Dialog open={formOpen} onOpenChange={setFormOpen}>
-          <DialogContent className="w-[95vw] sm:w-full">
-            <DialogHeader>
-              <DialogTitle>{editingRole ? "Editar Função" : "Nova Função"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome</Label>
-                <Input value={roleName} onChange={(e) => setRoleName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição</Label>
-                <Input value={roleDesc} onChange={(e) => setRoleDesc(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Permissões</Label>
-                <div className="grid grid-cols-1 gap-2 border rounded-md p-3 max-h-48 overflow-y-auto">
-                  {ALL_PERMISSIONS.map((perm) => (
-                    <div key={perm.value} className="flex items-center gap-2">
-                      <Checkbox checked={selectedPerms.includes(perm.value)} onCheckedChange={() => togglePerm(perm.value)} />
-                      <span className="text-sm">{perm.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <div>
-                  <Label htmlFor="is_default">Padrão para novos membros</Label>
-                  <p className="text-xs text-muted-foreground">Novos membros receberão esta função automaticamente</p>
-                </div>
-                <Switch id="is_default" checked={isDefault} onCheckedChange={setIsDefault} />
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
-                <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !roleName}>
-                  {saveMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {dialog?.kind === "form" && (
+          <RoleForm
+            key={dialogKey}
+            role={dialog.role}
+            roles={roles ?? []}
+            onClose={closeDialog}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
+        )}
+        {dialog?.kind === "delete" && (
+          <RoleDeleteFlow
+            key={dialogKey}
+            role={dialog.role}
+            onClose={closeDialog}
+            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+          />
+        )}
       </div>
     </AppLayout>
   );
