@@ -9,6 +9,9 @@ import { SERVER_ERROR, type SignInOutcome } from "@/lib/auth/sign-in-result";
 import { shouldEndSession } from "@/lib/auth/session";
 import { isFocusCheckDue, setSessionCheckHandler, singleFlight } from "@/lib/auth/session-check";
 import { requestSignIn } from "@/services/auth/sign-in";
+import { refreshAccess, useAccessQuery } from "@/hooks/use-access";
+import { hasPermission as accessHasPermission, type Access } from "@/lib/access/access";
+import type { PermissionAction } from "@/lib/access/permissions";
 
 type Member = MemberRow;
 
@@ -16,15 +19,22 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   member: Member | null;
-  permissions: string[];
-  isSystem: boolean;
+  /**
+   * O acesso de quem está logado, pela `my_access()` (E2.02): permissões
+   * efetivas, função e alcance. `null` sem sessão ou antes da primeira
+   * leitura. É relido sem sair e entrar (RN-08, `use-access`).
+   */
+  access: Access | null;
   loading: boolean;
   /**
-   * As permissões do usuário logado já chegaram (ou não há sessão). Antes
-   * disso, `hasPermission` responde `false` para tudo: uma tela protegida por
+   * O acesso do usuário logado já chegou (ou não há sessão). Antes disso,
+   * `hasPermission` responde `false` para tudo: uma tela protegida por
    * permissão espera, em vez de dizer que o usuário não tem acesso.
    */
   permissionsLoaded: boolean;
+  /** A primeira leitura do acesso falhou (T12): a área principal mostra o aviso com "Tentar de novo". */
+  accessLoadFailed: boolean;
+  retryAccess: () => void;
   signIn: (identifier: string, password: string) => Promise<SignInOutcome>;
   signOut: () => Promise<void>;
   /**
@@ -33,7 +43,8 @@ interface AuthContextType {
    * Volta a `false` no próximo login.
    */
   sessionEnded: boolean;
-  hasPermission: (...permissions: string[]) => boolean;
+  /** Só mostra ou esconde: quem protege é o banco. As permissões aposentadas não liberam nada (RN-22). */
+  hasPermission: (...permissions: PermissionAction[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,12 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<Member | null>(null);
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [isSystem, setIsSystem] = useState(false);
   const [loading, setLoading] = useState(true);
-  // De quem são as permissões carregadas: a renovação do token recarrega as do
-  // mesmo usuário sem voltar a "carregando".
-  const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
   const queryClient = useQueryClient();
   // O usuário da sessão atual, para a verificação ler sem depender do render.
@@ -64,39 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // O fim forçado está em andamento: um evento com sessão (renovação) até o SIGNED_OUT não apaga o aviso.
   const endingRef = useRef(false);
 
+  // O acesso (permissões, função e alcance) vem da `my_access()`, com a chave do usuário da sessão.
+  const { access, loadFailed: accessLoadFailed, retry: retryAccess } = useAccessQuery(user?.id ?? null);
+
   const loadMemberData = async (userId: string) => {
-    try {
-      // Pela members_view: o próprio cadastro vem sem máscara.
-      const { data: memberData } = await supabase
-        .from("members_view")
-        .select(MEMBER_ROW_SELECT)
-        .eq("auth_user_id", userId)
-        .maybeSingle();
+    // Pela members_view: o próprio cadastro vem sem máscara.
+    const { data: memberData } = await supabase
+      .from("members_view")
+      .select(MEMBER_ROW_SELECT)
+      .eq("auth_user_id", userId)
+      .maybeSingle();
 
-      setMember(memberData);
-
-      if (memberData?.role_id) {
-        const [{ data: perms }, { data: role }] = await Promise.all([
-          supabase
-            .from("role_permissions")
-            .select("permission")
-            .eq("role_id", memberData.role_id),
-          supabase
-            .from("roles")
-            .select("is_system")
-            .eq("id", memberData.role_id)
-            .maybeSingle()
-        ]);
-
-        setPermissions(perms?.map((p) => p.permission) || []);
-        setIsSystem(role?.is_system || false);
-      } else {
-        setPermissions([]);
-        setIsSystem(false);
-      }
-    } finally {
-      setPermissionsUserId(userId);
-    }
+    setMember(memberData);
   };
 
   useEffect(() => {
@@ -120,10 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           setTimeout(() => loadMemberData(session.user.id), 0);
+          // Sessão renovada: relê o acesso (T12).
+          if (event === "TOKEN_REFRESHED") void refreshAccess(queryClient);
         } else {
           setMember(null);
-          setPermissions([]);
-          setIsSystem(false);
         }
         setLoading(false);
       }
@@ -173,8 +158,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setUser(null);
         setMember(null);
-        setPermissions([]);
-        setIsSystem(false);
         queryClient.clear();
       }
     }),
@@ -232,16 +215,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) signOutRequestedRef.current = false;
   };
 
-  const hasPermission = (...perms: string[]) => {
-    if (isSystem) return true;
-    return perms.some((p) => permissions.includes(p));
-  };
+  const hasPermission = (...perms: PermissionAction[]) => accessHasPermission(access, ...perms);
 
-  const permissionsLoaded = !loading && (!user || permissionsUserId === user.id);
+  const permissionsLoaded = !loading && (!user || access !== null);
 
   return (
     <AuthContext.Provider
-      value={{ session, user, member, permissions, isSystem, loading, permissionsLoaded, signIn, signOut, sessionEnded, hasPermission }}
+      value={{
+        session,
+        user,
+        member,
+        access,
+        loading,
+        permissionsLoaded,
+        accessLoadFailed,
+        retryAccess,
+        signIn,
+        signOut,
+        sessionEnded,
+        hasPermission,
+      }}
     >
       {children}
     </AuthContext.Provider>
