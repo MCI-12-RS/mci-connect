@@ -102,10 +102,10 @@ test.beforeAll(async () => {
      INSERT INTO public.roles (id, name) VALUES
        (${lit(role(1))}, '${NAME} LE'), (${lit(role(2))}, '${NAME} MB'), (${lit(role(3))}, '${NAME} Membro');
      INSERT INTO public.role_permissions (role_id, permission)
-     SELECT ${lit(role(1))}::uuid, p::public.permission_action FROM unnest(ARRAY['view_members', 'view_all_church', 'view_all_reports',
+     SELECT ${lit(role(1))}::uuid, p::public.permission_action FROM unnest(ARRAY['view_all_church', 'view_all_reports',
             'view_dashboard', 'edit_own_data', 'delete_member', 'delete_cell', 'delete_cell_report']) p
      UNION ALL
-     SELECT ${lit(role(2))}::uuid, p::public.permission_action FROM unnest(ARRAY['view_members', 'view_all_church', 'view_all_reports',
+     SELECT ${lit(role(2))}::uuid, p::public.permission_action FROM unnest(ARRAY['view_all_church', 'view_all_reports',
             'view_dashboard', 'edit_own_data']) p
      UNION ALL SELECT ${lit(role(3))}::uuid, 'view_dashboard'::public.permission_action;
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, auth_user_id, role_id, email) VALUES

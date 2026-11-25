@@ -16,7 +16,6 @@ test.describe.configure({ mode: "serial" });
 const PREFIX = "e2e104b0";
 const PASSWORD = "QaSignIn#2026";
 const id = (n: number) => `${PREFIX}-0001-0000-0000-${String(n).padStart(12, "0")}`;
-const ROLE_MEMBER = "8f40ab80-68a7-4c3f-a590-fd564369afae"; // semeada: Membro (só base)
 
 const ANA = { name: "QA Sign Ana Souza", email: "ana.e2e104@teste.invalid", cpf: "52998224725", mobile: "(51) 98888-5001" };
 const BIA = { name: "QA Sign Bia Reis", email: "bia.e2e104@teste.invalid", mobile: "(51) 97777-5002" };
@@ -70,7 +69,7 @@ test.beforeAll(async () => {
   await removeAccounts();
   const authIds = await Promise.all(ACCOUNTS.map((a) => createAuthUser(env, a.email, PASSWORD)));
   const row = (n: number, who: { name: string; email: string; cpf?: string; mobile?: string }, auth: string) =>
-    `(${lit(id(n))}, ${lit(who.name)}, 'F', false, true, ${lit(auth)}, ${lit(ROLE_MEMBER)}, ${lit(who.email)},
+    `(${lit(id(n))}, ${lit(who.name)}, 'F', false, true, ${lit(auth)}, (SELECT id FROM public.roles WHERE name = 'Membro'), ${lit(who.email)},
       ${who.cpf ? lit(who.cpf) : "NULL"}, ${who.mobile ? lit(who.mobile) : "NULL"})`;
   sql(
     env,

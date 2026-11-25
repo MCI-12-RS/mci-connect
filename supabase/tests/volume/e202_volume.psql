@@ -13,7 +13,7 @@
 --
 -- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
 --   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
---     < supabase/tests/volume/e202_volume.sql > e202_explain.txt
+--     < supabase/tests/volume/e202_volume.psql > e202_explain.txt
 -- A saída traz o EXPLAIN (ANALYZE, BUFFERS) de cada consulta e uma linha
 -- "META" com o tempo e o limite.
 

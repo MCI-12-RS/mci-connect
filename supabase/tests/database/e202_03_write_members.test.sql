@@ -547,7 +547,7 @@ SELECT is(v[6], 'NULL', 'DA-10: Rita atribui funções e cadastra sem escolher: 
 -- 7. RN-21: sempre há um administrador (DA-8).
 -- ===========================================================================
 SELECT pg_temp.run('r21',
-  format('UPDATE public.members SET role_id = pg_temp.mkrole(%L, ARRAY(SELECT p::text FROM unnest(public.active_permissions()) p)) WHERE id = %L', 'T Todas as permissões', pg_temp.m(15)),
+  'UPDATE public.members SET role_id = NULL WHERE role_id = (SELECT id FROM public.roles WHERE is_system) AND id NOT IN (''' || pg_temp.m(16) || '''); ' || format('UPDATE public.members SET role_id = pg_temp.mkrole(%L, ARRAY(SELECT p::text FROM unnest(public.active_permissions()) p)) WHERE id = %L', 'T Todas as permissões', pg_temp.m(15)),
   ARRAY[
     /* 1 */ pg_temp.pc(16, format('UPDATE public.members SET role_id = NULL WHERE id = %L', pg_temp.m(16))),
     /* 2 */ pg_temp.pc(16, format('SELECT public.delete_member(%L)', pg_temp.m(16))),
@@ -567,7 +567,7 @@ SELECT is(v[6], 'Não é possível tirar a função Administrador do último adm
 SELECT is(v[7], '1', 'RN-21: e Rita continua administradora') FROM sb WHERE k = 'r21';
 -- Rita e Sílvio (Hugo), administradores: Rita dá a Sílvio a função Líder: aceito, e Rita continua administradora.
 SELECT pg_temp.run('r21b',
-  format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Administrador'), pg_temp.m(15)),
+  'UPDATE public.members SET role_id = NULL WHERE role_id = (SELECT id FROM public.roles WHERE is_system) AND id NOT IN (''' || pg_temp.m(16) || '''); ' || format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Administrador'), pg_temp.m(15)),
   ARRAY[
     /* 1 */ pg_temp.pc(16, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(15))),
     /* 2 */ format('SELECT count(*)::text FROM public.members WHERE role_id = %L AND deleted_at IS NULL', pg_temp.role('Administrador')),

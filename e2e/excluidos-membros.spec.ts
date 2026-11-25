@@ -110,11 +110,11 @@ test.beforeAll(async () => {
        (${lit(role(1))}, '${NAME} LE'), (${lit(role(2))}, '${NAME} AD2'), (${lit(role(3))}, '${NAME} Alta'),
        (${lit(role(4))}, '${NAME} Membro'), (${lit(role(5))}, '${NAME} Líder');
      INSERT INTO public.role_permissions (role_id, permission)
-     ${permissions(1, ["view_members", "view_all_church", "view_all_reports", "view_dashboard", "edit_own_data", "delete_member", "delete_cell", "delete_cell_report"])}
-     UNION ALL ${permissions(2, ["manage_roles", "view_members", "view_all_church", "view_all_reports", "view_dashboard", "edit_own_data"])}
-     UNION ALL ${permissions(3, ["manage_roles", "view_members", "view_all_church", "view_dashboard", "delete_member", "assign_role"])}
+     ${permissions(1, ["view_all_church", "view_all_reports", "view_dashboard", "edit_own_data", "delete_member", "delete_cell", "delete_cell_report"])}
+     UNION ALL ${permissions(2, ["manage_roles", "view_all_church", "view_all_reports", "view_dashboard", "edit_own_data"])}
+     UNION ALL ${permissions(3, ["manage_roles", "view_all_church", "view_dashboard", "delete_member", "assign_role"])}
      UNION ALL ${permissions(4, ["view_dashboard"])}
-     UNION ALL ${permissions(5, ["view_dashboard", "view_members"])};
+     UNION ALL ${permissions(5, ["view_dashboard", "view_all_church"])};
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, auth_user_id, email, mobile_whatsapp, cpf) VALUES
        (${lit(member(90))}, ${lit(who("Lia Lopes"))}, 'F', false, true, ${lit(role(1))}, ${lit(auth.le)}, ${lit(LE.email)}, NULL, NULL),
        (${lit(member(91))}, ${lit(who("Ada Dutra"))}, 'F', false, true, ${lit(role(2))}, ${lit(auth.ad2)}, ${lit(AD2.email)}, NULL, NULL),
