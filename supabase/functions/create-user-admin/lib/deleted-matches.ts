@@ -3,13 +3,6 @@
 // Vitest (lib/deleted-matches.test.ts).
 import { HttpError, isRecord } from './errors.ts'
 
-/**
- * Domínio do e-mail fictício que o formulário gera para quem não tem e-mail
- * (`<nome>_<hash>@mci12fakemail.com`). Não é um e-mail da pessoa, então não
- * conta como correspondência. O E2.04 elimina o fictício (DA-1, DA-7).
- */
-export const PLACEHOLDER_EMAIL_DOMAIN = '@mci12fakemail.com'
-
 /** Texto do PO (RN-18): o e-mail da conta de um excluído, sem como seguir. */
 export const DELETED_ACCOUNT_EMAIL_MESSAGE =
   'Este e-mail pertence a um cadastro excluído. Peça a um administrador para restaurá-lo ou use outro e-mail.'
@@ -39,11 +32,6 @@ export interface DeletedMatchesParams {
   _cpf: string | null
 }
 
-/** O e-mail é o fictício gerado pelo formulário? */
-export function isPlaceholderEmail(email: string): boolean {
-  return email.trim().toLowerCase().endsWith(PLACEHOLDER_EMAIL_DOMAIN)
-}
-
 // O banco normaliza (normalize_email, normalize_digits); aqui só se descarta o
 // que não é texto. Um número vira texto, como o PostgREST faria no INSERT.
 function asText(value: unknown): string | null {
@@ -53,13 +41,18 @@ function asText(value: unknown): string | null {
 }
 
 /**
- * Parâmetros da consulta, tirados da linha que vai para `members`: o e-mail
- * (sem o fictício), o celular (`mobile_whatsapp`) e o CPF, como vieram.
+ * Parâmetros da consulta, tirados da linha que vai para `members`: o e-mail, o
+ * celular (`mobile_whatsapp`) e o CPF, como vieram.
+ *
+ * O e-mail fictício (`placeholder_email_domains()`, DT-18 do E2.04) não é
+ * filtrado aqui: a consulta só roda depois do ensaio (`check_member_insert`),
+ * que recusa esse domínio (RN-05), e o cadastro não o guarda mais (DA-1, DT-01).
+ * A lista de domínios fica só no banco e na tabela de casos do front.
  */
 export function deletedMatchesParams(memberRow: Readonly<Record<string, unknown>>): DeletedMatchesParams {
   const email = asText(memberRow.email)
   return {
-    _email: email && !isPlaceholderEmail(email) ? email : null,
+    _email: email || null,
     _mobile: asText(memberRow.mobile_whatsapp),
     _cpf: asText(memberRow.cpf),
   }
