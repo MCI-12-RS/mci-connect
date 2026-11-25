@@ -37,6 +37,8 @@ export const MENU_TEXTS = {
   signOut: "Sair",
   /** Não está no spec: rótulo do botão que abre o menu no celular. */
   openMenu: "Abrir menu",
+  /** Não está no spec: nome acessível do menu no celular (só para leitor de tela). */
+  menuTitle: "Menu",
 } as const;
 
 /** "Meus dados" só para leitura (T6, UXD-13, UX-09). */

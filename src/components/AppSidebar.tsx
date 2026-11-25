@@ -2,7 +2,7 @@ import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, 
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
@@ -46,8 +46,10 @@ const AppSidebar = () => {
     setOpen(false);
   };
 
+  // O conteúdo rola quando a altura não cabe (zoom de 200% ou celular na
+  // horizontal), para o "Sair" do rodapé continuar alcançável.
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto bg-sidebar text-sidebar-foreground" data-testid="menu-content">
       <div className="p-4 flex items-center gap-3">
         <img src={logo} alt="MCI" className="w-10 h-10 rounded-full" />
         <h2 className="text-sidebar-primary-foreground font-bold text-lg leading-tight">MCI Connect</h2>
@@ -147,7 +149,10 @@ const AppSidebar = () => {
             className="p-0 w-64 bg-sidebar border-sidebar-border"
             // Ao abrir "Meus dados" pelo menu, o foco fica no diálogo, sem voltar ao gatilho do menu.
             onCloseAutoFocus={(event) => { if (ownDataOpen) event.preventDefault(); }}
+            // Só o nome acessível (o título abaixo); o menu não tem descrição.
+            aria-describedby={undefined}
           >
+            <SheetTitle className="sr-only">{MENU_TEXTS.menuTitle}</SheetTitle>
             {sidebarContent}
           </SheetContent>
         </Sheet>

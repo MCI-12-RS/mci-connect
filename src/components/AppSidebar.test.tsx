@@ -246,3 +246,40 @@ describe("Meus dados pelo menu do celular (revisão de UI do E2.02)", () => {
     expect(triggerFocused).not.toHaveBeenCalled();
   });
 });
+
+describe("Menu acessível e alcançável (QA do E2.02)", () => {
+  it("no celular, o diálogo do menu tem nome acessível e não aponta para uma descrição", async () => {
+    mobile.value = true;
+    auth.access = CAIO;
+    auth.member = { id: "m-1", name: "Caio Lima" };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderAt("/");
+    fireEvent.click(screen.getByRole("button", { name: "Abrir menu" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Menu" });
+    expect(dialog).not.toHaveAttribute("aria-describedby");
+    // O Radix avisa no console quando falta o título ou a descrição.
+    const radixWarnings = [...warn.mock.calls, ...error.mock.calls].filter((call) =>
+      String(call[0]).includes("DialogContent"),
+    );
+    expect(radixWarnings).toEqual([]);
+    warn.mockRestore();
+    error.mockRestore();
+  });
+
+  it.each([
+    ["no celular", true],
+    ["no desktop", false],
+  ])("%s, o conteúdo do menu rola quando a altura não cabe, com o 'Sair' dentro dele", async (_label, isMobile) => {
+    mobile.value = isMobile;
+    auth.access = CAIO;
+    auth.member = { id: "m-1", name: "Caio Lima" };
+    renderAt("/");
+    if (isMobile) fireEvent.click(screen.getByRole("button", { name: "Abrir menu" }));
+
+    const content = await screen.findByTestId("menu-content");
+    expect(content).toHaveClass("overflow-y-auto", "min-h-0", "h-full");
+    expect(content).toContainElement(screen.getByRole("button", { name: "Sair" }));
+  });
+});
