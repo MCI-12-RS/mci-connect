@@ -8,6 +8,7 @@
 
 import { isPermissionDenied, isJsonObject, parseAppError } from "@/lib/errors";
 import { refusalField } from "./codes";
+import { valueInUseFromUniqueViolation } from "@/lib/members/codes";
 import { ACCESS_TEXTS, MEMBER_FORM_TEXTS, MENU_TEXTS } from "./texts";
 
 // --- `role_options` (AQ-3) ---
@@ -272,9 +273,19 @@ const permissionRefusal = (): MemberFormRefusal => ({
  */
 export function memberRefusalFromError(error: unknown): MemberFormRefusal | null {
   if (isPermissionDenied(error)) return permissionRefusal();
-  const appError = parseAppError(error);
+  // Um `23505` cru (índice único de e-mail, celular ou CPF) vira a mesma
+  // recusa do trigger (E2.04, "Formato dos erros"), sem o texto técnico.
+  const appError = parseAppError(error) ?? valueInUseFromUniqueViolation(error);
   if (!appError) return null;
   return ruleRefusal(appError.code, appError.message, refusalField(appError));
+}
+
+/**
+ * O toast de uma gravação que falhou sem recusa (rede, 40P01, erro técnico):
+ * só "tente de novo", nunca o texto técnico.
+ */
+export function memberSaveFailureMessage(networkError: boolean): string {
+  return networkError ? MEMBER_FORM_TEXTS.saveNetworkError : MEMBER_FORM_TEXTS.saveFailed;
 }
 
 /** Códigos da `create-user-admin` que não são recusa de regra. */

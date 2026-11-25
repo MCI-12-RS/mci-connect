@@ -133,6 +133,10 @@ export const MEMBER_FORM_TEXTS = {
   roleLoadFailed: "Não foi possível carregar as funções.",
   /** Não está no spec: seletor de função vazio no envio (o texto de antes do E2.02, agora embaixo do campo). */
   roleRequired: "Selecione uma função para o membro.",
+  /** Não está no spec: falha sem regra ao salvar o cadastro (40P01, erro técnico), sem o texto técnico (UX-30). */
+  saveFailed: "Não foi possível salvar o cadastro. Tente de novo.",
+  /** Não está no spec: queda de conexão ao salvar o cadastro. */
+  saveNetworkError: "Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.",
 } as const;
 
 /** Formulário de célula (T7). */
