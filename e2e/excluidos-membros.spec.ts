@@ -77,6 +77,7 @@ function cleanup() {
      DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE '${PREFIX}%';
      UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE '${PREFIX}%';
      DELETE FROM public.members WHERE id::text LIKE '${PREFIX}%';
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      DELETE FROM public.role_permissions WHERE role_id::text LIKE '${PREFIX}%';
      DELETE FROM public.roles WHERE id::text LIKE '${PREFIX}%';
      COMMIT;`,
@@ -336,7 +337,7 @@ test("RN-15 (AD): Dario, excluído por engano, volta às listas com o líder Leo
 }) => {
   const dario = who("Dario Neves");
   const leo = who("Leo Martins");
-  const disciplesOfLeo = () => sql(env, `SELECT total_disciples FROM public.members WHERE id = ${lit(member(16))}`);
+  const disciplesOfLeo = () => sql(env, `SELECT total_disciples FROM private.member_hierarchy WHERE member_id = ${lit(member(16))}`);
   const data = () =>
     sql(env, `SELECT coalesce(email, '') || '|' || coalesce(mobile_whatsapp, '') || '|' || gender FROM public.members WHERE id = ${lit(member(17))}`);
   expect(disciplesOfLeo(), "com Dario excluído").toBe("0");

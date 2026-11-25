@@ -26,6 +26,7 @@ function cleanup() {
      SET LOCAL session_replication_role = replica;
      DELETE FROM public.events WHERE entity_id IN (${lit(LIDER.id)}, ${lit(OUTRO.id)});
      DELETE FROM public.members WHERE id IN (${lit(LIDER.id)}, ${lit(OUTRO.id)});
+     DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
      COMMIT;`,
   );
 }

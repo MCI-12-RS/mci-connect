@@ -47,6 +47,7 @@ DELETE FROM public.events WHERE entity_id::text LIKE 'f104c0de%' OR actor_user_i
    OR (entity = 'auth' AND action IN ('login_failed', 'login_blocked', 'login') AND occurred_at >= '$START'::timestamptz);
 UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE id::text LIKE 'f104c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f104c0de%';
+DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
 DELETE FROM auth.sessions WHERE user_id::text LIKE 'f104c0de%';
 DELETE FROM auth.users WHERE id::text LIKE 'f104c0de%';
 COMMIT;

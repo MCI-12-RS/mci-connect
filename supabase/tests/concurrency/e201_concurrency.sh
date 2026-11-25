@@ -64,6 +64,7 @@ DELETE FROM public.cells WHERE id::text LIKE 'f201c0de%';
 DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE 'f201c0de%';
 UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f201c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f201c0de%';
+DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f201c0de%';
 DELETE FROM public.roles WHERE id::text LIKE 'f201c0de%';
 DELETE FROM auth.sessions WHERE user_id::text LIKE 'f201c0de%';

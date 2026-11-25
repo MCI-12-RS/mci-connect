@@ -57,6 +57,7 @@ BEGIN;
 SET LOCAL session_replication_role = replica;
 UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f202c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f202c0de%';
+DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
 DELETE FROM public.role_permissions WHERE role_id IN (SELECT id FROM public.roles WHERE name LIKE 'f202 %');
 UPDATE public.members SET role_id = NULL WHERE role_id IN (SELECT id FROM public.roles WHERE name LIKE 'f202 %');
 DELETE FROM public.roles WHERE name LIKE 'f202 %';

@@ -53,6 +53,7 @@ BEGIN;
 SET LOCAL session_replication_role = replica;
 UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f204c0de%' OR name LIKE 'E204 Conc%';
 DELETE FROM public.members WHERE id::text LIKE 'f204c0de%' OR name LIKE 'E204 Conc%';
+DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f204c0de%';
 DELETE FROM public.roles WHERE id::text LIKE 'f204c0de%';
 DELETE FROM auth.sessions WHERE user_id::text LIKE 'f204c0de%';
@@ -224,8 +225,9 @@ done
 bruno_base() {
   base
   q "BEGIN; SET LOCAL session_replication_role = replica;
-     INSERT INTO public.members (id, name, gender, leader_id, has_leadership, g12_level, mobile_whatsapp, deleted_at)
-     VALUES ('$M_BRUNO', 'E204 Conc Bruno Alves', 'M', '$M_ANA', true, 2, '5188880000', now()); COMMIT;" >/dev/null
+     INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_whatsapp, deleted_at)
+     VALUES ('$M_BRUNO', 'E204 Conc Bruno Alves', 'M', '$M_ANA', true, '5188880000', now());
+     SET LOCAL session_replication_role = origin; SELECT private.rebuild_member_hierarchy(); COMMIT;" >/dev/null
 }
 echo "== 4a. Restaurar Bruno (A segura a trava) × cadastro de Lúcia com (51) 98888-0000"
 bruno_base
