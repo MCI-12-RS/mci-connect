@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { createAuthUser, deleteAuthUser, e2eEnv, lit, rpcAs, sql, type E2EEnv } from "./exclusao-support";
+import { E2E_BASE_URL } from "./base-url";
 
 // Acesso e sessão do membro excluído (E2.01, PR 6, tarefa 23): RN-14, UX-35 e
 // UX-36. Login de verdade pela função `sign-in`, na stack local (a função precisa
@@ -138,7 +139,7 @@ async function returnFocus(page: Page) {
 
 /** Abre uma segunda sessão do navegador (outro contexto) já com o membro logado. */
 async function openSession(browser: Browser, who: Who) {
-  const context = await browser.newContext({ baseURL: "http://localhost:8080" });
+  const context = await browser.newContext({ baseURL: E2E_BASE_URL });
   const page = await context.newPage();
   await typeAndSubmit(page, who.email, PASSWORD);
   await expectSignedIn(page);
