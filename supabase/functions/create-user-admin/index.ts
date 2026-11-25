@@ -286,6 +286,13 @@ async function ensureAccount(admin: SupabaseClient, input: CreateMemberRequest, 
  * a linha do cofre sai junto com a conta (`ON DELETE CASCADE`), então a senha
  * que já está lá foi gravada por outra chamada da MESMA tentativa (reenvio ou
  * corrida). Ela fica, e o cadastro devolve o mesmo membro (ou o grava agora).
+ *
+ * Caso aceito: a conta órfã de uma chamada anterior da mesma tentativa que
+ * gravou a senha e não chegou ao cadastro (o `undoAccount` falhou, ou a chamada
+ * caiu entre os passos) fica com a senha daquela chamada, mesmo que o reenvio
+ * traga outra. Apagar e recriar a conta aqui correria contra uma chamada da
+ * mesma tentativa ainda em curso. A conta nasce com a marca `initial` e pode
+ * ser redefinida (RN-01).
  */
 async function setInitialPassword(admin: SupabaseClient, input: CreateMemberRequest): Promise<void> {
   const { error } = await admin.rpc('set_initial_password', {

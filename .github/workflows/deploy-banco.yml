@@ -14,7 +14,7 @@
 # DEPOIS das migrations, e a guarda nasce numa delas). Depois rode "Deploy: promote
 # (Vercel)" para colocar o front no ar.
 #
-# Os passos 1 e 4 usam a Management API com SUPABASE_ACCESS_TOKEN. A resposta da
+# Os passos 1 e 5 usam a Management API com SUPABASE_ACCESS_TOKEN. A resposta da
 # configuração do Auth tem segredos: o corpo nunca é impresso, só o campo lido.
 #
 # Configuração no GitHub (Settings → Secrets and variables → Actions):

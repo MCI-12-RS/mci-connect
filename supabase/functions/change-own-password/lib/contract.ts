@@ -194,9 +194,10 @@ export function resultReply(result: ChangeResult): Response {
 
 /**
  * Erro do `auth.getUser`: a sessão não vale mais (token vencido, assinatura
- * errada, sessão apagada) ou o Auth falhou. Sem status, ou com 5xx, é falha do
- * Auth (500); 4xx é sessão encerrada (401).
+ * errada, sessão apagada) ou o Auth falhou. Sem status, 429 (limite de taxa do
+ * Auth) ou 5xx é falha do Auth (500: a tela não encerra a sessão por isso); o
+ * resto dos 4xx é sessão encerrada (401).
  */
 export function isAuthServerFailure(error: { status?: number }): boolean {
-  return typeof error.status !== 'number' || error.status === 0 || error.status >= 500
+  return typeof error.status !== 'number' || error.status === 0 || error.status === 429 || error.status >= 500
 }
