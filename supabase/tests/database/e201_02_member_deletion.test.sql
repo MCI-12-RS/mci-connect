@@ -176,48 +176,51 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
 --   ├─ Elisa (1, AD), Fábio (1, AD), Adão (1, AD parcial)
 --   └─ Dora (1) → Davi (outro ministério)                                [RN-02]
 --   Nina: inativa, sem líder, casada com Neto                            [RN-04]
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active) VALUES
-  (pg_temp.m(1), 'Paulo Pastor E201', 'M', true, NULL, false, true);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id) VALUES
-  (pg_temp.m(2),  'Vera Valente',   'F', pg_temp.m(1), true, true, NULL, NULL),
-  (pg_temp.m(30), 'Gina Garcia',    'F', pg_temp.m(1), true, true, NULL, NULL),
-  (pg_temp.m(13), 'Otávio Ortiz',   'M', pg_temp.m(1), true, true, NULL, NULL),
-  (pg_temp.m(14), 'Paula Prado',    'F', pg_temp.m(1), true, true, NULL, NULL),
-  (pg_temp.m(17), 'Elisa Esteves',  'F', pg_temp.m(1), true, true, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(21), 'Fábio Freitas',  'M', pg_temp.m(1), true, true, pg_temp.u(7), pg_temp.role(1)),
-  (pg_temp.m(22), 'Adão Alves',     'M', pg_temp.m(1), true, true, pg_temp.u(6), pg_temp.role(6)),
-  (pg_temp.m(40), 'Dora Dias',      'F', pg_temp.m(1), true, true, NULL, NULL);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id) VALUES
-  (pg_temp.m(3),  'Wagner Wolff',     'M', pg_temp.m(2),  true, true,  NULL, NULL),
-  (pg_temp.m(5),  'Gil Gomes',        'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(10), 'Carlos Castro',    'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(11), 'Marcos Moura',     'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(15), 'Neto Nobre',       'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(18), 'Lucas Lopes',      'M', pg_temp.m(30), true, true,  pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(19), 'Maria Melo',       'F', pg_temp.m(30), true, true,  pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(20), 'Lia Lacerda',      'F', pg_temp.m(30), true, true,  pg_temp.u(4), pg_temp.role(4)),
-  (pg_temp.m(23), 'Bruno Brito',      'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(24), 'Celso Cunha',      'M', pg_temp.m(30), true, true,  pg_temp.u(5), pg_temp.role(5)),
-  (pg_temp.m(25), 'Quintino Quadros', 'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(26), 'Aurora Assis',     'F', pg_temp.m(30), true, true,  pg_temp.u(8), pg_temp.role(8)),
-  (pg_temp.m(32), 'Gustavo Góis',     'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(33), 'Gaspar Gama',      'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(35), 'Rita Rocha',       'F', pg_temp.m(30), true, true,  pg_temp.u(9), pg_temp.role(3)),
-  (pg_temp.m(36), 'Raul Rocha',       'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(37), 'Lauro Leme',       'M', pg_temp.m(30), true, true,  NULL, NULL),
-  (pg_temp.m(41), 'Davi Duarte',      'M', pg_temp.m(40), true, true,  NULL, NULL);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active) VALUES
-  (pg_temp.m(4),  'Xavier Xisto',   'M', pg_temp.m(3),  true, true),
-  (pg_temp.m(31), 'Iara Inativa',   'F', pg_temp.m(3),  true, false),
-  (pg_temp.m(6),  'Hugo Hart',      'M', pg_temp.m(5),  true, true),
-  (pg_temp.m(7),  'Ivo Iglesias',   'M', pg_temp.m(5),  true, true),
-  (pg_temp.m(8),  'João Jardim',    'M', pg_temp.m(5),  true, true),
-  (pg_temp.m(9),  'Léo Lins',       'M', pg_temp.m(5),  true, false),
-  (pg_temp.m(34), 'Dário Dutra',    'M', pg_temp.m(33), true, true);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active)
-SELECT pg_temp.m(50 + n), 'Gustavo Discípulo ' || n, 'M', pg_temp.m(32), true, true FROM generate_series(1, 7) n;
-INSERT INTO public.members (id, name, gender, is_active, has_leadership, spouse_id) VALUES
-  (pg_temp.m(12), 'Nina Nunes', 'F', false, false, pg_temp.m(15));
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192012' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Paulo Pastor E201', 'M', true, NULL, false, true, pg_temp.mob(1));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id, mobile_whatsapp) VALUES
+  (pg_temp.m(2),  'Vera Valente',   'F', pg_temp.m(1), true, true, NULL, NULL, pg_temp.mob(2)),
+  (pg_temp.m(30), 'Gina Garcia',    'F', pg_temp.m(1), true, true, NULL, NULL, pg_temp.mob(30)),
+  (pg_temp.m(13), 'Otávio Ortiz',   'M', pg_temp.m(1), true, true, NULL, NULL, pg_temp.mob(13)),
+  (pg_temp.m(14), 'Paula Prado',    'F', pg_temp.m(1), true, true, NULL, NULL, pg_temp.mob(14)),
+  (pg_temp.m(17), 'Elisa Esteves',  'F', pg_temp.m(1), true, true, pg_temp.u(1), pg_temp.role(1), pg_temp.mob(17)),
+  (pg_temp.m(21), 'Fábio Freitas',  'M', pg_temp.m(1), true, true, pg_temp.u(7), pg_temp.role(1), pg_temp.mob(21)),
+  (pg_temp.m(22), 'Adão Alves',     'M', pg_temp.m(1), true, true, pg_temp.u(6), pg_temp.role(6), pg_temp.mob(22)),
+  (pg_temp.m(40), 'Dora Dias',      'F', pg_temp.m(1), true, true, NULL, NULL, pg_temp.mob(40));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id, mobile_whatsapp) VALUES
+  (pg_temp.m(3),  'Wagner Wolff',     'M', pg_temp.m(2),  true, true,  NULL, NULL, pg_temp.mob(3)),
+  (pg_temp.m(5),  'Gil Gomes',        'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(5)),
+  (pg_temp.m(10), 'Carlos Castro',    'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(10)),
+  (pg_temp.m(11), 'Marcos Moura',     'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(11)),
+  (pg_temp.m(15), 'Neto Nobre',       'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(15)),
+  (pg_temp.m(18), 'Lucas Lopes',      'M', pg_temp.m(30), true, true,  pg_temp.u(2), pg_temp.role(2), pg_temp.mob(18)),
+  (pg_temp.m(19), 'Maria Melo',       'F', pg_temp.m(30), true, true,  pg_temp.u(3), pg_temp.role(3), pg_temp.mob(19)),
+  (pg_temp.m(20), 'Lia Lacerda',      'F', pg_temp.m(30), true, true,  pg_temp.u(4), pg_temp.role(4), pg_temp.mob(20)),
+  (pg_temp.m(23), 'Bruno Brito',      'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(23)),
+  (pg_temp.m(24), 'Celso Cunha',      'M', pg_temp.m(30), true, true,  pg_temp.u(5), pg_temp.role(5), pg_temp.mob(24)),
+  (pg_temp.m(25), 'Quintino Quadros', 'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(25)),
+  (pg_temp.m(26), 'Aurora Assis',     'F', pg_temp.m(30), true, true,  pg_temp.u(8), pg_temp.role(8), pg_temp.mob(26)),
+  (pg_temp.m(32), 'Gustavo Góis',     'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(32)),
+  (pg_temp.m(33), 'Gaspar Gama',      'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(33)),
+  (pg_temp.m(35), 'Rita Rocha',       'F', pg_temp.m(30), true, true,  pg_temp.u(9), pg_temp.role(3), pg_temp.mob(35)),
+  (pg_temp.m(36), 'Raul Rocha',       'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(36)),
+  (pg_temp.m(37), 'Lauro Leme',       'M', pg_temp.m(30), true, true,  NULL, NULL, pg_temp.mob(37)),
+  (pg_temp.m(41), 'Davi Duarte',      'M', pg_temp.m(40), true, true,  NULL, NULL, pg_temp.mob(41));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(4),  'Xavier Xisto',   'M', pg_temp.m(3),  true, true, pg_temp.mob(4)),
+  (pg_temp.m(31), 'Iara Inativa',   'F', pg_temp.m(3),  true, false, pg_temp.mob(31)),
+  (pg_temp.m(6),  'Hugo Hart',      'M', pg_temp.m(5),  true, true, pg_temp.mob(6)),
+  (pg_temp.m(7),  'Ivo Iglesias',   'M', pg_temp.m(5),  true, true, pg_temp.mob(7)),
+  (pg_temp.m(8),  'João Jardim',    'M', pg_temp.m(5),  true, true, pg_temp.mob(8)),
+  (pg_temp.m(9),  'Léo Lins',       'M', pg_temp.m(5),  true, false, pg_temp.mob(9)),
+  (pg_temp.m(34), 'Dário Dutra',    'M', pg_temp.m(33), true, true, pg_temp.mob(34));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, mobile_whatsapp)
+SELECT pg_temp.m(50 + n), 'Gustavo Discípulo ' || n, 'M', pg_temp.m(32), true, true, pg_temp.mob(50 + n) FROM generate_series(1, 7) n;
+INSERT INTO public.members (id, name, gender, is_active, has_leadership, spouse_id, mobile_whatsapp) VALUES
+  (pg_temp.m(12), 'Nina Nunes', 'F', false, false, pg_temp.m(15), pg_temp.mob(12));
 UPDATE public.members SET spouse_id = pg_temp.m(14) WHERE id = pg_temp.m(13);
 UPDATE public.members SET spouse_id = pg_temp.m(36) WHERE id = pg_temp.m(35);
 

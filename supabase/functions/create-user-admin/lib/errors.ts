@@ -4,8 +4,8 @@
 //
 // Toda resposta de erro tem `{ error, code?, … }`, e `error` é a mensagem pronta
 // para a tela. Os códigos seguem a tabela de respostas do E2.04 ("Fluxo da
-// `create-user-admin`"); o E2.04 acrescenta aqui os que faltam (`invalid_request`,
-// `value_in_use` e o `23505` pelo nome do índice, `attempt_already_used`).
+// `create-user-admin`"). Nenhuma resposta traz o `details` do Postgres nem dado
+// de outro cadastro (DT-10).
 
 /** `HINT` dos erros de regra do banco (E2.01, "Formato dos erros"). */
 export const APP_ERROR_HINT = 'app_error'
@@ -56,17 +56,74 @@ export const forbidden = (message = 'Você não tem permissão para cadastrar me
 export const serverError = (): HttpError =>
   new HttpError(500, 'Erro inesperado ao cadastrar o membro.', 'server_error')
 
+/** Texto genérico do `invalid_request`: só um cliente fora do contrato chega aqui. */
+export const INVALID_REQUEST_MESSAGE = 'Não foi possível ler o cadastro enviado. Recarregue a página e tente de novo.'
+
+/** Corpo, `attemptId`, `memberData` ou senha fora do formato. */
+export const invalidRequest = (message = INVALID_REQUEST_MESSAGE): HttpError =>
+  new HttpError(400, message, 'invalid_request')
+
+/** Texto do spec (DA-10). */
+export const ATTEMPT_ALREADY_USED_MESSAGE = 'Este cadastro já foi enviado. Confira na lista de Membros.'
+
+/** O `attemptId` já é de um cadastro que quem chama não vê (DA-10). */
+export const attemptAlreadyUsed = (): HttpError =>
+  new HttpError(409, ATTEMPT_ALREADY_USED_MESSAGE, 'attempt_already_used')
+
 // Status de cada recusa de regra que não é 400 (tabela de respostas do E2.04).
 const APP_ERROR_STATUS: ReadonlyMap<string, number> = new Map([
-  // Só numa corrida: o aviso de excluído já recusa antes de criar a conta.
+  ['value_in_use', 409],
   ['deleted_account_email', 409],
 ])
 
-// Campo de cada recusa que o banco ainda não informa no DETAIL. O E2.04 passa a
-// mandar `field: "email"` no `deleted_account_email`; o DETAIL vence.
+// Campo de cada recusa quando o DETAIL não o informa (o banco do E2.01 não
+// mandava `field` no `deleted_account_email`). O DETAIL vence.
 const APP_ERROR_FIELD: ReadonlyMap<string, string> = new Map([
   ['deleted_account_email', 'email'],
 ])
+
+/** Chave primária de `members`: o `attemptId` já virou cadastro (tentativa repetida). */
+export const MEMBER_PKEY = 'members_pkey'
+
+// Índices únicos de identificação (E2.04, migration 1) → campo do `value_in_use`,
+// no vocabulário do banco (`email`, `mobile`, `cpf`), com o texto do trigger.
+const UNIQUE_INDEX_FIELD: ReadonlyMap<string, string> = new Map([
+  ['members_email_key', 'email'],
+  ['members_mobile_key', 'mobile'],
+  ['members_cpf_key', 'cpf'],
+])
+const VALUE_IN_USE_MESSAGE: ReadonlyMap<string, string> = new Map([
+  ['email', 'Este e-mail já está sendo usado por outro cadastro.'],
+  ['mobile', 'Este celular já está sendo usado por outro cadastro.'],
+  ['cpf', 'Este CPF já está sendo usado por outro cadastro.'],
+])
+
+/**
+ * Nome do índice de um `23505`, lido da mensagem do Postgres
+ * (`duplicate key value violates unique constraint "<nome>"`). Só o nome: o
+ * `details` traz o valor duplicado e nunca é lido.
+ */
+export function uniqueViolationName(error: DbError): string | null {
+  if (error.code !== '23505' || typeof error.message !== 'string') return null
+  return /unique constraint "([^"]+)"/.exec(error.message)?.[1] ?? null
+}
+
+/** O `23505` é da chave primária de `members`: outra chamada com o mesmo `attemptId` gravou antes. */
+export function isMemberIdConflict(error: DbError): boolean {
+  return uniqueViolationName(error) === MEMBER_PKEY
+}
+
+/**
+ * `23505` de um índice de identificação → 409 `value_in_use` com aquele campo
+ * (reserva para a gravação sem trava; o caminho normal é a recusa do trigger).
+ * `null` para outro erro ou outro índice.
+ */
+export function valueInUseFromUniqueViolation(error: DbError): HttpError | null {
+  const name = uniqueViolationName(error)
+  const field = name ? UNIQUE_INDEX_FIELD.get(name) : undefined
+  if (!field) return null
+  return new HttpError(409, VALUE_IN_USE_MESSAGE.get(field) ?? SAVE_FAILED_MESSAGE, 'value_in_use', { fields: [field] })
+}
 
 /** Objeto JSON (não nulo e não lista), sem asserção de tipo. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -113,15 +170,19 @@ export function appErrorToHttp(error: DbError): HttpError | null {
 }
 
 /**
- * Erro do INSERT de `members` → resposta. As recusas de regra (`app_error`)
- * levam o código e o campo; os demais erros viram mensagens genéricas, sem
- * nomes de constraints nem valores digitados.
+ * Erro do INSERT (ou do ensaio) de `members` → resposta. As recusas de regra
+ * (`app_error`) levam o código e o campo, e o `23505` de um índice de
+ * identificação vira `value_in_use`; os demais erros viram mensagens genéricas,
+ * sem nomes de constraints nem valores digitados.
  */
 export function insertErrorToHttp(error: DbError): HttpError {
-  const appError = appErrorToHttp(error)
+  const appError = appErrorToHttp(error) ?? valueInUseFromUniqueViolation(error)
   if (appError) return appError
   switch (error.code) {
-    case '23505': return new HttpError(409, 'Já existe um membro com este e-mail, CPF ou celular.')
+    case '23505':
+      // Outro índice (a chave primária é tratada antes, no index.ts): só o nome no log.
+      console.error('create-user-admin: valor duplicado', uniqueViolationName(error))
+      return new HttpError(409, SAVE_FAILED_MESSAGE)
     case '23503': return new HttpError(400, 'Líder, cônjuge ou função informados não existem.')
     case '23514': return new HttpError(400, 'Algum campo tem um valor inválido.')
     case '22P02':
@@ -135,16 +196,22 @@ export function insertErrorToHttp(error: DbError): HttpError {
   }
 }
 
-/** Erro da criação da conta de acesso (Admin API) → resposta. */
+/** A senha recusada pelo Auth: a única falha da criação da conta que a pessoa resolve na tela. */
+export function isWeakPassword(error: AuthApiError): boolean {
+  return error.code === 'weak_password'
+}
+
+/**
+ * Erro da criação da conta de acesso (Admin API) → resposta. O e-mail e o id da
+ * conta são gerados pela função (DA-1), então, fora a senha fraca, toda falha é
+ * do servidor. A conta já existente (tentativa anterior) é tratada antes, no
+ * index.ts, e só chega aqui se não pôde ser reaproveitada.
+ */
 export function authErrorToHttp(error: AuthApiError): HttpError {
-  if (error.code === 'email_exists' || error.code === 'user_already_exists') {
-    return new HttpError(409, 'Já existe uma conta de acesso com este e-mail.')
-  }
-  if (error.code === 'weak_password') return new HttpError(400, 'A senha não atende aos requisitos mínimos.')
-  if (error.code === 'email_address_invalid' || error.code === 'validation_failed') {
-    return new HttpError(400, 'E-mail inválido.')
+  if (isWeakPassword(error)) {
+    return new HttpError(400, 'A senha não atende aos requisitos mínimos.', 'weak_password', { field: 'password' })
   }
   // Sem a mensagem: o Auth repete nela o e-mail informado.
   console.error('create-user-admin: falha ao criar a conta de acesso', error.code, error.status)
-  return new HttpError(400, 'Não foi possível criar o acesso.')
+  return serverError()
 }

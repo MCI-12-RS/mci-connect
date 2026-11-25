@@ -22,6 +22,8 @@ const NAME = "QA Celula";
 const PASSWORD = "QaCelula#2026";
 const id = (kind: number, n: number) => `${PREFIX}-000${kind}-0000-0000-${String(n).padStart(12, "0")}`;
 const person = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193207${String(n).padStart(4, "0")}`;
 const cellId = (n: number) => id(3, n);
 const reportId = (n: number) => id(4, n);
 const ROLE_ONLY_VIEW_REPORTS = id(2, 1);
@@ -197,9 +199,9 @@ test.beforeAll(async () => {
 
   const row = (w: Who) =>
     `(${lit(memberId(w))}, ${lit(w.name)}, ${lit(w.gender)}, ${!!w.pastor}, ${w.leader !== null}, ${w.leader === null ? "NULL" : lit(person(w.leader))}, ${!w.inactive}, ` +
-    `${w.login ? lit(authIds[w.name]!) : "NULL"}, ${roleRef(w.role)}, ${w.login ? lit(emailOf(w)) : "NULL"})`;
+    `${w.login ? lit(authIds[w.name]!) : "NULL"}, ${roleRef(w.role)}, ${w.login ? lit(emailOf(w)) : "NULL"}, ${lit(mobileOf(w.n))})`;
   const tier = (members: Who[]) =>
-    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, auth_user_id, role_id, email)
+    `INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, is_active, auth_user_id, role_id, email, mobile_whatsapp)
      VALUES ${members.map(row).join(",\n            ")};`;
   const byLeader = (leaders: Array<number | null>) => PEOPLE.filter((p) => leaders.includes(p.leader));
   sql(

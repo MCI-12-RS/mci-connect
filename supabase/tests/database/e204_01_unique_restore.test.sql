@@ -34,22 +34,26 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, email, mobil
   (pg_temp.m(6), 'Davi Souza', 'M', false, pg_temp.m(3), 'davi@exemplo.com', NULL, NULL, false),
   (pg_temp.m(7), 'Diego Rocha', 'M', false, pg_temp.m(1), NULL, NULL, '529.982.247-25', true),
   (pg_temp.m(8), 'Otávio Reis', 'M', false, pg_temp.m(1), NULL, '(51) 97777-0000', NULL, true),
-  (pg_temp.m(9), 'Olga Reis', 'F', false, pg_temp.m(1), NULL, NULL, NULL, true),
+  (pg_temp.m(9), 'Olga Reis', 'F', false, pg_temp.m(1), 'olga@exemplo.com', NULL, NULL, true),  -- E2.04: identificador (RN-08)
   (pg_temp.m(10), 'Paulo Fixo', 'M', false, pg_temp.m(1), NULL, '(51) 8888-1111', NULL, true);
 UPDATE public.members SET spouse_id = pg_temp.m(9) WHERE id = pg_temp.m(8);
 
 -- Bruno e Bruna: excluídos (E2.01), carregados direto (a exclusão pela RPC é testada no E2.01).
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, g12_level, email, mobile_whatsapp, cpf, deleted_at) VALUES
-  (pg_temp.m(11), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 1, 'bruno@exemplo.com', '(51) 8888-0000', '012.345.678-90', now()),
+  (pg_temp.m(11), 'Bruno Alves', 'M', false, pg_temp.m(1), true, 1, 'bruno@exemplo.com', '(51) 8888-0000', '01234567890', now()),  -- CPF só com dígitos (CHECK do E2.04)
   (pg_temp.m(12), 'Bruna Alves', 'F', false, pg_temp.m(1), true, 1, NULL, '51988882222', NULL, now());
 SET LOCAL session_replication_role = origin;
 
 -- Tenta o comando e desfaz: 'accepted', 'unique:<índice>' ou 'error:<sqlstate>'.
+-- E2.04 (PR 2): o trigger ad_enforce_member_rules recusaria antes, com value_in_use. Aqui se
+-- prova o índice, que é a garantia (DT-07): o trigger sai só dentro da tentativa (o a0_ continua
+-- normalizando). As recusas do trigger são testadas nos e204_02_*.
 CREATE FUNCTION pg_temp.attempt(_sql text) RETURNS text LANGUAGE plpgsql AS $$
 DECLARE _c text;
 BEGIN
   BEGIN
+    ALTER TABLE public.members DISABLE TRIGGER ad_enforce_member_rules;
     EXECUTE _sql;
     RAISE EXCEPTION 'undo' USING ERRCODE = 'XU001';
   EXCEPTION
@@ -144,6 +148,10 @@ SELECT is(pg_temp.attempt('SET LOCAL session_replication_role = replica; UPDATE 
 -- ---------------------------------------------------------------------------
 -- _member_values_in_use (DT-07, DT-09).
 -- ---------------------------------------------------------------------------
+-- E2.04 (PR 2): os INSERTs da massa já pegaram as travas por valor (trigger ad_), que duram até
+-- o fim da transação; as contagens abaixo são a partir delas.
+CREATE TEMP TABLE lk0 ON COMMIT DROP AS
+  SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid();
 SELECT is(public._member_values_in_use(NULL, 'caio@exemplo.com', '(51) 8888-7777', '529.982.247-25', false),
   ARRAY['email', 'mobile', 'cpf']::text[], 'RN-10: devolve os três campos em uso, na ordem e-mail, celular, CPF');
 SELECT is(public._member_values_in_use(NULL, NULL, '51988887777', '52998224725', false),
@@ -156,14 +164,14 @@ SELECT is(public._member_values_in_use(NULL, NULL, NULL, NULL, false), ARRAY[]::
 SELECT is(public._member_values_in_use(NULL, 'bruno@exemplo.com', '(51) 8888-0000', '012.345.678-90', false), ARRAY[]::text[],
   'DEL-04: os dados de um excluído não estão em uso');
 SELECT is(public._member_values_in_use(NULL, NULL, '98887777', NULL, false), ARRAY[]::text[], 'DA-5: celular ilegível não é conferido');
-SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), 0,
+SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), (SELECT n FROM lk0),
   'DT-07: com _lock = false nenhuma trava é pedida');
 SELECT is(public._member_values_in_use(NULL, 'livre@exemplo.com', '5133330000', '111.444.777-35', true), ARRAY[]::text[],
   'com _lock = true e nada em uso, devolve vazio');
-SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), 3,
+SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), (SELECT n FROM lk0) + 3,
   'DT-07: uma trava por valor não nulo (e-mail, celular e CPF)');
 SELECT is(public._member_values_in_use(NULL, NULL, '5133330001', NULL, true), ARRAY[]::text[], 'trava só o valor informado');
-SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), 4,
+SELECT is((SELECT count(*)::int FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()), (SELECT n FROM lk0) + 4,
   'DT-07: um valor nulo não é travado (só mais uma trava)');
 
 -- ---------------------------------------------------------------------------

@@ -92,11 +92,13 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   ('b202f202-0000-0000-0000-000000000001', 'view_members'), ('b202f202-0000-0000-0000-000000000001', 'view_dashboard'),
   ('b202f202-0000-0000-0000-000000000002', 'view_own_ministry'), ('b202f202-0000-0000-0000-000000000002', 'view_own_ministry_dashboard');
 SET LOCAL app.role_maintenance = 'off';
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES ('c202f202-0000-0000-0000-000000000001', 'F202 Pastor', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id) VALUES
-  ('c202f202-0000-0000-0000-000000000002', 'F202 Recepcionista', 'F', 'c202f202-0000-0000-0000-000000000001', true, 'a202f202-0000-0000-0000-000000000001', 'b202f202-0000-0000-0000-000000000001'),
-  ('c202f202-0000-0000-0000-000000000003', 'F202 Painel', 'M', 'c202f202-0000-0000-0000-000000000001', true, 'a202f202-0000-0000-0000-000000000002', 'b202f202-0000-0000-0000-000000000002');
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES ('c202f202-0000-0000-0000-000000000001', 'F202 Pastor', 'M', true, false, 'c202f202-0000-0000-0000-000000000001@teste.invalid');
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, email) VALUES
+  ('c202f202-0000-0000-0000-000000000002', 'F202 Recepcionista', 'F', 'c202f202-0000-0000-0000-000000000001', true, 'a202f202-0000-0000-0000-000000000001', 'b202f202-0000-0000-0000-000000000001', 'c202f202-0000-0000-0000-000000000002@teste.invalid'),
+  ('c202f202-0000-0000-0000-000000000003', 'F202 Painel', 'M', 'c202f202-0000-0000-0000-000000000001', true, 'a202f202-0000-0000-0000-000000000002', 'b202f202-0000-0000-0000-000000000002', 'c202f202-0000-0000-0000-000000000003@teste.invalid');
 -- Estado "antes" (como se a migration ainda não tivesse rodado): padrão errada, cadastro com líder sem a chave, permissões aposentadas e a Líder alterada.
+-- O CHECK de liderança do E2.04 (posterior) sai nesta transação: o "líder sem a chave" é um dado de antes dele.
+ALTER TABLE public.members DROP CONSTRAINT IF EXISTS members_leadership_check;
 SET LOCAL session_replication_role = replica;
 UPDATE public.roles SET is_default = false;
 UPDATE public.roles SET is_default = true WHERE name = 'Líder';

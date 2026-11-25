@@ -23,14 +23,26 @@ $$ SELECT coalesce(array_agg((right(v.member_id::text, 12))::int ORDER BY v.memb
 DROP INDEX public.members_email_key;
 DROP INDEX public.members_mobile_key;
 DROP INDEX public.members_cpf_key;
+-- E2.04 (PR 2): as violações do tipo (a) só existem antes da migration 2 (é sobre elas que a
+-- função serve de guarda). O NOT NULL e os CHECKs dela também saem na transação.
+ALTER TABLE public.members
+  ALTER COLUMN gender DROP NOT NULL,
+  DROP CONSTRAINT members_email_check,
+  DROP CONSTRAINT members_email_not_placeholder_check,
+  DROP CONSTRAINT members_cpf_check,
+  DROP CONSTRAINT members_leadership_check,
+  DROP CONSTRAINT members_leader_not_self_check,
+  DROP CONSTRAINT members_spouse_not_self_check,
+  DROP CONSTRAINT members_baptism_check;
 
 -- Cadastros dentro das regras: Samuel (pastor), Pedro (com líder), Ester (sem liderança), Caio
 -- (batizado com data) e Bruno (excluído, válido).
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, email, mobile_whatsapp, cpf, is_baptized, baptism_date) VALUES
-  (pg_temp.m(1), 'Samuel Colares', 'M', true, NULL, 'samuel@exemplo.com', '51911110001', '52998224725', false, NULL),
-  (pg_temp.m(2), 'Pedro Lima', 'M', false, pg_temp.m(1), 'pedro@exemplo.com', '51911110002', NULL, false, NULL),
-  (pg_temp.m(3), 'Ester Prado', 'F', false, NULL, NULL, NULL, NULL, false, NULL),
-  (pg_temp.m(4), 'Caio Souza', 'M', false, pg_temp.m(2), 'caio@exemplo.com', NULL, NULL, true, '2020-05-10');
+-- E2.04 (PR 2): pelas regras de escrita, Ester tem um identificador e "Tem Liderança?" desligado.
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, leader_id, email, mobile_whatsapp, cpf, is_baptized, baptism_date) VALUES
+  (pg_temp.m(1), 'Samuel Colares', 'M', true, NULL, NULL, 'samuel@exemplo.com', '51911110001', '52998224725', false, NULL),
+  (pg_temp.m(2), 'Pedro Lima', 'M', false, NULL, pg_temp.m(1), 'pedro@exemplo.com', '51911110002', NULL, false, NULL),
+  (pg_temp.m(3), 'Ester Prado', 'F', false, false, NULL, NULL, '51911110003', NULL, false, NULL),
+  (pg_temp.m(4), 'Caio Souza', 'M', false, NULL, pg_temp.m(2), 'caio@exemplo.com', NULL, NULL, true, '2020-05-10');
 
 -- A violação de cada regra, em cadastros próprios (inseridos sem os triggers: dado antigo).
 SET LOCAL session_replication_role = replica;

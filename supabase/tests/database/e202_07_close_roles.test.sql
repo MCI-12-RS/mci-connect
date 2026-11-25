@@ -96,16 +96,19 @@ SELECT pg_temp.role('E202-07 Visualiza'), p::public.permission_action
 UNION ALL
 SELECT pg_temp.role('E202-07 Básica'), 'view_dashboard'::public.permission_action;
 
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active) VALUES
-  (pg_temp.m(1), 'Samuel E20207', 'M', true,  NULL,         false, NULL,         NULL,                           true);
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active) VALUES
-  (pg_temp.m(2), 'Pedro E20207',  'M', false, pg_temp.m(1), true,  pg_temp.u(2), pg_temp.role('Líder'),         true),
-  (pg_temp.m(4), 'Rita E20207',   'F', false, pg_temp.m(1), true,  pg_temp.u(4), pg_temp.role('Administrador'), true),
-  (pg_temp.m(5), 'Ana E20207',    'F', false, pg_temp.m(1), true,  pg_temp.u(5), pg_temp.role('E202-07 Atribui'),   true),
-  (pg_temp.m(6), 'Gil E20207',    'M', false, pg_temp.m(1), true,  pg_temp.u(6), pg_temp.role('E202-07 Gerencia'),  true),
-  (pg_temp.m(7), 'Vera E20207',   'F', false, pg_temp.m(1), true,  pg_temp.u(7), pg_temp.role('E202-07 Visualiza'), true);
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active) VALUES
-  (pg_temp.m(3), 'André E20207',  'M', false, pg_temp.m(2), true,  pg_temp.u(3), pg_temp.role('Membro'),        true);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192027' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Samuel E20207', 'M', true,  NULL,         false, NULL,         NULL,                           true, pg_temp.mob(1));
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(2), 'Pedro E20207',  'M', false, pg_temp.m(1), true,  pg_temp.u(2), pg_temp.role('Líder'),         true, pg_temp.mob(2)),
+  (pg_temp.m(4), 'Rita E20207',   'F', false, pg_temp.m(1), true,  pg_temp.u(4), pg_temp.role('Administrador'), true, pg_temp.mob(4)),
+  (pg_temp.m(5), 'Ana E20207',    'F', false, pg_temp.m(1), true,  pg_temp.u(5), pg_temp.role('E202-07 Atribui'),   true, pg_temp.mob(5)),
+  (pg_temp.m(6), 'Gil E20207',    'M', false, pg_temp.m(1), true,  pg_temp.u(6), pg_temp.role('E202-07 Gerencia'),  true, pg_temp.mob(6)),
+  (pg_temp.m(7), 'Vera E20207',   'F', false, pg_temp.m(1), true,  pg_temp.u(7), pg_temp.role('E202-07 Visualiza'), true, pg_temp.mob(7));
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(3), 'André E20207',  'M', false, pg_temp.m(2), true,  pg_temp.u(3), pg_temp.role('Membro'),        true, pg_temp.mob(3));
 
 -- Contagens de referência, lidas como dono das tabelas.
 CREATE TEMP TABLE ref AS
@@ -303,8 +306,8 @@ SET LOCAL ROLE authenticated;
 SELECT is((SELECT (public.role_options(pg_temp.m(3)))->>'reason'), 'no_permission', 'Pedro: role_options do André → no_permission (RN-23)');
 SELECT is((SELECT (public.role_options(pg_temp.m(3)))->'current'), 'null'::jsonb, 'Pedro: e sem a função atual');
 -- Cadastro sem função escolhida: o banco preenche a padrão (RN-19), sem RETURNING.
-SELECT lives_ok(format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership)
-                          VALUES (%L, 'Novo do Pedro E20207', 'M', %L, true) $$, pg_temp.m(9), pg_temp.m(2)),
+SELECT lives_ok(format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_whatsapp)
+                          VALUES (%L, 'Novo do Pedro E20207', 'M', %L, true, %L) $$, pg_temp.m(9), pg_temp.m(2), pg_temp.mob(9)),
   'Pedro: INSERT sem RETURNING, sem função, funciona (o banco põe a padrão)');
 RESET ROLE;
 SELECT is((SELECT role_id FROM public.members WHERE id = pg_temp.m(9)), public.default_role_id(), 'Pedro: o cadastro novo ficou com a função padrão');
@@ -312,12 +315,12 @@ SELECT is((SELECT role_id FROM public.members WHERE id = pg_temp.m(9)), public.d
 -- create-user-admin: insert com a sessão de quem chama, sem RETURNING, com a função escolhida.
 SELECT pg_temp.login(4);
 SET LOCAL ROLE authenticated;
-SELECT lives_ok(format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id)
-                          VALUES (%L, 'Conta Nova E20207', 'F', %L, true, %L, %L) $$,
-                        pg_temp.m(8), pg_temp.m(1), pg_temp.u(8), pg_temp.role('E202-07 Visualiza')),
+SELECT lives_ok(format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, mobile_whatsapp)
+                          VALUES (%L, 'Conta Nova E20207', 'F', %L, true, %L, %L, %L) $$,
+                        pg_temp.m(8), pg_temp.m(1), pg_temp.u(8), pg_temp.role('E202-07 Visualiza'), pg_temp.mob(8)),
   'Rita: INSERT sem RETURNING com role_id funciona (create-user-admin)');
 SELECT lives_ok(format($$ SELECT public.check_member_insert(%L::jsonb) $$,
-                        json_build_object('name', 'Ensaio E20207', 'gender', 'M', 'leader_id', pg_temp.m(1),
+                        json_build_object('name', 'Ensaio E20207', 'gender', 'M', 'mobile_whatsapp', pg_temp.mob(10), 'leader_id', pg_temp.m(1),
                                           'has_leadership', true, 'role_id', pg_temp.role('Membro'))),
   'Rita: check_member_insert com role_id continua respondendo');
 RESET ROLE;

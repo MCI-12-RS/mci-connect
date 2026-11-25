@@ -330,13 +330,26 @@ describe("UX-22: recusas do servidor na edição (Pedro, sem a igreja toda)", ()
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("erro técnico (sem regra): toast destrutivo com a mensagem, sem Alert de regra", async () => {
+  it("erro técnico (sem regra): toast destrutivo com 'tente de novo', sem o texto técnico nem Alert de regra", async () => {
     await openAndFillNotes();
-    refuse({ code: "XX000", message: "boom" });
+    refuse({ code: "40P01", message: "deadlock detected" });
     submitEdit();
 
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "destructive", description: "boom" })));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive", description: "Não foi possível salvar o cadastro. Tente de novo." }),
+      ),
+    );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("E2.04: 23505 cru do índice único mostra a mensagem amigável, nunca o texto técnico", async () => {
+    await openAndFillNotes();
+    refuse({ code: "23505", message: 'duplicate key value violates unique constraint "members_email_key"', details: "Key (email)=(x) already exists." });
+    submitEdit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Este e-mail já está sendo usado por outro cadastro.");
+    expect(screen.queryByText(/duplicate key/)).not.toBeInTheDocument();
   });
 
   it("depois de uma recusa, um novo envio limpa o Alert", async () => {
@@ -443,6 +456,41 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith({ title: "Membro criado com sucesso" });
     expect(invoke).toHaveBeenCalledWith("create-user-admin", expect.objectContaining({ body: expect.objectContaining({ memberData: expect.any(Object) }) }));
+  });
+
+  it("E2.04 (DT-11, RN-05): corpo novo, e-mail vazio como null e o mesmo attemptId na nova tentativa", async () => {
+    await fillNew();
+    createRefusal(409, { error: "Este celular já está sendo usado por outro cadastro.", code: "value_in_use", fields: ["mobile"] });
+    submitNew();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Este celular já está sendo usado por outro cadastro.");
+
+    invoke.mockResolvedValueOnce({ data: { member: { id: "novo" }, replayed: true }, error: null });
+    submitNew();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Membro criado com sucesso" }));
+
+    const bodies = invoke.mock.calls.map(([, options]) => options.body);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].attemptId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(bodies[1].attemptId).toBe(bodies[0].attemptId);
+    expect(bodies[0]).not.toHaveProperty("email");
+    expect(bodies[0].memberData.email).toBeNull();
+  });
+
+  it("E2.04: uma nova abertura do formulário gera outro attemptId", async () => {
+    const { unmount } = render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
+    fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Igor Teixeira" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Criar membro" })).toBeEnabled());
+    invoke.mockResolvedValueOnce({ data: { member: { id: "a" }, replayed: false }, error: null });
+    submitNew();
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    unmount();
+
+    await fillNew();
+    invoke.mockResolvedValueOnce({ data: { member: { id: "b" }, replayed: false }, error: null });
+    submitNew();
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    const [first, second] = invoke.mock.calls.map(([, options]) => options.body.attemptId);
+    expect(second).not.toBe(first);
   });
 
   it("UX-17: o cadastro novo de Pedro vem com ele no Líder, com a dica ligada ao campo e sem os interruptores", async () => {

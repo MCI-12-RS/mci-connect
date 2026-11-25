@@ -149,27 +149,30 @@ SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid'
   FROM generate_series(1, 19) n
 UNION ALL SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid' FROM unnest(ARRAY[30, 32, 34]) n;
 
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, auth_user_id, role_id, is_active) VALUES
- (pg_temp.m(1),'Samuel','M',true,NULL,pg_temp.u(1),pg_temp.role('Líder'),true),
- (pg_temp.m(2),'Magda','F',true,NULL,pg_temp.u(2),pg_temp.role('Líder'),true),
- (pg_temp.m(3),'Pedro','M',false,pg_temp.m(1),pg_temp.u(3),pg_temp.role('Líder'),true),
- (pg_temp.m(4),'Paula','F',false,pg_temp.m(2),pg_temp.u(4),pg_temp.role('Líder'),true),
- (pg_temp.m(5),'Tiago','M',false,pg_temp.m(1),pg_temp.u(5),NULL,true),
- (pg_temp.m(6),'Tania','F',false,pg_temp.m(2),pg_temp.u(6),NULL,true),
- (pg_temp.m(7),'Andre','M',false,pg_temp.m(3),pg_temp.u(7),pg_temp.role('Líder'),true),
- (pg_temp.m(8),'Beatriz','F',false,pg_temp.m(6),pg_temp.u(8),pg_temp.role('Membro'),true),
- (pg_temp.m(9),'Caio','M',false,pg_temp.m(7),pg_temp.u(9),pg_temp.role('Membro'),true),
- (pg_temp.m(10),'Fabio','M',false,pg_temp.m(7),pg_temp.u(10),pg_temp.role('Membro'),false),
- (pg_temp.m(11),'Gabriel','M',false,pg_temp.m(10),pg_temp.u(11),NULL,true),
- (pg_temp.m(12),'Carla','F',false,pg_temp.m(4),pg_temp.u(12),pg_temp.role('Membro'),true),
- (pg_temp.m(13),'Debora','F',false,pg_temp.m(8),pg_temp.u(13),NULL,true),
- (pg_temp.m(14),'Diego','M',false,pg_temp.m(5),pg_temp.u(14),pg_temp.role('Líder'),true),
- (pg_temp.m(15),'Hugo','M',false,pg_temp.m(5),pg_temp.u(15),NULL,true),
- (pg_temp.m(16),'Rita','F',false,pg_temp.m(6),pg_temp.u(16),pg_temp.role('Administrador'),true),
- (pg_temp.m(17),'Ester','F',false,NULL,pg_temp.u(17),pg_temp.role('Membro'),true),
- (pg_temp.m(18),'Lucia','F',false,pg_temp.m(17),pg_temp.u(18),NULL,true),
- (pg_temp.m(20),'D3t','F',false,pg_temp.m(13),NULL,NULL,true),
- (pg_temp.m(21),'D3h','F',false,pg_temp.m(13),NULL,NULL,true);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192023' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+ (pg_temp.m(1),'Samuel Massa','M',true,NULL, false,pg_temp.u(1),pg_temp.role('Líder'),true, pg_temp.mob(1)),
+ (pg_temp.m(2),'Magda Massa','F',true,NULL, false,pg_temp.u(2),pg_temp.role('Líder'),true, pg_temp.mob(2)),
+ (pg_temp.m(3),'Pedro Massa','M',false,pg_temp.m(1), true,pg_temp.u(3),pg_temp.role('Líder'),true, pg_temp.mob(3)),
+ (pg_temp.m(4),'Paula Massa','F',false,pg_temp.m(2), true,pg_temp.u(4),pg_temp.role('Líder'),true, pg_temp.mob(4)),
+ (pg_temp.m(5),'Tiago Massa','M',false,pg_temp.m(1), true,pg_temp.u(5),NULL,true, pg_temp.mob(5)),
+ (pg_temp.m(6),'Tania Massa','F',false,pg_temp.m(2), true,pg_temp.u(6),NULL,true, pg_temp.mob(6)),
+ (pg_temp.m(7),'Andre Massa','M',false,pg_temp.m(3), true,pg_temp.u(7),pg_temp.role('Líder'),true, pg_temp.mob(7)),
+ (pg_temp.m(8),'Beatriz Massa','F',false,pg_temp.m(6), true,pg_temp.u(8),pg_temp.role('Membro'),true, pg_temp.mob(8)),
+ (pg_temp.m(9),'Caio Massa','M',false,pg_temp.m(7), true,pg_temp.u(9),pg_temp.role('Membro'),true, pg_temp.mob(9)),
+ (pg_temp.m(10),'Fabio Massa','M',false,pg_temp.m(7), true,pg_temp.u(10),pg_temp.role('Membro'),false, pg_temp.mob(10)),
+ (pg_temp.m(11),'Gabriel Massa','M',false,pg_temp.m(10), true,pg_temp.u(11),NULL,true, pg_temp.mob(11)),
+ (pg_temp.m(12),'Carla Massa','F',false,pg_temp.m(4), true,pg_temp.u(12),pg_temp.role('Membro'),true, pg_temp.mob(12)),
+ (pg_temp.m(13),'Debora Massa','F',false,pg_temp.m(8), true,pg_temp.u(13),NULL,true, pg_temp.mob(13)),
+ (pg_temp.m(14),'Diego Massa','M',false,pg_temp.m(5), true,pg_temp.u(14),pg_temp.role('Líder'),true, pg_temp.mob(14)),
+ (pg_temp.m(15),'Hugo Massa','M',false,pg_temp.m(5), true,pg_temp.u(15),NULL,true, pg_temp.mob(15)),
+ (pg_temp.m(16),'Rita Massa','F',false,pg_temp.m(6), true,pg_temp.u(16),pg_temp.role('Administrador'),true, pg_temp.mob(16)),
+ (pg_temp.m(17),'Ester Massa','F',false,NULL, false,pg_temp.u(17),pg_temp.role('Membro'),true, pg_temp.mob(17)),
+ (pg_temp.m(18),'Lucia Massa','F',false,pg_temp.m(17), true,pg_temp.u(18),NULL,true, pg_temp.mob(18)),
+ (pg_temp.m(20),'D3t Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(20)),
+ (pg_temp.m(21),'D3h Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(21));
 UPDATE public.members SET spouse_id = pg_temp.m(2) WHERE id = pg_temp.m(1);
 UPDATE public.members SET spouse_id = pg_temp.m(4) WHERE id = pg_temp.m(3);
 UPDATE public.members SET spouse_id = pg_temp.m(6) WHERE id = pg_temp.m(5);
@@ -186,7 +189,9 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, a
  (pg_temp.m(32),'Assim1','M',false,NULL,pg_temp.m(33),pg_temp.u(32),pg_temp.role('Membro'),true,false,0),
  (pg_temp.m(33),'Assim2','F',false,NULL,NULL,NULL,NULL,true,false,0),
  (pg_temp.m(35),'Isolado','M',false,NULL,NULL,NULL,NULL,true,false,0),
- (pg_temp.m(34),'PastorComLider','M',true,pg_temp.m(35),NULL,pg_temp.u(34),pg_temp.role('Líder'),true,true,0);
+-- E2.04 (RN-11): pastor com líder deixou de existir (members_leadership_check vale
+-- também em replica). PastorComLider fica pastor sem líder, ao lado de Isolado.
+ (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false,0);
 -- Relatórios da semana passada (a semana atual fica livre para os lançamentos).
 INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
  (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1'),
@@ -315,18 +320,18 @@ SELECT is(v[5], '-|-', 'DA-4: e o vínculo do outro lado é desfeito (simetria)'
 SELECT pg_temp.run('ensaio',
   format('CREATE TEMP TABLE e0 AS SELECT (SELECT count(*) FROM public.events) AS ev, (SELECT count(*) FROM public.members) AS mb; GRANT ALL ON e0 TO authenticated;'),
   ARRAY[
-    /* 1 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(14), 'has_leadership', true))),
-    /* 2 */ pg_temp.pm(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(14), 'has_leadership', true))),
-    /* 3 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(7)))),
-    /* 4 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor'))),
-    /* 5 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(7), 'is_pastor', true))),
-    /* 6 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(7), 'role_id', pg_temp.role('Administrador')))),
-    /* 7 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(9)))),
-    /* 8 */ pg_temp.pc(16, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor'))),
-    /* 9 */ pg_temp.pc(19, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor'))),
-    /* 10 */ pg_temp.pc(NULL, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor'))),
+    /* 1 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239901', 'leader_id', pg_temp.m(14), 'has_leadership', true))),
+    /* 2 */ pg_temp.pm(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239902', 'leader_id', pg_temp.m(14), 'has_leadership', true))),
+    /* 3 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239903', 'leader_id', pg_temp.m(7)))),
+    /* 4 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239904', 'has_leadership', false))),
+    /* 5 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239905', 'leader_id', pg_temp.m(7), 'is_pastor', true))),
+    /* 6 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239906', 'leader_id', pg_temp.m(7), 'role_id', pg_temp.role('Administrador')))),
+    /* 7 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239907', 'leader_id', pg_temp.m(9)))),
+    /* 8 */ pg_temp.pc(16, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239908', 'has_leadership', false))),
+    /* 9 */ pg_temp.pc(19, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239909', 'has_leadership', false))),
+    /* 10 */ pg_temp.pc(NULL, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239910', 'has_leadership', false))),
     /* 11 */ 'SELECT ((SELECT count(*) FROM public.events) = (SELECT ev FROM e0) AND (SELECT count(*) FROM public.members) = (SELECT mb FROM e0))::text',
-    /* 12 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', 'abc')))
+    /* 12 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239911', 'leader_id', 'abc')))
   ]);
 SELECT is(v[1], 'person_not_visible', 'RN-09: o ensaio de Pedro com Diego como líder recusa (person_not_visible), como o INSERT') FROM sb WHERE k = 'ensaio';
 SELECT is(v[2], 'Você só pode escolher pessoas que você vê.', 'RN-09: com a mensagem do spec') FROM sb WHERE k = 'ensaio';
@@ -345,19 +350,19 @@ SELECT is(v[12], '22P02', 'o ensaio com uuid inválido dá o mesmo erro de tipo 
 SELECT pg_temp.run('insert',
   '',
   ARRAY[
-    /* 1 */ pg_temp.pc(3, format($i$INSERT INTO public.members (name, gender, leader_id) VALUES ('Igor', 'M', %L)$i$, pg_temp.m(14))),
-    /* 2 */ pg_temp.pc(3, format($i$INSERT INTO public.members (name, gender, leader_id) VALUES ('Igor', 'M', %L)$i$, pg_temp.m(7))),
-    /* 3 */ 'SELECT name || ''|'' || coalesce((SELECT name FROM public.roles WHERE id = role_id), ''-'') || ''|'' || has_leadership::text FROM public.members WHERE name = ''Igor''',
-    /* 4 */ format($p$SELECT pg_temp.lab(pg_temp.ids(3, 'SELECT id FROM public.members_view WHERE name = ''Igor'''))$p$) || '',
-    /* 5 */ pg_temp.pr(3, $i$SELECT 1 FROM public.members_view WHERE name = 'Igor'$i$),
-    /* 6 */ pg_temp.pc(3, $i$INSERT INTO public.members (name, gender) VALUES ('Igor2', 'M')$i$),
-    /* 7 */ pg_temp.pc(9, $i$INSERT INTO public.members (name, gender) VALUES ('Igor3', 'M')$i$),
-    /* 8 */ pg_temp.pc(16, $i$INSERT INTO public.members (name, gender) VALUES ('Igor4', 'M')$i$),
+    /* 1 */ pg_temp.pc(3, format($i$INSERT INTO public.members (name, gender, mobile_whatsapp, leader_id) VALUES ('Igor Novo', 'M', '51920239915', %L)$i$, pg_temp.m(14))),
+    /* 2 */ pg_temp.pc(3, format($i$INSERT INTO public.members (name, gender, mobile_whatsapp, leader_id) VALUES ('Igor Novo', 'M', '51920239916', %L)$i$, pg_temp.m(7))),
+    /* 3 */ 'SELECT name || ''|'' || coalesce((SELECT name FROM public.roles WHERE id = role_id), ''-'') || ''|'' || has_leadership::text FROM public.members WHERE name = ''Igor Novo''',
+    /* 4 */ format($p$SELECT pg_temp.lab(pg_temp.ids(3, 'SELECT id FROM public.members_view WHERE name = ''Igor Novo'''))$p$) || '',
+    /* 5 */ pg_temp.pr(3, $i$SELECT 1 FROM public.members_view WHERE name = 'Igor Novo'$i$),
+    /* 6 */ pg_temp.pc(3, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, has_leadership) VALUES ('Igor2 Novo', 'M', '51920239917', false)$i$),
+    /* 7 */ pg_temp.pc(9, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, has_leadership) VALUES ('Igor3 Novo', 'M', '51920239918', false)$i$),
+    /* 8 */ pg_temp.pc(16, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, has_leadership) VALUES ('Igor4 Novo', 'M', '51920239919', false)$i$),
     /* 9 */ 'SELECT count(*)::text FROM public.members WHERE name LIKE ''Igor%'''
   ]);
 SELECT is(v[1], 'person_not_visible', 'RN-09: o INSERT de Pedro com Diego como líder recusa (person_not_visible)') FROM sb WHERE k = 'insert';
 SELECT is(v[2], '00000', 'RN-10: Pedro cadastra Igor com André como líder: aceito') FROM sb WHERE k = 'insert';
-SELECT is(v[3], 'Igor|Membro|true', 'RN-19 e DA-11: Igor fica com a função Membro (padrão) e Tem Liderança ligado') FROM sb WHERE k = 'insert';
+SELECT is(v[3], 'Igor Novo|Membro|true', 'RN-19 e DA-11: Igor fica com a função Membro (padrão) e Tem Liderança ligado') FROM sb WHERE k = 'insert';
 SELECT is(v[5], '1', 'RN-10: Igor aparece em Membros para Pedro') FROM sb WHERE k = 'insert';
 SELECT is(v[6], 'pastor_or_no_leadership_requires_church', 'RN-10: o INSERT de Pedro sem líder recusa') FROM sb WHERE k = 'insert';
 SELECT is(v[7], '42501', 'RN-10: o INSERT de Caio (Membro) dá 42501') FROM sb WHERE k = 'insert';
@@ -374,7 +379,8 @@ SELECT pg_temp.run('pastor',
     /* 2 */ pg_temp.pm(3, format('UPDATE public.members SET is_pastor = true WHERE id = %L', pg_temp.m(7))),
     /* 3 */ pg_temp.pc(1, format('UPDATE public.members SET is_pastor = true WHERE id = %L', pg_temp.m(7))),
     /* 4 */ format('SELECT is_pastor::text FROM public.members WHERE id = %L', pg_temp.m(7)),
-    /* 5 */ pg_temp.pc(16, format('UPDATE public.members SET is_pastor = true WHERE id = %L', pg_temp.m(7))),
+    -- E2.04 (RN-11): pastor não tem líder; quem marca tira o líder na mesma gravação.
+    /* 5 */ pg_temp.pc(16, format('UPDATE public.members SET is_pastor = true, leader_id = NULL WHERE id = %L', pg_temp.m(7))),
     /* 6 */ format('SELECT is_pastor::text FROM public.members WHERE id = %L', pg_temp.m(7)),
     -- Samuel muda a data de nascimento de Magda: aceito, e ela continua pastora; desmarcar é recusado.
     /* 7 */ pg_temp.pc(1, format('UPDATE public.members SET birth_date = ''1970-01-01'' WHERE id = %L', pg_temp.m(2))),
@@ -386,10 +392,11 @@ SELECT pg_temp.run('pastor',
     /* 12 */ pg_temp.pc(1, format('UPDATE public.members SET leader_id = %L WHERE id = %L', pg_temp.m(3), pg_temp.m(2))),
     /* 13 */ format('SELECT coalesce(leader_id::text, ''-'') FROM public.members WHERE id = %L', pg_temp.m(2)),
     -- RN-10: tirar o líder de Hugo (DA-1: Caio está fora do escopo de Diego; usa-se Hugo), e cadastrar sem líder.
-    /* 14 */ pg_temp.pc(14, format('UPDATE public.members SET leader_id = NULL WHERE id = %L', pg_temp.m(15))),
-    /* 15 */ pg_temp.pm(14, format('UPDATE public.members SET leader_id = NULL WHERE id = %L', pg_temp.m(15))),
+    -- E2.04 (RN-12): tirar o líder exige desligar "Tem Liderança?" na mesma gravação (senão, leader_required).
+    /* 14 */ pg_temp.pc(14, format('UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE id = %L', pg_temp.m(15))),
+    /* 15 */ pg_temp.pm(14, format('UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE id = %L', pg_temp.m(15))),
     /* 16 */ format('SELECT leader_id::text FROM public.members WHERE id = %L', pg_temp.m(15)),
-    /* 17 */ pg_temp.pc(14, $i$INSERT INTO public.members (name, gender) VALUES ('Igor', 'M')$i$),
+    /* 17 */ pg_temp.pc(14, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, has_leadership) VALUES ('Igor Novo', 'M', '51920239920', false)$i$),
     /* 18 */ pg_temp.pc(14, format('UPDATE public.members SET has_leadership = false WHERE id = %L', pg_temp.m(15))),
     /* 19 */ format('SELECT has_leadership::text FROM public.members WHERE id = %L', pg_temp.m(15))
   ]);
@@ -489,13 +496,13 @@ SELECT pg_temp.run('r18',
     /* 1 */ pg_temp.pc(3, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(9))),
     /* 2 */ pg_temp.pm(3, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(9))),
     /* 3 */ format('SELECT (SELECT name FROM public.roles WHERE id = role_id) FROM public.members WHERE id = %L', pg_temp.m(9)),
-    /* 4 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(9)))),
+    /* 4 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239912', 'leader_id', pg_temp.m(9)))),
     /* 5 */ pg_temp.pc(16, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(16))),
     /* 6 */ pg_temp.pm(16, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(16))),
     /* 7 */ pg_temp.pc(16, format('UPDATE public.members SET role_id = %L WHERE id = %L', pg_temp.role('Líder'), pg_temp.m(9))),
     /* 8 */ format('SELECT (SELECT name FROM public.roles WHERE id = role_id) FROM public.members WHERE id = %L', pg_temp.m(9)),
     -- RN-08: depois que Rita dá Líder a Caio, a ação seguinte dele já cadastra, sem sair e entrar.
-    /* 9 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(9))))
+    /* 9 */ pg_temp.pc(9, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239913', 'leader_id', pg_temp.m(9))))
   ]);
 SELECT is(v[1], 'role_change_not_allowed', 'RN-18: Pedro (Líder) troca a função de Caio: role_change_not_allowed') FROM sb WHERE k = 'r18';
 SELECT is(v[2], 'Você não tem permissão para alterar a função deste membro.', 'RN-18: com a mensagem do spec') FROM sb WHERE k = 'r18';
@@ -529,12 +536,12 @@ SELECT is(v[5], '00000', 'RN-18: mas atribui a Membro, que cobre') FROM sb WHERE
 SELECT pg_temp.run('r19',
   format('SELECT pg_temp.mkrole(%L, ARRAY[''view_all_church'', ''view_dashboard'']); UPDATE public.roles SET is_default = false WHERE is_default; UPDATE public.roles SET is_default = true WHERE name = %L; SET CONSTRAINTS ALL IMMEDIATE;', 'Secretaria', 'Secretaria'),
   ARRAY[
-    /* 1 */ pg_temp.pc(3, $i$INSERT INTO public.members (name, gender, leader_id) VALUES ('Igor', 'M', '$i$ || pg_temp.m(7) || $i$')$i$),
-    /* 2 */ pg_temp.pm(3, $i$INSERT INTO public.members (name, gender, leader_id) VALUES ('Igor', 'M', '$i$ || pg_temp.m(7) || $i$')$i$),
-    /* 3 */ 'SELECT count(*)::text FROM public.members WHERE name = ''Igor''',
-    /* 4 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor', 'leader_id', pg_temp.m(7)))),
-    /* 5 */ pg_temp.pc(16, $i$INSERT INTO public.members (name, gender, leader_id) VALUES ('Igor', 'M', '$i$ || pg_temp.m(7) || $i$')$i$),
-    /* 6 */ 'SELECT (SELECT name FROM public.roles WHERE id = role_id) FROM public.members WHERE name = ''Igor'''
+    /* 1 */ pg_temp.pc(3, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, leader_id) VALUES ('Igor Novo', 'M', '51920239921', '$i$ || pg_temp.m(7) || $i$')$i$),
+    /* 2 */ pg_temp.pm(3, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, leader_id) VALUES ('Igor Novo', 'M', '51920239922', '$i$ || pg_temp.m(7) || $i$')$i$),
+    /* 3 */ 'SELECT count(*)::text FROM public.members WHERE name = ''Igor Novo''',
+    /* 4 */ pg_temp.pc(3, format('SELECT public.check_member_insert(%L::jsonb)', jsonb_build_object('name', 'Igor Novo', 'gender', 'M', 'mobile_whatsapp', '51920239914', 'leader_id', pg_temp.m(7)))),
+    /* 5 */ pg_temp.pc(16, $i$INSERT INTO public.members (name, gender, mobile_whatsapp, leader_id) VALUES ('Igor Novo', 'M', '51920239923', '$i$ || pg_temp.m(7) || $i$')$i$),
+    /* 6 */ 'SELECT (SELECT name FROM public.roles WHERE id = role_id) FROM public.members WHERE name = ''Igor Novo'''
   ]);
 SELECT is(v[1], 'default_role_not_covered', 'RN-19: com a Secretaria (Toda a Igreja) como padrão, Pedro cadastra Igor: default_role_not_covered') FROM sb WHERE k = 'r19';
 SELECT is(v[2], 'A função padrão tem permissões que você não tem. Peça a um administrador para fazer este cadastro.', 'RN-19: com a mensagem do spec') FROM sb WHERE k = 'r19';

@@ -506,8 +506,8 @@ SELECT lives_ok(format($$
   pg_temp.m(20), pg_temp.m(5), pg_temp.u(7)),
   'Cadastro (create_member, sem view_sensitive_data): INSERT sem RETURNING funciona');
 SELECT results_eq(
-  format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active)
-            VALUES (%L, 'Otto Outro', 'M', %L, true, true) RETURNING id $$, pg_temp.m(21), pg_temp.m(5)),
+  format($$ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, mobile_whatsapp)
+            VALUES (%L, 'Otto Outro', 'M', %L, true, true, '51910850021') RETURNING id $$, pg_temp.m(21), pg_temp.m(5)),
   format($$ VALUES (%L::uuid) $$, pg_temp.m(21)),
   'Cadastro: INSERT … RETURNING id funciona');
 SELECT throws_ok(

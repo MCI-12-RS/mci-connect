@@ -34,6 +34,8 @@ const NAME = "QA4 Ver Rel";
 const PASSWORD = "Qa4VerRel#2026";
 const id = (kind: number, n: number) => `${PREFIX}-${String(kind).padStart(4, "0")}-0000-0000-${String(n).padStart(12, "0")}`;
 const member = (n: number) => id(1, n);
+/** Celular único por cadastro da massa: todo cadastro novo precisa de um identificador (E2.04, RN-08). */
+const mobileOf = (n: number) => `5193204${String(n).padStart(4, "0")}`;
 const cell = (n: number) => id(2, n);
 const report = (n: number) => id(3, n);
 const role = (n: number) => id(4, n);
@@ -126,16 +128,16 @@ test.beforeAll(async () => {
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, auth_user_id, role_id, email) VALUES
        (${lit(member(90))}, ${lit(who("Lia Lopes"))}, 'F', false, true, ${lit(authIds.le)}, ${lit(role(1))}, ${lit(LE.email)}),
        (${lit(member(91))}, ${lit(who("Mauro Melo"))}, 'M', false, true, ${lit(authIds.mb)}, ${lit(role(2))}, ${lit(MB.email)});
-     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id) VALUES
-       (${lit(member(1))}, ${lit(CARLOS)}, 'M', false, true, ${lit(role(3))}),
-       (${lit(member(2))}, ${lit(ANA)}, 'F', false, true, ${lit(role(3))}),
-       (${lit(member(3))}, ${lit(SARA)}, 'F', false, true, ${lit(role(3))}),
-       (${lit(member(4))}, ${lit(BRUNO)}, 'M', false, true, ${lit(role(3))}),
-       (${lit(member(5))}, ${lit(ALVARO)}, 'M', false, true, ${lit(role(3))}),
-       (${lit(member(6))}, ${lit(RUI)}, 'M', false, true, ${lit(role(3))}),
-       (${lit(member(7))}, ${lit(YARA)}, 'F', false, true, ${lit(role(3))}),
-       (${lit(member(8))}, ${lit(ZULEICA)}, 'F', false, true, ${lit(role(3))}),
-       (${lit(member(9))}, ${lit(HUGO)}, 'M', false, true, ${lit(role(3))});
+     INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, mobile_whatsapp) VALUES
+       (${lit(member(1))}, ${lit(CARLOS)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(1))}),
+       (${lit(member(2))}, ${lit(ANA)}, 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(2))}),
+       (${lit(member(3))}, ${lit(SARA)}, 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(3))}),
+       (${lit(member(4))}, ${lit(BRUNO)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(4))}),
+       (${lit(member(5))}, ${lit(ALVARO)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(5))}),
+       (${lit(member(6))}, ${lit(RUI)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(6))}),
+       (${lit(member(7))}, ${lit(YARA)}, 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(7))}),
+       (${lit(member(8))}, ${lit(ZULEICA)}, 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(8))}),
+       (${lit(member(9))}, ${lit(HUGO)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(9))});
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number, neighborhood) VALUES
        (${lit(cell(1))}, ${lit(member(1))}, NULL, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA4 das Flores', '120', 'Centro'),
        (${lit(cell(2))}, ${lit(member(6))}, NULL, ${lit(member(6))}, 'Discipulado', 'Quarta', '20:00', true, 'Rua QA4 do Sol', '45', 'Centro'),

@@ -62,7 +62,7 @@ DELETE FROM public.cell_report_participants WHERE report_id::text LIKE 'f201c0de
 DELETE FROM public.cell_reports WHERE id::text LIKE 'f201c0de%' OR cell_id::text LIKE 'f201c0de%';
 DELETE FROM public.cells WHERE id::text LIKE 'f201c0de%';
 DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE 'f201c0de%';
-UPDATE public.members SET leader_id = NULL, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f201c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f201c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f201c0de%';
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f201c0de%';
 DELETE FROM public.roles WHERE id::text LIKE 'f201c0de%';
@@ -88,13 +88,13 @@ WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
   ('$RLE', 'view_all_church'), ('$RLE', 'edit_member'), ('$RLE', 'delete_member'), ('$RLE', 'edit_cell'),
   ('$RLE', 'create_cell'), ('$RLE', 'delete_cell'), ('$RLE', 'delete_cell_report'), ('$RLE', 'edit_cell_report');
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
-  ('$M_PASTOR', 'E201 Conc Pastor', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id) VALUES
-  ('$M_AD1', 'E201 Conc Ana Admin',  'F', '$M_PASTOR', true, '$U1', '$RAD'),
-  ('$M_AD2', 'E201 Conc Beto Admin', 'M', '$M_PASTOR', true, '$U2', '$RAD'),
-  ('$M_LE',  'E201 Conc Lia LE',     'F', '$M_PASTOR', true, '$U3', '$RLE'),
-  ('$M_OLD', 'E201 Conc Olavo',      'M', '$M_PASTOR', true, NULL,  NULL);
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES
+  ('$M_PASTOR', 'E201 Conc Pastor', 'M', true, false, '$M_PASTOR@teste.invalid');
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, email) VALUES
+  ('$M_AD1', 'E201 Conc Ana Admin',  'F', '$M_PASTOR', true, '$U1', '$RAD', '$M_AD1@teste.invalid'),
+  ('$M_AD2', 'E201 Conc Beto Admin', 'M', '$M_PASTOR', true, '$U2', '$RAD', '$M_AD2@teste.invalid'),
+  ('$M_LE',  'E201 Conc Lia LE',     'F', '$M_PASTOR', true, '$U3', '$RLE', '$M_LE@teste.invalid'),
+  ('$M_OLD', 'E201 Conc Olavo',      'M', '$M_PASTOR', true, NULL,  NULL, '$M_OLD@teste.invalid');
 COMMIT;
 SQL
 }
@@ -150,7 +150,7 @@ WEEK="public.week_start(public.sp_today())"
 # ---------------------------------------------------------------------------
 echo "== 1. Duas exclusões do mesmo membro (A segura a trava; B espera)"
 base
-q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$M_AD1', true)" >/dev/null
+q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$M_AD1', true, '$M_BRUNO@teste.invalid')" >/dev/null
 pair s1 "$U1" "BEGIN; SELECT public.delete_member('$M_BRUNO'); SELECT pg_sleep($HOLD); COMMIT;" \
         "$U2" "SELECT public.delete_member('$M_BRUNO');"
 show s1
@@ -166,7 +166,7 @@ same_instant_deletes() {
   local leader=$1 rounds=$2 label=$3 i pair_out deadlocks=0
   for i in $(seq 1 "$rounds"); do
     base
-    q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$leader', true)" >/dev/null
+    q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$leader', true, '$M_BRUNO@teste.invalid')" >/dev/null
     T=$(q "SELECT (clock_timestamp() + interval '1 second')::text")
     pair s1b "$U1" "SELECT pg_sleep_until('$T'); SELECT public.delete_member('$M_BRUNO');" \
              "$U2" "SELECT pg_sleep_until('$T'); SELECT public.delete_member('$M_BRUNO');" 0
@@ -187,8 +187,8 @@ same_instant_deletes "$M_AD1" 10 "1c"
 # ---------------------------------------------------------------------------
 echo "== 2a. Exclusão de Gil (trava primeiro) × Gil como líder de Hugo"
 base
-q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES
-     ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true), ('$M_HUGO', 'E201 Conc Hugo', 'M', '$M_OLD', true)" >/dev/null
+q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
+     ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true, '$M_GIL@teste.invalid'), ('$M_HUGO', 'E201 Conc Hugo', 'M', '$M_OLD', true, '$M_HUGO@teste.invalid')" >/dev/null
 pair s2a "$U1" "BEGIN; SELECT public.delete_member('$M_GIL'); SELECT pg_sleep($HOLD); COMMIT;" \
          "$U3" "UPDATE public.members SET leader_id = '$M_GIL' WHERE id = '$M_HUGO';"
 show s2a
@@ -200,8 +200,8 @@ invariant
 
 echo "== 2b. Gil como líder de Hugo (trava primeiro) × exclusão de Gil"
 base
-q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES
-     ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true), ('$M_HUGO', 'E201 Conc Hugo', 'M', '$M_OLD', true)" >/dev/null
+q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
+     ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true, '$M_GIL@teste.invalid'), ('$M_HUGO', 'E201 Conc Hugo', 'M', '$M_OLD', true, '$M_HUGO@teste.invalid')" >/dev/null
 pair s2b "$U3" "BEGIN; UPDATE public.members SET leader_id = '$M_GIL' WHERE id = '$M_HUGO'; SELECT pg_sleep($HOLD); COMMIT;" \
          "$U1" "SELECT public.delete_member('$M_GIL');"
 show s2b
@@ -271,8 +271,8 @@ check "R continua excluído; só um relatório não excluído na semana" \
 # ---------------------------------------------------------------------------
 setup5() {
   base
-  q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES
-       ('$M_HOST', 'E201 Conc Quintino', 'M', '$M_AD1', true), ('$M_LEADER', 'E201 Conc Rui', 'M', '$M_AD1', true);
+  q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
+       ('$M_HOST', 'E201 Conc Quintino', 'M', '$M_AD1', true, '$M_HOST@teste.invalid'), ('$M_LEADER', 'E201 Conc Rui', 'M', '$M_AD1', true, '$M_LEADER@teste.invalid');
      INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time)
        VALUES ('$C1', '$M_LEADER', '$M_HOST', 'Evangelística', 'Terça', '20:00')" >/dev/null
   session "$U1" "SELECT public.delete_cell('$C1');" >/dev/null
@@ -302,8 +302,8 @@ invariant
 # ---------------------------------------------------------------------------
 setup6() {
   base
-  q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true);
-     INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$M_GIL', true)" >/dev/null
+  q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES ('$M_GIL', 'E201 Conc Gil', 'M', '$M_AD1', true, '$M_GIL@teste.invalid');
+     INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES ('$M_BRUNO', 'E201 Conc Bruno', 'M', '$M_GIL', true, '$M_BRUNO@teste.invalid')" >/dev/null
   session "$U1" "SELECT public.delete_member('$M_BRUNO');" >/dev/null
 }
 echo "== 6a. (extra) Exclusão do líder Gil (trava primeiro) × restauração de Bruno"

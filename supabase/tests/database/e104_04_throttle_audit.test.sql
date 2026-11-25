@@ -166,14 +166,13 @@ DROP INDEX IF EXISTS public.members_mobile_key;
 
 INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, is_active, auth_user_id, email, cpf, mobile_whatsapp) VALUES
   (pg_temp.m(18), 'Samuel Pastor E104', 'M', true, NULL, false, true, pg_temp.u(18), 'e104-18@exemplo.com', NULL, NULL);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id, email, cpf, mobile_whatsapp)
-SELECT pg_temp.m(v.n), v.name, v.gender, pg_temp.m(18), true, v.n <> 17,
-       CASE WHEN v.n = 16 THEN NULL ELSE pg_temp.u(v.n) END,
-       CASE v.n WHEN 19 THEN pg_temp.role(2) WHEN 30 THEN pg_temp.role(1) WHEN 32 THEN pg_temp.role(3) END,
-       v.email, v.cpf, v.mobile
-  FROM (VALUES
+-- E2.04 (DT-23): o cadastro não guarda mais o e-mail fictício (DA-7); a conta
+-- de Bruno continua com ele. Joana, Paula e Sílvia repetem o celular de outro
+-- cadastro, o que as regras do E2.04 recusam: entram em replica, como dado
+-- antigo (os CHECKs e os outros índices valem; os triggers, não).
+CREATE TEMP TABLE e104_massa AS SELECT * FROM (VALUES
     (1,  'Ana Souza',        'F', 'ana.souza@exemplo.com',            '529.982.247-25', '(51) 98888-7777'),
-    (2,  'Bruno Brito',      'M', 'bruno_k3j9x2@mci12fakemail.com',   NULL,             '(51) 97777-6666'),
+    (2,  'Bruno Brito',      'M', NULL,                               NULL,             '(51) 97777-6666'),
     (3,  'Carla Campos',     'F', 'carla@novo.com',                   NULL,             NULL),
     (4,  'Hugo Hoffmann',    'M', 'e104-4@exemplo.com',               NULL,             '(55) 99999-1234'),
     (5,  'Gabi Gomes',       'F', 'e104-5@exemplo.com',               NULL,             '(51) 8877-6655'),
@@ -203,6 +202,19 @@ SELECT pg_temp.m(v.n), v.name, v.gender, pg_temp.m(18), true, v.n <> 17,
     (30, 'Adriana Admin',    'F', 'e104-30@exemplo.com',              NULL,             NULL),
     (32, 'Aurora Auditoria', 'F', 'e104-32@exemplo.com',              NULL,             NULL)
   ) AS v(n, name, gender, email, cpf, mobile);
+CREATE FUNCTION pg_temp.load_massa(_replica boolean) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id, email, cpf, mobile_whatsapp)
+  SELECT pg_temp.m(v.n), v.name, v.gender, pg_temp.m(18), true, v.n <> 17,
+         CASE WHEN v.n = 16 THEN NULL ELSE pg_temp.u(v.n) END,
+         CASE v.n WHEN 19 THEN pg_temp.role(2) WHEN 30 THEN pg_temp.role(1) WHEN 32 THEN pg_temp.role(3) END,
+         v.email, public.normalize_digits(v.cpf), v.mobile   -- CPF gravado só com dígitos (CHECK)
+    FROM e104_massa v
+   WHERE (v.n IN (7, 11, 13)) = _replica;
+$$;
+SELECT pg_temp.load_massa(false);
+SET LOCAL session_replication_role = replica;
+SELECT pg_temp.load_massa(true);
+SET LOCAL session_replication_role = origin;
 
 -- Rita e Rosa são excluídas pela RPC real (E2.01): a conta fica suspensa.
 SELECT pg_temp.val(30, format('SELECT public.delete_member(%L)', pg_temp.m(12)));

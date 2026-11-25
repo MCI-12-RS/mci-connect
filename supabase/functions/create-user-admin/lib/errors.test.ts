@@ -3,13 +3,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   APP_ERROR_HINT,
   appErrorToHttp,
+  ATTEMPT_ALREADY_USED_MESSAGE,
+  attemptAlreadyUsed,
   authErrorToHttp,
   forbidden,
   HttpError,
+  INVALID_REQUEST_MESSAGE,
   insertErrorToHttp,
+  invalidRequest,
+  isMemberIdConflict,
+  isWeakPassword,
   SAVE_FAILED_MESSAGE,
   serverError,
   unauthenticated,
+  uniqueViolationName,
+  valueInUseFromUniqueViolation,
 } from './errors.ts'
 
 const appError = (detail: unknown, message = 'Mensagem do banco.') => ({
@@ -49,6 +57,66 @@ describe('respostas com código da tabela do E2.04', () => {
   })
 })
 
+describe('códigos novos do E2.04', () => {
+  it('400 invalid_request, com a mensagem genérica ou a informada', () => {
+    expect([invalidRequest().status, invalidRequest().body()]).toEqual([
+      400, { error: INVALID_REQUEST_MESSAGE, code: 'invalid_request' },
+    ])
+    expect(invalidRequest('Informe a senha.').body()).toEqual({ error: 'Informe a senha.', code: 'invalid_request' })
+  })
+
+  it('409 attempt_already_used com o texto da DA-10', () => {
+    expect(ATTEMPT_ALREADY_USED_MESSAGE).toBe('Este cadastro já foi enviado. Confira na lista de Membros.')
+    expect([attemptAlreadyUsed().status, attemptAlreadyUsed().body()]).toEqual([
+      409, { error: ATTEMPT_ALREADY_USED_MESSAGE, code: 'attempt_already_used' },
+    ])
+  })
+})
+
+const uniqueViolation = (name: string) => ({
+  code: '23505',
+  message: `duplicate key value violates unique constraint "${name}"`,
+  details: 'Key (public.normalize_digits(cpf))=(39053344705) already exists.',
+})
+
+describe('23505 pelo nome do índice', () => {
+  it('lê só o nome do índice da mensagem', () => {
+    expect(uniqueViolationName(uniqueViolation('members_cpf_key'))).toBe('members_cpf_key')
+    expect(uniqueViolationName({ code: '23505' })).toBeNull()
+    expect(uniqueViolationName({ code: '23505', message: 'outra coisa' })).toBeNull()
+    expect(uniqueViolationName({ code: '23503', message: 'unique constraint "members_cpf_key"' })).toBeNull()
+  })
+
+  it('members_pkey é a tentativa repetida', () => {
+    expect(isMemberIdConflict(uniqueViolation('members_pkey'))).toBe(true)
+    expect(isMemberIdConflict(uniqueViolation('members_email_key'))).toBe(false)
+    expect(isMemberIdConflict({ code: '22023', message: 'unique constraint "members_pkey"' })).toBe(false)
+  })
+
+  it('índices de identificação → 409 value_in_use com o campo e o texto do trigger, sem o details', () => {
+    const cases: Array<[string, string, string]> = [
+      ['members_email_key', 'email', 'Este e-mail já está sendo usado por outro cadastro.'],
+      ['members_mobile_key', 'mobile', 'Este celular já está sendo usado por outro cadastro.'],
+      ['members_cpf_key', 'cpf', 'Este CPF já está sendo usado por outro cadastro.'],
+    ]
+    for (const [index, field, message] of cases) {
+      const http = valueInUseFromUniqueViolation(uniqueViolation(index))
+      expect([http?.status, http?.body()]).toEqual([409, { error: message, code: 'value_in_use', fields: [field] }])
+      expect(JSON.stringify(http?.body())).not.toContain('39053344705')
+      expect(insertErrorToHttp(uniqueViolation(index)).body()).toEqual(http?.body())
+    }
+    expect(valueInUseFromUniqueViolation(uniqueViolation('members_pkey'))).toBeNull()
+    expect(valueInUseFromUniqueViolation(uniqueViolation('members_auth_user_id_key'))).toBeNull()
+  })
+
+  it('outro índice → 409 genérico, só o nome do índice no log', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const http = insertErrorToHttp(uniqueViolation('members_auth_user_id_key'))
+    expect([http.status, http.body()]).toEqual([409, { error: SAVE_FAILED_MESSAGE }])
+    expect(JSON.stringify(log.mock.calls)).not.toContain('39053344705')
+  })
+})
+
 describe('appErrorToHttp', () => {
   it('deleted_member_chosen → 400 com o campo do DETAIL, sem o member_id do excluído', () => {
     const http = appErrorToHttp(appError(
@@ -79,6 +147,36 @@ describe('appErrorToHttp', () => {
   it('o field do DETAIL vence o campo implícito', () => {
     expect(appErrorToHttp(appError({ code: 'deleted_account_email', field: 'outro' }))?.body())
       .toMatchObject({ field: 'outro' })
+  })
+
+  it('value_in_use → 409 com os fields do DETAIL e a mensagem do primeiro', () => {
+    const http = appErrorToHttp(appError(
+      { code: 'value_in_use', fields: ['email', 'cpf'] },
+      'Este e-mail já está sendo usado por outro cadastro.',
+    ))
+    expect([http?.status, http?.body()]).toEqual([409, {
+      error: 'Este e-mail já está sendo usado por outro cadastro.', code: 'value_in_use', fields: ['email', 'cpf'],
+    }])
+  })
+
+  it('identifier_required → 400 com field e fields', () => {
+    const http = appErrorToHttp(appError({
+      code: 'identifier_required', field: 'identification', fields: ['mobile_whatsapp', 'email', 'cpf'],
+    }))
+    expect([http?.status, http?.body()]).toEqual([400, {
+      error: 'Mensagem do banco.', code: 'identifier_required', field: 'identification',
+      fields: ['mobile_whatsapp', 'email', 'cpf'],
+    }])
+  })
+
+  it('as recusas de regra do E2.04 → 400 com o campo', () => {
+    for (const [code, field] of [
+      ['name_invalid', 'name'], ['gender_required', 'gender'], ['email_placeholder', 'email'],
+      ['cpf_invalid', 'cpf'], ['mobile_invalid', 'mobile_whatsapp'], ['leader_cycle', 'leader_id'],
+    ]) {
+      expect(appErrorToHttp(appError({ code, field }))?.body()).toEqual({ error: 'Mensagem do banco.', code, field })
+      expect(appErrorToHttp(appError({ code, field }))?.status).toBe(400)
+    }
   })
 
   it('qualquer outro app_error → 400 com o code, e o field ou os fields quando houver', () => {
@@ -130,10 +228,10 @@ describe('insertErrorToHttp', () => {
     ])
   })
 
-  it('23505, 23503, 23514 e formatos: as mensagens de antes, sem code', () => {
-    expect(insertErrorToHttp({ code: '23505', message: 'duplicate key value violates unique constraint "members_email_key"' }).body())
-      .toEqual({ error: 'Já existe um membro com este e-mail, CPF ou celular.' })
-    expect(insertErrorToHttp({ code: '23505' }).status).toBe(409)
+  it('23505 sem índice, 23503, 23514 e formatos: mensagens genéricas, sem code', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect([insertErrorToHttp({ code: '23505' }).status, insertErrorToHttp({ code: '23505' }).body()])
+      .toEqual([409, { error: SAVE_FAILED_MESSAGE }])
     expect(insertErrorToHttp({ code: '23503' }).body()).toEqual({ error: 'Líder, cônjuge ou função informados não existem.' })
     expect(insertErrorToHttp({ code: '23514' }).body()).toEqual({ error: 'Algum campo tem um valor inválido.' })
     for (const code of ['22P02', '22007', '22008']) {
@@ -152,15 +250,25 @@ describe('insertErrorToHttp', () => {
 })
 
 describe('authErrorToHttp', () => {
-  it('mantém as respostas de antes', () => {
-    expect(authErrorToHttp({ code: 'email_exists' }).body()).toEqual({ error: 'Já existe uma conta de acesso com este e-mail.' })
-    expect(authErrorToHttp({ code: 'user_already_exists' }).status).toBe(409)
-    expect(authErrorToHttp({ code: 'weak_password' }).body()).toEqual({ error: 'A senha não atende aos requisitos mínimos.' })
-    expect(authErrorToHttp({ code: 'email_address_invalid' }).body()).toEqual({ error: 'E-mail inválido.' })
-    expect(authErrorToHttp({ code: 'validation_failed' }).status).toBe(400)
+  it('senha fraca → 400 weak_password no campo password', () => {
+    expect(isWeakPassword({ code: 'weak_password' })).toBe(true)
+    expect(isWeakPassword({ code: 'email_exists' })).toBe(false)
+    const http = authErrorToHttp({ code: 'weak_password' })
+    expect([http.status, http.body()]).toEqual([400, {
+      error: 'A senha não atende aos requisitos mínimos.', code: 'weak_password', field: 'password',
+    }])
+  })
+
+  it('o resto é do servidor (e-mail e id da conta são gerados pela função) → 500, sem a mensagem do Auth no log', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(authErrorToHttp({ code: 'unexpected_failure', status: 500, message: 'ana@exemplo.com' }).body())
-      .toEqual({ error: 'Não foi possível criar o acesso.' })
+    for (const error of [
+      { code: 'email_exists', status: 422 },
+      { code: 'validation_failed', status: 400 },
+      { code: 'unexpected_failure', status: 500, message: 'ana@exemplo.com' },
+      {},
+    ]) {
+      expect([authErrorToHttp(error).status, authErrorToHttp(error).body()]).toEqual([500, serverError().body()])
+    }
     expect(JSON.stringify(log.mock.calls)).not.toContain('ana@exemplo.com')
   })
 })

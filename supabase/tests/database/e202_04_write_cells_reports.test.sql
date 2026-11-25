@@ -146,27 +146,30 @@ SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid'
   FROM generate_series(1, 19) n
 UNION ALL SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid' FROM unnest(ARRAY[30, 32, 34]) n;
 
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, auth_user_id, role_id, is_active) VALUES
- (pg_temp.m(1),'Samuel','M',true,NULL,pg_temp.u(1),pg_temp.role('Líder'),true),
- (pg_temp.m(2),'Magda','F',true,NULL,pg_temp.u(2),pg_temp.role('Líder'),true),
- (pg_temp.m(3),'Pedro','M',false,pg_temp.m(1),pg_temp.u(3),pg_temp.role('Líder'),true),
- (pg_temp.m(4),'Paula','F',false,pg_temp.m(2),pg_temp.u(4),pg_temp.role('Líder'),true),
- (pg_temp.m(5),'Tiago','M',false,pg_temp.m(1),pg_temp.u(5),NULL,true),
- (pg_temp.m(6),'Tania','F',false,pg_temp.m(2),pg_temp.u(6),NULL,true),
- (pg_temp.m(7),'Andre','M',false,pg_temp.m(3),pg_temp.u(7),pg_temp.role('Líder'),true),
- (pg_temp.m(8),'Beatriz','F',false,pg_temp.m(6),pg_temp.u(8),pg_temp.role('Membro'),true),
- (pg_temp.m(9),'Caio','M',false,pg_temp.m(7),pg_temp.u(9),pg_temp.role('Membro'),true),
- (pg_temp.m(10),'Fabio','M',false,pg_temp.m(7),pg_temp.u(10),pg_temp.role('Membro'),false),
- (pg_temp.m(11),'Gabriel','M',false,pg_temp.m(10),pg_temp.u(11),NULL,true),
- (pg_temp.m(12),'Carla','F',false,pg_temp.m(4),pg_temp.u(12),pg_temp.role('Membro'),true),
- (pg_temp.m(13),'Debora','F',false,pg_temp.m(8),pg_temp.u(13),NULL,true),
- (pg_temp.m(14),'Diego','M',false,pg_temp.m(5),pg_temp.u(14),pg_temp.role('Líder'),true),
- (pg_temp.m(15),'Hugo','M',false,pg_temp.m(5),pg_temp.u(15),NULL,true),
- (pg_temp.m(16),'Rita','F',false,pg_temp.m(6),pg_temp.u(16),pg_temp.role('Administrador'),true),
- (pg_temp.m(17),'Ester','F',false,NULL,pg_temp.u(17),pg_temp.role('Membro'),true),
- (pg_temp.m(18),'Lucia','F',false,pg_temp.m(17),pg_temp.u(18),NULL,true),
- (pg_temp.m(20),'D3t','F',false,pg_temp.m(13),NULL,NULL,true),
- (pg_temp.m(21),'D3h','F',false,pg_temp.m(13),NULL,NULL,true);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192024' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+ (pg_temp.m(1),'Samuel Massa','M',true,NULL, false,pg_temp.u(1),pg_temp.role('Líder'),true, pg_temp.mob(1)),
+ (pg_temp.m(2),'Magda Massa','F',true,NULL, false,pg_temp.u(2),pg_temp.role('Líder'),true, pg_temp.mob(2)),
+ (pg_temp.m(3),'Pedro Massa','M',false,pg_temp.m(1), true,pg_temp.u(3),pg_temp.role('Líder'),true, pg_temp.mob(3)),
+ (pg_temp.m(4),'Paula Massa','F',false,pg_temp.m(2), true,pg_temp.u(4),pg_temp.role('Líder'),true, pg_temp.mob(4)),
+ (pg_temp.m(5),'Tiago Massa','M',false,pg_temp.m(1), true,pg_temp.u(5),NULL,true, pg_temp.mob(5)),
+ (pg_temp.m(6),'Tania Massa','F',false,pg_temp.m(2), true,pg_temp.u(6),NULL,true, pg_temp.mob(6)),
+ (pg_temp.m(7),'Andre Massa','M',false,pg_temp.m(3), true,pg_temp.u(7),pg_temp.role('Líder'),true, pg_temp.mob(7)),
+ (pg_temp.m(8),'Beatriz Massa','F',false,pg_temp.m(6), true,pg_temp.u(8),pg_temp.role('Membro'),true, pg_temp.mob(8)),
+ (pg_temp.m(9),'Caio Massa','M',false,pg_temp.m(7), true,pg_temp.u(9),pg_temp.role('Membro'),true, pg_temp.mob(9)),
+ (pg_temp.m(10),'Fabio Massa','M',false,pg_temp.m(7), true,pg_temp.u(10),pg_temp.role('Membro'),false, pg_temp.mob(10)),
+ (pg_temp.m(11),'Gabriel Massa','M',false,pg_temp.m(10), true,pg_temp.u(11),NULL,true, pg_temp.mob(11)),
+ (pg_temp.m(12),'Carla Massa','F',false,pg_temp.m(4), true,pg_temp.u(12),pg_temp.role('Membro'),true, pg_temp.mob(12)),
+ (pg_temp.m(13),'Debora Massa','F',false,pg_temp.m(8), true,pg_temp.u(13),NULL,true, pg_temp.mob(13)),
+ (pg_temp.m(14),'Diego Massa','M',false,pg_temp.m(5), true,pg_temp.u(14),pg_temp.role('Líder'),true, pg_temp.mob(14)),
+ (pg_temp.m(15),'Hugo Massa','M',false,pg_temp.m(5), true,pg_temp.u(15),NULL,true, pg_temp.mob(15)),
+ (pg_temp.m(16),'Rita Massa','F',false,pg_temp.m(6), true,pg_temp.u(16),pg_temp.role('Administrador'),true, pg_temp.mob(16)),
+ (pg_temp.m(17),'Ester Massa','F',false,NULL, false,pg_temp.u(17),pg_temp.role('Membro'),true, pg_temp.mob(17)),
+ (pg_temp.m(18),'Lucia Massa','F',false,pg_temp.m(17), true,pg_temp.u(18),NULL,true, pg_temp.mob(18)),
+ (pg_temp.m(20),'D3t Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(20)),
+ (pg_temp.m(21),'D3h Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(21));
 UPDATE public.members SET spouse_id = pg_temp.m(2) WHERE id = pg_temp.m(1);
 UPDATE public.members SET spouse_id = pg_temp.m(4) WHERE id = pg_temp.m(3);
 UPDATE public.members SET spouse_id = pg_temp.m(6) WHERE id = pg_temp.m(5);
@@ -183,7 +186,9 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, a
  (pg_temp.m(32),'Assim1','M',false,NULL,pg_temp.m(33),pg_temp.u(32),pg_temp.role('Membro'),true,false,0),
  (pg_temp.m(33),'Assim2','F',false,NULL,NULL,NULL,NULL,true,false,0),
  (pg_temp.m(35),'Isolado','M',false,NULL,NULL,NULL,NULL,true,false,0),
- (pg_temp.m(34),'PastorComLider','M',true,pg_temp.m(35),NULL,pg_temp.u(34),pg_temp.role('Líder'),true,true,0);
+-- E2.04 (RN-11): pastor com líder deixou de existir (members_leadership_check vale
+-- também em replica). PastorComLider fica pastor sem líder, ao lado de Isolado.
+ (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false,0);
 -- Relatórios da semana passada (a semana atual fica livre para os lançamentos).
 INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
  (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1'),
@@ -403,11 +408,11 @@ SELECT isnt(v[10], '00000', 'RN-09: Pedro move R2 para C3, que ele não vê: rec
 -- 4. Participantes: aviso (member_visible), retirar, incluir e o excluído (RN-09, DA-5).
 -- ===========================================================================
 SELECT is(pg_temp.val(3, format($q$SELECT string_agg(member_name || '=' || member_visible, ',' ORDER BY member_name) FROM public.cell_report_participants_view WHERE report_id = %L$q$, pg_temp.r(2))),
-  'Diego=false,Hugo=false', 'RN-09: o aviso da edição de R2 para Pedro: Diego e Hugo não são visíveis (member_visible = false)');
+  'Diego Massa=false,Hugo Massa=false', 'RN-09: o aviso da edição de R2 para Pedro: Diego e Hugo não são visíveis (member_visible = false)');
 SELECT is(pg_temp.val(14, format($q$SELECT string_agg(member_name || '=' || member_visible, ',' ORDER BY member_name) FROM public.cell_report_participants_view WHERE report_id = %L$q$, pg_temp.r(2))),
-  'Diego=true,Hugo=true', 'RN-09: Diego vê os dois participantes de R2');
+  'Diego Massa=true,Hugo Massa=true', 'RN-09: Diego vê os dois participantes de R2');
 SELECT is(pg_temp.val(3, format($q$SELECT string_agg(member_name || '=' || member_visible, ',' ORDER BY member_name) FROM public.cell_report_participants_view WHERE report_id = %L$q$, pg_temp.r(1))),
-  'Caio=true', 'RN-09: em R1, Caio é visível para Pedro');
+  'Caio Massa=true', 'RN-09: em R1, Caio é visível para Pedro');
 
 SELECT pg_temp.run('part',
   '',
@@ -422,12 +427,12 @@ SELECT pg_temp.run('part',
     /* 8 */ pg_temp.pc(16, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L]::uuid[])', pg_temp.r(2), pg_temp.m(14), pg_temp.m(15), pg_temp.m(1)))
   ]);
 SELECT is(v[1], '00000', 'RN-09: Pedro retira Hugo de R2 (retirar não é escolher): aceito') FROM sb WHERE k = 'part';
-SELECT is(v[2], 'Diego', 'RN-09: e só Hugo sai') FROM sb WHERE k = 'part';
+SELECT is(v[2], 'Diego Massa', 'RN-09: e só Hugo sai') FROM sb WHERE k = 'part';
 SELECT is(v[3], 'person_not_visible', 'RN-09: Pedro tenta incluir Hugo de novo pela API: recusado') FROM sb WHERE k = 'part';
 SELECT is(v[4], 'Você só pode escolher pessoas que você vê.', 'RN-09: com a mensagem do spec') FROM sb WHERE k = 'part';
-SELECT is(v[5], 'Diego', 'RN-09: e Hugo continua fora') FROM sb WHERE k = 'part';
+SELECT is(v[5], 'Diego Massa', 'RN-09: e Hugo continua fora') FROM sb WHERE k = 'part';
 SELECT is(v[6], '00000', 'RN-09: Diego, que vê Hugo, o inclui de novo em R2') FROM sb WHERE k = 'part';
-SELECT is(v[7], 'Diego,Hugo', 'RN-09: e Hugo volta ao relatório') FROM sb WHERE k = 'part';
+SELECT is(v[7], 'Diego Massa,Hugo Massa', 'RN-09: e Hugo volta ao relatório') FROM sb WHERE k = 'part';
 SELECT is(v[8], '00000', 'RN-09: Rita escolhe qualquer pessoa (inclui Samuel)') FROM sb WHERE k = 'part';
 
 -- Gabriel excluído e participante de R1: ninguém o retira (RN-13 do E2.01).

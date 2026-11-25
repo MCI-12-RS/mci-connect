@@ -139,7 +139,7 @@ const Members = () => {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm break-words">{m.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {m.instagram || (canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
+                  {m.instagram || (canSeeSensitive(m) && m.email ? m.email : canSeeSensitive(m) ? formatPhone(m.mobile_whatsapp) || "—" : "—")}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -278,7 +278,7 @@ const Members = () => {
                           <div>
                             <span className="font-medium">{m.name}</span>
                             {m.instagram && <p className="text-xs text-primary font-medium">{m.instagram}</p>}
-                            {!m.instagram && canSeeSensitive(m) && m.email && !m.email.endsWith("@mci12fakemail.com") && (
+                            {!m.instagram && canSeeSensitive(m) && m.email && (
                               <p className="text-xs text-muted-foreground">{m.email}</p>
                             )}
                           </div>

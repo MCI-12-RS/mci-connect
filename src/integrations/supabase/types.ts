@@ -380,7 +380,7 @@ export type Database = {
           email: string | null
           female_cells: number | null
           g12_level: number
-          gender: string | null
+          gender: string
           has_leadership: boolean
           id: string
           instagram: string | null
@@ -418,8 +418,8 @@ export type Database = {
           email?: string | null
           female_cells?: number | null
           g12_level?: number
-          gender?: string | null
-          has_leadership?: boolean
+          gender: string
+          has_leadership: boolean
           id?: string
           instagram?: string | null
           is_active?: boolean
@@ -456,7 +456,7 @@ export type Database = {
           email?: string | null
           female_cells?: number | null
           g12_level?: number
-          gender?: string | null
+          gender?: string
           has_leadership?: boolean
           id?: string
           instagram?: string | null

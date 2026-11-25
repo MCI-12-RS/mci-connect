@@ -87,6 +87,25 @@ async function removeAccounts() {
   }
 }
 
+/**
+ * Apaga o cadastro (e a conta) que um teste criou com "Cadastrar mesmo assim". Desde o E2.04 o e-mail, o
+ * celular e o CPF de um cadastro ativo são únicos (RN-09): o que ele guarda deixaria de ser "dado de
+ * excluído" para os testes seguintes.
+ */
+async function releaseCreated(name: string) {
+  const accountIds = sql(env, `SELECT auth_user_id FROM public.members WHERE name = ${lit(name)} AND auth_user_id IS NOT NULL`)
+    .split("\n")
+    .filter(Boolean);
+  sql(
+    env,
+    `BEGIN; SET LOCAL session_replication_role = replica;
+     DELETE FROM public.events WHERE entity_label = ${lit(name)};
+     DELETE FROM public.members WHERE name = ${lit(name)};
+     COMMIT;`,
+  );
+  for (const userId of accountIds) await deleteAuthUser(env, userId);
+}
+
 const permissions = (roleNumber: number, list: readonly string[]) =>
   `SELECT ${lit(role(roleNumber))}::uuid, p::public.permission_action FROM unnest(ARRAY[${list.map(lit).join(", ")}]) p`;
 
@@ -178,6 +197,11 @@ async function fillNewMember(page: Page, data: NewMember) {
   const dialog = page.getByRole("dialog", { name: "Novo membro" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Nome *").fill(data.name);
+  // E2.04 (RN-03, RN-12): o sexo é obrigatório, e quem vê a igreja toda sem escolher líder marca "É Pastor(a)?".
+  await dialog.getByLabel("Gênero").click();
+  await page.getByRole("option", { name: "Masculino" }).click();
+  const pastor = dialog.getByRole("switch", { name: "É Pastor(a)?" });
+  if ((await pastor.count()) > 0) await pastor.click();
   if (data.email) await dialog.getByLabel("E-mail").fill(data.email);
   if (data.mobile) await dialog.getByLabel("Celular / WhatsApp").fill(data.mobile);
   if (data.cpf) await dialog.getByLabel("CPF").fill(data.cpf);
@@ -250,6 +274,7 @@ test.describe("RN-18 / UX-31 (AD)", () => {
     await expect(toast(page, "Membro criado com sucesso")).toBeVisible();
     expect(membersNamed(novo)).toBe(1);
     expect(isDeleted(member(5)) + isDeleted(member(6)), "os excluídos continuam excluídos").toBe("truetrue");
+    await releaseCreated(novo);
   });
 
   test("UX-31 no celular (360×800): o aviso cabe na tela, com os botões à vista e alvos de toque de 44 px", async ({ page }) => {
@@ -287,7 +312,8 @@ test.describe("RN-18 / UX-32 (AD): restaurar pelo aviso", () => {
     await expect(status).toContainText(`Cadastro de ${who("Dora Reis")} restaurado. Confira os dados e, se precisar, altere e salve.`);
     await expect(status).toBeFocused();
     await expect(edit.getByLabel("Nome *")).toHaveValue(who("Dora Reis"));
-    await expect(edit.getByLabel("Celular / WhatsApp")).toHaveValue(DORA_MOBILE);
+    // O banco guarda só os dígitos (RN-06), e a tela atual mostra o valor gravado.
+    await expect(edit.getByLabel("Celular / WhatsApp")).toHaveValue("51977770501");
     await expect(edit.getByLabel("CPF")).toHaveValue("");
     await expect(edit.getByRole("button", { name: "Salvar", exact: true })).toBeVisible();
 
@@ -410,6 +436,7 @@ test.describe("RN-18 / UX-34: cadastrar mesmo assim", () => {
     await expect.poll(() => replies.map((r) => r.status)).toEqual([409, 200]);
     expect(membersNamed(novo)).toBe(1);
     expect(isDeleted(member(7)), "Marta continua excluída").toBe("true");
+    await releaseCreated(novo);
   });
 
   test("Dado o celular de Marta excluída, quando CM só digita o celular e passa para o próximo campo, então nenhum aviso aparece e nada vai ao servidor (a conferência é ao salvar)", async ({ page }) => {

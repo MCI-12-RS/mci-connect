@@ -369,12 +369,12 @@ SELECT ok((SELECT prosecdef FROM pg_proc WHERE oid = 'public.refresh_member_stat
 -- 9. Violações diretas como postgres (critério de pronto 2) — 14
 -- ===========================================================================
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.members (id, name, gender, is_pastor, g12_level, leader_id, spouse_id, is_active) VALUES
-  (pg_temp.m(1), 'E201 Est Líder',    'M', false, 1, NULL,         NULL,         true),
-  (pg_temp.m(2), 'E201 Est Discípulo','M', false, 2, pg_temp.m(1), NULL,         true),
-  (pg_temp.m(3), 'E201 Est Marido',   'M', false, 0, NULL,         pg_temp.m(4), true),
-  (pg_temp.m(4), 'E201 Est Esposa',   'F', false, 0, NULL,         pg_temp.m(3), true),
-  (pg_temp.m(5), 'E201 Est Solo',     'M', false, 0, NULL,         NULL,         true);
+INSERT INTO public.members (id, name, gender, is_pastor, g12_level, leader_id, has_leadership, spouse_id, is_active) VALUES
+  (pg_temp.m(1), 'E201 Est Líder',    'M', false, 1, NULL, false,         NULL,         true),
+  (pg_temp.m(2), 'E201 Est Discípulo','M', false, 2, pg_temp.m(1), true, NULL,         true),
+  (pg_temp.m(3), 'E201 Est Marido',   'M', false, 0, NULL, false,         pg_temp.m(4), true),
+  (pg_temp.m(4), 'E201 Est Esposa',   'F', false, 0, NULL, false,         pg_temp.m(3), true),
+  (pg_temp.m(5), 'E201 Est Solo',     'M', false, 0, NULL, false,         NULL,         true);
 INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time) VALUES
   (pg_temp.c(1), pg_temp.m(1), 'Evangelística', 'Quarta', '20:00'),
   (pg_temp.c(2), pg_temp.m(5), 'Evangelística', 'Quinta', '20:00');

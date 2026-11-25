@@ -48,10 +48,11 @@ $$ SELECT count(*)::int FROM public.events WHERE actor_user_id = pg_temp.u(_n) A
 INSERT INTO auth.users (id, email, encrypted_password)
 SELECT pg_temp.u(n), 'e104-lae-' || n || '@teste.invalid', extensions.crypt('Senha#' || n, extensions.gen_salt('bf', 4))
   FROM generate_series(1, 3) n;
-INSERT INTO public.members (id, name, gender, auth_user_id) VALUES
-  ('c1040400-0000-0000-0000-000000000001', 'Ana LAE', 'F', pg_temp.u(1)),
-  ('c1040400-0000-0000-0000-000000000002', 'Beto LAE', 'M', pg_temp.u(2)),
-  ('c1040400-0000-0000-0000-000000000003', 'Cris LAE', 'F', pg_temp.u(3));
+-- E2.04 (DT-23): sem liderança de propósito e com um identificador real.
+INSERT INTO public.members (id, name, gender, auth_user_id, has_leadership, mobile_whatsapp) VALUES
+  ('c1040400-0000-0000-0000-000000000001', 'Ana LAE', 'F', pg_temp.u(1), false, '51910400401'),
+  ('c1040400-0000-0000-0000-000000000002', 'Beto LAE', 'M', pg_temp.u(2), false, '51910400402'),
+  ('c1040400-0000-0000-0000-000000000003', 'Cris LAE', 'F', pg_temp.u(3), false, '51910400403');
 UPDATE public.members SET deleted_at = now() WHERE id = 'c1040400-0000-0000-0000-000000000003';
 
 -- Estrutura

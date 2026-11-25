@@ -19,7 +19,7 @@ import { toMemberWritePayload, type MemberRow } from "@/lib/members/fields";
 import DeletedMatchesDialog, { type RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { memberRestoreNotices } from "@/lib/deletion/restore";
-import { readFunctionErrorBody, isJsonObject } from "@/lib/errors";
+import { readFunctionErrorBody, isJsonObject, isNetworkError } from "@/lib/errors";
 import { requestSessionCheck } from "@/lib/auth/session-check";
 import { memberSearchEmptyLabel } from "@/lib/access/access";
 import { GENDER_LABELS, genderLabel } from "@/lib/members/gender";
@@ -30,6 +30,7 @@ import {
   leadershipValues,
   memberRefusalFromCreate,
   memberRefusalFromError,
+  memberSaveFailureMessage,
   ministryFieldsView,
   needsRoleOptions,
   roleFieldView,
@@ -62,15 +63,15 @@ type SaveResult =
   | { kind: "gone" }
   | { kind: "deletedMatches"; warning: DeletedMatchesWarning }
   /** Recusa de regra ou de permissão da `create-user-admin` (T11). */
-  | { kind: "refused"; refusal: MemberFormRefusal };
+  | { kind: "refused"; refusal: MemberFormRefusal }
+  /** Falha da `create-user-admin` sem regra (`unauthenticated`, `server_error`…): a mensagem pronta dela, no toast. */
+  | { kind: "failed"; message: string };
 
 interface SaveInput {
   data: MemberInsert;
   /** "Cadastrar mesmo assim" (RN-18): segue apesar dos cadastros excluídos com os mesmos dados. */
   confirmDeletedMatches: boolean;
 }
-
-const FAKE_EMAIL_DOMAIN = "@mci12fakemail.com";
 
 interface MemberFormProps {
   member: Member | null;
@@ -272,6 +273,10 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
   }, [emailError]);
 
   const [password, setPassword] = useState("");
+  // Identifica o cadastro na `create-user-admin` (E2.04, DT-11): um por abertura
+  // do formulário, o mesmo em cada nova tentativa e no "Cadastrar mesmo assim".
+  // A repetição devolve o cadastro já criado, sem duplicar.
+  const [attemptId] = useState(() => crypto.randomUUID());
   // O cadastro foi excluído (ou saiu do escopo) enquanto era editado.
   const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
   const deletedAlertRef = useRef<HTMLDivElement>(null);
@@ -325,33 +330,13 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
 
   const mutation = useMutation({
     mutationFn: async ({ data, confirmDeletedMatches }: SaveInput): Promise<SaveResult> => {
-      // E-mail em branco: na edição, mantém o atual (o fictício, se for o caso);
-      // no cadastro, gera um fictício, porque o Auth exige e-mail.
-      let email: string | undefined = data.email?.trim() || undefined;
-
-      if (!email) {
-        if (isEditing && member?.email?.endsWith(FAKE_EMAIL_DOMAIN)) {
-          email = member.email;
-        } else if (!isEditing) {
-          const normalizedName = (data.name || "membro")
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .trim()
-            .replace(/[^a-z0-9]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_|_$/g, "");
-            
-          const hash = Math.random().toString(36).substring(2, 8);
-          email = `${normalizedName}_${hash}${FAKE_EMAIL_DOMAIN}`;
-        }
-      }
-
       // Só os campos que o usuário vê e pode editar (lista branca). O banco
-      // também ignora os dados sensíveis enviados por quem não os vê.
+      // também ignora os dados sensíveis enviados por quem não os vê. Texto
+      // vazio vai como `null`, inclusive o e-mail: o cadastro guarda só o
+      // e-mail real (E2.04, DA-1 e RN-05), e o da conta é gerado pelo servidor.
       const leadership = canEditMinistry ? leadershipValues(ministryView, data) : {};
       const payload = toMemberWritePayload(
-        { ...data, ...leadership, email, role_id: roleValue },
+        { ...data, ...leadership, role_id: roleValue },
         { sensitiveVisible: canViewSensitive, canEditMinistry, includeRole: roleView.kind === "select" },
       );
 
@@ -359,7 +344,7 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         const finalPassword = password || "123456";
         const { data: result, error } = await supabase.functions.invoke('create-user-admin', {
           body: {
-            email: payload.email,
+            attemptId,
             password: finalPassword,
             memberData: payload,
             confirmDeletedMatches,
@@ -376,9 +361,12 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
           }
           const formRefusal = refusal ? memberRefusalFromCreate(refusal) : null;
           if (formRefusal) return { kind: "refused", refusal: formRefusal };
-          throw new Error(refusal?.message ?? error.message);
+          if (refusal) return { kind: "failed", message: refusal.message };
+          // Sem corpo legível (queda de conexão, resposta fora do formato): o texto genérico.
+          throw error;
         }
-        if (isJsonObject(result) && typeof result.error === "string") throw new Error(result.error);
+        if (isJsonObject(result) && typeof result.error === "string") return { kind: "failed", message: result.error };
+        // `replayed: true` (a mesma tentativa repetida) também é sucesso: o cadastro existe.
         return { kind: "saved" };
       }
 
@@ -404,6 +392,10 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
         showRefusal(result.refusal);
         return;
       }
+      if (result.kind === "failed") {
+        toast({ variant: "destructive", title: "Erro", description: result.message });
+        return;
+      }
       if (result.kind === "gone") {
         setDeletedWhileEditing(true);
         // "0 linhas" também é o que um membro excluído recebe (RN-14): confere a própria sessão.
@@ -417,10 +409,11 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
       toast({ title: isEditing ? "Membro atualizado com sucesso" : "Membro criado com sucesso" });
       onClose();
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       const refusal = memberRefusalFromError(error);
       if (refusal) showRefusal(refusal);
-      else toast({ variant: "destructive", title: "Erro", description: error.message });
+      // Nunca o texto técnico (40P01, rede, erro inesperado): só "tente de novo".
+      else toast({ variant: "destructive", title: "Erro", description: memberSaveFailureMessage(isNetworkError(error)) });
     },
   });
 
@@ -487,8 +480,6 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
     update(field, maskFn(value));
   };
 
-  const isFakeEmail = form.email?.endsWith(FAKE_EMAIL_DOMAIN);
-
   /** "Fechar" do aviso de cadastro excluído: volta para a lista, recarregada. */
   const closeDeleted = () => {
     queryClient.invalidateQueries({ queryKey: ["members"] });
@@ -545,16 +536,16 @@ const MemberForm = ({ member, onClose, defineLeader = false, onRestored, restore
           {canViewSensitive && (
             <div className="space-y-2">
               <Label htmlFor="email">
-                E-mail {isFakeEmail && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
+                E-mail {isEditing && !form.email && <span className="text-xs text-muted-foreground font-normal ml-2">(Não informado)</span>}
               </Label>
               <Input
                 ref={emailInputRef}
                 id="email"
                 readOnly={readOnly}
                 type="email"
-                value={isFakeEmail ? "" : (form.email || "")}
+                value={form.email || ""}
                 onChange={(e) => update("email", e.target.value)}
-                placeholder={isFakeEmail && !readOnly ? "Adicionar e-mail..." : ""}
+                placeholder={isEditing && !form.email && !readOnly ? "Adicionar e-mail..." : ""}
                 aria-invalid={emailError ? true : undefined}
                 aria-describedby={emailError ? "email-error" : undefined}
                 className={emailError ? "border-destructive" : undefined}

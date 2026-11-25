@@ -5,6 +5,7 @@ import {
   leadershipValues,
   memberRefusalFromCreate,
   memberRefusalFromError,
+  memberSaveFailureMessage,
   ministryFieldsView,
   needsRoleOptions,
   parseRoleOptions,
@@ -273,6 +274,28 @@ describe("recusas do servidor (T11, UX-22)", () => {
       field: null,
       rereadAccess: true,
     });
+  });
+
+  it("23505 cru do índice único (E2.04): a mensagem de value_in_use, nunca o texto técnico", () => {
+    const refusal = memberRefusalFromError({
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "members_mobile_key"',
+      details: "Key (mobile_whatsapp)=(51988887777) already exists.",
+      hint: null,
+    });
+    expect(refusal).toEqual({ message: "Este celular já está sendo usado por outro cadastro.", field: null, rereadAccess: false });
+  });
+
+  it("regra do E2.04 pelo trigger: a mensagem pronta do banco", () => {
+    const msg = "Informe o e-mail, o celular ou o CPF. A pessoa usa um deles para entrar no sistema.";
+    expect(
+      memberRefusalFromError(appError({ code: "identifier_required", field: "identification", fields: ["mobile_whatsapp", "email", "cpf"] }, msg)),
+    ).toEqual({ message: msg, field: null, rereadAccess: false });
+  });
+
+  it("falha sem recusa: só 'tente de novo', com o aviso de conexão na queda de rede", () => {
+    expect(memberSaveFailureMessage(false)).toBe("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(memberSaveFailureMessage(true)).toBe("Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.");
   });
 
   it("erro técnico ou de rede: null (a tela usa o aviso genérico)", () => {

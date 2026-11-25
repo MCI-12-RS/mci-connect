@@ -1,11 +1,14 @@
 // Vitest (o E2.04 previa Deno; o Deno não é usado nesta máquina).
 import { describe, expect, it } from 'vitest'
+import { HttpError } from './errors.ts'
 import {
   DELETED_ACCOUNT_EMAIL_MESSAGE,
   DELETED_MATCHES_MESSAGE,
   type DeletedMemberMatch,
   deletedMatchesParams,
+  deletedAccountEmailWithMatches,
   deletedMatchesRefusal,
+  isDeletedAccountEmailRefusal,
   isPlaceholderEmail,
   toDeletedMatches,
 } from './deleted-matches.ts'
@@ -109,5 +112,50 @@ describe('toDeletedMatches', () => {
     expect(() => toDeletedMatches({})).toThrow()
     expect(() => toDeletedMatches([{ matched_fields: ['cpf'] }])).toThrow()
     expect(() => toDeletedMatches([{ ...hidden(['cpf']), is_account_email: 'false' }])).toThrow()
+  })
+})
+
+describe('deletedAccountEmailWithMatches (recusa do ensaio ou do INSERT, E2.04)', () => {
+  // A recusa como appErrorToHttp a monta a partir do trigger: só `field`.
+  const dbRefusal = () => new HttpError(409, DELETED_ACCOUNT_EMAIL_MESSAGE, 'deleted_account_email', { field: 'email' })
+
+  it('reconhece só a recusa deleted_account_email', () => {
+    expect(isDeletedAccountEmailRefusal(dbRefusal())).toBe(true)
+    expect(isDeletedAccountEmailRefusal(new HttpError(409, 'x', 'value_in_use', { fields: ['email'] }))).toBe(false)
+    expect(isDeletedAccountEmailRefusal(new HttpError(400, 'x'))).toBe(false)
+  })
+
+  it('com a linha is_account_email: 409 deleted_account_email com field e matches, como no E2.01', () => {
+    const matches = [visible(['email'], true), hidden(['cpf'])]
+    const refusal = deletedAccountEmailWithMatches(dbRefusal(), matches)
+    expect(refusal.status).toBe(409)
+    expect(refusal.body()).toEqual({
+      error: DELETED_ACCOUNT_EMAIL_MESSAGE,
+      code: 'deleted_account_email',
+      field: 'email',
+      matches,
+    })
+  })
+
+  it('para quem não vê o excluído, matches vêm como a RPC devolveu (sem nome nem id)', () => {
+    const matches = [hidden(['email'], true)]
+    expect(deletedAccountEmailWithMatches(dbRefusal(), matches).body().matches).toBe(matches)
+  })
+
+  it('sem a linha is_account_email (corrida): a recusa do banco, só com field', () => {
+    const refusal = dbRefusal()
+    expect(deletedAccountEmailWithMatches(refusal, [])).toBe(refusal)
+    expect(deletedAccountEmailWithMatches(refusal, [hidden(['email']), visible(['mobile'])])).toBe(refusal)
+    expect(refusal.body()).toEqual({ error: DELETED_ACCOUNT_EMAIL_MESSAGE, code: 'deleted_account_email', field: 'email' })
+  })
+
+  it('consulta que falhou (null): a recusa do banco, só com field', () => {
+    const refusal = dbRefusal()
+    expect(deletedAccountEmailWithMatches(refusal, null)).toBe(refusal)
+  })
+
+  it('outra recusa segue como está, mesmo com correspondências', () => {
+    const other = new HttpError(409, 'Este CPF já está sendo usado por outro cadastro.', 'value_in_use', { fields: ['cpf'] })
+    expect(deletedAccountEmailWithMatches(other, [visible(['email'], true)])).toBe(other)
   })
 })
