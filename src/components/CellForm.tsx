@@ -236,6 +236,8 @@ const CellForm = ({ cell, onClose, onPendingChange }: CellFormProps) => {
       toast({ variant: "destructive", title: "Erro", description: "O Líder é obrigatório." });
       return;
     }
+    // Já no envio, e não só no efeito: o host para de aceitar o fechamento antes do próximo quadro.
+    onPendingChange?.(true);
     mutation.mutate(form);
   };
 
