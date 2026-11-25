@@ -41,7 +41,7 @@ function credentials(emailVar: string, passwordVar: string) {
 async function login(page: Page, { email, password }: { email: string; password: string }) {
   await page.goto("/login");
   await page.getByLabel("Identificação").fill(email);
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/\/$/);
 }

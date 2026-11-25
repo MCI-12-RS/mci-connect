@@ -12,6 +12,6 @@ test("a tela de login mostra os campos de identificação e senha", async ({ pag
   await page.goto("/login");
   await expect(page.getByLabel("Identificação")).toBeVisible();
   await expect(page.getByPlaceholder("CPF, celular ou e-mail")).toBeVisible();
-  await expect(page.getByLabel("Senha")).toBeVisible();
+  await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
   await expect(page.locator('button[type="submit"]')).toBeEnabled();
 });

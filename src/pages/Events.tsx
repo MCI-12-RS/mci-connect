@@ -18,35 +18,24 @@ import {
 } from "@/components/ui/sheet";
 import { Navigate } from "react-router-dom";
 import { formatDateTimeInBrasilia } from "@/lib/format";
+import { AUTH_ACTION_LABELS, authEventDetailFields, authEventSecondLine, isAuthEvent } from "@/lib/audit/auth-events";
+import type { Enums, Tables } from "@/integrations/supabase/types";
 
-type EventRow = {
-  id: string;
-  occurred_at: string;
-  actor_user_id: string | null;
-  actor_label: string | null;
-  action: string;
-  entity: string;
-  entity_id: string | null;
-  entity_label: string | null;
-  description: string;
-  changed_fields: string[] | null;
-  metadata: any;
-  success: boolean;
-  error_reason: string | null;
-};
+type EventRow = Tables<"events">;
+type EventAction = Enums<"event_action">;
+type EventEntity = Enums<"event_entity">;
 
-const ACTION_LABELS: Record<string, string> = {
+// A ordem é a do filtro "Ação" (UX-15).
+const ACTION_LABELS: Record<EventAction, string> = {
   create: "Criação",
   update: "Atualização",
   delete: "Exclusão",
   restore: "Restauração",
-  login: "Login",
-  login_failed: "Login (falha)",
-  logout: "Logout",
+  ...AUTH_ACTION_LABELS,
   password_changed: "Senha alterada",
 };
 
-const ENTITY_LABELS: Record<string, string> = {
+const ENTITY_LABELS: Record<EventEntity, string> = {
   member: "Membro",
   cell: "Célula",
   cell_report: "Relatório",
@@ -54,18 +43,37 @@ const ENTITY_LABELS: Record<string, string> = {
   auth: "Autenticação",
 };
 
+function isEventAction(value: string): value is EventAction {
+  return Object.prototype.hasOwnProperty.call(ACTION_LABELS, value);
+}
+
+function isEventEntity(value: string): value is EventEntity {
+  return Object.prototype.hasOwnProperty.call(ENTITY_LABELS, value);
+}
+
 /** "10/11/2026, 14:32", sempre no horário de Brasília, qualquer que seja o fuso do navegador. */
 const formatDateTime = (iso: string) => {
   const when = formatDateTimeInBrasilia(iso);
   return when ? `${when.date}, ${when.time}` : "—";
 };
 
+function hasMetadata(metadata: EventRow["metadata"]): boolean {
+  return typeof metadata === "object" && metadata !== null && Object.keys(metadata).length > 0;
+}
+
+/** Segunda linha da descrição dos eventos de login (UX-16). */
+function EventSecondLine({ event }: { event: EventRow }) {
+  const line = authEventSecondLine(event);
+  if (!line) return null;
+  return <span className="block text-sm text-muted-foreground">{line}</span>;
+}
+
 const Events = () => {
   const { hasPermission, permissionsLoaded } = useAuth();
 
   const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState<string>("all");
-  const [entityFilter, setEntityFilter] = useState<string>("all");
+  const [actionFilter, setActionFilter] = useState<EventAction | "all">("all");
+  const [entityFilter, setEntityFilter] = useState<EventEntity | "all">("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<EventRow | null>(null);
 
@@ -73,7 +81,7 @@ const Events = () => {
     queryKey: ["events", actionFilter, entityFilter, statusFilter],
     queryFn: async () => {
       let q = supabase
-        .from("events" as any)
+        .from("events")
         .select("*")
         .order("occurred_at", { ascending: false })
         .limit(500);
@@ -84,7 +92,7 @@ const Events = () => {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data as unknown as EventRow[]) ?? [];
+      return data ?? [];
     },
     enabled: hasPermission("view_audit_log"),
   });
@@ -94,8 +102,8 @@ const Events = () => {
     const s = search.toLowerCase();
     return events.filter((e) =>
       [e.actor_label, e.entity_label, e.description]
-        .filter(Boolean)
-        .some((f) => f!.toLowerCase().includes(s))
+        .filter((f): f is string => !!f)
+        .some((f) => f.toLowerCase().includes(s))
     );
   }, [events, search]);
 
@@ -129,7 +137,10 @@ const Events = () => {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Ação</Label>
-                <Select value={actionFilter} onValueChange={setActionFilter}>
+                <Select
+                  value={actionFilter}
+                  onValueChange={(v) => setActionFilter(isEventAction(v) ? v : "all")}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
@@ -141,7 +152,10 @@ const Events = () => {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Entidade</Label>
-                <Select value={entityFilter} onValueChange={setEntityFilter}>
+                <Select
+                  value={entityFilter}
+                  onValueChange={(v) => setEntityFilter(isEventEntity(v) ? v : "all")}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
@@ -207,10 +221,13 @@ const Events = () => {
                         <Badge variant="outline">{ACTION_LABELS[e.action] || e.action}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">{ENTITY_LABELS[e.entity] || e.entity}</TableCell>
-                      <TableCell className="text-sm">{e.description}</TableCell>
+                      <TableCell className="text-sm">
+                        {e.description}
+                        <EventSecondLine event={e} />
+                      </TableCell>
                       <TableCell>
                         {e.success ? (
-                          <Badge variant="secondary">OK</Badge>
+                          <Badge variant="outline">OK</Badge>
                         ) : (
                           <Badge variant="destructive">Erro</Badge>
                         )}
@@ -246,7 +263,7 @@ const Events = () => {
                       <p>{ENTITY_LABELS[selected.entity] || selected.entity}</p>
                     </div>
                   </div>
-                  {selected.entity_label && (
+                  {!isAuthEvent(selected) && selected.entity_label && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Identificação</Label>
                       <p>{selected.entity_label}</p>
@@ -256,6 +273,13 @@ const Events = () => {
                     <Label className="text-xs text-muted-foreground">Descrição</Label>
                     <p>{selected.description}</p>
                   </div>
+                  {isAuthEvent(selected) &&
+                    authEventDetailFields(selected).map((field) => (
+                      <div key={field.key}>
+                        <Label className="text-xs text-muted-foreground">{field.label}</Label>
+                        <p>{field.value}</p>
+                      </div>
+                    ))}
                   {selected.changed_fields && selected.changed_fields.length > 0 && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Campos alterados</Label>
@@ -266,7 +290,7 @@ const Events = () => {
                       </div>
                     </div>
                   )}
-                  {selected.metadata && Object.keys(selected.metadata).length > 0 && (
+                  {!isAuthEvent(selected) && hasMetadata(selected.metadata) && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Metadados</Label>
                       <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto">
@@ -274,7 +298,7 @@ const Events = () => {
                       </pre>
                     </div>
                   )}
-                  {selected.error_reason && (
+                  {!isAuthEvent(selected) && selected.error_reason && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Erro</Label>
                       <p className="text-destructive">{selected.error_reason}</p>

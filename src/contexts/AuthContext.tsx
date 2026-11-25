@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { MEMBER_ROW_SELECT, type MemberRow } from "@/lib/members/fields";
+import { SERVER_ERROR, type SignInOutcome } from "@/lib/auth/sign-in-result";
+import { requestSignIn } from "@/services/auth/sign-in";
 
 type Member = MemberRow;
 
@@ -18,7 +20,7 @@ interface AuthContextType {
    * permissão espera, em vez de dizer que o usuário não tem acesso.
    */
   permissionsLoaded: boolean;
-  signIn: (login: string, password: string) => Promise<void>;
+  signIn: (identifier: string, password: string) => Promise<SignInOutcome>;
   signOut: () => Promise<void>;
   hasPermission: (...permissions: string[]) => boolean;
 }
@@ -99,35 +101,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (login: string, password: string) => {
-    let email = login;
+  /**
+   * Login pela Edge Function `sign-in` (E1.04, RN-13 e RN-14): o único caminho.
+   * As falhas esperadas voltam como resultado, sem exceção. No sucesso, a
+   * sessão devolvida pela função passa ao cliente do Supabase, que a renova e
+   * a guarda como antes. O login é registrado na Auditoria pelo servidor.
+   */
+  const signIn = async (identifier: string, password: string): Promise<SignInOutcome> => {
+    const result = await requestSignIn(identifier, password);
+    if (result.result !== "ok") return result;
 
-    // If it doesn't look like an email, try resolving it via the Edge Function
-    if (!login.includes("@")) {
-      const { data, error } = await supabase.functions.invoke("get-user-email", {
-        body: { identifier: login }
-      });
-
-      if (error) throw error;
-      if (data?.email) {
-        email = data.email;
-      } else {
-        throw new Error("CPF ou celular não encontrado ou não vinculado a um e-mail.");
-      }
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    // Falhas de login não são registradas daqui: sem sessão, o registro poderia
-    // ser forjado. Elas passam a ser registradas no servidor (passo E1.04).
-    if (error) throw error;
-
-    // Logged in — register success event
-    await supabase.rpc("log_auth_event", {
-      _action: "login",
-      _success: true,
-      _identifier: login,
-      _reason: null,
-    }).then(() => {}, () => {});
+    const { error } = await supabase.auth.setSession({
+      access_token: result.session.access_token,
+      refresh_token: result.session.refresh_token,
+    });
+    return error ? SERVER_ERROR : { result: "ok" };
   };
 
   const signOut = async () => {
