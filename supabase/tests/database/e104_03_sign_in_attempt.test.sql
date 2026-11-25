@@ -146,6 +146,15 @@ SELECT pg_temp.u(n),
        n = 27
   FROM generate_series(1, 32) n WHERE n <> 16;
 
+-- E2.03: a senha mora no cofre (private.account_passwords), não em auth.users. Esta massa grava
+-- o bcrypt em auth.users só para montar os casos; aqui ele passa para o cofre e auth.users fica sem senha
+-- (a conta com hash que não é bcrypt $2a$ fica sem linha no cofre, como a Wilma).
+INSERT INTO private.account_passwords (auth_user_id, password_hash)
+SELECT id, encrypted_password FROM auth.users
+ WHERE encrypted_password ~ '^\$2a\$[0-9]{2}\$[./A-Za-z0-9]{53}$'
+ON CONFLICT (auth_user_id) DO NOTHING;
+UPDATE auth.users SET encrypted_password = '' WHERE coalesce(encrypted_password, '') <> '';
+
 INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(1), 'E104 todas'), (pg_temp.role(2), 'E104 sem permissões'), (pg_temp.role(3), 'E104 auditoria');
 INSERT INTO public.role_permissions (role_id, permission)
@@ -236,19 +245,19 @@ SELECT ok((SELECT deleted_at IS NOT NULL FROM public.members WHERE id = pg_temp.
 SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.att('ana.souza@exemplo.com', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'email', 'identifier_masked', 'a***@exemplo.com', 'password_action', NULL),
-  'RN-01: Ana entra com o e-mail (resposta completa do contrato, password_action nulo)');
+                     'identifier_type', 'email', 'identifier_masked', 'a***@exemplo.com', 'password_action', NULL, 'must_change_password', true),
+  'RN-01: Ana entra com o e-mail (resposta completa do contrato, password_action nulo, must_change_password pela política)');
 SELECT is(pg_temp.att('(51) 98888-7777', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'mobile', 'identifier_masked', '***7777', 'password_action', NULL),
+                     'identifier_type', 'mobile', 'identifier_masked', '***7777', 'password_action', NULL, 'must_change_password', true),
   'RN-01, RN-15: Ana entra com o celular, tipo Celular, máscara ***7777');
 SELECT is(pg_temp.att('529.982.247-25', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'cpf', 'identifier_masked', '***4725', 'password_action', NULL),
+                     'identifier_type', 'cpf', 'identifier_masked', '***4725', 'password_action', NULL, 'must_change_password', true),
   'RN-01, RN-15: Ana entra com o CPF; só o CPF dela encontra, então o tipo é CPF');
 SELECT is((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(pg_temp.att('ana.souza@exemplo.com', 'Senha#1')) k),
-  ARRAY['auth_email', 'auth_user_id', 'identifier_masked', 'identifier_type', 'member_id', 'password_action', 'result']::text[],
-  'Contrato: a resposta de sucesso tem exatamente estas sete chaves');
+  ARRAY['auth_email', 'auth_user_id', 'identifier_masked', 'identifier_type', 'member_id', 'must_change_password', 'password_action', 'result']::text[],
+  'Contrato (E2.03): a resposta de sucesso tem exatamente estas oito chaves, com must_change_password (Senha#1 tem 7 caracteres: a marca nasce na primeira entrada, RN-08 b)');
 
 SELECT is(pg_temp.fr('bruno_k3j9x2@mci12fakemail.com', 'Senha#2'), 'invalid|not_found',
   'RN-01: o e-mail fictício de Bruno, com a senha certa, é "não encontrada"');

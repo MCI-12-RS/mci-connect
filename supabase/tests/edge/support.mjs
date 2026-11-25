@@ -61,7 +61,12 @@ export const PW = 'Senha#Edge1'
 export async function createMassa() {
   await cleanupMassa()
   const ids = { pastor: randomUUID(), ana: randomUUID(), ouro: randomUUID(), prata: randomUUID(), excluida: randomUUID(), semConta: randomUUID(), banida: randomUUID() }
-  const mkUser = async (email) => (await admin('POST', 'users', { email, password: PW, email_confirm: true })).id
+  // E2.03: o Auth não guarda senha (a guarda descarta a do createUser); a senha de teste vai para o cofre.
+  const mkUser = async (email) => {
+    const { id } = await admin('POST', 'users', { email, password: PW, email_confirm: true })
+    sql(`SELECT private.write_password('${id}'::uuid, NULL, '${PW}', NULL);`)
+    return id
+  }
   const auth = { ana: await mkUser(`ana@${DOMAIN}`), banida: await mkUser(`banida@${DOMAIN}`) }
   sql(`BEGIN;
 UPDATE auth.users SET banned_until = now() + interval '10 years' WHERE id = '${auth.banida}';
@@ -84,7 +89,7 @@ export async function cleanupMassa() {
   sql(`BEGIN;
 SET LOCAL session_replication_role = replica;
 DELETE FROM public.events WHERE entity_label LIKE 'E104 Edge%' OR actor_label LIKE 'E104 Edge%';
-UPDATE public.members SET leader_id = NULL WHERE name LIKE 'E104 Edge%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE name LIKE 'E104 Edge%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE name LIKE 'E104 Edge%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);
 DELETE FROM private.sign_in_throttle;

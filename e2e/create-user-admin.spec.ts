@@ -101,7 +101,7 @@ async function createUser(token: string | null, payload: object): Promise<Reply>
  * acesso usa sempre o e-mail técnico gerado pelo servidor. Todo cadastro tem líder (RN-12): Lia.
  */
 const request = (email: string | null, memberData: Record<string, unknown>, extra: object = {}) => ({
-  password: "Senha#2026",
+  password: "Caminho#2026x",
   memberData: { gender: "M", is_active: true, leader_id: member(90), ...(email ? { email } : {}), ...memberData },
   ...extra,
 });
@@ -519,7 +519,7 @@ test.describe("E2.04 PR 2: contrato novo da create-user-admin", () => {
     const login = await fetch(`${env.apiUrl}/functions/v1/sign-in`, {
       method: "POST",
       headers: { apikey: env.publishableKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier: mobile, password: "Senha#2026" }),
+      body: JSON.stringify({ identifier: mobile, password: "Caminho#2026x" }),
     });
     const body: Record<string, unknown> = await login.json();
     expect(login.status, JSON.stringify(body)).toBe(200);

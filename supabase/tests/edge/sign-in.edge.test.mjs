@@ -106,8 +106,9 @@ describe('sessão (RN-13, RN-14)', () => {
   it('RN-13: o login com sucesso devolve só a sessão mínima, sem user nem e-mail', async () => {
     const r = await signIn(ANA_EMAIL, PW)
     assert.equal(r.status, 200, r.text)
-    assert.deepEqual(Object.keys(r.body).sort(), ['result', 'session'])
+    assert.deepEqual(Object.keys(r.body).sort(), ['must_change_password', 'result', 'session'])   // E2.03: a marca da conta
     assert.equal(r.body.result, 'ok')
+    assert.equal(typeof r.body.must_change_password, 'boolean')
     assert.deepEqual(Object.keys(r.body.session).sort(), ['access_token', 'expires_at', 'expires_in', 'refresh_token', 'token_type'])
     assert.equal(r.body.session.token_type, 'bearer')
     assert.equal(typeof r.body.session.expires_in, 'number')

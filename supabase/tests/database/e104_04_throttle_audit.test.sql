@@ -150,6 +150,15 @@ SELECT pg_temp.u(n),
        n = 27
   FROM generate_series(1, 32) n WHERE n <> 16;
 
+-- E2.03: a senha mora no cofre (private.account_passwords), não em auth.users. Esta massa grava
+-- o bcrypt em auth.users só para montar os casos; aqui ele passa para o cofre e auth.users fica sem senha
+-- (a conta com hash que não é bcrypt $2a$ fica sem linha no cofre, como a Wilma).
+INSERT INTO private.account_passwords (auth_user_id, password_hash)
+SELECT id, encrypted_password FROM auth.users
+ WHERE encrypted_password ~ '^\$2a\$[0-9]{2}\$[./A-Za-z0-9]{53}$'
+ON CONFLICT (auth_user_id) DO NOTHING;
+UPDATE auth.users SET encrypted_password = '' WHERE coalesce(encrypted_password, '') <> '';
+
 INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(1), 'E104 todas'), (pg_temp.role(2), 'E104 sem permissões'), (pg_temp.role(3), 'E104 auditoria');
 INSERT INTO public.role_permissions (role_id, permission)

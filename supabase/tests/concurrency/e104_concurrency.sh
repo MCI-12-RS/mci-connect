@@ -49,6 +49,7 @@ UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE id::tex
 DELETE FROM public.members WHERE id::text LIKE 'f104c0de%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);  -- em replica a FK em cascata não roda
 DELETE FROM auth.sessions WHERE user_id::text LIKE 'f104c0de%';
+DELETE FROM private.account_passwords WHERE auth_user_id::text LIKE 'f104c0de%';  -- E2.03: em replica a FK em cascata não roda
 DELETE FROM auth.users WHERE id::text LIKE 'f104c0de%';
 COMMIT;
 SQL
@@ -59,11 +60,12 @@ setup() {
   cleanup
   $PSQL -X -q -v ON_ERROR_STOP=1 >/dev/null <<SQL
 BEGIN;
-INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at)
-VALUES ('$U_ANA', '$ANA_EMAIL', extensions.crypt('$ANA_PW', extensions.gen_salt('bf', 10)), now());
+INSERT INTO auth.users (id, email, email_confirmed_at) VALUES ('$U_ANA', '$ANA_EMAIL', now());
 INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES ('$M_PASTOR', 'E104 Conc Pastor', 'M', true, false, '$M_PASTOR@teste.invalid');
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, email, cpf, mobile_whatsapp)
 VALUES ('$M_ANA', 'E104 Conc Ana', 'F', '$M_PASTOR', true, '$U_ANA', '$ANA_EMAIL', '$ANA_CPF', '(51) 90000-1104');
+-- E2.03: a senha mora no cofre (private.account_passwords); auth.users fica sem senha.
+SELECT private.write_password('$U_ANA', '$M_ANA', '$ANA_PW', NULL);
 COMMIT;
 SQL
 }

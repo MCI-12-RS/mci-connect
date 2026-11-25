@@ -54,7 +54,11 @@ export function sql(env: E2EEnv, query: string): string {
 /** Escapa um texto para um literal SQL. */
 export const lit = (value: string) => `'${value.replace(/'/g, "''")}'`;
 
-/** Cria uma conta confirmada no Auth local e devolve o id. */
+/**
+ * Cria uma conta confirmada no Auth local e devolve o id. Desde o E2.03 o Auth não guarda senha (a guarda
+ * descarta a que o createUser grava): a senha de teste vai para o cofre (`private.write_password`, como o
+ * postgres), que é de onde a `sign-in` a confere.
+ */
 export async function createAuthUser(env: E2EEnv, email: string, password: string): Promise<string> {
   const response = await fetch(`${env.apiUrl}/auth/v1/admin/users`, {
     method: "POST",
@@ -68,6 +72,7 @@ export async function createAuthUser(env: E2EEnv, email: string, password: strin
   const body: unknown = await response.json();
   const id = typeof body === "object" && body !== null && "id" in body ? body.id : null;
   if (typeof id !== "string") throw new Error(`Não foi possível criar ${email}: ${JSON.stringify(body)}`);
+  sql(env, `SELECT private.write_password(${lit(id)}::uuid, NULL, ${lit(password)}, NULL);`);
   return id;
 }
 

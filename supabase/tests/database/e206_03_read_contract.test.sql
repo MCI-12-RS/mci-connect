@@ -331,10 +331,14 @@ SELECT is(pg_temp.scn(14, ARRAY[$c$pg:UPDATE public.members SET auth_user_id = p
 SELECT is(pg_temp.scn(14, ARRAY[$c$pg:UPDATE public.members SET auth_user_id = pg_temp.u(7), role_id = pg_temp.role('Líder') WHERE id = pg_temp.mn('André')$c$],
     ARRAY['SELECT pg_temp.mv(7)'])->'q'->0 -> 'Tânia', NULL,
   'RN-10: o cadastro de Tânia não está na members_view de André');
-SELECT is((SELECT array_agg(column_name::text ORDER BY ordinal_position) FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'members_view'
-              AND ordinal_position > (SELECT max(ordinal_position) - 2 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'members_view')),
-  ARRAY['g12_id', 'g12_name'], 'RN-10: g12_id e g12_name vão no fim da members_view (as colunas de antes ficam onde estavam)');
+SELECT is((SELECT array_agg(c.column_name::text ORDER BY c.ordinal_position) FROM information_schema.columns c
+            WHERE c.table_schema = 'public' AND c.table_name = 'members_view'
+              AND c.ordinal_position > (SELECT ordinal_position FROM information_schema.columns
+                                         WHERE table_schema = 'public' AND table_name = 'members_view' AND column_name = 'spouse_name')
+              AND c.ordinal_position <= (SELECT ordinal_position + 2 FROM information_schema.columns
+                                          WHERE table_schema = 'public' AND table_name = 'members_view' AND column_name = 'spouse_name')),
+  ARRAY['g12_id', 'g12_name'],
+  'RN-10: g12_id e g12_name vêm logo depois de spouse_name (E2.03 acrescenta password_reset_status no fim; as colunas de antes ficam onde estavam)');
 
 -- ===========================================================================
 -- RN-11: Células (cells_view)
