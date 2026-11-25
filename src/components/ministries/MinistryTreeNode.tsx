@@ -43,7 +43,8 @@ const CoupleNames = ({ node }: { node: MinistryCoupleNode }) => (
 const NodeDetails = ({ node }: { node: MinistryCoupleNode }) => (
   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 sm:flex-nowrap">
     <CoupleNames node={node} />
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground sm:shrink-0 sm:justify-end">
+    {/* No hover da linha, o texto sobe para manter 4,5:1 sobre o `bg-muted/60`. */}
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground group-hover:text-foreground/80 sm:shrink-0 sm:justify-end">
       <LevelBadge {...node.level} className="text-xs" />
       <TotalsText disciples={node.total_disciples} cells={node.total_cells} />
     </span>
@@ -122,7 +123,7 @@ const MinistryTreeNode = ({ node, path }: MinistryTreeNodeProps) => {
         onClick={() => setExpanded((open) => !open)}
         className={cn(
           ROW,
-          "transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "group transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           // O destaque não depende de `:focus-visible`: depois de um toque, o navegador não mostra o anel.
           highlighted && "ring-2 ring-ring",
         )}

@@ -398,7 +398,7 @@ const CellForm = ({ cell, onClose, onPendingChange }: CellFormProps) => {
           <div className="space-y-2">
             <Label htmlFor="state">Estado</Label>
             <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
-              <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+              <SelectTrigger id="state"><SelectValue placeholder="UF" /></SelectTrigger>
               <SelectContent>
                 {BRAZILIAN_STATES.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>

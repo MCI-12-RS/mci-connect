@@ -150,18 +150,19 @@ const Members = () => {
         {members.map((m) => (
           <div key={m.id} className="px-4 py-4 space-y-3">
             {/* Header: Avatar + Name + Actions */}
-            <div className="flex items-center gap-3">
+            {/* Com a fonte ampliada, as ações descem para a linha de baixo. */}
+            <div className="flex flex-wrap items-center gap-3">
               <Avatar className="w-11 h-11 border-2 border-muted shrink-0">
                 <AvatarImage src={m.avatar_url || ""} />
                 <AvatarFallback className="bg-muted">
                   <User className="w-5 h-5 text-muted-foreground" />
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="grow basis-32 min-w-0">
                 <p className="font-semibold text-sm break-words">{m.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 break-words">{contactLine(m)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 break-all">{contactLine(m)}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="ml-auto flex items-center gap-2 shrink-0">
                 {canEdit(m) && (
                   <Button
                     variant="ghost"
@@ -197,9 +198,9 @@ const Members = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold">Membros</h1>
+              <h1 className="text-2xl md:text-3xl font-bold break-words">Membros</h1>
               {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
@@ -303,7 +304,7 @@ const Members = () => {
                           </div>
                         </TableCell>
                         {showWideColumns && (
-                          <TableCell className="text-sm">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">{canSeeSensitive(m) ? (formatPhone(m.mobile_whatsapp) || "—") : "•••••"}</TableCell>
                         )}
                         <TableCell><LevelBadge {...memberLevel(m)} /></TableCell>
                         <TableCell className="text-sm">

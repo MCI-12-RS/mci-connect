@@ -154,7 +154,7 @@ const Cells = () => {
       : [];
 
   const renderMobileActions = (c: CellRow) => (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="ml-auto flex items-center gap-2 shrink-0">
       {renderFrequentActions(c, "h-11 w-11")}
       <RowActionsMenu label={CELL_DELETION_TEXTS.actionsLabel(leaderLabel(c.leader_name))} actions={rowActions(c)} />
     </div>
@@ -189,8 +189,9 @@ const Cells = () => {
         {cells.map((c) => (
           <div key={c.id} className="px-4 py-4 space-y-3">
             {/* Header */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
+            {/* Com a fonte ampliada, as ações descem para a linha de baixo. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="grow basis-32 min-w-0">
                 <p className="text-sm">{renderLeader(c, "font-semibold")}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {CELLS_LIST_TEXTS.g12Label} {renderG12(c)}
@@ -236,9 +237,9 @@ const Cells = () => {
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold">Células</h1>
+              <h1 className="text-2xl md:text-3xl font-bold break-words">Células</h1>
               {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}
