@@ -61,6 +61,11 @@ const mock = vi.hoisted(() => {
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mock.supabase }));
 
+// Os avisos (toasts) abertos: descartados só no fim forçado da sessão.
+const toasts = vi.hoisted(() => ({ dismiss: vi.fn(), sonnerDismiss: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ dismiss: toasts.dismiss }));
+vi.mock("sonner", () => ({ toast: { dismiss: toasts.sonnerDismiss } }));
+
 function LoginProbe() {
   const location = useLocation();
   return <p>{isSessionEndedState(location.state) ? "login com aviso" : "login sem aviso"}</p>;
@@ -98,6 +103,8 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
     mock.state.ownReads = 0;
     mock.state.ownRead = () => Promise.resolve({ data: { id: "m1" }, error: null });
     mock.signOut.mockClear();
+    toasts.dismiss.mockClear();
+    toasts.sonnerDismiss.mockClear();
   });
 
   it("sem linha e sem erro: encerra localmente e vai ao login com o aviso", async () => {
@@ -110,6 +117,8 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
     expect(await screen.findByText("login com aviso")).toBeInTheDocument();
     expect(mock.signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(clear).toHaveBeenCalled();
+    expect(toasts.dismiss).toHaveBeenCalledWith();
+    expect(toasts.sonnerDismiss).toHaveBeenCalledWith();
   });
 
   it("queda de conexão não encerra a sessão", async () => {
@@ -123,6 +132,7 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
     await waitFor(() => expect(mock.state.ownReads).toBe(1));
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
+    expect(toasts.dismiss).not.toHaveBeenCalled();
   });
 
   it("várias recusas ao mesmo tempo geram uma releitura só", async () => {
@@ -151,6 +161,8 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
 
     expect(await screen.findByText("login com aviso")).toBeInTheDocument();
     expect(mock.state.ownReads).toBe(0);
+    expect(toasts.dismiss).toHaveBeenCalled();
+    expect(toasts.sonnerDismiss).toHaveBeenCalled();
   });
 
   it("o Sair da pessoa vai ao login sem o aviso", async () => {
@@ -163,6 +175,8 @@ describe("AuthContext: fim da sessão do membro excluído (E2.01, RN-14, DT-20)"
 
     expect(await screen.findByText("login sem aviso")).toBeInTheDocument();
     expect(mock.signOut).toHaveBeenCalledWith();
+    expect(toasts.dismiss).not.toHaveBeenCalled();
+    expect(toasts.sonnerDismiss).not.toHaveBeenCalled();
   });
 
   it("a volta do foco relê o cadastro, no máximo uma vez por intervalo", async () => {

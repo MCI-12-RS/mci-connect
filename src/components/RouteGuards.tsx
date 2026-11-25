@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SESSION_ENDED_REASON } from "@/lib/auth/session";
 
 const Loading = () => (
-  <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando...</div>
+  <div className="min-h-dvh flex items-center justify-center text-muted-foreground">Carregando...</div>
 );
 
 /** Só com sessão. Sem ela, o login; se a sessão foi encerrada pelo sistema, com o aviso (E2.01, RN-14). */

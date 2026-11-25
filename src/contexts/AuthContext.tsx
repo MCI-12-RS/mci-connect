@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast as sonnerToast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { dismiss as dismissToasts } from "@/hooks/use-toast";
 import { MEMBER_ROW_SELECT, type MemberRow } from "@/lib/members/fields";
 import { SERVER_ERROR, type SignInOutcome } from "@/lib/auth/sign-in-result";
 import { shouldEndSession } from "@/lib/auth/session";
@@ -35,6 +37,12 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/** Fim forçado da sessão: nenhum aviso da tela anterior fica por cima do login (E2.01, PR 6). */
+function dismissOpenToasts() {
+  dismissToasts();
+  sonnerToast.dismiss();
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -97,7 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userIdRef.current = session?.user.id ?? null;
         if (event === "SIGNED_OUT") {
           // Sem o pedido da pessoa (renovação recusada, outra aba, fim forçado): o login mostra o aviso.
-          if (!signOutRequestedRef.current) setSessionEnded(true);
+          if (!signOutRequestedRef.current) {
+            setSessionEnded(true);
+            dismissOpenToasts();
+          }
           signOutRequestedRef.current = false;
           endingRef.current = false;
           // Nada do usuário anterior fica na memória para o próximo login.
@@ -152,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // O aviso antes de a sessão sumir: o ProtectedRoute redireciona já com ele.
       endingRef.current = true;
       setSessionEnded(true);
+      dismissOpenToasts();
       // Sem log_auth_event: o banco não grava para cadastro excluído (DA-9).
       const { error } = await supabase.auth.signOut({ scope: "local" });
       if (error) {
