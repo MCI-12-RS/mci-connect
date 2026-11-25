@@ -157,6 +157,9 @@ SELECT is((SELECT attnum::int || ' ' || format_type(atttypid, atttypmod) FROM pg
 -- ===========================================================================
 -- 2. Conferência do catálogo — 4
 -- ===========================================================================
+-- Limite: a busca é textual (prosrc) e só no schema public, onde estão as
+-- funções chamadas com o papel de quem consulta. Em private não há função
+-- com EXECUTE para authenticated.
 SELECT is(ARRAY(SELECT p.proname::text FROM pg_proc p
                  WHERE p.pronamespace = 'public'::regnamespace AND NOT p.prosecdef
                    AND p.prosrc ~ '\m(roles|role_permissions)\M' ORDER BY 1),
