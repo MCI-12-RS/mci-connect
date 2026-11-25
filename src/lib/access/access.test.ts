@@ -110,6 +110,33 @@ describe("menuItems (RN-22, UX-08)", () => {
   });
 });
 
+describe("RN-07: sem cadastro ou sem função, nada liberado", () => {
+  it.each([
+    ["conta X (sem cadastro)", contaX],
+    ["Hugo (sem função)", hugo],
+  ])("%s: nenhum item e nenhuma rota", (_, access) => {
+    expect(menuItems(access)).toEqual([]);
+    for (const path of ["/", "/members", "/cells", "/cell-reports", "/ministries", "/roles", "/events"]) {
+      expect(canSeeRoute(access, path)).toBe(false);
+    }
+  });
+});
+
+describe("RN-22: catálogo e permissões aposentadas", () => {
+  it("o catálogo não oferece view_members nem view_own_ministry_dashboard", () => {
+    const values: string[] = PERMISSION_CATALOG.map((p) => p.value);
+    expect(values).not.toContain("view_members");
+    expect(values).not.toContain("view_own_ministry_dashboard");
+  });
+
+  it("view_members e view_own_ministry_dashboard sozinhas não abrem item nem rota", () => {
+    const legacy = persona({ permissions: ["view_members", "view_own_ministry_dashboard"] });
+    expect(menuItems(legacy)).toEqual([]);
+    expect(canSeeRoute(legacy, "/members")).toBe(false);
+    expect(canSeeRoute(legacy, "/")).toBe(false);
+  });
+});
+
 describe("hasPermission", () => {
   it("responde se há pelo menos uma das permissões", () => {
     expect(hasPermission(caio, "edit_member", "edit_own_data")).toBe(true);

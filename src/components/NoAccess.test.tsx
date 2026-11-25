@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouteAccess } from "./NoAccess";
 import { NO_ACCESS, type Access } from "@/lib/access/access";
+import { supabase } from "@/integrations/supabase/client";
 
 // Tela sem acesso (E2.02, T12, P13, UX-11): o título da rota, o aviso e "Ir
 // para o início", sem redirecionar e sem montar a página (nenhuma consulta).
@@ -19,6 +20,10 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ signOut: vi.fn(), member: null, retryAccess: vi.fn(), ...auth }),
 }));
 vi.mock("@/components/AppSidebar", () => ({ default: () => null }));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { from: vi.fn(), rpc: vi.fn(), functions: { invoke: vi.fn() } },
+}));
 
 const pageMounted = vi.fn();
 function Page() {
@@ -85,5 +90,14 @@ describe("RouteAccess e NoAccess (T12)", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
     expect(pageMounted).not.toHaveBeenCalled();
+  });
+
+  it("UX-11 e UX-30: sem permissão, nenhuma requisição de dados e nada técnico no DOM", () => {
+    renderRoles();
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
+    const text = screen.getByTestId("no-access").textContent ?? "";
+    expect(text).not.toMatch(/view_|manage_|edit_|42501|row-level security|Líder|Administrador/i);
   });
 });
