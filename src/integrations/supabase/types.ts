@@ -1344,6 +1344,16 @@ export type Database = {
         Returns: undefined
       }
       _mask_identifier: { Args: { _id: string }; Returns: string }
+      _member_values_in_use: {
+        Args: {
+          _cpf: string
+          _email: string
+          _lock?: boolean
+          _mobile: string
+          _self: string
+        }
+        Returns: string[]
+      }
       _viewer_scope_anchors: {
         Args: never
         Returns: {
@@ -1356,6 +1366,10 @@ export type Database = {
       active_permissions: {
         Args: never
         Returns: Database["public"]["Enums"]["permission_action"][]
+      }
+      birth_date_problem: {
+        Args: { _birth: string; _today: string }
+        Returns: string
       }
       can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
@@ -1416,6 +1430,8 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_placeholder_email: { Args: { _email: string }; Returns: boolean }
       is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
+      is_valid_email: { Args: { _email: string }; Returns: boolean }
+      is_valid_person_name: { Args: { _name: string }; Returns: boolean }
       log_auth_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -1424,6 +1440,15 @@ export type Database = {
           _success: boolean
         }
         Returns: undefined
+      }
+      member_account_email: { Args: { _member_id: string }; Returns: string }
+      member_descendants_among: {
+        Args: { _candidate_ids: string[]; _member_id: string }
+        Returns: string[]
+      }
+      member_has_login_identifier: {
+        Args: { _cpf: string; _email: string; _mobile: string }
+        Returns: boolean
       }
       member_names: {
         Args: { _ids: string[] }
@@ -1468,6 +1493,9 @@ export type Database = {
       normalize_digits: { Args: { _value: string }; Returns: string }
       normalize_email: { Args: { _value: string }; Returns: string }
       normalize_mobile: { Args: { _value: string }; Returns: string }
+      normalize_person_name: { Args: { _name: string }; Returns: string }
+      placeholder_email_domain: { Args: never; Returns: string }
+      placeholder_email_domains: { Args: never; Returns: string[] }
       restore_cell: { Args: { _cell_id: string }; Returns: undefined }
       restore_cell_report: { Args: { _report_id: string }; Returns: undefined }
       restore_member: {
