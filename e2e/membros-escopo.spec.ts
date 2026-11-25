@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { accessToken, createAuthUser, deleteAuthUser, e2eEnv, lit, openList, sql, toast, type E2EEnv } from "./exclusao-support";
+import { E2E_BASE_URL } from "./base-url";
 
 // Membros por escopo e por função (E2.02, PR 4, tarefa 14): UX-15 (Membros),
 // UX-16, UX-17, UX-19, UX-20 (só Líder e Cônjuge), UX-21 e UX-22 pela tela, e
@@ -539,7 +540,7 @@ test.describe("RN-10, UX-19: pastor e sem liderança sem ver a igreja toda", () 
     expect(created.status).toBe(403);
     expect(membersNamed(`${NAME} Igor Caio`)).toBe(0);
 
-    const context = await browser.newContext({ baseURL: "http://localhost:8080" });
+    const context = await browser.newContext({ baseURL: E2E_BASE_URL });
     try {
       const pedro = await context.newPage();
       await signIn(pedro, PEDRO);

@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { createAuthUser, deleteAuthUser, e2eEnv, lit, sql, toast, type E2EEnv } from "./exclusao-support";
+import { E2E_BASE_URL } from "./base-url";
 
 // Acesso, menu e rotas (E2.02, PR 2, tarefa 8): UX-08, UX-09, UX-10 (duas
 // sessões), UX-11 e o smoke de login. Login de verdade pela função `sign-in`
@@ -130,7 +131,7 @@ async function signIn(page: Page, email: string, password = PASSWORD) {
 }
 
 async function openSession(browser: Browser, email: string) {
-  const context = await browser.newContext({ baseURL: "http://localhost:8080" });
+  const context = await browser.newContext({ baseURL: E2E_BASE_URL });
   const page = await context.newPage();
   await signIn(page, email);
   return { context, page };
@@ -198,7 +199,7 @@ test.describe("UX-09: meus dados", () => {
   });
 
   test("abaixo de 768 px, o botão tem 44x44 px", async ({ browser }) => {
-    const context = await browser.newContext({ baseURL: "http://localhost:8080", viewport: { width: 360, height: 800 } });
+    const context = await browser.newContext({ baseURL: E2E_BASE_URL, viewport: { width: 360, height: 800 } });
     const page = await context.newPage();
     await signIn(page, CAIO.email);
     await page.getByRole("button", { name: "Abrir menu" }).click();

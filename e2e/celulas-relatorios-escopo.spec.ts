@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import { createAuthUser, deleteAuthUser, e2eEnv, lit, openList, sql, toast, type E2EEnv } from "./exclusao-support";
+import { E2E_BASE_URL } from "./base-url";
 
 // Células, Relatórios, Dashboard e Ministérios por escopo e por função (E2.02,
 // PR 5, tarefa 17): UX-13, UX-14, UX-23, UX-24, UX-26, UX-27, UX-28, UX-31 e
@@ -254,7 +255,7 @@ async function signIn(page: Page, w: Who) {
 
 /** Uma sessão nova (contexto próprio) de outra pessoa, para comparar quem vê o quê no mesmo teste. */
 async function sessionOf(browser: Browser, w: Who, viewport?: { width: number; height: number }): Promise<{ page: Page; close: () => Promise<void> }> {
-  const context = await browser.newContext({ baseURL: "http://localhost:8080", ...(viewport ? { viewport } : {}) });
+  const context = await browser.newContext({ baseURL: E2E_BASE_URL, ...(viewport ? { viewport } : {}) });
   const page = await context.newPage();
   await signIn(page, w);
   return { page, close: () => context.close() };
