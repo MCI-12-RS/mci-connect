@@ -531,6 +531,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "members_spouse_id_fkey"
             columns: ["spouse_id"]
             isOneToOne: false
@@ -577,6 +584,13 @@ export type Database = {
             referencedRelation: "roles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles_view"
+            referencedColumns: ["id"]
+          },
         ]
       }
       roles: {
@@ -616,6 +630,7 @@ export type Database = {
           member_deleted: boolean | null
           member_id: string | null
           member_name: string | null
+          member_visible: boolean | null
           report_id: string | null
         }
         Relationships: [
@@ -982,6 +997,7 @@ export type Database = {
       }
       cells_view: {
         Row: {
+          can_submit_report: boolean | null
           city: string | null
           complement: string | null
           created_at: string | null
@@ -991,10 +1007,12 @@ export type Database = {
           host_name: string | null
           id: string | null
           is_active: boolean | null
+          is_mine: boolean | null
           last_report_date: string | null
           leader_g12_level: number | null
           leader_gender: string | null
           leader_id: string | null
+          leader_is_pastor: boolean | null
           leader_name: string | null
           meeting_day: string | null
           meeting_time: string | null
@@ -1152,6 +1170,13 @@ export type Database = {
             referencedRelation: "roles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles_view"
+            referencedColumns: ["id"]
+          },
         ]
       }
       members_view: {
@@ -1191,6 +1216,7 @@ export type Database = {
           search_text: string | null
           sensitive_visible: boolean | null
           spouse_id: string | null
+          spouse_name: string | null
           state: string | null
           street: string | null
           total_cells: number | null
@@ -1228,6 +1254,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "members_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "members_spouse_id_fkey"
             columns: ["spouse_id"]
             isOneToOne: false
@@ -1250,8 +1283,45 @@ export type Database = {
           },
         ]
       }
+      roles_view: {
+        Row: {
+          description: string | null
+          id: string | null
+          is_default: boolean | null
+          is_protected: boolean | null
+          members_count: number | null
+          name: string | null
+          permissions: Database["public"]["Enums"]["permission_action"][] | null
+          updated_at: string | null
+        }
+        Insert: {
+          description?: string | null
+          id?: string | null
+          is_default?: boolean | null
+          is_protected?: boolean | null
+          members_count?: never
+          name?: string | null
+          permissions?: never
+          updated_at?: string | null
+        }
+        Update: {
+          description?: string | null
+          id?: string | null
+          is_default?: boolean | null
+          is_protected?: boolean | null
+          members_count?: never
+          name?: string | null
+          permissions?: never
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      _assert_admin_remains: {
+        Args: { _member_id: string }
+        Returns: undefined
+      }
       _cell_label_by_leader: { Args: { _leader_id: string }; Returns: string }
       _dashboard_assert_access: { Args: never; Returns: undefined }
       _del_lock_cell_week: {
@@ -1288,13 +1358,24 @@ export type Database = {
         Returns: undefined
       }
       _mask_identifier: { Args: { _id: string }; Returns: string }
-      can_assign_role: { Args: { _role_id: string }; Returns: boolean }
-      can_manage_own_cell: {
-        Args: { _cell_id: string; _user_id: string }
-        Returns: boolean
+      _viewer_scope_anchors: {
+        Args: never
+        Returns: {
+          g12: string
+          g12_spouse: string
+          me: string
+          me_spouse: string
+        }[]
       }
+      active_permissions: {
+        Args: never
+        Returns: Database["public"]["Enums"]["permission_action"][]
+      }
+      can_assign_role: { Args: { _role_id: string }; Returns: boolean }
+      can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
       cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
       check_member_deletion: { Args: { _member_id: string }; Returns: Json }
+      check_member_insert: { Args: { _member: Json }; Returns: undefined }
       dashboard_cells_by_type: {
         Args: never
         Returns: {
@@ -1331,9 +1412,11 @@ export type Database = {
           week_start: string
         }[]
       }
+      default_role_id: { Args: never; Returns: string }
       delete_cell: { Args: { _cell_id: string }; Returns: undefined }
       delete_cell_report: { Args: { _report_id: string }; Returns: undefined }
       delete_member: { Args: { _member_id: string }; Returns: undefined }
+      delete_role: { Args: { _role_id: string }; Returns: undefined }
       find_deleted_member_matches: {
         Args: { _cpf: string; _email: string; _mobile: string }
         Returns: {
@@ -1344,16 +1427,7 @@ export type Database = {
           name: string
         }[]
       }
-      get_ministry_root: { Args: { _member_id: string }; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
-      is_in_same_ministry: {
-        Args: { _target_member_id: string; _user_id: string }
-        Returns: boolean
-      }
-      is_leader_of_visible_member: {
-        Args: { _candidate_id: string; _user_id: string }
-        Returns: boolean
-      }
       is_placeholder_email: { Args: { _email: string }; Returns: boolean }
       is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
       log_auth_event: {
@@ -1388,6 +1462,23 @@ export type Database = {
         }[]
       }
       mobile_match_key: { Args: { _value: string }; Returns: string }
+      my_access: {
+        Args: never
+        Returns: {
+          can_assign_roles: boolean
+          can_create_member: boolean
+          can_submit_some_report: boolean
+          member_id: string
+          permissions: Database["public"]["Enums"]["permission_action"][]
+          role_id: string
+          role_is_protected: boolean
+          role_name: string
+          sees_ministry: boolean
+          sees_ministry_reports: boolean
+          sees_whole_church: boolean
+          sees_whole_church_reports: boolean
+        }[]
+      }
       normalize_digits: { Args: { _value: string }; Returns: string }
       normalize_email: { Args: { _value: string }; Returns: string }
       normalize_mobile: { Args: { _value: string }; Returns: string }
@@ -1401,6 +1492,22 @@ export type Database = {
           role_name: string
           role_reset_to_default: boolean
         }[]
+      }
+      role_effective_permissions: {
+        Args: { _role_id: string }
+        Returns: Database["public"]["Enums"]["permission_action"][]
+      }
+      role_options: { Args: { _member_id?: string }; Returns: Json }
+      save_role: {
+        Args: {
+          _description: string
+          _expected_updated_at?: string
+          _is_default: boolean
+          _name: string
+          _permissions: Database["public"]["Enums"]["permission_action"][]
+          _role_id: string
+        }
+        Returns: string
       }
       search_normalize: { Args: { _value: string }; Returns: string }
       set_cell_report_participants: {
@@ -1447,8 +1554,24 @@ export type Database = {
         Args: { _permission: Database["public"]["Enums"]["permission_action"] }
         Returns: boolean
       }
+      viewer_is_cell_person: { Args: { _cell_id: string }; Returns: boolean }
       viewer_member_id: { Args: never; Returns: string }
       viewer_ministry_member_ids: { Args: never; Returns: string[] }
+      viewer_permissions: {
+        Args: never
+        Returns: Database["public"]["Enums"]["permission_action"][]
+      }
+      viewer_scope_contains_any: {
+        Args: { _member_ids: string[] }
+        Returns: boolean
+      }
+      viewer_sees_cell: { Args: { _cell_id: string }; Returns: boolean }
+      viewer_sees_cell_people: {
+        Args: { _host_id: string; _leader_id: string; _timothy_id: string }
+        Returns: boolean
+      }
+      viewer_sees_member: { Args: { _member_id: string }; Returns: boolean }
+      viewer_tree_roots: { Args: never; Returns: string[] }
       week_start: { Args: { _day: string }; Returns: string }
       weekday_index: { Args: { _meeting_day: string }; Returns: number }
     }

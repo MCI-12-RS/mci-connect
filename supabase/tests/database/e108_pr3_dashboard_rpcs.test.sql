@@ -26,7 +26,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(204);
+SELECT plan(205);
 
 -- ---------------------------------------------------------------------------
 -- Ids fixos da massa: a(uth), b (roles), c (membros), d (células), e (relatórios).
@@ -85,7 +85,7 @@ SELECT pg_temp.u(n), 'e108pr3-' || n || '@teste.local' FROM generate_series(1, 1
 -- 10 P3 com view_own_ministry_dashboard
 
 INSERT INTO public.roles (id, name, is_system) VALUES
-  (pg_temp.role(1),  'Teste E108 PR3 P1 sistema',              true),
+  (pg_temp.role(1),  'Teste E108 PR3 P1 sistema',              false),
   (pg_temp.role(2),  'Teste E108 PR3 P2 igreja toda',          false),
   (pg_temp.role(3),  'Teste E108 PR3 P3 ministério',           false),
   (pg_temp.role(4),  'Teste E108 PR3 P4 relatórios',           false),
@@ -94,7 +94,7 @@ INSERT INTO public.roles (id, name, is_system) VALUES
   (pg_temp.role(7),  'Teste E108 PR3 membros sem dashboard',   false),
   (pg_temp.role(10), 'Teste E108 PR3 P3 dashboard ministério', false);
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(1),  'view_members'),
+  (pg_temp.role(1),  'view_all_church'),
   (pg_temp.role(1),  'view_dashboard'),
   (pg_temp.role(2),  'view_all_church'),
   (pg_temp.role(2),  'view_dashboard'),
@@ -103,10 +103,10 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(4),  'view_all_reports'),
   (pg_temp.role(4),  'view_dashboard'),
   (pg_temp.role(5),  'view_dashboard'),
-  (pg_temp.role(6),  'view_own_ministry_dashboard'),
-  (pg_temp.role(7),  'view_members'),
+  (pg_temp.role(6),  'view_dashboard'),
+  (pg_temp.role(7),  'view_all_church'),
   (pg_temp.role(10), 'view_own_ministry'),
-  (pg_temp.role(10), 'view_own_ministry_dashboard');
+  (pg_temp.role(10), 'view_dashboard');
 
 -- Árvore (nível entre parênteses):
 --   Pastores Paulo (01) e Priscila (02), casados.
@@ -462,12 +462,12 @@ SET LOCAL ROLE authenticated;
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
        FROM public.dashboard_summary('2026-03-07 23:59:00-03') $$,
-  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 2::bigint, 2::bigint, 1::bigint, 9::bigint) $$,
-  'RN-08/P3: sábado 23:59 ainda é a semana 01/03–07/03: 2 relatórios visíveis, 2 visitantes, 1 não realizada, 9 pendentes');
+  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 9::bigint) $$,
+  'RN-08/P3: sábado 23:59 ainda é a semana 01/03–07/03: 3 relatórios visíveis, 5 visitantes, 1 não realizada, 9 pendentes');
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
        FROM public.dashboard_summary('2026-03-07 23:59:59-03') $$,
-  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 2::bigint, 2::bigint, 1::bigint, 9::bigint) $$,
+  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 9::bigint) $$,
   'RN-08/P3: sábado 23:59:59 ainda é a mesma semana');
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
@@ -533,17 +533,20 @@ SELECT is(pg_temp.pending('2026-03-02 22:59:00+00'), 1::bigint,
 SELECT is(pg_temp.pending('2026-03-02 23:00:00+00'), 2::bigint,
   'RN-08/P3: 23:00 UTC de segunda = 20:00 em Brasília: conta');
 
--- RN-08d: a célula 12 é visível para P3 (pela anfitriã), o relatório dela não.
-SELECT is_empty(format('SELECT 1 FROM public.cell_reports WHERE cell_id = %L', pg_temp.c(12)),
-  'RN-08d/P3: o relatório da célula 12 é invisível para P3 sob RLS');
+-- RN-08d: a célula 12 é visível para P3 (pela anfitriã) e, desde o E2.02 (RN-04), o relatório dela também.
+-- O relatório de uma célula do ministério B (16) continua invisível.
+SELECT isnt_empty(format('SELECT 1 FROM public.cell_reports WHERE cell_id = %L', pg_temp.c(12)),
+  'RN-08d/P3: o relatório da célula 12 é visível para P3 sob RLS (anfitriã no escopo, RN-04)');
+SELECT is_empty(format('SELECT 1 FROM public.cell_reports WHERE cell_id = %L', pg_temp.c(16)),
+  'RN-08d/P3: o relatório da célula 16 (ministério B) é invisível para P3 sob RLS');
 SELECT isnt_empty(format('SELECT 1 FROM public.cells WHERE id = %L', pg_temp.c(12)),
   'RN-08d/P3: a célula 12 é visível para P3 sob RLS');
 
 -- Cards da semana só com relatórios visíveis e da semana.
-SELECT is((SELECT reports_sent FROM public.dashboard_summary('2026-03-04 12:00-03')), 2::bigint,
-  'RN-08/P3: relatórios enviados em W = 2 (o invisível, o da semana anterior e o da seguinte ficam fora)');
-SELECT is((SELECT visitors FROM public.dashboard_summary('2026-03-04 12:00-03')), 2::bigint,
-  'RN-08/P3: visitantes em W = 2 (os 3 do relatório invisível não contam; visitantes nulos valem 0)');
+SELECT is((SELECT reports_sent FROM public.dashboard_summary('2026-03-04 12:00-03')), 3::bigint,
+  'RN-08/P3: relatórios enviados em W = 3 (os da semana anterior e da seguinte ficam fora; o da célula 12 conta, RN-04)');
+SELECT is((SELECT visitors FROM public.dashboard_summary('2026-03-04 12:00-03')), 5::bigint,
+  'RN-08/P3: visitantes em W = 5 (2 + os 3 do relatório da célula 12; visitantes nulos valem 0)');
 SELECT is((SELECT cells_not_held FROM public.dashboard_summary('2026-03-04 12:00-03')), 1::bigint,
   'RN-08/P3: células não realizadas em W = 1');
 RESET ROLE;

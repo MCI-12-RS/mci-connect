@@ -113,15 +113,19 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(4), 'E201-07 CC'), (pg_temp.role(5), 'E201-07 YL'), (pg_temp.role(6), 'E201-07 LE'),
   (pg_temp.role(7), 'E201-07 ED'), (pg_temp.role(8), 'E201-07 SA');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(2), 'view_members'),
-  (pg_temp.role(3), 'view_members'), (pg_temp.role(3), 'create_member'),
-  (pg_temp.role(4), 'view_members'), (pg_temp.role(4), 'create_cell'),
+  (pg_temp.role(2), 'view_all_church'),
+  (pg_temp.role(3), 'view_all_church'), (pg_temp.role(3), 'create_member'),
+  -- E2.02 (RN-19): cobre a função padrão (Membro) para cadastrar sem escolher função
+  (pg_temp.role(3), 'view_dashboard'), (pg_temp.role(3), 'view_own_ministry'), (pg_temp.role(3), 'edit_own_data'),
+  (pg_temp.role(3), 'submit_own_cell_report'),
+  (pg_temp.role(4), 'view_all_church'), (pg_temp.role(4), 'create_cell'),
   (pg_temp.role(5), 'submit_own_cell_report'), (pg_temp.role(5), 'view_own_reports'),
-  (pg_temp.role(6), 'view_members'), (pg_temp.role(6), 'edit_cell'),
+  (pg_temp.role(6), 'view_all_church'), (pg_temp.role(6), 'edit_cell'), (pg_temp.role(6), 'edit_cell_report'),
   (pg_temp.role(7), 'edit_own_data'),
-  (pg_temp.role(8), 'view_members'), (pg_temp.role(8), 'submit_any_visible_report');
+  (pg_temp.role(8), 'view_all_church'), (pg_temp.role(8), 'submit_any_visible_report');
 
 INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
   (pg_temp.m(1), 'Paulo Pastor E201-07', 'M', true, false);
@@ -184,8 +188,8 @@ SELECT is(
   w, t || ': a política de INSERT usa a função de permissão')
   FROM (VALUES
     ('cells', '(viewer_can_insert_cell() AND (deleted_at IS NULL) AND (deleted_by IS NULL))'),
-    ('cell_reports', '(viewer_can_insert_cell_report(cell_id) AND (deleted_at IS NULL) AND (deleted_by IS NULL))'),
-    ('cell_report_participants', 'viewer_can_insert_cell_report_participant(report_id)')) v(t, w);
+    ('cell_reports', '(viewer_can_insert_cell_report(cell_id) AND can_submit_report(cell_id) AND (deleted_at IS NULL) AND (deleted_by IS NULL))'),
+    ('cell_report_participants', E'(viewer_can_insert_cell_report_participant(report_id) AND (EXISTS ( SELECT 1\n   FROM cell_reports r\n  WHERE ((r.id = cell_report_participants.report_id) AND (r.deleted_at IS NULL)))))')) v(t, w);
 
 SELECT ok(pg_get_functiondef('public.enforce_insert_permission()'::regprocedure) LIKE '%' || f || '%',
           'enforce_insert_permission chama ' || f || ' (a mesma função da política)')
@@ -312,12 +316,12 @@ SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(3))), '42501',
   'edit_own_data sem ser líder ou timóteo: caso da RN-06 (célula de outra pessoa) → 42501');
 
 -- submit_own_cell_report (Yara).
-SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(3))), '42501',
-  'submit_own_cell_report: caso da RN-06 (célula de outra pessoa) → 42501');
+SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(3))), 'cell_deleted',
+  'submit_own_cell_report: célula excluída de outra pessoa → cell_deleted (E2.02: o excluído tem prioridade sobre o invisível)');
 SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(1))), 'cell_deleted',
   'submit_own_cell_report: a própria célula excluída → cell_deleted (quem tem direito recebe a regra)');
-SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(4))), '42501',
-  'submit_own_cell_report: célula de outra pessoa, caso da semana única → 42501 (ordem das conferências)');
+SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(4))), 'not_found_or_deleted',
+  'submit_own_cell_report: célula invisível de outra pessoa, caso da semana única → not_found_or_deleted (E2.02, RN-13; a permissão vem antes, as recusas de escopo depois)');
 SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_report(pg_temp.c(6))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'submit_own_cell_report: relatório válido da própria célula funciona');
@@ -331,8 +335,8 @@ SELECT is(pg_temp.code(6, pg_temp.ins_report(pg_temp.c(5))), '23505',
   'edit_cell: semana já ocupada → mensagem do trigger de semana única (23505)');
 SELECT is(pg_temp.code(6, pg_temp.ins_report(pg_temp.c(4), public.sp_today() - 14)), '23514',
   'edit_cell: data de outra semana → mensagem do trigger de semana atual (23514)');
-SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(7), public.sp_today() - 14)), '23514',
-  'edit_own_data como timóteo: data de outra semana → mensagem do trigger de semana atual');
+SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(7), public.sp_today() - 14)), '42501',
+  'edit_own_data como timóteo: não dá mais direito de lançar → 42501 (E2.02, RN-13)');
 SELECT is(pg_temp.try('authenticated', 6, pg_temp.ins_report(pg_temp.c(8))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'edit_cell: relatório válido funciona');
@@ -357,15 +361,15 @@ SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(40)) || ' ON 
 -- Yara (submit_own_cell_report): mesma semântica da política antiga.
 SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(4), pg_temp.m(40))), 'report_cell_deleted',
   'submit_own_cell_report: relatório da própria célula excluída → report_cell_deleted (RN-11)');
-SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(5), pg_temp.m(40))), '42501',
-  'submit_own_cell_report: relatório excluído da própria célula → 42501 (a política antiga não o enxergava)');
+SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(5), pg_temp.m(40))), 'not_found_or_deleted',
+  'submit_own_cell_report: relatório excluído da própria célula → not_found_or_deleted (E2.02: a função deixa a recusa para o trigger do E2.01)');
 SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(40))), '42501',
   'submit_own_cell_report: relatório de célula de outra pessoa → 42501');
-SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_part(pg_temp.r(3), pg_temp.m(41))),
+SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_part(pg_temp.r(3), pg_temp.m(25))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'submit_own_cell_report: participante válido no próprio relatório funciona');
 SELECT is(pg_temp.try('authenticated', 5, format('SELECT public.set_cell_report_participants(%L, %L)',
-                                                 pg_temp.r(3), ARRAY[pg_temp.m(40), pg_temp.m(41)])) ->> 'state',
+                                                 pg_temp.r(3), ARRAY[pg_temp.m(25)])) ->> 'state',
   '00000', 'submit_own_cell_report: set_cell_report_participants (INVOKER) continua funcionando');
 
 -- Com permissão em qualquer relatório (Lucas): as recusas de regra continuam iguais.
@@ -384,39 +388,48 @@ SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_part(pg_temp.r(8), pg_te
 SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_part(pg_temp.r(1), pg_temp.m(41))) ->> 'code',
   'not_found_or_deleted', 'service_role: relatório excluído continua recusado (DT-27)');
 
--- A função repete a política antiga, avaliada sob o RLS de quem grava, para
--- cada pessoa (com e sem permissão) e cada relatório da massa.
+-- A função repete a regra do E2.02 (DA-5 e RN-13), avaliada sob o RLS de quem
+-- grava, para cada pessoa (com e sem permissão) e cada relatório da massa. O
+-- oráculo usa só viewer_has() e can_submit_report: a expressão antiga
+-- (user_has_permission e can_manage_own_cell) saiu de authenticated.
 CREATE FUNCTION pg_temp.participant_mismatches() RETURNS text[] LANGUAGE plpgsql AS $$
 DECLARE
   _n int; _rep uuid; _new boolean; _old boolean; _out text[] := '{}';
   _reps uuid[] := ARRAY(SELECT pg_temp.r(k) FROM generate_series(1, 9) k);
+  _cell uuid; _live boolean; _week boolean;
 BEGIN
   FOREACH _n IN ARRAY ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 10] LOOP
     FOREACH _rep IN ARRAY _reps LOOP
+      -- Existência e situação do relatório, lidas como dono (a função é definer).
+      SELECT r.cell_id, (r.deleted_at IS NULL AND c.deleted_at IS NULL) INTO _cell, _live
+        FROM public.cell_reports r JOIN public.cells c ON c.id = r.cell_id WHERE r.id = _rep;
       PERFORM set_config('request.jwt.claims', json_build_object('sub', pg_temp.u(_n), 'role', 'authenticated')::text, true);
       EXECUTE 'SET LOCAL ROLE authenticated';
       _new := public.viewer_can_insert_cell_report_participant(_rep);
-      SELECT public.user_has_permission(auth.uid(), 'edit_cell'::public.permission_action)
-          OR public.user_has_permission(auth.uid(), 'submit_any_visible_report'::public.permission_action)
-          OR EXISTS (
-               SELECT 1 FROM public.cell_reports cr
-                WHERE cr.id = _rep
-                  AND (   (public.user_has_permission(auth.uid(), 'submit_own_cell_report'::public.permission_action)
-                           AND public.can_manage_own_cell(auth.uid(), cr.cell_id))
-                       OR (public.user_has_permission(auth.uid(), 'edit_own_data'::public.permission_action)
-                           AND public.can_manage_own_cell(auth.uid(), cr.cell_id))))
-        INTO _old;
+      _old := false;
+      IF public.viewer_has('edit_cell_report') OR public.viewer_has('edit_cell')
+         OR public.viewer_has('submit_any_visible_report') OR public.viewer_has('submit_own_cell_report') THEN
+        IF _cell IS NULL OR NOT _live THEN
+          _old := true;                      -- relatório inexistente ou excluído: a recusa é do trigger aa_
+        ELSE
+          SELECT (v.week_start = public.week_start(public.sp_today())) INTO _week
+            FROM public.cell_reports_view v WHERE v.id = _rep;
+          _old := (_week IS NOT NULL)
+                  AND (public.viewer_has('edit_cell_report')
+                       OR (public.can_submit_report(_cell) AND _week));
+        END IF;
+      END IF;
       EXECUTE 'RESET ROLE';
       PERFORM set_config('request.jwt.claims', '', true);
       IF _new IS DISTINCT FROM _old THEN
-        _out := _out || format('usuário %s, relatório %s: nova %s, antiga %s', _n, _rep, _new, _old);
+        _out := _out || format('usuário %s, relatório %s: nova %s, esperada %s', _n, _rep, _new, _old);
       END IF;
     END LOOP;
   END LOOP;
   RETURN _out;
 END $$;
 SELECT is(pg_temp.participant_mismatches(), '{}'::text[],
-  'participantes: viewer_can_insert_cell_report_participant = política antiga sob o RLS (9 pessoas × 9 relatórios)');
+  'participantes: viewer_can_insert_cell_report_participant = regra do E2.02 (DA-5) sob o RLS (9 pessoas × 9 relatórios)');
 
 -- Idem para relatórios e células (a política antiga não lia tabela sob RLS).
 CREATE FUNCTION pg_temp.report_cell_mismatches() RETURNS text[] LANGUAGE plpgsql AS $$
@@ -427,20 +440,16 @@ BEGIN
   FOREACH _n IN ARRAY ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 10] LOOP
     PERFORM set_config('request.jwt.claims', json_build_object('sub', pg_temp.u(_n), 'role', 'authenticated')::text, true);
     EXECUTE 'SET LOCAL ROLE authenticated';
-    IF public.viewer_can_insert_cell() IS DISTINCT FROM
-       public.user_has_permission(auth.uid(), 'create_cell'::public.permission_action) THEN
+    IF public.viewer_can_insert_cell() IS DISTINCT FROM public.viewer_has('create_cell') THEN
       _out := _out || format('usuário %s: células', _n);
     END IF;
     FOREACH _cell IN ARRAY _cells LOOP
       _new := public.viewer_can_insert_cell_report(_cell);
-      _old := public.user_has_permission(auth.uid(), 'edit_cell'::public.permission_action)
-           OR public.user_has_permission(auth.uid(), 'submit_any_visible_report'::public.permission_action)
-           OR (public.user_has_permission(auth.uid(), 'submit_own_cell_report'::public.permission_action)
-               AND public.can_manage_own_cell(auth.uid(), _cell))
-           OR (public.user_has_permission(auth.uid(), 'edit_own_data'::public.permission_action)
-               AND public.can_manage_own_cell(auth.uid(), _cell));
+      -- RN-13: "Editar Próprio Cadastro" deixou de ser direito de lançar.
+      _old := public.viewer_has('edit_cell') OR public.viewer_has('submit_any_visible_report')
+              OR public.viewer_has('submit_own_cell_report');
       IF _new IS DISTINCT FROM _old THEN
-        _out := _out || format('usuário %s, célula %s: nova %s, antiga %s', _n, _cell, _new, _old);
+        _out := _out || format('usuário %s, célula %s: nova %s, esperada %s', _n, _cell, _new, _old);
       END IF;
     END LOOP;
     EXECUTE 'RESET ROLE';
@@ -449,7 +458,7 @@ BEGIN
   RETURN _out;
 END $$;
 SELECT is(pg_temp.report_cell_mismatches(), '{}'::text[],
-  'relatórios e células: as funções = políticas antigas (9 pessoas × 9 células)');
+  'relatórios e células: as funções = regra do E2.02 (RN-13; 9 pessoas × 9 células)');
 
 -- ===========================================================================
 -- 7. UPDATE e DELETE: o USING filtra antes dos triggers — 6 verificações

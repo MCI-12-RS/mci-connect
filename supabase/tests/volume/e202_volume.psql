@@ -1,0 +1,216 @@
+-- E2.02 (PR 1): volume de referência e metas do risco 8.
+-- Spec: docs/specs/e2-02-perfis-escopo.md (repositório apps-mci), Riscos, item 8:
+-- 20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações
+-- (o volume do E1.08), medidos com um pastor e um G12 com "Visualizar Seu
+-- Ministério".
+--
+-- Metas:
+--   - página de lista com contagem abaixo de 300 ms, inclusive para o pastor;
+--   - dashboard_summary abaixo de 800 ms;
+--   - my_access abaixo de 50 ms;
+--   - lançamento com 30 participantes abaixo de 300 ms;
+--   - PATCH de membro abaixo de 20 ms.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e202_volume.psql > e202_explain.txt
+-- A saída traz o EXPLAIN (ANALYZE, BUFFERS) de cada consulta e uma linha
+-- "META" com o tempo e o limite.
+
+\set ON_ERROR_STOP on
+-- As colunas que as telas pedem (src/lib/*/fields.ts): a lista não lê search_text nem as colunas de vínculo celular.
+\set member_cols 'id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, is_baptized, baptism_date, is_active, g12_level, total_disciples, total_cells, role_id, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code'
+\set cell_cols 'id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, timothy_name, host_name, g12_leader_name'
+\set report_cols 'id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, visitors_count, cell_leader_name, cell_street, cell_number, cell_complement, cell_neighborhood, cell_deleted'
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers (níveis e totais explícitos)
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas: 2 pastores casados (1 e 2), 12 G12 (3 a 14, casados dois a dois) e uma árvore
+-- de 12 discípulos por pessoa até 20.000 membros.
+INSERT INTO auth.users (id, email)
+SELECT ('a2020000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e202-vol-' || n || '@teste.invalid' FROM generate_series(1, 4) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, g12_level, is_active, has_leadership, auth_user_id, role_id, created_at)
+SELECT ('c2020000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2020000-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2020000-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2020000-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 2 THEN 0 WHEN n <= 14 THEN 1 WHEN n <= 158 THEN 2 WHEN n <= 1886 THEN 3 WHEN n <= 22000 THEN 4 ELSE 5 END,
+       n % 10 <> 0,
+       n > 2,
+       CASE n WHEN 1 THEN 'a2020000-0000-0000-0000-000000000001'::uuid
+              WHEN 3 THEN 'a2020000-0000-0000-0000-000000000003'::uuid
+              WHEN 100 THEN 'a2020000-0000-0000-0000-000000000004'::uuid END,
+       CASE WHEN n IN (1, 3, 100) THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day'
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células com líder, timóteo e anfitrião espalhados pela árvore.
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active)
+SELECT ('d2020000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2020000-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2020000-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2020000-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', true
+  FROM generate_series(1, 1500) n;
+
+-- 100 mil relatórios (67 semanas passadas por célula; a semana atual fica livre para o lançamento) e 800 mil participações (8 por relatório).
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2020000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2020000-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', true, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT ('e2020000-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('c2020000-0000-0000-0000-' || lpad((15 + ((i::bigint * 8 + k) * 7919) % 19980)::text, 12, '0'))::uuid
+  FROM generate_series(0, 99999) i, generate_series(0, 7) k;
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' reports=' || (SELECT count(*) FROM public.cell_reports) || ' participants=' || (SELECT count(*) FROM public.cell_report_participants) AS volume;
+
+-- Sessão como a pessoa n (1 = pastor Samuel, 3 = G12, 100 = Líder mais abaixo).
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub',
+    CASE _n WHEN 1 THEN 'a2020000-0000-0000-0000-000000000001' WHEN 3 THEN 'a2020000-0000-0000-0000-000000000003'
+            ELSE 'a2020000-0000-0000-0000-000000000004' END, 'role', 'authenticated')::text, true) $$;
+-- Tempo de uma consulta, em ms, pela medida do próprio servidor (EXPLAIN ANALYZE).
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+    IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+  END LOOP;
+  RETURN round(_best, 1);
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- Persona 1: pastor Samuel (função Líder, Seu Ministério: a árvore inteira).
+-- Persona 2: G12 Pedro (função Líder: um ministério de cerca de 1/12 da árvore).
+-- ---------------------------------------------------------------------------
+\echo
+\echo '######## PASTOR (Samuel, árvore inteira) ########'
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+\echo '--- Lista de membros: página (25) ordenada por nome, com a busca vazia'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols') \gexec
+\echo '--- Lista de membros: contagem exata'
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.members_view;
+\echo '--- Lista de células: página e contagem'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cells_view;
+\echo '--- Lista de relatórios: página e contagem'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cell_reports_view;
+\echo '--- Contagem de participantes dos 25 relatórios da página (segunda consulta da tela)'
+EXPLAIN (ANALYZE, BUFFERS) SELECT id, participants_count FROM public.cell_reports_view
+  WHERE id IN (SELECT id FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25);
+\echo '--- dashboard_summary'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary();
+\echo '--- my_access'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.my_access();
+\echo '--- ministry_tree_nodes (raízes)'
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.ministry_tree_nodes();
+SELECT 'META pastor lista membros + contagem (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.members_view$q$) AS ms;
+SELECT 'META pastor lista células + contagem (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META pastor lista relatórios: página (ms)', pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols')) AS ms;
+SELECT 'META pastor lista relatórios: contagem (ms)', pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+SELECT array_to_string(array_agg(quote_literal(id)), ',') AS ids25 FROM (SELECT id FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25) q \gset
+SELECT 'META pastor lista relatórios: contagem de participantes da página, com os 25 ids (ms)', pg_temp.ms(format('SELECT id, participants_count FROM public.cell_reports_view WHERE id IN (%s)', :'ids25')) AS ms;
+SELECT 'META pastor lista relatórios + contagem + participantes (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) + pg_temp.ms(format('SELECT id, participants_count FROM public.cell_reports_view WHERE id IN (%s)', :'ids25')) AS ms;
+SELECT 'META pastor dashboard_summary (ms, meta 800)', pg_temp.ms($q$SELECT * FROM public.dashboard_summary()$q$) AS ms;
+SELECT 'META pastor my_access (ms, meta 50)', pg_temp.ms($q$SELECT * FROM public.my_access()$q$, 20) AS ms;
+RESET ROLE;
+
+\echo
+\echo '######## G12 (Pedro, um ministério) ########'
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+\echo '--- Lista de membros: página e contagem'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.members_view;
+\echo '--- Lista de células: página e contagem'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cells_view;
+\echo '--- Lista de relatórios: página e contagem'
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cell_reports_view;
+\echo '--- dashboard_summary'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary();
+\echo '--- my_access'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.my_access();
+SELECT 'META G12 lista membros + contagem (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.members_view$q$) AS ms;
+SELECT 'META G12 lista células + contagem (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META G12 lista relatórios: página (ms)', pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols')) AS ms;
+SELECT 'META G12 lista relatórios: contagem (ms)', pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+SELECT array_to_string(array_agg(quote_literal(id)), ',') AS ids25 FROM (SELECT id FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25) q \gset
+SELECT 'META G12 lista relatórios: contagem de participantes da página, com os 25 ids (ms)', pg_temp.ms(format('SELECT id, participants_count FROM public.cell_reports_view WHERE id IN (%s)', :'ids25')) AS ms;
+SELECT 'META G12 lista relatórios + contagem + participantes (ms, meta 300)', pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols')) + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) + pg_temp.ms(format('SELECT id, participants_count FROM public.cell_reports_view WHERE id IN (%s)', :'ids25')) AS ms;
+SELECT 'META G12 dashboard_summary (ms, meta 800)', pg_temp.ms($q$SELECT * FROM public.dashboard_summary()$q$) AS ms;
+SELECT 'META G12 my_access (ms, meta 50)', pg_temp.ms($q$SELECT * FROM public.my_access()$q$, 20) AS ms;
+
+\echo '--- PATCH de membro (Pedro edita as observações de um membro do ministério dele)'
+EXPLAIN (ANALYZE, BUFFERS) UPDATE public.members SET notes = 'editado' WHERE id = 'c2020000-0000-0000-0000-000000000200';
+SELECT 'META G12 PATCH de membro (ms, meta 20)', pg_temp.ms($q$UPDATE public.members SET notes = 'editado ' || now() WHERE id = 'c2020000-0000-0000-0000-000000000200'$q$, 20) AS ms;
+RESET ROLE;
+
+-- Lançamento com 30 participantes: o relatório da semana atual de uma célula e os participantes, como a tela faz
+-- (INSERT do relatório e set_cell_report_participants), pelo pastor e pelo G12.
+CREATE FUNCTION pg_temp.launch_ms(_cell uuid, _n int) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz := clock_timestamp(); _t1 numeric; _t2 numeric; _t3 numeric; _id uuid; _ids uuid[];
+BEGIN
+  INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme)
+  VALUES (_cell, public.sp_today(), '23:59', true, 'Lançamento volume') RETURNING id INTO _id;
+  _t1 := round(extract(epoch FROM clock_timestamp() - _t) * 1000, 1);
+  _t := clock_timestamp();
+  SELECT array_agg(id) INTO _ids FROM (SELECT id FROM public.members_view ORDER BY id LIMIT _n) q;   -- escolha dos 30 (seletor, fora do lançamento)
+  _t2 := round(extract(epoch FROM clock_timestamp() - _t) * 1000, 1);
+  _t := clock_timestamp();
+  PERFORM public.set_cell_report_participants(_id, _ids);
+  _t3 := round(extract(epoch FROM clock_timestamp() - _t) * 1000, 1);
+  RETURN 'INSERT do relatório=' || _t1 || ' ms; escolha dos ' || _n || ' (fora do lançamento)=' || _t2 || ' ms; set_cell_report_participants=' || _t3 || ' ms; lançamento (INSERT + RPC)=' || (_t1 + _t3) || ' ms';
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.launch_ms(uuid, int) TO authenticated;
+-- Uma célula que cada pessoa vê, sem relatório na semana atual.
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT id AS cell_g12 FROM public.cells_view ORDER BY id LIMIT 1 \gset
+RESET ROLE;
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+SELECT id AS cell_past FROM public.cells_view ORDER BY id DESC LIMIT 1 \gset
+RESET ROLE;
+\echo '--- Diagnóstico do set_cell_report_participants com 30 participantes (custo de cada peça)'
+\echo '--- Lançamento: relatório + 30 participantes'
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+SELECT 'META pastor lançamento com 30 participantes (ms, meta 300)', pg_temp.launch_ms(:'cell_past', 30) AS detalhe;
+SELECT array_agg(id) AS ids30 FROM (SELECT id FROM public.members_view ORDER BY id LIMIT 30) q \gset
+SELECT 'DIAG pastor viewer_can_insert_cell_report_participant, 1 chamada (a política de INSERT e o a0_check_insert_permission chamam uma vez por participante) (ms)', pg_temp.ms($q$SELECT public.viewer_can_insert_cell_report_participant((SELECT id FROM public.cell_reports LIMIT 1))$q$) AS ms;
+SELECT 'DIAG pastor leitura da cell_reports_view por id, para comparação: a viewer_can_insert_cell_report_participant não lê mais a view (ms)', pg_temp.ms($q$SELECT 1 FROM public.cell_reports_view WHERE id = (SELECT id FROM public.cell_reports LIMIT 1)$q$) AS ms;
+SELECT 'DIAG pastor 30 x viewer_sees_member (ms)', pg_temp.ms(format('SELECT count(*) FROM unnest(%L::uuid[]) i WHERE public.viewer_sees_member(i)', :'ids30')) AS ms;
+SELECT 'DIAG pastor 1 x viewer_scope_contains_any(30 ids) (ms)', pg_temp.ms(format('SELECT public.viewer_scope_contains_any(%L::uuid[])', :'ids30')) AS ms;
+SELECT 'DIAG pastor viewer_ministry_member_ids() inteira (ms)', pg_temp.ms('SELECT count(*) FROM public.viewer_ministry_member_ids()') AS ms;
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT 'META G12 lançamento com 30 participantes (ms, meta 300)', pg_temp.launch_ms(:'cell_g12', 30) AS detalhe;
+SELECT array_agg(id) AS ids30 FROM (SELECT id FROM public.members_view ORDER BY id LIMIT 30) q \gset
+SELECT 'DIAG G12 30 x viewer_sees_member (ms)', pg_temp.ms(format('SELECT count(*) FROM unnest(%L::uuid[]) i WHERE public.viewer_sees_member(i)', :'ids30')) AS ms;
+SELECT 'DIAG G12 1 x viewer_scope_contains_any(30 ids) (ms)', pg_temp.ms(format('SELECT public.viewer_scope_contains_any(%L::uuid[])', :'ids30')) AS ms;
+SELECT 'DIAG G12 viewer_ministry_member_ids() inteira (ms)', pg_temp.ms('SELECT count(*) FROM public.viewer_ministry_member_ids()') AS ms;
+RESET ROLE;
+ROLLBACK;

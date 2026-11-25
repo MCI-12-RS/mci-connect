@@ -158,13 +158,13 @@ SELECT pg_temp.u(n), 'e108pr5-' || n || '@teste.local' FROM generate_series(1, 8
 -- create-user-admin), 8 conta da Xênia (nunca entra).
 
 INSERT INTO public.roles (id, name, is_system) VALUES
-  (pg_temp.role(1), 'Teste E108 PR5 P1 sistema',                      true),
+  (pg_temp.role(1), 'Teste E108 PR5 P1 sistema',                      false),
   (pg_temp.role(2), 'Teste E108 PR5 P2 igreja toda, edita',           false),
   (pg_temp.role(3), 'Teste E108 PR5 P3 ministério, sensível, edita',  false),
   (pg_temp.role(4), 'Teste E108 PR5 próprio cadastro',                false),
   (pg_temp.role(5), 'Teste E108 PR5 cadastra sem dados sensíveis',    false);
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(1), 'view_members'),
+  (pg_temp.role(1), 'view_all_church'),
   (pg_temp.role(1), 'view_sensitive_data'),
   (pg_temp.role(1), 'edit_member'),
   (pg_temp.role(1), 'delete_member'),
@@ -177,7 +177,12 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(3), 'edit_member'),
   (pg_temp.role(4), 'edit_own_data'),
   (pg_temp.role(5), 'create_member'),
-  (pg_temp.role(5), 'view_all_church');
+  (pg_temp.role(5), 'view_all_church'),
+  -- E2.02 (RN-19): quem cadastra sem escolher função precisa cobrir a função padrão (Membro).
+  (pg_temp.role(5), 'view_dashboard'),
+  (pg_temp.role(5), 'view_own_ministry'),
+  (pg_temp.role(5), 'edit_own_data'),
+  (pg_temp.role(5), 'submit_own_cell_report');
 
 -- Árvore (nível entre parênteses):
 --   Pastores Paulo (01) e Priscila (02, P1), casados.
@@ -531,7 +536,8 @@ SET LOCAL ROLE authenticated;
 SELECT lives_ok(format($$ UPDATE public.members SET mobile_whatsapp = '51998887766' WHERE id = %L $$, pg_temp.m(6)),
   'Próprio cadastro: UPDATE do próprio celular é aceito');
 SELECT throws_ok(format($$ UPDATE public.members SET leader_id = %L WHERE id = %L $$, pg_temp.m(5), pg_temp.m(6)),
-  '42501', NULL, 'Próprio cadastro sem edit_member: trocar o próprio líder → 42501 (regra 5)');
+  '22023', 'Você só pode alterar os seus dados pessoais. Não é permitido alterar: líder.',
+  'Próprio cadastro sem edit_member: trocar o próprio líder → own_data_only, 22023 (regra 5; E2.02 AQ-5 tira do 42501)');
 RESET ROLE;
 SELECT is((SELECT mobile_whatsapp FROM public.members WHERE id = pg_temp.m(6)), '51998887766',
   'Próprio cadastro: o celular muda (RN-12)');

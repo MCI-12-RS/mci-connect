@@ -151,18 +151,19 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(4), 'E201-02 LE ministério'), (pg_temp.role(5), 'E201-02 só delete_cell'),
   (pg_temp.role(6), 'E201-02 AD parcial'), (pg_temp.role(8), 'E201-02 auditoria');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(2), 'view_members'), (pg_temp.role(2), 'view_dashboard'), (pg_temp.role(2), 'create_member'),
+  (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'view_dashboard'), (pg_temp.role(2), 'create_member'),
   (pg_temp.role(2), 'edit_member'), (pg_temp.role(2), 'delete_member'), (pg_temp.role(2), 'create_cell'),
   (pg_temp.role(2), 'edit_cell'), (pg_temp.role(2), 'delete_cell'), (pg_temp.role(2), 'delete_cell_report'),
-  (pg_temp.role(3), 'view_members'), (pg_temp.role(3), 'view_dashboard'),
+  (pg_temp.role(3), 'view_all_church'), (pg_temp.role(3), 'view_dashboard'),
   (pg_temp.role(4), 'view_own_ministry'), (pg_temp.role(4), 'view_dashboard'), (pg_temp.role(4), 'delete_member'),
   (pg_temp.role(4), 'delete_cell'), (pg_temp.role(4), 'delete_cell_report'),
-  (pg_temp.role(5), 'view_members'), (pg_temp.role(5), 'delete_cell'),
-  (pg_temp.role(6), 'manage_roles'), (pg_temp.role(6), 'view_members'), (pg_temp.role(6), 'delete_member'),
+  (pg_temp.role(5), 'view_all_church'), (pg_temp.role(5), 'delete_cell'),
+  (pg_temp.role(6), 'manage_roles'), (pg_temp.role(6), 'view_all_church'), (pg_temp.role(6), 'delete_member'),
   (pg_temp.role(6), 'view_dashboard'),
-  (pg_temp.role(8), 'view_audit_log'), (pg_temp.role(8), 'view_members');
+  (pg_temp.role(8), 'view_audit_log'), (pg_temp.role(8), 'view_all_church');
 
 -- Árvore (nível entre parênteses):
 --   Paulo Pastor (0)

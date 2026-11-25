@@ -70,7 +70,7 @@ $$;
 --      menos os dois;
 --   4. direct_disciples > 0: abrir o nó traz exatamente esses discípulos.
 -- Devolve 5 verificações (a 5ª: quantos níveis foram abertos, no mínimo).
-CREATE FUNCTION pg_temp.tree_parity(_who text, _starts text[], _min_levels int)
+CREATE FUNCTION pg_temp.tree_parity(_who text, _starts text[], _min_levels int, _roots uuid[] DEFAULT NULL)
 RETURNS SETOF text LANGUAGE plpgsql AS $$
 DECLARE
   _queue text[] := _starts;
@@ -102,7 +102,7 @@ BEGIN
         SELECT c.id
           FROM public.members c
          WHERE c.is_active
-           AND CASE WHEN _parents IS NULL THEN c.is_pastor
+           AND CASE WHEN _parents IS NULL THEN (CASE WHEN _roots IS NULL THEN c.is_pastor ELSE c.id = ANY (_roots) END)
                     ELSE c.leader_id = ANY (_parents) AND c.id <> ALL (_parents) END
         UNION
         SELECT s.id
@@ -110,7 +110,7 @@ BEGIN
           JOIN public.members s ON s.id = c.spouse_id
          WHERE c.is_active
            AND s.is_active
-           AND CASE WHEN _parents IS NULL THEN c.is_pastor
+           AND CASE WHEN _parents IS NULL THEN (CASE WHEN _roots IS NULL THEN c.is_pastor ELSE c.id = ANY (_roots) END)
                     ELSE c.leader_id = ANY (_parents) AND c.id <> ALL (_parents) AND s.id <> ALL (_parents) END
       ) e;
     IF _got IS DISTINCT FROM _exp THEN
@@ -175,12 +175,12 @@ SELECT pg_temp.u(n), 'e108pr4-' || n || '@teste.local' FROM generate_series(1, 7
 -- 6 P3 do ministério B, 7 sem cadastro de membro
 
 INSERT INTO public.roles (id, name, is_system) VALUES
-  (pg_temp.role(1), 'Teste E108 PR4 P1 sistema',     true),
+  (pg_temp.role(1), 'Teste E108 PR4 P1 sistema',     false),
   (pg_temp.role(2), 'Teste E108 PR4 P2 igreja toda', false),
   (pg_temp.role(3), 'Teste E108 PR4 P3 ministério',  false),
   (pg_temp.role(4), 'Teste E108 PR4 P4 relatórios',  false);
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(1), 'view_members'),
+  (pg_temp.role(1), 'view_all_church'),
   (pg_temp.role(2), 'view_all_church'),
   (pg_temp.role(3), 'view_own_ministry'),
   (pg_temp.role(4), 'view_all_reports'),
@@ -440,8 +440,9 @@ SELECT is((SELECT count(*)::int FROM public.ministry_tree_nodes(pg_temp.ms(10, 1
   'Cônjuge/P3: continuam 11 nós; João sozinho');
 SELECT is_empty(format('SELECT * FROM public.ministry_tree_nodes(%L)', pg_temp.ms(41)),
   'Cônjuge/P3: abrir Bruno (invisível) não devolve ninguém');
-SELECT is_empty('SELECT * FROM public.ministry_tree_nodes()',
-  'P3: não vê pastores (get_ministry_root nulo para eles): raízes vazias');
+SELECT results_eq('SELECT member_id, spouse_id FROM public.ministry_tree_nodes()',
+  format('VALUES (%L::uuid, %L::uuid)', pg_temp.m(10), pg_temp.m(11)),
+  'P3: não vê pastores; a raiz é o casal G12 dele (DA-6 do E2.02)');
 SELECT results_eq(
   format('SELECT member_id, spouse_id, direct_disciples FROM public.ministry_tree_nodes(%L)', pg_temp.ms(1, 2)),
   format('VALUES (%L::uuid, %L::uuid, 12::bigint)', pg_temp.m(10), pg_temp.m(11)),
@@ -463,10 +464,8 @@ RESET ROLE;
 -- P5 (pastor Paulo, sem função): só vê o próprio cadastro.
 SELECT pg_temp.login(5);
 SET LOCAL ROLE authenticated;
-SELECT results_eq(
-  'SELECT member_id, spouse_id, spouse_name, direct_disciples, total_disciples, total_cells FROM public.ministry_tree_nodes()',
-  format('VALUES (%L::uuid, NULL::uuid, NULL::text, 0::bigint, 30, 8)', pg_temp.m(1)),
-  'Cônjuge/P5: o pastor sem permissão vê só a si mesmo como raiz: sem a esposa invisível e sem discípulos');
+SELECT is_empty('SELECT * FROM public.ministry_tree_nodes()',
+  'Cônjuge/P5: o pastor sem permissão de escopo não recebe nenhuma raiz (E2.02: Ministérios exige ver a igreja ou o ministério)');
 SELECT is_empty(format('SELECT * FROM public.ministry_tree_nodes(%L)', pg_temp.ms(1, 2)),
   'P5: abrir o próprio nó não devolve ninguém');
 RESET ROLE;
@@ -656,13 +655,13 @@ RESET ROLE;
 -- P3 ministério A (view_own_ministry)
 SELECT pg_temp.login(3);
 SET LOCAL ROLE authenticated;
-SELECT * FROM pg_temp.tree_parity('P3', (SELECT s FROM pg_temp.starts), 7);
+SELECT * FROM pg_temp.tree_parity('P3', (SELECT s FROM pg_temp.starts), 7, pg_temp.ms(10));
 RESET ROLE;
 
 -- P3 ministério B (view_own_ministry)
 SELECT pg_temp.login(6);
 SET LOCAL ROLE authenticated;
-SELECT * FROM pg_temp.tree_parity('P3 do ministério B', (SELECT s FROM pg_temp.starts), 6);
+SELECT * FROM pg_temp.tree_parity('P3 do ministério B', (SELECT s FROM pg_temp.starts), 6, pg_temp.ms(41));
 RESET ROLE;
 
 -- P4 relatórios (view_all_reports, sem ver membros)
@@ -674,7 +673,7 @@ RESET ROLE;
 -- P5 básico (pastor sem função)
 SELECT pg_temp.login(5);
 SET LOCAL ROLE authenticated;
-SELECT * FROM pg_temp.tree_parity('P5', (SELECT s FROM pg_temp.starts), 4);
+SELECT * FROM pg_temp.tree_parity('P5', (SELECT s FROM pg_temp.starts), 4, '{}'::uuid[]);
 RESET ROLE;
 
 -- Sem cadastro de membro

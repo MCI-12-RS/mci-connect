@@ -83,9 +83,10 @@ INSERT INTO auth.users (id, email) VALUES
   ('$U1', 'e201-conc-1@teste.invalid'), ('$U2', 'e201-conc-2@teste.invalid'), ('$U3', 'e201-conc-3@teste.invalid');
 INSERT INTO public.roles (id, name) VALUES ('$RAD', 'E201 Conc AD'), ('$RLE', 'E201 Conc LE');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT '$RAD', p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT '$RAD', p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  ('$RLE', 'view_members'), ('$RLE', 'edit_member'), ('$RLE', 'delete_member'), ('$RLE', 'edit_cell'),
+  ('$RLE', 'view_all_church'), ('$RLE', 'edit_member'), ('$RLE', 'delete_member'), ('$RLE', 'edit_cell'),
   ('$RLE', 'create_cell'), ('$RLE', 'delete_cell'), ('$RLE', 'delete_cell_report'), ('$RLE', 'edit_cell_report');
 INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
   ('$M_PASTOR', 'E201 Conc Pastor', 'M', true, false);

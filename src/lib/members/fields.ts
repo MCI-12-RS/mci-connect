@@ -29,6 +29,7 @@ export type MemberRow = Omit<
   | "search_text"
   | "male_cells"
   | "female_cells"
+  | "spouse_name"
   | "created_at"
   | "updated_at"
 >;

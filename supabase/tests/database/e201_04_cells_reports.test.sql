@@ -130,14 +130,15 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(4), 'E201-04 MIN'), (pg_temp.role(5), 'E201-04 LID'), (pg_temp.role(6), 'E201-04 MB'),
   (pg_temp.role(9), 'E201-04 LE ministério');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(1), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(2), 'view_members'), (pg_temp.role(2), 'create_cell'), (pg_temp.role(2), 'edit_cell'),
+  (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'create_cell'), (pg_temp.role(2), 'edit_cell'),
   (pg_temp.role(2), 'delete_cell'), (pg_temp.role(2), 'delete_cell_report'),
-  (pg_temp.role(3), 'view_members'), (pg_temp.role(3), 'edit_cell_report'), (pg_temp.role(3), 'edit_cell'),
+  (pg_temp.role(3), 'view_all_church'), (pg_temp.role(3), 'edit_cell_report'), (pg_temp.role(3), 'edit_cell'),
   (pg_temp.role(4), 'view_own_ministry'), (pg_temp.role(4), 'view_dashboard'),
   (pg_temp.role(5), 'submit_own_cell_report'), (pg_temp.role(5), 'view_own_reports'), (pg_temp.role(5), 'edit_own_data'),
-  (pg_temp.role(6), 'view_members'), (pg_temp.role(6), 'view_dashboard'),
+  (pg_temp.role(6), 'view_all_church'), (pg_temp.role(6), 'view_dashboard'),
   (pg_temp.role(9), 'view_own_ministry'), (pg_temp.role(9), 'delete_cell'), (pg_temp.role(9), 'delete_cell_report');
 
 -- Paulo Pastor → Gina (G12, ministério A) e Dora (G12, ministério B).

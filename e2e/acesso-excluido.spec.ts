@@ -82,7 +82,7 @@ test.beforeAll(async () => {
      INSERT INTO public.roles (id, name) VALUES (${lit(ROLE)}, 'QA Acesso Excluído');
      INSERT INTO public.role_permissions (role_id, permission)
      SELECT ${lit(ROLE)}::uuid, p::public.permission_action
-     FROM unnest(ARRAY['view_dashboard', 'view_members', 'view_all_church', 'edit_own_data']) p;
+     FROM unnest(ARRAY['view_dashboard', 'view_all_church', 'edit_own_data']) p;
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, auth_user_id, role_id, email, cpf, mobile_whatsapp)
      VALUES ${ALL.map(row).join(",\n            ")};
      COMMIT;`,

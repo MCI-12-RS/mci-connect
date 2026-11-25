@@ -193,7 +193,7 @@ INSERT INTO public.roles (id, name) VALUES
   (pg_temp.role(14), 'E201-05 AD P4b'), (pg_temp.role(15), 'E201-05 AD P5'), (pg_temp.role(16), 'E201-05 AD P4'),
   (pg_temp.role(20), 'E201-05 P3 do ministério V'), (pg_temp.role(30), 'E201-05 AD global');
 INSERT INTO public.role_permissions (role_id, permission) VALUES
-  (pg_temp.role(1), 'view_members'), (pg_temp.role(1), 'view_dashboard'),
+  (pg_temp.role(1), 'view_all_church'), (pg_temp.role(1), 'view_dashboard'),
   (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'view_dashboard'),
   (pg_temp.role(3), 'view_own_ministry'), (pg_temp.role(3), 'view_dashboard'),
   (pg_temp.role(4), 'view_own_reports'),
@@ -201,7 +201,7 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(6), 'view_all_reports'),
   (pg_temp.role(7), 'view_dashboard'),
   (pg_temp.role(9), 'view_own_ministry'),
-  (pg_temp.role(11), 'manage_roles'), (pg_temp.role(11), 'view_members'),
+  (pg_temp.role(11), 'manage_roles'), (pg_temp.role(11), 'view_all_church'),
   (pg_temp.role(12), 'manage_roles'), (pg_temp.role(12), 'view_all_church'),
   (pg_temp.role(13), 'manage_roles'), (pg_temp.role(13), 'view_own_ministry'),
   (pg_temp.role(14), 'manage_roles'), (pg_temp.role(14), 'view_all_reports'),
@@ -209,7 +209,8 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(16), 'manage_roles'), (pg_temp.role(16), 'view_own_reports'),
   (pg_temp.role(20), 'view_own_ministry'), (pg_temp.role(20), 'view_dashboard');
 INSERT INTO public.role_permissions (role_id, permission)
-SELECT pg_temp.role(30), p FROM unnest(enum_range(NULL::public.permission_action)) p;
+SELECT pg_temp.role(30), p FROM unnest(enum_range(NULL::public.permission_action)) p
+WHERE p NOT IN ('view_members', 'view_own_ministry_dashboard');
 
 INSERT INTO auth.users (id, email)
 SELECT pg_temp.u(n), 'e201-05-' || n || '@teste.invalid'
@@ -433,8 +434,8 @@ SELECT is(pg_temp.ids(13, 'SELECT id::text FROM public.members_deleted_view'),
 SELECT is(pg_temp.ids(13, 'SELECT id::text FROM public.cells_deleted_view'), ARRAY[pg_temp.c(7)::text, pg_temp.c(9)::text],
   'RN-15: e as células excluídas de João e de Hélio (anfitrião Alberto, do A), não a de Beto (só do B)');
 SELECT is(pg_temp.ids(13, 'SELECT id::text FROM public.cell_reports_deleted_view'),
-  (SELECT array_agg(x::text ORDER BY x::text) FROM unnest(ARRAY[pg_temp.r(2), pg_temp.r(6), pg_temp.r(14)]) x),
-  'RN-15: e os relatórios excluídos do ministério A (inclusive o da célula excluída)');
+  (SELECT array_agg(x::text ORDER BY x::text) FROM unnest(ARRAY[pg_temp.r(2), pg_temp.r(4), pg_temp.r(6), pg_temp.r(14)]) x),
+  'RN-15: e os relatórios excluídos do ministério A (inclusive o da célula excluída e, desde o E2.02 (RN-04), o da célula 02, vista pelo anfitrião)');
 SELECT is(pg_temp.ids(15, 'SELECT id::text FROM public.cells_deleted_view'), ARRAY[pg_temp.c(8)::text],
   'RN-15: AD sem leitura vê só a própria célula excluída (ramo do líder)');
 SELECT is(pg_temp.ids(15, 'SELECT id::text FROM public.members_deleted_view'), '{}'::text[],

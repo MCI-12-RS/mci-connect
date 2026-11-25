@@ -159,9 +159,9 @@ test.beforeAll(async () => {
      INSERT INTO public.roles (id, name) VALUES
        (${lit(role(1))}, '${NAME} LE'), (${lit(role(2))}, '${NAME} CM'), (${lit(role(3))}, '${NAME} MB');
      INSERT INTO public.role_permissions (role_id, permission)
-     ${permissions(1, ["view_members", "view_all_church", "view_dashboard", "create_member", "delete_member"])}
-     UNION ALL ${permissions(2, ["view_members", "view_all_church", "view_dashboard", "create_member"])}
-     UNION ALL ${permissions(3, ["view_dashboard", "view_members", "view_all_church"])};
+     ${permissions(1, ["view_all_church", "view_dashboard", "create_member", "view_own_ministry", "edit_own_data", "submit_own_cell_report", "delete_member"])}
+     UNION ALL ${permissions(2, ["view_all_church", "view_dashboard", "create_member", "view_own_ministry", "edit_own_data", "submit_own_cell_report"])}
+     UNION ALL ${permissions(3, ["view_dashboard", "view_all_church"])};
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, auth_user_id, email, mobile_whatsapp, cpf) VALUES
        (${lit(member(90))}, ${lit(who("Lia Lopes"))}, 'F', false, true, ${lit(role(1))}, ${lit(auth.le)}, ${lit(LE.email)}, NULL, NULL),
        (${lit(member(91))}, ${lit(who("Caio Mota"))}, 'M', false, true, ${lit(role(2))}, ${lit(auth.cm)}, ${lit(CM.email)}, NULL, NULL),
