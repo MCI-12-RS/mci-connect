@@ -9,11 +9,15 @@ export function FieldHint({ id, children }: { id: string; children: string }) {
   );
 }
 
-/** Erro embaixo de um campo: ícone e texto, nunca só a cor (Acessibilidade). */
+/**
+ * Erro embaixo de um campo: ícone e texto, nunca só a cor (Acessibilidade).
+ * O texto fica em `text-foreground` e o vermelho só no ícone: o
+ * `text-destructive` sobre o fundo do diálogo não chega a 4,5:1 (UX-29).
+ */
 export function FieldError({ id, children }: { id: string; children: string }) {
   return (
-    <p id={id} className="flex items-start gap-1.5 text-sm text-destructive">
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+    <p id={id} className="flex items-start gap-1.5 text-sm text-foreground">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
       <span>{children}</span>
     </p>
   );
