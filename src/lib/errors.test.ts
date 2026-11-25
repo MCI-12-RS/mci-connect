@@ -3,6 +3,7 @@ import {
   APP_ERROR_HINT,
   PERMISSION_DENIED,
   isNetworkError,
+  isRecalcFailure,
   isPermissionDenied,
   parseAppError,
   readFunctionErrorBody,
@@ -168,5 +169,37 @@ describe("readFunctionErrorBody (corpo do erro de uma Edge Function)", () => {
     await expect(readFunctionErrorBody(functionError(undefined))).resolves.toBeNull();
     await expect(readFunctionErrorBody(new Error("x"))).resolves.toBeNull();
     await expect(readFunctionErrorBody({ context: "x" })).resolves.toBeNull();
+  });
+});
+
+describe("isRecalcFailure (E2.06, AQ-5 e DT-14)", () => {
+  const appError = (code: string) => ({
+    code: "22023",
+    message: "Não foi possível salvar as alterações. Tente de novo.",
+    details: JSON.stringify({ code, reason: "missing_row" }),
+    hint: APP_ERROR_HINT,
+  });
+
+  it("hierarchy_update_failed, no formato app_error", () => {
+    expect(isRecalcFailure(appError("hierarchy_update_failed"))).toBe(true);
+  });
+
+  it.each(["40P01", "40001", "55P03", "57014", "XX000", "53000", "53100", "53200", "53300", "53400"])(
+    "SQLSTATE transitório %s",
+    (code) => {
+      expect(isRecalcFailure({ code, message: "canceling statement due to statement timeout" })).toBe(true);
+    },
+  );
+
+  it("outras recusas de regra, permissão, queda de conexão e erros técnicos não são", () => {
+    expect(isRecalcFailure(appError("leader_cycle"))).toBe(false);
+    expect(isRecalcFailure({ code: PERMISSION_DENIED, message: "x" })).toBe(false);
+    expect(isRecalcFailure({ code: "", message: "TypeError: Failed to fetch" })).toBe(false);
+    expect(isRecalcFailure({ code: "23505", message: "duplicate key" })).toBe(false);
+    expect(isRecalcFailure({ code: "XX001", message: "x" })).toBe(false);
+    expect(isRecalcFailure({ code: "22023", message: "x" })).toBe(false);
+    expect(isRecalcFailure(null)).toBe(false);
+    expect(isRecalcFailure(new Error("x"))).toBe(false);
+    expect(isRecalcFailure("57014")).toBe(false);
   });
 });

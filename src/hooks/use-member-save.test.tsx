@@ -61,7 +61,7 @@ describe("useMemberSave: edição (DT-19)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("PATCH só com o que mudou, pedindo só o id de volta; sucesso recarrega Membros e as funções", async () => {
+  it("PATCH só com o que mudou, pedindo só o id de volta; sucesso recarrega as telas da hierarquia e as funções", async () => {
     const { save, invalidate } = setup();
     respondWith({ data: [{ id: "m1" }] });
 
@@ -74,7 +74,13 @@ describe("useMemberSave: edição (DT-19)", () => {
       ["eq", "id", "m1"],
       ["select", "id"],
     ]);
-    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([["members"], ["role-options"]]);
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      ["members"],
+      ["cells"],
+      ["cell_reports"],
+      ["dashboard"],
+      ["role-options"],
+    ]);
   });
 
   it("0 linhas: o cadastro sumiu; a lista recarrega e a sessão é conferida (E2.01)", async () => {
@@ -104,16 +110,30 @@ describe("useMemberSave: edição (DT-19)", () => {
     });
   });
 
-  it("40P01 (DT-25): falha técnica, com nova tentativa, sem texto técnico", async () => {
+  it("40P01 (DT-25): falha transitória do recálculo (E2.06, AQ-5), com nova tentativa, sem texto técnico", async () => {
     const { save } = setup();
     respondWith({ error: { code: "40P01", message: "deadlock detected" } });
-    expect(await save(update({ leader_id: "pedro" }))).toEqual({ kind: "failed", network: false });
+    expect(await save(update({ leader_id: "pedro" }))).toEqual({ kind: "failed", cause: "recalc" });
+  });
+
+  it("hierarchy_update_failed (E2.06, RN-08): falha no rodapé, e não recusa no topo", async () => {
+    const { save } = setup();
+    respondWith({
+      error: appError("Não foi possível salvar as alterações. Tente de novo.", { code: "hierarchy_update_failed", reason: "no_top" }),
+    });
+    expect(await save(update({ leader_id: "pedro" }))).toEqual({ kind: "failed", cause: "recalc" });
+  });
+
+  it("outro erro técnico: falha genérica", async () => {
+    const { save } = setup();
+    respondWith({ error: { code: "XX001", message: "data corrupted" } });
+    expect(await save(update({ notes: "x" }))).toEqual({ kind: "failed", cause: "other" });
   });
 
   it("queda de conexão: falha de rede", async () => {
     const { save } = setup();
     respondWith({ error: { code: "", message: "TypeError: Failed to fetch" } });
-    expect(await save(update({ notes: "x" }))).toEqual({ kind: "failed", network: true });
+    expect(await save(update({ notes: "x" }))).toEqual({ kind: "failed", cause: "network" });
   });
 
   it("42501: a recusa de permissão, no topo, que relê o acesso", async () => {
@@ -170,12 +190,12 @@ describe("useMemberSave: cadastro novo pela create-user-admin (DT-11)", () => {
   it("server_error e queda de conexão: falha, com o aviso de conexão só na queda", async () => {
     const { save } = setup();
     functionError(500, { error: "Erro interno.", code: "server_error" });
-    expect(await save(create())).toEqual({ kind: "failed", network: false });
+    expect(await save(create())).toEqual({ kind: "failed", cause: "other" });
 
     const offline = new Error("Failed to send a request to the Edge Function");
     offline.name = "FunctionsFetchError";
     invoke.mockResolvedValueOnce({ data: null, error: offline });
-    expect(await save(create())).toEqual({ kind: "failed", network: true });
+    expect(await save(create())).toEqual({ kind: "failed", cause: "network" });
   });
 });
 
@@ -196,7 +216,7 @@ describe("useMemberSave: tempo-limite do cadastro (T7)", () => {
       outcome = await pending;
     });
     expect(CREATE_MEMBER_TIMEOUT_MS).toBe(20_000);
-    expect(outcome).toEqual({ kind: "failed", network: true });
+    expect(outcome).toEqual({ kind: "failed", cause: "network" });
 
     invoke.mockResolvedValueOnce({ data: { member: { id: "novo" }, replayed: true }, error: null });
     await act(async () => {

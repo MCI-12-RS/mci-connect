@@ -60,7 +60,10 @@ const Members = () => {
   const showTable = useMinWidth(TABLE_MIN_WIDTH);
   const showWideColumns = useMinWidth(WIDE_TABLE_MIN_WIDTH);
 
-  const { data, isLoading, isError, isPlaceholderData } = useMembersList(list.params);
+  const { data, isLoading, isError, isPlaceholderData, isRefetching } = useMembersList(list.params);
+  // A lista na tela recarrega (troca de página ou depois de uma gravação): as
+  // linhas ficam em `opacity-60` e com `aria-busy` até a resposta (E1.08; E2.06, P44).
+  const refreshing = isPlaceholderData || isRefetching;
   const members = data?.rows ?? [];
   const total = data?.total ?? 0;
 
@@ -143,7 +146,7 @@ const Members = () => {
     if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
 
     return (
-      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {members.map((m) => (
           <div key={m.id} className="px-4 py-4 space-y-3">
             {/* Header: Avatar + Name + Actions */}
@@ -258,7 +261,7 @@ const Members = () => {
                     {showActions && <ActionsHead>{MEMBERS_LIST_TEXTS.columnActions}</ActionsHead>}
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody aria-busy={refreshing}>
                   {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
@@ -273,7 +276,7 @@ const Members = () => {
                     </TableRow>
                   ) : (
                     members.map((m) => (
-                      <TableRow key={m.id} className={isPlaceholderData ? "opacity-60" : undefined}>
+                      <TableRow key={m.id} className={refreshing ? "opacity-60" : undefined}>
                         {showWideColumns && (
                           <TableCell>
                             <Avatar className="w-10 h-10 border">

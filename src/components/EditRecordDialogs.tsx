@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -126,14 +126,16 @@ export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus, defineLe
 /** "Editar Célula" de uma célula pelo id. */
 export function EditCellDialog({ cellId, onClose, onCloseAutoFocus }: EditByIdDialogProps & { cellId: string }) {
   const { data: cell, isPending, isError, refetch } = useCell(cellId);
+  // Durante o envio, o formulário não fecha por "✕", `Esc` nem toque fora (E2.06, P44).
+  const [saving, setSaving] = useState(false);
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>Editar Célula</DialogTitle>
         </DialogHeader>
         {cell ? (
-          <CellForm cell={cell} onClose={onClose} />
+          <CellForm cell={cell} onClose={onClose} onPendingChange={setSaving} />
         ) : (
           <LoadState
             isPending={isPending}

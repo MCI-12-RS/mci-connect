@@ -32,6 +32,8 @@ import { listSubtitle } from "@/lib/access/access";
 const Cells = () => {
   const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
+  // Durante o envio, o formulário não fecha por "✕", `Esc` nem toque fora (E2.06, P44).
+  const [cellSaving, setCellSaving] = useState(false);
   const [editingCell, setEditingCell] = useState<CellRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
@@ -41,7 +43,10 @@ const Cells = () => {
   // Cartões até 1023 px e tabela a partir de 1024 px, já no primeiro render (P45).
   const showTable = useMinWidth(TABLE_MIN_WIDTH);
 
-  const { data, isLoading, isError, isPlaceholderData } = useCellsList(list.params);
+  const { data, isLoading, isError, isPlaceholderData, isRefetching } = useCellsList(list.params);
+  // A lista na tela recarrega (troca de página ou depois de uma gravação): as
+  // linhas ficam em `opacity-60` e com `aria-busy` até a resposta (E1.08; E2.06, P44).
+  const refreshing = isPlaceholderData || isRefetching;
   const cells = data?.rows ?? [];
   const total = data?.total ?? 0;
 
@@ -56,7 +61,7 @@ const Cells = () => {
     setEditingCell(cell);
     setFormOpen(true);
   };
-  const handleClose = () => { setFormOpen(false); setEditingCell(null); };
+  const handleClose = () => { setFormOpen(false); setEditingCell(null); setCellSaving(false); };
   const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setSelectedCellForReport(cell);
@@ -180,7 +185,7 @@ const Cells = () => {
     if (cells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
 
     return (
-      <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {cells.map((c) => (
           <div key={c.id} className="px-4 py-4 space-y-3">
             {/* Header */}
@@ -289,7 +294,7 @@ const Cells = () => {
                     {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody aria-busy={refreshing}>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                   ) : isError ? (
@@ -298,7 +303,7 @@ const Cells = () => {
                     <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
                   ) : (
                     cells.map((c) => (
-                      <TableRow key={c.id} className={isPlaceholderData ? "opacity-60" : undefined}>
+                      <TableRow key={c.id} className={refreshing ? "opacity-60" : undefined}>
                         <TableCell>
                           <div className="flex flex-col gap-1">
                             {renderLeader(c, "text-sm font-medium")}
@@ -341,7 +346,7 @@ const Cells = () => {
           )}
         </Card>
 
-        <Dialog open={formOpen} onOpenChange={handleClose}>
+        <Dialog open={formOpen} onOpenChange={(open) => !open && !cellSaving && handleClose()}>
           <DialogContent
             className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
@@ -349,7 +354,7 @@ const Cells = () => {
             <DialogHeader>
               <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
             </DialogHeader>
-            <CellForm cell={editingCell} onClose={handleClose} />
+            <CellForm cell={editingCell} onClose={handleClose} onPendingChange={setCellSaving} />
           </DialogContent>
         </Dialog>
 

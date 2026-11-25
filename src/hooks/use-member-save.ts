@@ -4,11 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { refreshAccess } from "@/hooks/use-access";
 import { ROLE_OPTIONS_QUERY_KEY } from "@/hooks/use-role-options";
 import { requestSessionCheck } from "@/lib/auth/session-check";
-import { isJsonObject, isNetworkError, readFunctionErrorBody } from "@/lib/errors";
+import { isJsonObject, isNetworkError, isRecalcFailure, readFunctionErrorBody, RECALC_FAILURE_CODE } from "@/lib/errors";
+import { refreshAfterMemberWrite } from "@/lib/query-refresh";
 import {
   memberRefusalFromCreate,
   memberRefusalFromError,
   type MemberFormRefusal,
+  type MemberSaveFailureCause,
 } from "@/lib/access/member-form";
 import { parseCreateMemberRefusal, type DeletedMatch } from "@/lib/members/deleted-matches";
 import type { MemberWrite } from "@/lib/members/fields";
@@ -43,8 +45,11 @@ export type MemberSaveResult =
   | { kind: "deletedMatches"; matches: DeletedMatch[]; accountEmail: boolean }
   /** Recusa de regra ou de permissão: nos campos ou no `Alert` do topo (T5). */
   | { kind: "refused"; refusal: MemberFormRefusal }
-  /** Queda de conexão, 40P01 (DT-25) ou erro técnico: "tente de novo" no rodapé (T7). */
-  | { kind: "failed"; network: boolean };
+  /**
+   * Queda de conexão, falha no recálculo da hierarquia ou falha transitória
+   * (40P01 e afins, E2.06 AQ-5), ou erro técnico: "tente de novo" no rodapé (T7).
+   */
+  | { kind: "failed"; cause: MemberSaveFailureCause };
 
 type CreateOutcome = Extract<MemberSaveResult, { kind: "saved" | "deletedMatches" | "refused" | "failed" }>;
 
@@ -56,11 +61,11 @@ type CreateOutcome = Extract<MemberSaveResult, { kind: "saved" | "deletedMatches
  */
 export const CREATE_MEMBER_TIMEOUT_MS = 20_000;
 
-/** A `create-user-admin` com tempo-limite: estourado, `{ kind: "failed", network: true }`. */
+/** A `create-user-admin` com tempo-limite: estourado, `{ kind: "failed", cause: "network" }`. */
 async function createMemberWithTimeout(request: CreateMemberRequest): Promise<CreateOutcome> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<CreateOutcome>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: "failed", network: true }), CREATE_MEMBER_TIMEOUT_MS);
+    timer = setTimeout(() => resolve({ kind: "failed", cause: "network" }), CREATE_MEMBER_TIMEOUT_MS);
   });
   try {
     return await Promise.race([createMember(request), timeout]);
@@ -77,12 +82,14 @@ async function createMember({ attemptId, password, memberData, confirmDeletedMat
     // As respostas 4xx/5xx da função trazem `{ error, code, field, fields, matches }`.
     const body = parseCreateMemberRefusal(await readFunctionErrorBody(error));
     if (body?.kind === "deletedMatches") return { kind: "deletedMatches", matches: body.matches, accountEmail: body.accountEmail };
+    // A falha no recálculo é um `app_error`, mas não é recusa de regra: "tente de novo" no rodapé (E2.06, AQ-5).
+    if (body?.code === RECALC_FAILURE_CODE) return { kind: "failed", cause: "recalc" };
     const refusal = body ? memberRefusalFromCreate(body) : null;
     if (refusal) return { kind: "refused", refusal };
     // Sem corpo legível (queda de conexão) ou com um código técnico: "tente de novo".
-    return { kind: "failed", network: !body && isNetworkError(error) };
+    return { kind: "failed", cause: !body && isNetworkError(error) ? "network" : "other" };
   }
-  if (isJsonObject(data) && typeof data.error === "string") return { kind: "failed", network: false };
+  if (isJsonObject(data) && typeof data.error === "string") return { kind: "failed", cause: "other" };
   // `replayed: true` (a mesma tentativa repetida) também é sucesso: o cadastro existe.
   return { kind: "saved" };
 }
@@ -101,9 +108,11 @@ async function updateMember({ memberId, patch }: UpdateMemberRequest): Promise<"
 
 /** A falha de uma edição, sem nenhum texto técnico (UX-30). */
 function classifyUpdateError(error: unknown): MemberSaveResult {
+  // Antes das recusas: a falha no recálculo também vem como `app_error` (E2.06, AQ-5).
+  if (isRecalcFailure(error)) return { kind: "failed", cause: "recalc" };
   const refusal = memberRefusalFromError(error);
   if (refusal) return { kind: "refused", refusal };
-  return { kind: "failed", network: isNetworkError(error) };
+  return { kind: "failed", cause: isNetworkError(error) ? "network" : "other" };
 }
 
 /**
@@ -113,7 +122,8 @@ function classifyUpdateError(error: unknown): MemberSaveResult {
  * classificado; a tela decide onde mostrar.
  *
  * Efeitos:
- * - sucesso: a lista de Membros e as opções de função recarregam;
+ * - sucesso: as telas com nível, liderança e totais carregam do zero e a
+ *   aberta recarrega (E2.06, P44), e as opções de função recarregam;
  * - "0 linhas": a lista recarrega já, e a própria sessão é conferida (um membro excluído recebe o mesmo, RN-14);
  * - recusa que pede (42501, RN-10 do E2.02): o acesso é relido.
  */
@@ -130,7 +140,7 @@ export function useMemberSave() {
   const afterSave = (result: MemberSaveResult) => {
     switch (result.kind) {
       case "saved":
-        void queryClient.invalidateQueries({ queryKey: ["members"] });
+        void refreshAfterMemberWrite(queryClient);
         void queryClient.invalidateQueries({ queryKey: ROLE_OPTIONS_QUERY_KEY });
         return;
       case "gone":

@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSlowPending } from "@/hooks/use-slow-pending";
 import { useMemberAddress } from "@/hooks/use-member-address";
 import { Database } from "@/integrations/supabase/types";
 import AsyncMemberSelect from "@/components/AsyncMemberSelect";
@@ -24,6 +25,9 @@ import { refreshAccess } from "@/hooks/use-access";
 import { memberSearchEmptyLabel, peopleLimitedToMinistry } from "@/lib/access/access";
 import { cellRefusalFromError, type CellFormRefusal, type CellPersonField } from "@/lib/access/cell-form";
 import { CELL_FORM_TEXTS } from "@/lib/access/texts";
+import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
+import { isRecalcFailure } from "@/lib/errors";
+import { refreshAfterCellWrite } from "@/lib/query-refresh";
 import { describedBy } from "@/lib/a11y";
 import { FieldError, FieldHint } from "@/components/members/FormFieldParts";
 
@@ -37,6 +41,11 @@ interface CellFormProps {
   /** Célula em edição: a linha da cells_view. */
   cell: CellRow | null;
   onClose: () => void;
+  /**
+   * A gravação começou ou terminou. Quem abre o diálogo não o deixa fechar
+   * durante o envio ("✕", `Esc` e o toque fora; E2.06, T5 e P44).
+   */
+  onPendingChange?: (pending: boolean) => void;
 }
 
 const BRAZILIAN_STATES = [
@@ -84,7 +93,7 @@ const toCellInsertPayload = (value: Partial<CellInsert>): CellInsert => ({
   is_active: value.is_active ?? true,
 });
 
-const CellForm = ({ cell, onClose }: CellFormProps) => {
+const CellForm = ({ cell, onClose, onPendingChange }: CellFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEditing = !!cell;
@@ -137,6 +146,12 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
     }
   };
 
+  // Falha sem recusa (recálculo da hierarquia, falha transitória ou técnica):
+  // num `Alert` acima dos botões, com os dados mantidos e o foco no botão
+  // primário, que serve de "Tentar de novo" (E2.06, T5 e RN-08).
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+
   const errorFor = (field: CellPersonField) => (fieldError?.field === field ? fieldError.message : null);
 
   // Endereço do anfitrião: carregado no cadastro e quando o anfitrião muda na
@@ -186,24 +201,37 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         queryClient.invalidateQueries({ queryKey: ["cells", "list"] });
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["cells"] });
-      // A lista de relatórios mostra o líder e o endereço atuais da célula.
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] });
+      // Células, Relatórios, Membros, Ministérios e o Dashboard sem os valores de antes (P44).
+      void refreshAfterCellWrite(queryClient);
       toast({ title: isEditing ? "Célula atualizada" : "Célula criada" });
       onClose();
     },
     onError: (error) => {
-      // As recusas ficam no formulário, com os dados (T11); o resto, como antes.
-      const refusal = cellRefusalFromError(error);
+      // As recusas ficam no formulário, com os dados (T11). O resto, também no
+      // formulário e nunca com o texto técnico (E2.06, T5 e UX-19).
+      const refusal = isRecalcFailure(error) ? null : cellRefusalFromError(error);
       if (refusal) showRefusal(refusal);
-      else toast({ variant: "destructive", title: "Erro", description: error.message });
+      else setSaveFailure(SAVE_TEXTS.recalcFailed);
     },
   });
+
+  const saving = mutation.isPending;
+  const slowSaving = useSlowPending(saving);
+
+  useEffect(() => {
+    onPendingChange?.(saving);
+  }, [saving, onPendingChange]);
+
+  // Depois da falha, o foco volta ao botão primário, já habilitado.
+  useEffect(() => {
+    if (saveFailure && !saving) primaryRef.current?.focus();
+  }, [saveFailure, saving]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setTopRefusal(null);
     setFieldError(null);
+    setSaveFailure(null);
     if (!form.leader_id) {
       toast({ variant: "destructive", title: "Erro", description: "O Líder é obrigatório." });
       return;
@@ -379,12 +407,25 @@ const CellForm = ({ cell, onClose }: CellFormProps) => {
         </div>
       </div>
 
+      {saveFailure && (
+        <Alert role="alert" variant="destructive">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="text-foreground">{saveFailure}</AlertDescription>
+        </Alert>
+      )}
+
+      {slowSaving && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {SAVE_TEXTS.stillSaving}
+        </p>
+      )}
+
       <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={mutation.isPending || deletedWhileEditing}>
-          {mutation.isPending ? "Salvando..." : isEditing ? "Salvar" : "Criar Célula"}
+        <Button ref={primaryRef} type="submit" disabled={saving || deletedWhileEditing}>
+          {saving ? "Salvando..." : isEditing ? "Salvar" : "Criar Célula"}
         </Button>
       </div>
     </form>
