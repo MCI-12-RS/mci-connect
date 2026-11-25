@@ -529,30 +529,53 @@ $$;
 -- aqui para quem tem alguma permissão de gravar relatório: a recusa sai do
 -- aa_enforce_participant_rules, com a mensagem do E2.01, e a política barra de
 -- qualquer jeito.
+-- A política de INSERT chama esta função uma vez por participante (risco 8):
+-- por isso ela lê a linha de cell_reports direto e confere a visibilidade pela
+-- forma por id do predicado da cell_reports_view ("Cell reports view policy"),
+-- sem ler a view (que expande viewer_ministry_member_ids a cada chamada).
+-- Mudou o predicado da view ou da política, mude aqui também.
 CREATE OR REPLACE FUNCTION public.viewer_can_insert_cell_report_participant(_report_id uuid)
 RETURNS boolean
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT CASE
-    WHEN NOT (    public.viewer_has('edit_cell_report'::public.permission_action)
-               OR public.viewer_has('edit_cell'::public.permission_action)
-               OR public.viewer_has('submit_any_visible_report'::public.permission_action)
-               OR public.viewer_has('submit_own_cell_report'::public.permission_action))
-      THEN false
-    WHEN NOT EXISTS (
-      SELECT 1 FROM public.cell_reports r JOIN public.cells c ON c.id = r.cell_id
-       WHERE r.id = _report_id AND r.deleted_at IS NULL AND c.deleted_at IS NULL)
-      THEN true
-    ELSE EXISTS (
-      SELECT 1 FROM public.cell_reports_view v
-       WHERE v.id = _report_id
-         AND (    public.viewer_has('edit_cell_report'::public.permission_action)
-               OR (    public.can_submit_report(v.cell_id)
-                   AND v.week_start = public.week_start(public.sp_today())))
-    )
-  END
+DECLARE
+  _cell_id uuid;
+  _week date;
+BEGIN
+  IF NOT (    public.viewer_has('edit_cell_report'::public.permission_action)
+           OR public.viewer_has('edit_cell'::public.permission_action)
+           OR public.viewer_has('submit_any_visible_report'::public.permission_action)
+           OR public.viewer_has('submit_own_cell_report'::public.permission_action)) THEN
+    RETURN false;
+  END IF;
+
+  SELECT r.cell_id, public.week_start(r.date)
+    INTO _cell_id, _week
+    FROM public.cell_reports r
+    JOIN public.cells c ON c.id = r.cell_id
+   WHERE r.id = _report_id
+     AND r.deleted_at IS NULL
+     AND c.deleted_at IS NULL;
+  IF NOT FOUND THEN
+    RETURN true;          -- o aa_enforce_participant_rules responde
+  END IF;
+
+  -- Relatório visível (o WHERE da cell_reports_view, por id).
+  IF NOT (    public.viewer_has('view_all_reports'::public.permission_action)
+           OR public.viewer_has('view_all_church'::public.permission_action)
+           OR public.viewer_is_cell_person(_cell_id)
+           OR (    (    public.viewer_has('view_own_ministry'::public.permission_action)
+                     OR public.viewer_has('view_own_reports'::public.permission_action))
+               AND public.cell_in_viewer_ministry(_cell_id))) THEN
+    RETURN false;
+  END IF;
+
+  RETURN public.viewer_has('edit_cell_report'::public.permission_action)
+      OR (    _week = public.week_start(public.sp_today())
+          AND public.can_submit_report(_cell_id));
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.viewer_can_insert_cell() FROM PUBLIC, anon;

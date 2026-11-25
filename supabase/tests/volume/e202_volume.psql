@@ -199,8 +199,8 @@ SELECT pg_temp.as_member(1);
 SET LOCAL ROLE authenticated;
 SELECT 'META pastor lançamento com 30 participantes (ms, meta 300)', pg_temp.launch_ms(:'cell_past', 30) AS detalhe;
 SELECT array_agg(id) AS ids30 FROM (SELECT id FROM public.members_view ORDER BY id LIMIT 30) q \gset
-SELECT 'DIAG pastor viewer_can_insert_cell_report_participant, 1 chamada (a política de INSERT chama uma vez por participante) (ms)', pg_temp.ms($q$SELECT public.viewer_can_insert_cell_report_participant((SELECT id FROM public.cell_reports LIMIT 1))$q$) AS ms;
-SELECT 'DIAG pastor viewer_can_insert_cell_report_participant, 1 chamada, só a leitura da cell_reports_view por id (ms)', pg_temp.ms($q$SELECT 1 FROM public.cell_reports_view WHERE id = (SELECT id FROM public.cell_reports LIMIT 1)$q$) AS ms;
+SELECT 'DIAG pastor viewer_can_insert_cell_report_participant, 1 chamada (a política de INSERT e o a0_check_insert_permission chamam uma vez por participante) (ms)', pg_temp.ms($q$SELECT public.viewer_can_insert_cell_report_participant((SELECT id FROM public.cell_reports LIMIT 1))$q$) AS ms;
+SELECT 'DIAG pastor leitura da cell_reports_view por id, para comparação: a viewer_can_insert_cell_report_participant não lê mais a view (ms)', pg_temp.ms($q$SELECT 1 FROM public.cell_reports_view WHERE id = (SELECT id FROM public.cell_reports LIMIT 1)$q$) AS ms;
 SELECT 'DIAG pastor 30 x viewer_sees_member (ms)', pg_temp.ms(format('SELECT count(*) FROM unnest(%L::uuid[]) i WHERE public.viewer_sees_member(i)', :'ids30')) AS ms;
 SELECT 'DIAG pastor 1 x viewer_scope_contains_any(30 ids) (ms)', pg_temp.ms(format('SELECT public.viewer_scope_contains_any(%L::uuid[])', :'ids30')) AS ms;
 SELECT 'DIAG pastor viewer_ministry_member_ids() inteira (ms)', pg_temp.ms('SELECT count(*) FROM public.viewer_ministry_member_ids()') AS ms;
