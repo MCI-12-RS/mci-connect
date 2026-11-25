@@ -16,7 +16,6 @@ import {
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { Navigate } from "react-router-dom";
 import { formatDateTimeInBrasilia } from "@/lib/format";
 import { AUTH_ACTION_LABELS, authEventDetailFields, authEventSecondLine, isAuthEvent } from "@/lib/audit/auth-events";
 import type { Enums, Tables } from "@/integrations/supabase/types";
@@ -69,7 +68,7 @@ function EventSecondLine({ event }: { event: EventRow }) {
 }
 
 const Events = () => {
-  const { hasPermission, permissionsLoaded } = useAuth();
+  const { hasPermission } = useAuth();
 
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<EventAction | "all">("all");
@@ -106,10 +105,6 @@ const Events = () => {
         .some((f) => f.toLowerCase().includes(s))
     );
   }, [events, search]);
-
-  // Espera as permissões: antes delas, quem tem view_audit_log seria mandado para o início.
-  if (!permissionsLoaded) return null;
-  if (!hasPermission("view_audit_log")) return <Navigate to="/" replace />;
 
   return (
     <AppLayout>
