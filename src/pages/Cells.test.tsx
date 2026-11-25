@@ -279,4 +279,25 @@ describe("Células: quem lança e o alcance (E2.02)", () => {
 
     expect(await screen.findByText("Células do seu ministério")).toBeInTheDocument();
   });
+
+  it("O subtítulo de quem vê a igreja toda diz 'Células de toda a igreja' (UX-15)", async () => {
+    auth.access = {
+      member_id: "m-rita",
+      role_id: "r-admin",
+      role_name: "Administrador",
+      role_is_protected: true,
+      permissions: ["view_all_church"],
+      sees_whole_church: true,
+      sees_ministry: true,
+      sees_whole_church_reports: true,
+      sees_ministry_reports: true,
+      can_create_member: true,
+      can_assign_roles: true,
+      can_submit_some_report: true,
+    };
+    renderCells();
+
+    expect(await screen.findByText("Células de toda a igreja")).toBeInTheDocument();
+    expect(screen.queryByText("Células do seu ministério")).not.toBeInTheDocument();
+  });
 });

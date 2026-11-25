@@ -308,6 +308,39 @@ describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
     expect(screen.queryByText("Meu Ministério")).not.toBeInTheDocument();
   });
 
+  it("Dado só 'Visualizar Dashboard', sem ver a igreja nem o ministério, então não mostra subtítulo nem selo (E2.02, UX-12, PO-UX-13)", async () => {
+    auth.access = {
+      ...CHURCH_ACCESS,
+      permissions: ["view_dashboard"],
+      sees_whole_church: false,
+      sees_ministry: false,
+      sees_whole_church_reports: false,
+      sees_ministry_reports: false,
+    };
+    respondAll();
+
+    renderDashboard();
+    await settle();
+
+    expect(cardValue("Total de Membros")).toBe("1.530");
+    expect(screen.queryByText("Meu Ministério")).not.toBeInTheDocument();
+    expect(screen.queryByText("Visão do seu ministério")).not.toBeInTheDocument();
+    expect(screen.queryByText("Visão geral da igreja")).not.toBeInTheDocument();
+  });
+
+  it("Dada a conta X (sem cadastro de membro), então mostra a mensagem e a linha de quem não tem cadastro, sem card nem chamadas (E2.02, RN-07, UX-13)", async () => {
+    auth.access = { ...NO_ACCESS, member_id: null };
+
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
+    expect(screen.getByText("Seu acesso ainda não está ligado a um cadastro de membro. Fale com um administrador.")).toBeInTheDocument();
+    expect(screen.queryByText("Sua conta ainda não tem uma função. Fale com um administrador.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Esta Semana/ })).not.toBeInTheDocument();
+    expect(fakeRpcs()).toHaveLength(0);
+  });
+
   it("Dado o banco negando só o resumo (42501) e as outras RPCs respondendo, então nenhum número aparece, só a mensagem exata de acesso negado", async () => {
     respondToRpc("dashboard_summary", denied);
     respondToRpc("dashboard_cells_by_type", { data: cellsByType });
