@@ -64,6 +64,14 @@ END $$;
 DROP INDEX public.members_email_key;
 DROP INDEX public.members_mobile_key;
 DROP INDEX public.members_cpf_key;
+-- E2.04 (PR 2): o que a migration 2 acrescentou também sai, pelo mesmo motivo (a guarda da
+-- migration 1 roda antes dela, sobre e-mail e CPF fora do formato e sem as regras de escrita).
+DROP TRIGGER a0_normalize_member ON public.members;
+DROP TRIGGER ad_enforce_member_rules ON public.members;
+ALTER TABLE public.members
+  DROP CONSTRAINT members_email_check,
+  DROP CONSTRAINT members_cpf_check,
+  ALTER COLUMN has_leadership SET DEFAULT false;
 
 -- Dois cadastros com o mesmo celular, pela chave do 9º dígito; os outros dados são distintos.
 -- O terceiro e o quarto não contam: um é excluído e o outro tem celular ilegível repetido.

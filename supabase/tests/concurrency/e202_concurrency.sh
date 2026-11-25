@@ -55,7 +55,7 @@ cleanup() {
   $PSQL -X -q -v ON_ERROR_STOP=0 >/dev/null 2>&1 <<SQL
 BEGIN;
 SET LOCAL session_replication_role = replica;
-UPDATE public.members SET leader_id = NULL, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f202c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f202c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f202c0de%';
 DELETE FROM public.role_permissions WHERE role_id IN (SELECT id FROM public.roles WHERE name LIKE 'f202 %');
 UPDATE public.members SET role_id = NULL WHERE role_id IN (SELECT id FROM public.roles WHERE name LIKE 'f202 %');
@@ -77,19 +77,19 @@ BEGIN;
 INSERT INTO auth.users (id, email) VALUES
   ('$U_ANA', 'e202-conc-1@teste.invalid'), ('$U_BETO', 'e202-conc-2@teste.invalid'),
   ('$U_PEDRO', 'e202-conc-3@teste.invalid'), ('$U_RITA', 'e202-conc-4@teste.invalid');
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES ('$M_PAS', 'E202 Conc Pastor', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id) VALUES
-  ('$M_ANA',   'E202 Conc Ana',   'F', '$M_PAS',   true, '$U_ANA',   (SELECT id FROM public.roles WHERE is_system)),
-  ('$M_BETO',  'E202 Conc Beto',  'M', '$M_PAS',   true, '$U_BETO',  (SELECT id FROM public.roles WHERE is_system)),
-  ('$M_PEDRO', 'E202 Conc Pedro', 'M', '$M_PAS',   true, '$U_PEDRO', (SELECT id FROM public.roles WHERE name = 'Líder')),
-  ('$M_DIEGO', 'E202 Conc Diego', 'M', '$M_PAS',   true, NULL,       NULL),
-  ('$M_RITA',  'E202 Conc Rita',  'F', '$M_PAS',   true, '$U_RITA',  (SELECT id FROM public.roles WHERE is_system)),
-  ('$M_LIA',   'E202 Conc Lia',   'F', '$M_PAS',   true, NULL,       NULL);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES
-  ('$M_ANDRE', 'E202 Conc Andre', 'M', '$M_PEDRO', true),
-  ('$M_CARLA', 'E202 Conc Carla', 'F', '$M_PEDRO', true);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership) VALUES
-  ('$M_CAIO',  'E202 Conc Caio',  'M', '$M_ANDRE', true);
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES ('$M_PAS', 'E202 Conc Pastor', 'M', true, false, '$M_PAS@teste.invalid');
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, email) VALUES
+  ('$M_ANA',   'E202 Conc Ana',   'F', '$M_PAS',   true, '$U_ANA',   (SELECT id FROM public.roles WHERE is_system), '$M_ANA@teste.invalid'),
+  ('$M_BETO',  'E202 Conc Beto',  'M', '$M_PAS',   true, '$U_BETO',  (SELECT id FROM public.roles WHERE is_system), '$M_BETO@teste.invalid'),
+  ('$M_PEDRO', 'E202 Conc Pedro', 'M', '$M_PAS',   true, '$U_PEDRO', (SELECT id FROM public.roles WHERE name = 'Líder'), '$M_PEDRO@teste.invalid'),
+  ('$M_DIEGO', 'E202 Conc Diego', 'M', '$M_PAS',   true, NULL,       NULL, '$M_DIEGO@teste.invalid'),
+  ('$M_RITA',  'E202 Conc Rita',  'F', '$M_PAS',   true, '$U_RITA',  (SELECT id FROM public.roles WHERE is_system), '$M_RITA@teste.invalid'),
+  ('$M_LIA',   'E202 Conc Lia',   'F', '$M_PAS',   true, NULL,       NULL, '$M_LIA@teste.invalid');
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
+  ('$M_ANDRE', 'E202 Conc Andre', 'M', '$M_PEDRO', true, '$M_ANDRE@teste.invalid'),
+  ('$M_CARLA', 'E202 Conc Carla', 'F', '$M_PEDRO', true, '$M_CARLA@teste.invalid');
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
+  ('$M_CAIO',  'E202 Conc Caio',  'M', '$M_ANDRE', true, '$M_CAIO@teste.invalid');
 COMMIT;
 SQL
 }

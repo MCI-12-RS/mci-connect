@@ -45,7 +45,7 @@ SET LOCAL session_replication_role = replica;
 DELETE FROM private.sign_in_throttle;
 DELETE FROM public.events WHERE entity_id::text LIKE 'f104c0de%' OR actor_user_id::text LIKE 'f104c0de%'
    OR (entity = 'auth' AND action IN ('login_failed', 'login_blocked', 'login') AND occurred_at >= '$START'::timestamptz);
-UPDATE public.members SET leader_id = NULL WHERE id::text LIKE 'f104c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE id::text LIKE 'f104c0de%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE id::text LIKE 'f104c0de%';
 DELETE FROM auth.sessions WHERE user_id::text LIKE 'f104c0de%';
 DELETE FROM auth.users WHERE id::text LIKE 'f104c0de%';
@@ -60,7 +60,7 @@ setup() {
 BEGIN;
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at)
 VALUES ('$U_ANA', '$ANA_EMAIL', extensions.crypt('$ANA_PW', extensions.gen_salt('bf', 10)), now());
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES ('$M_PASTOR', 'E104 Conc Pastor', 'M', true, false);
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES ('$M_PASTOR', 'E104 Conc Pastor', 'M', true, false, '$M_PASTOR@teste.invalid');
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, email, cpf, mobile_whatsapp)
 VALUES ('$M_ANA', 'E104 Conc Ana', 'F', '$M_PASTOR', true, '$U_ANA', '$ANA_EMAIL', '$ANA_CPF', '(51) 90000-1104');
 COMMIT;

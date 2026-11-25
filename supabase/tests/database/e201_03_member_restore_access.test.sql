@@ -137,29 +137,32 @@ SELECT pg_temp.u(n), 'e201-03-' || n || '@teste.invalid', extensions.crypt('Senh
 -- 9 Bia (conta já banida até 2030)
 
 -- Paulo Pastor → Gina (G12) e Dora (G12, outro ministério).
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
-  (pg_temp.m(1), 'Paulo Pastor E201-03', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id) VALUES
-  (pg_temp.m(2),  'Gina Garcia',   'F', pg_temp.m(1), true, NULL,         NULL),
-  (pg_temp.m(3),  'Dora Dias',     'F', pg_temp.m(1), true, NULL,         NULL),
-  (pg_temp.m(17), 'Elisa Esteves', 'F', pg_temp.m(1), true, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(19), 'Adão Alves',    'M', pg_temp.m(1), true, pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(21), 'Fábio Freitas', 'M', pg_temp.m(1), true, pg_temp.u(8), pg_temp.role(1));
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192013' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Paulo Pastor E201-03', 'M', true, false, pg_temp.mob(1));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, mobile_whatsapp) VALUES
+  (pg_temp.m(2),  'Gina Garcia',   'F', pg_temp.m(1), true, NULL,         NULL, pg_temp.mob(2)),
+  (pg_temp.m(3),  'Dora Dias',     'F', pg_temp.m(1), true, NULL,         NULL, pg_temp.mob(3)),
+  (pg_temp.m(17), 'Elisa Esteves', 'F', pg_temp.m(1), true, pg_temp.u(1), pg_temp.role(1), pg_temp.mob(17)),
+  (pg_temp.m(19), 'Adão Alves',    'M', pg_temp.m(1), true, pg_temp.u(3), pg_temp.role(3), pg_temp.mob(19)),
+  (pg_temp.m(21), 'Fábio Freitas', 'M', pg_temp.m(1), true, pg_temp.u(8), pg_temp.role(1), pg_temp.mob(21));
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id,
                             email, mobile_whatsapp, cpf) VALUES
-  (pg_temp.m(5),  'Gil Gomes',      'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, NULL, NULL),
-  (pg_temp.m(6),  'Hugo Hart',      'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, NULL, NULL),
+  (pg_temp.m(5),  'Gil Gomes',      'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, pg_temp.mob(5), NULL),
+  (pg_temp.m(6),  'Hugo Hart',      'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, pg_temp.mob(6), NULL),
   (pg_temp.m(16), 'Ana Abreu',      'F', pg_temp.m(2), true, true,  pg_temp.u(5), pg_temp.role(5), 'e201-03-5@teste.invalid', NULL, NULL),
-  (pg_temp.m(18), 'Lucas Lopes',    'M', pg_temp.m(2), true, true,  pg_temp.u(2), pg_temp.role(2), NULL, NULL, NULL),
-  (pg_temp.m(20), 'Mirela Moraes',  'F', pg_temp.m(2), true, true,  pg_temp.u(4), pg_temp.role(4), NULL, NULL, NULL),
-  (pg_temp.m(22), 'Cecília Couto',  'F', pg_temp.m(2), true, true,  pg_temp.u(6), pg_temp.role(6), NULL, NULL, NULL),
-  (pg_temp.m(24), 'Inês Inativa',   'F', pg_temp.m(2), true, false, NULL,         NULL,            NULL, NULL, NULL),
+  (pg_temp.m(18), 'Lucas Lopes',    'M', pg_temp.m(2), true, true,  pg_temp.u(2), pg_temp.role(2), NULL, pg_temp.mob(18), NULL),
+  (pg_temp.m(20), 'Mirela Moraes',  'F', pg_temp.m(2), true, true,  pg_temp.u(4), pg_temp.role(4), NULL, pg_temp.mob(20), NULL),
+  (pg_temp.m(22), 'Cecília Couto',  'F', pg_temp.m(2), true, true,  pg_temp.u(6), pg_temp.role(6), NULL, pg_temp.mob(22), NULL),
+  (pg_temp.m(24), 'Inês Inativa',   'F', pg_temp.m(2), true, false, NULL,         NULL,            NULL, pg_temp.mob(24), NULL),
   (pg_temp.m(25), 'Davi Duarte',    'M', pg_temp.m(3), true, true,  NULL,         NULL,            NULL, '(51) 96666-0000', NULL),
-  (pg_temp.m(26), 'Zeno Zanella',   'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, NULL, NULL),
+  (pg_temp.m(26), 'Zeno Zanella',   'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, pg_temp.mob(26), NULL),
   (pg_temp.m(27), 'Bia Bastos',     'F', pg_temp.m(2), true, true,  pg_temp.u(9), pg_temp.role(10), 'e201-03-9@teste.invalid', NULL, NULL),
   (pg_temp.m(28), 'Teo Tavares',    'M', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, NULL, '390.533.447-05'),
   (pg_temp.m(30), 'Olga Otero',     'F', pg_temp.m(2), true, true,  NULL,         NULL,            'olga@e201-03.invalid', NULL, NULL),
-  (pg_temp.m(42), 'Sara Souza',     'F', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, NULL, NULL),
+  (pg_temp.m(42), 'Sara Souza',     'F', pg_temp.m(2), true, true,  NULL,         NULL,            NULL, pg_temp.mob(42), NULL),
   (pg_temp.m(43), 'Edu Esteves',    'M', pg_temp.m(2), true, true,  NULL,         NULL,            'edu@e201-03.invalid', '(51) 95555-0000', '111.444.777-35');
 -- Bruno: discípulo de Gil, com conta, função que será apagada e dados de contato.
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, auth_user_id, role_id,
@@ -356,7 +359,7 @@ SELECT is(pg_temp.val(1, $$SELECT string_agg(name, ',') FROM public.members_dele
 SELECT is(pg_temp.val(1, format('SELECT email FROM public.members_deleted_view WHERE id = %L', pg_temp.m(25))), NULL,
   'RN-15: sem dado sensível cadastrado, o campo vem nulo');
 SELECT is(pg_temp.val(1, format('SELECT mobile_whatsapp FROM public.members_deleted_view WHERE id = %L', pg_temp.m(25))),
-  '(51) 96666-0000', 'RN-15: com view_sensitive_data, o celular aparece (mesma máscara da members_view)');
+  '51966660000', 'RN-15: com view_sensitive_data, o celular aparece (mesma máscara da members_view; gravado normalizado desde o E2.04)');
 SELECT is(pg_temp.val(4, format('SELECT count(*) FROM public.members_deleted_view WHERE id = %L', pg_temp.m(42))), '1',
   'RN-15: o administrador do ministério de Gina vê Sara, do ministério dele');
 SELECT is(pg_temp.val(4, format('SELECT count(*) FROM public.members_deleted_view WHERE id = %L', pg_temp.m(25))), '0',
@@ -553,17 +556,21 @@ SELECT is(pg_temp.try(6, format($$INSERT INTO public.members (name, gender, lead
 SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.members (name, gender, leader_id, email)
                                               VALUES ('Novo Bruno', 'M', %L, 'bruno@e201-03.invalid')$$, pg_temp.m(2)))),
   'deleted_account_email', 'RN-18: também para o administrador');
-SELECT is(pg_temp.code(pg_temp.try(NULL, $$INSERT INTO public.members (name, gender, email)
-                                           VALUES ('Novo Bruno', 'M', 'bruno@e201-03.invalid')$$)),
+SELECT is(pg_temp.code(pg_temp.try(NULL, $$INSERT INTO public.members (name, gender, has_leadership, email)
+                                           VALUES ('Novo Bruno', 'M', false, 'bruno@e201-03.invalid')$$)),
   'deleted_account_email', 'RN-18/DT-27: também como postgres (service role)');
-SELECT is(pg_temp.code(pg_temp.try(6, format($$INSERT INTO public.members (name, gender, leader_id, mobile_whatsapp, cpf)
-                                              VALUES ('Outra Pessoa', 'F', %L, '51999990000', '52998224725')$$, pg_temp.m(2)))),
+SELECT is(pg_temp.code(pg_temp.try(6, format($$INSERT INTO public.members (name, gender, leader_id, mobile_whatsapp, cpf, email)
+                                              VALUES ('Outra Pessoa', 'F', %L, '51999990000', '52998224725', 'outra@e201-03.invalid')$$, pg_temp.m(2)))),
   '00000', 'RN-18: celular e CPF de um excluído não impedem o cadastro ("Cadastrar mesmo assim")');
 SELECT is(pg_temp.code(pg_temp.try(6, format($$INSERT INTO public.members (name, gender, leader_id, email)
                                               VALUES ('Olga Nova', 'F', %L, 'OLGA@e201-03.invalid')$$, pg_temp.m(2)))),
   '00000', 'RN-18: e-mail de um excluído sem conta também não impede');
-SELECT is(pg_temp.try(1, format($$UPDATE public.members SET email = 'bruno@e201-03.invalid' WHERE id = %L$$, pg_temp.m(18))) ->> 'rows',
-  '1', 'RN-18: a regra vale ao salvar um membro novo; na edição vale a unicidade do E2.04');
+SELECT is(pg_temp.code(pg_temp.try(1, format($$UPDATE public.members SET email = 'bruno@e201-03.invalid' WHERE id = %L$$, pg_temp.m(18)))),
+  'deleted_account_email', 'RN-18: desde o E2.04 (DT-14, DA-4) a regra vale também ao trocar o e-mail de um cadastro');
+-- Dado anterior ao E2.04 (o e-mail da conta de um excluído noutro cadastro): só em replica.
+SET LOCAL session_replication_role = replica;
+UPDATE public.members SET email = 'bruno@e201-03.invalid' WHERE id = pg_temp.m(18);
+SET LOCAL session_replication_role = origin;
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(23)))), 'restore_value_in_use',
   'RN-16 e: com o e-mail de Bruno em outro cadastro, restaurá-lo é recusado');
 

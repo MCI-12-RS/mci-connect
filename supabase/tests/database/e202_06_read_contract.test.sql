@@ -142,27 +142,30 @@ SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid'
   FROM generate_series(1, 19) n
 UNION ALL SELECT pg_temp.u(n), 'e202-' || n || '@teste.invalid' FROM unnest(ARRAY[30, 32, 34]) n;
 
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, auth_user_id, role_id, is_active) VALUES
- (pg_temp.m(1),'Samuel','M',true,NULL,pg_temp.u(1),pg_temp.role('Líder'),true),
- (pg_temp.m(2),'Magda','F',true,NULL,pg_temp.u(2),pg_temp.role('Líder'),true),
- (pg_temp.m(3),'Pedro','M',false,pg_temp.m(1),pg_temp.u(3),pg_temp.role('Líder'),true),
- (pg_temp.m(4),'Paula','F',false,pg_temp.m(2),pg_temp.u(4),pg_temp.role('Líder'),true),
- (pg_temp.m(5),'Tiago','M',false,pg_temp.m(1),pg_temp.u(5),NULL,true),
- (pg_temp.m(6),'Tania','F',false,pg_temp.m(2),pg_temp.u(6),NULL,true),
- (pg_temp.m(7),'Andre','M',false,pg_temp.m(3),pg_temp.u(7),pg_temp.role('Líder'),true),
- (pg_temp.m(8),'Beatriz','F',false,pg_temp.m(6),pg_temp.u(8),pg_temp.role('Membro'),true),
- (pg_temp.m(9),'Caio','M',false,pg_temp.m(7),pg_temp.u(9),pg_temp.role('Membro'),true),
- (pg_temp.m(10),'Fabio','M',false,pg_temp.m(7),pg_temp.u(10),pg_temp.role('Membro'),false),
- (pg_temp.m(11),'Gabriel','M',false,pg_temp.m(10),pg_temp.u(11),NULL,true),
- (pg_temp.m(12),'Carla','F',false,pg_temp.m(4),pg_temp.u(12),pg_temp.role('Membro'),true),
- (pg_temp.m(13),'Debora','F',false,pg_temp.m(8),pg_temp.u(13),NULL,true),
- (pg_temp.m(14),'Diego','M',false,pg_temp.m(5),pg_temp.u(14),pg_temp.role('Líder'),true),
- (pg_temp.m(15),'Hugo','M',false,pg_temp.m(5),pg_temp.u(15),NULL,true),
- (pg_temp.m(16),'Rita','F',false,pg_temp.m(6),pg_temp.u(16),pg_temp.role('Administrador'),true),
- (pg_temp.m(17),'Ester','F',false,NULL,pg_temp.u(17),pg_temp.role('Membro'),true),
- (pg_temp.m(18),'Lucia','F',false,pg_temp.m(17),pg_temp.u(18),NULL,true),
- (pg_temp.m(20),'D3t','F',false,pg_temp.m(13),NULL,NULL,true),
- (pg_temp.m(21),'D3h','F',false,pg_temp.m(13),NULL,NULL,true);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192026' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadership, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+ (pg_temp.m(1),'Samuel Massa','M',true,NULL, false,pg_temp.u(1),pg_temp.role('Líder'),true, pg_temp.mob(1)),
+ (pg_temp.m(2),'Magda Massa','F',true,NULL, false,pg_temp.u(2),pg_temp.role('Líder'),true, pg_temp.mob(2)),
+ (pg_temp.m(3),'Pedro Massa','M',false,pg_temp.m(1), true,pg_temp.u(3),pg_temp.role('Líder'),true, pg_temp.mob(3)),
+ (pg_temp.m(4),'Paula Massa','F',false,pg_temp.m(2), true,pg_temp.u(4),pg_temp.role('Líder'),true, pg_temp.mob(4)),
+ (pg_temp.m(5),'Tiago Massa','M',false,pg_temp.m(1), true,pg_temp.u(5),NULL,true, pg_temp.mob(5)),
+ (pg_temp.m(6),'Tania Massa','F',false,pg_temp.m(2), true,pg_temp.u(6),NULL,true, pg_temp.mob(6)),
+ (pg_temp.m(7),'Andre Massa','M',false,pg_temp.m(3), true,pg_temp.u(7),pg_temp.role('Líder'),true, pg_temp.mob(7)),
+ (pg_temp.m(8),'Beatriz Massa','F',false,pg_temp.m(6), true,pg_temp.u(8),pg_temp.role('Membro'),true, pg_temp.mob(8)),
+ (pg_temp.m(9),'Caio Massa','M',false,pg_temp.m(7), true,pg_temp.u(9),pg_temp.role('Membro'),true, pg_temp.mob(9)),
+ (pg_temp.m(10),'Fabio Massa','M',false,pg_temp.m(7), true,pg_temp.u(10),pg_temp.role('Membro'),false, pg_temp.mob(10)),
+ (pg_temp.m(11),'Gabriel Massa','M',false,pg_temp.m(10), true,pg_temp.u(11),NULL,true, pg_temp.mob(11)),
+ (pg_temp.m(12),'Carla Massa','F',false,pg_temp.m(4), true,pg_temp.u(12),pg_temp.role('Membro'),true, pg_temp.mob(12)),
+ (pg_temp.m(13),'Debora Massa','F',false,pg_temp.m(8), true,pg_temp.u(13),NULL,true, pg_temp.mob(13)),
+ (pg_temp.m(14),'Diego Massa','M',false,pg_temp.m(5), true,pg_temp.u(14),pg_temp.role('Líder'),true, pg_temp.mob(14)),
+ (pg_temp.m(15),'Hugo Massa','M',false,pg_temp.m(5), true,pg_temp.u(15),NULL,true, pg_temp.mob(15)),
+ (pg_temp.m(16),'Rita Massa','F',false,pg_temp.m(6), true,pg_temp.u(16),pg_temp.role('Administrador'),true, pg_temp.mob(16)),
+ (pg_temp.m(17),'Ester Massa','F',false,NULL, false,pg_temp.u(17),pg_temp.role('Membro'),true, pg_temp.mob(17)),
+ (pg_temp.m(18),'Lucia Massa','F',false,pg_temp.m(17), true,pg_temp.u(18),NULL,true, pg_temp.mob(18)),
+ (pg_temp.m(20),'D3t Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(20)),
+ (pg_temp.m(21),'D3h Massa','F',false,pg_temp.m(13), true,NULL,NULL,true, pg_temp.mob(21));
 UPDATE public.members SET spouse_id = pg_temp.m(2) WHERE id = pg_temp.m(1);
 UPDATE public.members SET spouse_id = pg_temp.m(4) WHERE id = pg_temp.m(3);
 UPDATE public.members SET spouse_id = pg_temp.m(6) WHERE id = pg_temp.m(5);
@@ -179,7 +182,9 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, a
  (pg_temp.m(32),'Assim1','M',false,NULL,pg_temp.m(33),pg_temp.u(32),pg_temp.role('Membro'),true,false,0),
  (pg_temp.m(33),'Assim2','F',false,NULL,NULL,NULL,NULL,true,false,0),
  (pg_temp.m(35),'Isolado','M',false,NULL,NULL,NULL,NULL,true,false,0),
- (pg_temp.m(34),'PastorComLider','M',true,pg_temp.m(35),NULL,pg_temp.u(34),pg_temp.role('Líder'),true,true,0);
+-- E2.04 (RN-11): pastor com líder deixou de existir (members_leadership_check vale
+-- também em replica). PastorComLider fica pastor sem líder, ao lado de Isolado.
+ (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false,0);
 -- Relatórios da semana passada (a semana atual fica livre para os lançamentos).
 INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
  (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1'),
@@ -271,8 +276,8 @@ SELECT is(v[2], 'false', 'AQ-1: e falso para a de André') FROM sb WHERE k = 'lp
 -- ===========================================================================
 -- 2. members_view.spouse_name (DT-23).
 -- ===========================================================================
-SELECT is(pg_temp.val(3, format($q$SELECT spouse_name FROM public.members_view WHERE id = %L$q$, pg_temp.m(3))), 'Paula', 'DT-23: Pedro vê o nome da cônjuge no próprio cadastro');
-SELECT is(pg_temp.val(3, format($q$SELECT spouse_name FROM public.members_view WHERE id = %L$q$, pg_temp.m(7))), 'Beatriz', 'DT-23: Pedro vê André e o nome de referência da cônjuge dele (Beatriz), que ele não vê');
+SELECT is(pg_temp.val(3, format($q$SELECT spouse_name FROM public.members_view WHERE id = %L$q$, pg_temp.m(3))), 'Paula Massa', 'DT-23: Pedro vê o nome da cônjuge no próprio cadastro');
+SELECT is(pg_temp.val(3, format($q$SELECT spouse_name FROM public.members_view WHERE id = %L$q$, pg_temp.m(7))), 'Beatriz Massa', 'DT-23: Pedro vê André e o nome de referência da cônjuge dele (Beatriz), que ele não vê');
 SELECT is(pg_temp.val(3, format($q$SELECT count(*)::text FROM public.members WHERE id = %L$q$, pg_temp.m(8))), '0', 'DT-23: mas não lê o cadastro de Beatriz');
 SELECT is(pg_temp.val(3, format($q$SELECT coalesce(spouse_name, 'nenhum') FROM public.members_view WHERE id = %L$q$, pg_temp.m(9))), 'nenhum', 'DT-23: Caio não tem cônjuge: nulo');
 
@@ -282,22 +287,22 @@ SELECT is(pg_temp.val(3, format($q$SELECT coalesce(spouse_name, 'nenhum') FROM p
 CREATE FUNCTION pg_temp.roots(_n int) RETURNS text LANGUAGE sql AS $$
   SELECT pg_temp.val(_n, $q$SELECT string_agg(member_name || coalesce('+' || spouse_name, ''), ' | ' ORDER BY member_name)
        FROM public.ministry_tree_nodes() WHERE member_id::text LIKE 'c2020000%'$q$) $$;
-SELECT is(pg_temp.roots(3), 'Pedro+Paula', 'DA-6: Pedro abre a árvore no casal G12 dele');
-SELECT is(pg_temp.roots(9), 'Pedro+Paula', 'DA-6: Caio abre no casal G12 do ministério dele');
-SELECT is(pg_temp.roots(7), 'Pedro+Paula', 'DA-6: André também');
-SELECT is(pg_temp.roots(8), 'Tiago+Tania', 'DA-6: Beatriz abre no casal G12 dela (Tiago e Tânia)');
-SELECT is(pg_temp.roots(1), 'Samuel+Magda', 'DA-6: Samuel, pastor e sem G12, abre no próprio casal');
-SELECT is(pg_temp.roots(17), 'Ester', 'DA-6: Ester, sem liderança, abre no próprio cadastro');
+SELECT is(pg_temp.roots(3), 'Pedro Massa+Paula Massa', 'DA-6: Pedro abre a árvore no casal G12 dele');
+SELECT is(pg_temp.roots(9), 'Pedro Massa+Paula Massa', 'DA-6: Caio abre no casal G12 do ministério dele');
+SELECT is(pg_temp.roots(7), 'Pedro Massa+Paula Massa', 'DA-6: André também');
+SELECT is(pg_temp.roots(8), 'Tiago Massa+Tania Massa', 'DA-6: Beatriz abre no casal G12 dela (Tiago e Tânia)');
+SELECT is(pg_temp.roots(1), 'Samuel Massa+Magda Massa', 'DA-6: Samuel, pastor e sem G12, abre no próprio casal');
+SELECT is(pg_temp.roots(17), 'Ester Massa', 'DA-6: Ester, sem liderança, abre no próprio cadastro');
 SELECT is(pg_temp.roots(15), NULL, 'DA-6: Hugo, sem permissão de escopo, não recebe raiz (estado vazio)');
 SELECT is(pg_temp.val(19, 'SELECT count(*)::text FROM public.ministry_tree_nodes()'), '0', 'DA-6: a conta X não recebe raiz');
-SELECT is(pg_temp.roots(16), 'PastorComLider | Samuel+Magda', 'DA-6: Rita (Toda a Igreja) abre nos pastores');
+SELECT is(pg_temp.roots(16), 'PastorComLider | Samuel Massa+Magda Massa', 'DA-6: Rita (Toda a Igreja) abre nos pastores');
 SELECT is(pg_temp.val(3, format($q$SELECT count(*)::text FROM public.ministry_tree_nodes(ARRAY[%L, %L]::uuid[])$q$, pg_temp.m(3), pg_temp.m(4))), '2', 'DA-6: abrir o casal G12 devolve os discípulos diretos do casal (André e Carla)');
 SELECT is(pg_temp.val(3, format($q$SELECT count(*)::text FROM public.ministry_tree_nodes(ARRAY[%L]::uuid[])$q$, pg_temp.m(5))), '0', 'RN-05: Pedro abre Tiago, que não vê: nada');
 
 -- ===========================================================================
 -- 4. member_names (E1.13 sobre o escopo novo).
 -- ===========================================================================
-SELECT is(pg_temp.val(3, format($q$SELECT string_agg(name, ',' ORDER BY name) FROM public.member_names(ARRAY[%L, %L, %L, %L]::uuid[])$q$, pg_temp.m(1), pg_temp.m(14), pg_temp.m(8), pg_temp.m(4))), 'Paula,Samuel',
+SELECT is(pg_temp.val(3, format($q$SELECT string_agg(name, ',' ORDER BY name) FROM public.member_names(ARRAY[%L, %L, %L, %L]::uuid[])$q$, pg_temp.m(1), pg_temp.m(14), pg_temp.m(8), pg_temp.m(4))), 'Paula Massa,Samuel Massa',
   'RN-02: Pedro recebe o nome de Samuel (líder dele) e de Paula (visível), e nenhum de Diego nem de Beatriz');
 SELECT is(pg_temp.val(9, format($q$SELECT count(*)::text FROM public.member_names(ARRAY[%L, %L]::uuid[])$q$, pg_temp.m(16), pg_temp.m(14))), '0', 'RN-23: Caio não recebe o nome de Rita nem de Diego');
 SELECT is(pg_temp.val(19, format($q$SELECT count(*)::text FROM public.member_names(ARRAY[%L]::uuid[])$q$, pg_temp.m(3))), '0', 'RN-07: a conta X não recebe nome nenhum');

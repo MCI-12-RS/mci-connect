@@ -65,7 +65,7 @@ export async function createMassa() {
   const auth = { ana: await mkUser(`ana@${DOMAIN}`), banida: await mkUser(`banida@${DOMAIN}`) }
   sql(`BEGIN;
 UPDATE auth.users SET banned_until = now() + interval '10 years' WHERE id = '${auth.banida}';
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES ('${ids.pastor}', 'E104 Edge Pastor', 'M', true, false);
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, email) VALUES ('${ids.pastor}', 'E104 Edge Pastor', 'M', true, false, 'pastor@${DOMAIN}');
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, email, cpf, mobile_whatsapp) VALUES
   ('${ids.ana}', 'E104 Edge Ana', 'F', '${ids.pastor}', true, '${auth.ana}', 'ana@${DOMAIN}', '168.995.350-09', '(51) 90000-2000'),
   ('${ids.ouro}', 'E104 Edge Ouro', 'M', '${ids.pastor}', true, NULL, 'ouro@${DOMAIN}', NULL, '(51) 90000-2060'),

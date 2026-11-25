@@ -24,21 +24,24 @@ INSERT INTO auth.users (id, email)
 SELECT pg_temp.u(n), 'e204d-' || n || '@teste.invalid' FROM generate_series(1, 10) n;
 
 -- 1 Samuel, 2 Magda, 3 Pedro, 4 André, 5 Caio, 6 Davi (inativo), 7 Tiago, 8 Diego, 9 Dora, 10 Rita.
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, auth_user_id, role_id, is_active) VALUES
-  (pg_temp.m(1), 'Samuel Colares', 'M', true, NULL, pg_temp.u(1), pg_temp.role('Líder'), true),
-  (pg_temp.m(2), 'Magda Colares', 'F', true, NULL, pg_temp.u(2), pg_temp.role('Líder'), true),
-  (pg_temp.m(3), 'Pedro Lima', 'M', false, pg_temp.m(1), pg_temp.u(3), pg_temp.role('Líder'), true),
-  (pg_temp.m(4), 'André Lima', 'M', false, pg_temp.m(3), pg_temp.u(4), NULL, true),
-  (pg_temp.m(5), 'Caio Souza', 'M', false, pg_temp.m(4), pg_temp.u(5), pg_temp.role('Membro'), true),
-  (pg_temp.m(6), 'Davi Souza', 'M', false, pg_temp.m(5), NULL, NULL, false),
-  (pg_temp.m(7), 'Tiago Reis', 'M', false, pg_temp.m(1), pg_temp.u(7), pg_temp.role('Líder'), true),
-  (pg_temp.m(8), 'Diego Rocha', 'M', false, pg_temp.m(7), pg_temp.u(8), pg_temp.role('Líder'), true),
-  (pg_temp.m(9), 'Dora Rocha', 'F', false, pg_temp.m(8), NULL, NULL, true),
-  (pg_temp.m(10), 'Rita Admin', 'F', false, pg_temp.m(2), pg_temp.u(10), pg_temp.role('Administrador'), true);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192041' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, auth_user_id, role_id, is_active, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Samuel Colares', 'M', true, NULL, pg_temp.u(1), pg_temp.role('Líder'), true, pg_temp.mob(1)),
+  (pg_temp.m(2), 'Magda Colares', 'F', true, NULL, pg_temp.u(2), pg_temp.role('Líder'), true, pg_temp.mob(2)),
+  (pg_temp.m(3), 'Pedro Lima', 'M', false, pg_temp.m(1), pg_temp.u(3), pg_temp.role('Líder'), true, pg_temp.mob(3)),
+  (pg_temp.m(4), 'André Lima', 'M', false, pg_temp.m(3), pg_temp.u(4), NULL, true, pg_temp.mob(4)),
+  (pg_temp.m(5), 'Caio Souza', 'M', false, pg_temp.m(4), pg_temp.u(5), pg_temp.role('Membro'), true, pg_temp.mob(5)),
+  (pg_temp.m(6), 'Davi Souza', 'M', false, pg_temp.m(5), NULL, NULL, false, pg_temp.mob(6)),
+  (pg_temp.m(7), 'Tiago Reis', 'M', false, pg_temp.m(1), pg_temp.u(7), pg_temp.role('Líder'), true, pg_temp.mob(7)),
+  (pg_temp.m(8), 'Diego Rocha', 'M', false, pg_temp.m(7), pg_temp.u(8), pg_temp.role('Líder'), true, pg_temp.mob(8)),
+  (pg_temp.m(9), 'Dora Rocha', 'F', false, pg_temp.m(8), NULL, NULL, true, pg_temp.mob(9)),
+  (pg_temp.m(10), 'Rita Admin', 'F', false, pg_temp.m(2), pg_temp.u(10), pg_temp.role('Administrador'), true, pg_temp.mob(10));
 -- A cadeia N1..N8: N1 sob Samuel, cada um líder do seguinte. Inclui um inativo no meio (N4).
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, is_active)
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, is_active, mobile_whatsapp)
 SELECT pg_temp.m(20 + n), 'Nivel ' || n || ' Cadeia', 'M', false,
-       CASE WHEN n = 1 THEN pg_temp.m(1) ELSE pg_temp.m(20 + n - 1) END, n <> 4
+       CASE WHEN n = 1 THEN pg_temp.m(1) ELSE pg_temp.m(20 + n - 1) END, n <> 4, pg_temp.mob(20 + n)
   FROM generate_series(1, 8) n;
 -- Um ciclo antigo (dado fora das regras, só em replica): X <-> Y, e Z sob Y.
 SET LOCAL session_replication_role = replica;

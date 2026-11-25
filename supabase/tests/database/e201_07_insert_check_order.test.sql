@@ -32,7 +32,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(86);
+SELECT plan(87);
 
 CREATE FUNCTION pg_temp.u(_n int) RETURNS uuid LANGUAGE sql IMMUTABLE AS
 $$ SELECT ('a2010700-0000-0000-0000-' || lpad(_n::text, 12, '0'))::uuid $$;
@@ -127,24 +127,27 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(7), 'edit_own_data'),
   (pg_temp.role(8), 'view_all_church'), (pg_temp.role(8), 'submit_any_visible_report');
 
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
-  (pg_temp.m(1), 'Paulo Pastor E201-07', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email, auth_user_id, role_id) VALUES
-  (pg_temp.m(21), 'Alice Admin',     'F', pg_temp.m(1), true, NULL, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(22), 'Nilo Nada',       'M', pg_temp.m(1), true, NULL, pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(23), 'Clara Cadastro',  'F', pg_temp.m(1), true, NULL, pg_temp.u(3), pg_temp.role(3)),
-  (pg_temp.m(24), 'Caio Celulas',    'M', pg_temp.m(1), true, NULL, pg_temp.u(4), pg_temp.role(4)),
-  (pg_temp.m(25), 'Yara Lider',      'F', pg_temp.m(1), true, NULL, pg_temp.u(5), pg_temp.role(5)),
-  (pg_temp.m(26), 'Lucas Edita',     'M', pg_temp.m(1), true, NULL, pg_temp.u(6), pg_temp.role(6)),
-  (pg_temp.m(27), 'Edu Proprio',     'M', pg_temp.m(1), true, NULL, pg_temp.u(7), pg_temp.role(7)),
-  (pg_temp.m(28), 'Sofia Envia',     'F', pg_temp.m(1), true, NULL, pg_temp.u(8), pg_temp.role(8)),
-  (pg_temp.m(31), 'Otavio Outro',    'M', pg_temp.m(1), true, NULL, NULL, NULL),
-  (pg_temp.m(40), 'Pia Participa',   'F', pg_temp.m(1), true, NULL, NULL, NULL),
-  (pg_temp.m(41), 'Rui Participa',   'M', pg_temp.m(1), true, NULL, NULL, NULL),
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192017' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Paulo Pastor E201-07', 'M', true, false, pg_temp.mob(1));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email, auth_user_id, role_id, mobile_whatsapp) VALUES
+  (pg_temp.m(21), 'Alice Admin',     'F', pg_temp.m(1), true, NULL, pg_temp.u(1), pg_temp.role(1), pg_temp.mob(21)),
+  (pg_temp.m(22), 'Nilo Nada',       'M', pg_temp.m(1), true, NULL, pg_temp.u(2), pg_temp.role(2), pg_temp.mob(22)),
+  (pg_temp.m(23), 'Clara Cadastro',  'F', pg_temp.m(1), true, NULL, pg_temp.u(3), pg_temp.role(3), pg_temp.mob(23)),
+  (pg_temp.m(24), 'Caio Celulas',    'M', pg_temp.m(1), true, NULL, pg_temp.u(4), pg_temp.role(4), pg_temp.mob(24)),
+  (pg_temp.m(25), 'Yara Lider',      'F', pg_temp.m(1), true, NULL, pg_temp.u(5), pg_temp.role(5), pg_temp.mob(25)),
+  (pg_temp.m(26), 'Lucas Edita',     'M', pg_temp.m(1), true, NULL, pg_temp.u(6), pg_temp.role(6), pg_temp.mob(26)),
+  (pg_temp.m(27), 'Edu Proprio',     'M', pg_temp.m(1), true, NULL, pg_temp.u(7), pg_temp.role(7), pg_temp.mob(27)),
+  (pg_temp.m(28), 'Sofia Envia',     'F', pg_temp.m(1), true, NULL, pg_temp.u(8), pg_temp.role(8), pg_temp.mob(28)),
+  (pg_temp.m(31), 'Otavio Outro',    'M', pg_temp.m(1), true, NULL, NULL, NULL, pg_temp.mob(31)),
+  (pg_temp.m(40), 'Pia Participa',   'F', pg_temp.m(1), true, NULL, NULL, NULL, pg_temp.mob(40)),
+  (pg_temp.m(41), 'Rui Participa',   'M', pg_temp.m(1), true, NULL, NULL, NULL, pg_temp.mob(41)),
   -- excluídos (marcados abaixo): Xavier tem conta; Zilda e Wagner não
-  (pg_temp.m(10), 'Xavier Excluido', 'M', pg_temp.m(1), true, 'xavier.e20107@teste.invalid', pg_temp.u(10), NULL),
-  (pg_temp.m(11), 'Zilda Excluida',  'F', pg_temp.m(1), true, NULL, NULL, NULL),
-  (pg_temp.m(12), 'Wagner Excluido', 'M', pg_temp.m(1), true, NULL, NULL, NULL);
+  (pg_temp.m(10), 'Xavier Excluido', 'M', pg_temp.m(1), true, 'xavier.e20107@teste.invalid', pg_temp.u(10), NULL, pg_temp.mob(10)),
+  (pg_temp.m(11), 'Zilda Excluida',  'F', pg_temp.m(1), true, NULL, NULL, NULL, pg_temp.mob(11)),
+  (pg_temp.m(12), 'Wagner Excluido', 'M', pg_temp.m(1), true, NULL, NULL, NULL, pg_temp.mob(12));
 
 -- c1 e c2 e c6: de Yara; c3, c4, c5 e c8: de Otávio; c7: de Otávio com Edu de timóteo.
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
@@ -212,7 +215,15 @@ SELECT is(
   f, tb || ': ' || f || ' é o primeiro BEFORE INSERT')
   FROM (VALUES ('cells', 'a0_check_insert_permission'), ('cell_reports', 'a0_check_insert_permission'),
                ('cell_report_participants', 'a0_check_insert_permission'),
-               ('members', 'aa_enforce_member_write_rules')) v(tb, f);
+               -- E2.04 (DT-04): a0_normalize_member vem antes de todos, mas só normaliza e nunca recusa.
+               ('members', 'a0_normalize_member')) v(tb, f);
+SELECT is(
+  (SELECT min(t.tgname COLLATE "C")::text FROM pg_trigger t
+    WHERE t.tgrelid = 'public.members'::regclass AND NOT t.tgisinternal
+      AND (t.tgtype & 2) = 2 AND (t.tgtype & 1) = 1 AND (t.tgtype & 4) = 4
+      AND t.tgname <> 'a0_normalize_member'),
+  'aa_enforce_member_write_rules',
+  'members: aa_enforce_member_write_rules é o primeiro BEFORE INSERT que recusa (depois do a0_ do E2.04)');
 
 SELECT ok(NOT p.prosecdef AND p.proconfig = ARRAY['search_path=public'],
   'enforce_insert_permission: INVOKER (enxerga quem grava), search_path fixo')
@@ -279,7 +290,7 @@ SELECT is(pg_temp.try('authenticated', 3, pg_temp.ins_member('Nova Pessoa', NULL
 SELECT is(pg_temp.try('authenticated', 3, pg_temp.ins_member('Nina Nova E201-07', 'nina.e20107@teste.invalid', pg_temp.m(1))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'create_member: cadastro válido funciona');
-SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_member('Sergio Service E201-07', NULL, pg_temp.m(1))),
+SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_member('Sergio Service E201-07', 'sergio.e20107@teste.invalid', pg_temp.m(1))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'service_role: cadastro válido funciona');
 SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_member('Sergio Service E201-07', NULL, pg_temp.m(11))) ->> 'code',

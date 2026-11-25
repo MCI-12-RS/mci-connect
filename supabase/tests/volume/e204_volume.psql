@@ -20,7 +20,7 @@ SET LOCAL synchronous_commit = off;
 INSERT INTO auth.users (id, email)
 SELECT ('a2041400-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e204-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
 
-INSERT INTO public.members (id, name, gender, is_pastor, leader_id, g12_level, is_active, has_leadership, auth_user_id, role_id, created_at)
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, g12_level, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
 SELECT ('c2041400-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
        'Membro Volume ' || n,
        CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
@@ -35,7 +35,8 @@ SELECT ('c2041400-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
               WHEN 3 THEN 'a2041400-0000-0000-0000-000000000003'::uuid END,
        CASE WHEN n = 1 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
             WHEN n = 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
-       now() - (n % 400) * interval '1 day'
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')                -- E2.04: identificador real e único (RN-08, RN-09)
   FROM generate_series(1, 20000) n;
 ANALYZE public.members;
 SET LOCAL session_replication_role = origin;

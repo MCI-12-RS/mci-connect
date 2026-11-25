@@ -87,15 +87,18 @@ INSERT INTO public.role_permissions (role_id, permission) VALUES
   (pg_temp.role(2), 'view_all_church'), (pg_temp.role(2), 'edit_cell'),
   (pg_temp.role(2), 'edit_cell_report');  -- E2.02 (DA-5): retirar participante exige edit_cell_report
 
-INSERT INTO public.members (id, name, gender, is_pastor, has_leadership) VALUES
-  (pg_temp.m(1), 'Pedro Pastor E201-06', 'M', true, false);
-INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id) VALUES
-  (pg_temp.m(2), 'Ana Admin E201-06', 'F', pg_temp.m(1), true, pg_temp.u(1), pg_temp.role(1)),
-  (pg_temp.m(3), 'Lino Lider E201-06', 'M', pg_temp.m(1), true, pg_temp.u(2), pg_temp.role(2)),
-  (pg_temp.m(4), 'Caio Celula',        'M', pg_temp.m(1), true, NULL, NULL),
-  (pg_temp.m(5), 'Fabio Folha',        'M', pg_temp.m(1), true, NULL, NULL),
-  (pg_temp.m(6), 'Paula Participante', 'F', pg_temp.m(1), true, NULL, NULL),
-  (pg_temp.m(7), 'Sara Saiu',          'F', pg_temp.m(1), true, NULL, NULL);
+-- E2.04 (DT-23): todo cadastro novo tem um identificador real (RN-08).
+CREATE FUNCTION pg_temp.mob(_n int) RETURNS text LANGUAGE sql IMMUTABLE AS
+  $$ SELECT '5192016' || lpad(_n::text, 4, '0') $$;
+INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, mobile_whatsapp) VALUES
+  (pg_temp.m(1), 'Pedro Pastor E201-06', 'M', true, false, pg_temp.mob(1));
+INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, role_id, mobile_whatsapp) VALUES
+  (pg_temp.m(2), 'Ana Admin E201-06', 'F', pg_temp.m(1), true, pg_temp.u(1), pg_temp.role(1), pg_temp.mob(2)),
+  (pg_temp.m(3), 'Lino Lider E201-06', 'M', pg_temp.m(1), true, pg_temp.u(2), pg_temp.role(2), pg_temp.mob(3)),
+  (pg_temp.m(4), 'Caio Celula',        'M', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(4)),
+  (pg_temp.m(5), 'Fabio Folha',        'M', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(5)),
+  (pg_temp.m(6), 'Paula Participante', 'F', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(6)),
+  (pg_temp.m(7), 'Sara Saiu',          'F', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(7));
 
 INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time) VALUES
   (pg_temp.c(1), pg_temp.m(4), pg_temp.m(4), 'Evangelística', 'Quarta', '20:00'),
