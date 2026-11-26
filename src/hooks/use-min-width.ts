@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 
 /** A partir daqui, as listas densas mostram a tabela; abaixo, os cartões (P45, `lg`). */
 export const TABLE_MIN_WIDTH = 1024;
+/**
+ * Células: a tabela com a coluna Relatório não cabe em 720 px, então os cartões
+ * vão até 1279 px e a tabela entra em 1280 px (E2.09, P74, UXD-5).
+ */
+export const CELLS_TABLE_MIN_WIDTH = 1280;
 /** A partir daqui, as colunas secundárias (foto, celular) entram na tabela (P45, `xl`). */
 export const WIDE_TABLE_MIN_WIDTH = 1280;
 

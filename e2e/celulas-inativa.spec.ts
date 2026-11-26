@@ -45,7 +45,7 @@ test("UX-21: Pedro inativa C1 pela tela: 'Inativa' com ícone e sem 'Novo relat�
 
     // Sem recarregar a página: a linha de C1 com "Inativa" e sem "Novo relatório"; C2 continua com ele.
     const row = page.getByRole("row").filter({ has: editCellButton(page, ANDRE) });
-    await expect(row.getByText("Inativa")).toBeVisible();
+    await expect(row.getByText("Inativa", { exact: true })).toBeVisible();
     await expect(row.locator("svg.lucide-circle-pause, svg.lucide-pause-circle")).toHaveCount(1);
     await expect(newReportButton(page, ANDRE)).toHaveCount(0);
     await expect(newReportButton(page, CAIO)).toBeVisible();

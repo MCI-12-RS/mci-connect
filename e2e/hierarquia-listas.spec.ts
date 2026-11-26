@@ -184,8 +184,9 @@ test.describe("UX-05: cartões e tabela por largura, sem rolagem horizontal, com
       else await expect(page.getByRole("table")).toHaveCount(0);
       await expect(page.getByText(LONG[1]!).first()).toBeVisible();
       await H.expectNoPageHScroll(page, `Membros ${name}`);
+      // Células: cartões até 1279 px e tabela a partir de 1280 px (E2.09, P74).
       await openCells(page, viewport.width);
-      if (kind === "tabela") await expect(page.getByRole("table")).toBeVisible();
+      if (viewport.width >= 1280) await expect(page.getByRole("table")).toBeVisible();
       else await expect(page.getByRole("table")).toHaveCount(0);
       await H.expectNoPageHScroll(page, `Células ${name}`);
     });
@@ -329,10 +330,11 @@ test.describe("UX-08: o líder com o nível e o G12 de um nome só na lista de C
     await H.signIn(page, H.RITA);
     await openCells(page, VIEWPORTS.phone.width);
     for (const [leader, text, g12] of EXPECTED) {
-      const card = page.locator("div.space-y-3").filter({ has: page.locator("span.break-words", { hasText: new RegExp(`^${leader}`) }) });
+      // E2.09 (UXD-4): o cartão é um item da lista, e o G12 abre o bloco das pessoas.
+      const card = page.locator("main li").filter({ has: page.locator("p.text-sm span.break-words", { hasText: new RegExp(`^${leader}`) }) });
       await expect(card, leader).toHaveCount(1);
       expect(await seen(card.locator("span.break-words").first()), `líder de ${leader}`).toBe(text);
-      expect(await seen(card.locator("p.text-xs").first()), `G12 de ${leader}`).toBe(`G12: ${g12}`);
+      expect(await seen(card.locator('[data-part="people"] > p').first()), `G12 de ${leader}`).toBe(`G12: ${g12}`);
     }
   });
 });

@@ -370,6 +370,9 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     respondWith(
       { data: [{ id: "m7", name: "Maria Mendes" }] },
       { data: [{ id: "new1" }] },
+      // O relatório gravado recarrega as consultas abertas, inclusive as opções de membro
+      // (E2.09, AQ-3: o relatório muda o vínculo celular).
+      { data: [{ id: "m7", name: "Maria Mendes" }] },
       { data: [{ id: "new1" }] },
     );
     respondToRpc(

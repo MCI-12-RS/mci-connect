@@ -110,10 +110,11 @@ describe("RN-11, UX-08: o líder com o nível e o G12 de um nome só", () => {
   it("Dados os cartões a 360 px, então é o mesmo: 'G12: …' sob o líder com o nível", async () => {
     setWidth(360);
     renderCells(all);
+    // E2.09 (UXD-4): o G12 abre o bloco das pessoas, logo abaixo do líder.
     for (const [c, leader, g12] of expected) {
-      const header = (await leaderEl(c.leader_name ?? "")).closest("div.min-w-0") as HTMLElement;
-      expect(seen(header.querySelector("span.break-words") as Element), leader).toBe(leader);
-      expect(seen(header.querySelector("p.text-xs") as Element), `G12 de ${c.leader_name}`).toBe(`G12: ${g12}`);
+      const card = (await leaderEl(c.leader_name ?? "")).closest("li") as HTMLElement;
+      expect(seen(card.querySelector("span.break-words") as Element), leader).toBe(leader);
+      expect(seen(card.querySelector('[data-part="people"] > p') as Element), `G12 de ${c.leader_name}`).toBe(`G12: ${g12}`);
     }
   });
 
@@ -138,20 +139,23 @@ describe("UX-16: o que o leitor de tela ouve na lista de Células", () => {
   it("Dada a célula de Ester, então ouve 'G12: nenhum' e o '—' fica fora do leitor", async () => {
     setWidth(360);
     renderCells([cEster]);
-    const header = (await leaderEl("Ester Ramos")).closest("div.min-w-0") as HTMLElement;
-    const p = header.querySelector("p.text-xs") as HTMLElement;
+    const card = (await leaderEl("Ester Ramos")).closest("li") as HTMLElement;
+    const p = card.querySelector('[data-part="people"] > p') as HTMLElement;
     expect(p.querySelector(".sr-only")).toHaveTextContent("nenhum");
     expect(p.querySelector('[aria-hidden="true"]')).toHaveTextContent("—");
     expect(p.textContent).toContain("G12:");
   });
 });
 
+// E2.09 (P74, UX-06): em Células, os cartões vão até 1279 px e a tabela entra em 1280 px.
 describe("UX-05: cartões ou tabela conforme a largura, já no primeiro render", () => {
   it.each([
     [360, "cartões"],
     [768, "cartões"],
-    [1024, "tabela"],
+    [1024, "cartões"],
+    [1279, "cartões"],
     [1280, "tabela"],
+    [1440, "tabela"],
   ])("A %i px o primeiro render já são %s", async (width, kind) => {
     setWidth(width);
     renderCells([c1]);
@@ -160,13 +164,15 @@ describe("UX-05: cartões ou tabela conforme a largura, já no primeiro render",
     await screen.findAllByText("André Souza", { exact: false });
   });
 
-  it("A tabela de Células tem Líder, G12, Endereço, Tipo, Dia / Hora e Situação (sem 'Status')", async () => {
-    setWidth(1024);
+  it("A tabela de Células tem Líder, G12, Endereço, Reunião, Relatório e Situação (sem 'Status', 'Tipo' nem 'Dia / Hora'; E2.09, UX-02)", async () => {
+    setWidth(1280);
     renderCells([c1]);
     await screen.findAllByText("André Souza", { exact: false });
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
-    expect(headers.slice(0, 6)).toEqual(["Líder", "G12", "Endereço", "Tipo", "Dia / Hora", "Situação"]);
+    expect(headers.slice(0, 6)).toEqual(["Líder", "G12", "Endereço", "Reunião", "Relatório", "Situação"]);
     expect(headers).not.toContain("Status");
+    expect(headers).not.toContain("Tipo");
+    expect(headers).not.toContain("Dia / Hora");
   });
 });
 

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { QueryClient, QueryObserver, type QueryKey } from "@tanstack/react-query";
-import { refreshAfterCellWrite, refreshAfterMemberWrite } from "./query-refresh";
+import { refreshAfterCellWrite, refreshAfterMemberWrite, refreshAfterReportWrite } from "./query-refresh";
 
-// E2.06, AQ-6, DT-16 e UXD-10: depois de gravar, a tela fechada carrega do
-// zero (sem o valor de antes) e a aberta recarrega.
+// E2.06, AQ-6, DT-16 e UXD-10; E2.09, AQ-3 e RN-09: depois de gravar, a tela
+// fechada carrega do zero (sem o valor de antes) e a aberta recarrega.
 
 const clients: QueryClient[] = [];
 const unsubscribes: Array<() => void> = [];
@@ -39,6 +39,7 @@ afterEach(() => {
 describe.each([
   ["refreshAfterMemberWrite", refreshAfterMemberWrite],
   ["refreshAfterCellWrite", refreshAfterCellWrite],
+  ["refreshAfterReportWrite", refreshAfterReportWrite],
 ])("%s", (_name, refresh) => {
   it("descarta as consultas inativas de Membros, Ministérios, Células, Relatórios e Dashboard", async () => {
     const client = newClient();
@@ -82,5 +83,31 @@ describe.each([
     expect(client.getQueryState(roles.queryKey)?.isInvalidated).toBe(false);
     // O acesso nunca é descartado; só a gravação de célula o relê (E2.08, AQ-8, DT-14).
     expect(client.getQueryState(access.queryKey)?.isInvalidated).toBe(refresh === refreshAfterCellWrite);
+  });
+});
+
+describe("refreshAfterReportWrite (E2.09, UX-11)", () => {
+  it("a lista de Células e o Dashboard fechados não guardam a situação de antes do relatório", async () => {
+    const client = newClient();
+    const cells = await seed(client, ["cells", "list", { page: 1, pageSize: 10, search: "" }]);
+    const summary = await seed(client, ["dashboard", "summary"]);
+    const members = await seed(client, ["members", "list", { page: 1 }]);
+
+    await refreshAfterReportWrite(client);
+
+    expect(client.getQueryData(cells.queryKey)).toBeUndefined();
+    expect(client.getQueryData(summary.queryKey)).toBeUndefined();
+    expect(client.getQueryData(members.queryKey)).toBeUndefined();
+  });
+
+  it("resolve só depois que a lista aberta terminou de recarregar", async () => {
+    const client = newClient();
+    const list = await seed(client, ["cells", "list", { page: 1 }]);
+    observe(client, list.queryKey, list.queryFn);
+
+    const done = refreshAfterReportWrite(client);
+    expect(client.getQueryData(list.queryKey)).toBe("valor 1");
+    await done;
+    expect(client.getQueryData(list.queryKey)).toBe("valor 2");
   });
 });

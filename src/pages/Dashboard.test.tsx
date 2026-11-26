@@ -143,7 +143,7 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
 
     expect(screen.getByRole("heading", { name: "Esta Semana (29/11 - 05/12)" })).toBeInTheDocument();
     expect(cardValue("Relatórios Enviados")).toBe("41");
-    expect(cardValue("Células sem Relatório")).toBe("6");
+    expect(cardValue("Células com relatório pendente")).toBe("6");
     expect(cardValue("Visitantes em Células")).toBe("17");
     expect(cardValue("Células Não Realizadas")).toBe("2");
     expect(cardValue("Total de Membros")).toBe("1.530");
@@ -189,6 +189,28 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
       expect(screen.queryByText("Erro ao carregar o dashboard.")).not.toBeInTheDocument();
     },
   );
+
+  it("E2.09, UX-13: o card de pendentes se chama 'Células com relatório pendente', com o triângulo (aria-hidden), e os títulos quebram linha com leading-snug", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] });
+    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+
+    renderDashboard();
+    await settle();
+
+    const title = screen.getByRole("heading", { name: "Células com relatório pendente" });
+    const card = title.closest<HTMLElement>("div.rounded-lg") as HTMLElement;
+    const icon = card.querySelector("svg") as SVGElement;
+    expect(icon).toHaveClass("lucide-triangle-alert");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(title.parentElement).toHaveClass("items-start");
+    for (const heading of screen.getAllByRole("heading", { level: 3 })) {
+      expect(heading).toHaveClass("leading-snug");
+      expect(heading).not.toHaveClass("truncate");
+      expect(heading).not.toHaveClass("leading-none");
+    }
+    expect(document.body.textContent).not.toMatch(/Células sem Relatório|Status|Atrasado|Entregue|Cancelada|cobr/);
+  });
 
   it("Dada uma falha no resumo, quando as novas tentativas se esgotam, então as seções dele mostram o erro e o resto aparece", async () => {
     respondToRpc("dashboard_summary", failure, failure, failure, failure);

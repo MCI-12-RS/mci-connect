@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CELL_ROW_SELECT, CELL_SUMMARY_SELECT } from "./fields";
+import { CELL_LIST_SELECT, CELL_ROW_SELECT, CELL_STORED_SELECT, CELL_SUMMARY_SELECT } from "./fields";
 
 const columns = (select: string) => select.split(",").map((c) => c.trim());
 
@@ -22,5 +22,23 @@ describe("colunas lidas da cells_view (risco 6)", () => {
     for (const expensive of ["search_text", "last_report_date", "g12_leader_id", "g12_leader_name"]) {
       expect(columns(CELL_SUMMARY_SELECT)).not.toContain(expensive);
     }
+  });
+});
+
+describe("a situação do relatório só na lista (E2.09, AQ-1, AQ-2)", () => {
+  const SITUATION = ["report_status", "report_missing_weeks"];
+
+  it("a lista pede as colunas de sempre e, no fim, as duas da situação", () => {
+    expect(columns(CELL_LIST_SELECT)).toEqual([...columns(CELL_ROW_SELECT), ...SITUATION]);
+    expect(columns(CELL_LIST_SELECT)).not.toContain("search_text");
+    expect(columns(CELL_LIST_SELECT)).not.toContain("last_report_date");
+  });
+
+  it.each([
+    ["CELL_ROW_SELECT", CELL_ROW_SELECT],
+    ["CELL_SUMMARY_SELECT", CELL_SUMMARY_SELECT],
+    ["CELL_STORED_SELECT", CELL_STORED_SELECT],
+  ])("%s não pede a situação (o formulário e o seletor não pagam o cálculo)", (_name, select) => {
+    for (const column of SITUATION) expect(columns(select)).not.toContain(column);
   });
 });
