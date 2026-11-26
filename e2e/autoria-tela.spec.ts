@@ -298,3 +298,46 @@ test("UX-28: em 320 px com a fonte em 200%, a autoria quebra linha sem corte nem
   const box = await link.boundingBox();
   expect((box?.x ?? 0) + (box?.width ?? 0), "o botão não estoura").toBeLessThanOrEqual(320);
 });
+
+test("UX-07 (ligação real do isDirty): sem alteração, 'Ver histórico' navega direto; com alteração, pede 'Descartar as alterações?' em membro, célula e relatório", async ({ page }) => {
+  await login(page, env.admin);
+  const expectDirect = async (dialog: ReturnType<Page["getByRole"]>, hrefPart: string) => {
+    await dialog.getByRole("link", { name: /^Ver histórico/ }).click();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/events\\?record_type=${hrefPart}`));
+  };
+  const expectAsks = async (dialog: ReturnType<Page["getByRole"]>) => {
+    await dialog.getByRole("link", { name: /^Ver histórico/ }).click();
+    await expect(page.getByRole("alertdialog", { name: "Descartar as alterações?" })).toBeVisible();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Continuar editando" }).click();
+    await expect(page).not.toHaveURL(/\/events/);
+  };
+
+  // Membro: sem mudança, direto.
+  let dialog = await openMemberEdit(page, TARGET.name);
+  await expectDirect(dialog, "member");
+
+  // Célula: com mudança pergunta; sem mudança vai direto.
+  await openList(page, "/cells", LEADER.name);
+  await page.getByRole("button", { name: `Editar a célula de ${LEADER.name}`, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Editar célula" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Complemento").fill("Mudança não salva");
+  await expectAsks(dialog);
+  await dialog.getByLabel("Complemento").fill("");
+  await page.keyboard.press("Escape");
+  await page.goto("/cells");
+  await openList(page, "/cells", LEADER.name);
+  await page.getByRole("button", { name: `Editar a célula de ${LEADER.name}`, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Editar célula" });
+  await expectDirect(dialog, "cell");
+
+  // Relatório: com mudança pergunta.
+  const brDate = sql(env, `SELECT to_char(public.sp_today(), 'DD/MM/YYYY')`);
+  await openList(page, "/cell-reports", LEADER.name);
+  await page.getByRole("button", { name: `Editar o relatório de ${brDate} da célula de ${LEADER.name}`, exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Tema da Palavra").fill("Tema não salvo");
+  await expectAsks(dialog);
+});
