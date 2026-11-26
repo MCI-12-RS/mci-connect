@@ -6,6 +6,7 @@
 // `app_error`), e a tela mostra a que veio. As cópias aqui servem para os
 // testes e para quando a tela decide sem chamar o servidor.
 
+import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
 
 /** Acesso relido, tela sem acesso e falha ao ler o acesso (T12, P13, UXD-11). */
@@ -133,10 +134,11 @@ export const MEMBER_FORM_TEXTS = {
   roleLoadFailed: "Não foi possível carregar as funções.",
   /** Não está no spec: seletor de função vazio no envio (o texto de antes do E2.02, agora embaixo do campo). */
   roleRequired: "Selecione uma função para o membro.",
-  /** Não está no spec: falha sem regra ao salvar o cadastro (40P01, erro técnico), sem o texto técnico (UX-30). */
-  saveFailed: "Não foi possível salvar o cadastro. Tente de novo.",
-  /** Não está no spec: queda de conexão ao salvar o cadastro. */
-  saveNetworkError: "Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.",
+  /**
+   * Queda de conexão, erro do servidor ou erro sem regra ao salvar o cadastro (40P01, falha da Auditoria):
+   * a mensagem de conexão, sem o texto técnico (E2.04 UX-30; E2.05 T5, RN-14).
+   */
+  saveNetworkError: AUDIT_SAVE_TEXTS.connection.member,
 } as const;
 
 /** Formulário de célula (T7). */

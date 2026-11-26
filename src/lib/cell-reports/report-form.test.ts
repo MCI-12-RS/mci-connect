@@ -156,11 +156,21 @@ describe("classifyReportSaveError", () => {
     });
   });
 
-  it("Dada a queda de conexão, então o texto de conexão", () => {
-    expect(classifyReportSaveError({ code: "", message: "TypeError: Failed to fetch" })).toEqual({
-      kind: "error",
-      message: "Não foi possível salvar. Verifique a conexão e tente de novo.",
-    });
+  it("Dada a queda de conexão, então a mensagem de conexão junto de Salvar (E2.05, T5)", () => {
+    expect(classifyReportSaveError({ code: "", message: "TypeError: Failed to fetch" })).toEqual({ kind: "connection" });
+  });
+
+  it("Dado um CHECK de tabela recusado (a falha da Auditoria, RN-14), então a mensagem de conexão, e não a da semana (E2.05, DT-18)", () => {
+    expect(
+      classifyReportSaveError({
+        code: "23514",
+        message: 'new row for relation "events" violates check constraint "e205_qa_broken"',
+      }),
+    ).toEqual({ kind: "connection" });
+  });
+
+  it("Dado um P0001 sem texto, então a mensagem de conexão", () => {
+    expect(classifyReportSaveError({ code: "P0001", message: "" })).toEqual({ kind: "connection" });
   });
 
   it("Dadas as regras de semana dos triggers e do índice único, então os textos de sempre", () => {
@@ -182,14 +192,11 @@ describe("classifyReportSaveError", () => {
     });
   });
 
-  it("Dado um erro técnico, então o texto genérico, sem a mensagem técnica (UX-39)", () => {
+  it("Dado um erro técnico ou do servidor, então a mensagem de conexão, sem a mensagem técnica (UX-39; E2.05, T5)", () => {
     expect(classifyReportSaveError({ code: "22P02", message: "invalid input syntax for type numeric" })).toEqual({
-      kind: "error",
-      message: "Não foi possível salvar o relatório. Tente de novo.",
+      kind: "connection",
     });
-    expect(classifyReportSaveError(new Error("boom"))).toEqual({
-      kind: "error",
-      message: "Não foi possível salvar o relatório. Tente de novo.",
-    });
+    expect(classifyReportSaveError({ code: "XX000", message: "internal error" })).toEqual({ kind: "connection" });
+    expect(classifyReportSaveError(new Error("boom"))).toEqual({ kind: "connection" });
   });
 });

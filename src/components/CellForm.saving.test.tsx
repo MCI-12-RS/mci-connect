@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { CellRow } from "@/lib/cells/fields";
 import { EditCellDialog } from "./EditRecordDialogs";
 
@@ -139,5 +139,50 @@ describe("CellForm: gravação que recalcula (E2.06, RN-08)", () => {
     });
     expect(toast).toHaveBeenCalledWith({ title: "Célula atualizada." });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("CellForm: sem mudança no servidor e falha da Auditoria (E2.05, T5)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+  });
+
+  it("UX-08 (AQ-7): o updated_at devolvido igual ao carregado dá 'Nenhuma alteração para salvar.', sem o toast de sucesso", async () => {
+    const loaded = "2026-11-26T13:00:00.123456+00:00";
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onClose = vi.fn();
+    respondWith({ data: { ...carlos, updated_at: loaded } });
+    respondToRpc("member_names", { data: [{ id: "l1", name: "Carlos Lima" }] });
+    render(
+      <QueryClientProvider client={client}>
+        <EditCellDialog cellId="c1" onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "Salvar alterações" });
+    fireEvent.change(screen.getByLabelText("Bairro"), { target: { value: "Bairro Novo" } });
+    respondWith({ data: [{ id: "c1", updated_at: loaded }] });
+
+    save();
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(fakeQueries().filter((query) => query.table === "cells")).toHaveLength(1);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({ title: "Nenhuma alteração para salvar." });
+  });
+
+  it("UX-09: a falha da Auditoria (CHECK em events) dá a mensagem de conexão acima dos botões, sem texto técnico e sem toast", async () => {
+    const onClose = await renderEdit();
+    respondWith({ error: { code: "23514", message: 'new row for relation "events" violates check constraint "e205_qa_broken"' } });
+    save();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Não foi possível salvar a célula. Verifique a conexão e tente de novo.");
+    expect(document.body.textContent).not.toMatch(/events|constraint|e205/);
+    expect(screen.getByLabelText("Bairro")).toHaveValue("Bairro Novo");
+    expect(toast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

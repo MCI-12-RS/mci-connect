@@ -4,7 +4,7 @@ import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
 import { CELL_STORED_SELECT } from "@/lib/cells/fields";
-import { useCellSave, type CreateCellRequest } from "./use-cell-save";
+import { useCellSave, type CellSaveRequest, type CreateCellRequest } from "./use-cell-save";
 
 // O cadastro de célula repetido depois de uma queda (E2.08, DT-09).
 
@@ -19,7 +19,7 @@ function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const { result } = renderHook(() => useCellSave(), { wrapper });
-  return (request: CreateCellRequest) => act(() => result.current.save(request));
+  return (request: CellSaveRequest) => act(() => result.current.save(request));
 }
 
 const ID = "22222222-2222-4222-8222-222222222222";
@@ -94,7 +94,7 @@ describe("useCellSave: nova tentativa de cadastro (DT-09)", () => {
     expect(patch.calls.slice(0, 3)).toEqual([
       ["update", { meeting_time: "19:30", street: "Rua B" }],
       ["eq", "id", ID],
-      ["select", "id"],
+      ["select", "id, updated_at"],
     ]);
   });
 
@@ -139,5 +139,29 @@ describe("useCellSave: nova tentativa de cadastro (DT-09)", () => {
     respondWith({ data: stored });
     expect(await save({ kind: "create", insert })).toEqual({ kind: "saved", outcome: "created" });
     expect(fakeQueries()[2].table).toBe("cells_view");
+  });
+});
+
+describe("useCellSave: edição (E2.05, AQ-7)", () => {
+  const loaded = "2026-11-26T13:00:00.123456+00:00";
+  const request = { kind: "update" as const, cellId: ID, patch: { number: "12" }, outcome: "updated" as const, loadedUpdatedAt: loaded };
+
+  it("o updated_at devolvido igual ao carregado: o servidor não mudou nada", async () => {
+    const save = setup();
+    respondWith({ data: [{ id: ID, updated_at: loaded }] });
+    expect(await save(request)).toEqual({ kind: "saved", outcome: "unchanged" });
+    expect(fakeQueries()[0].calls).toContainEqual(["select", "id, updated_at"]);
+  });
+
+  it("o updated_at novo: o toast da gravação", async () => {
+    const save = setup();
+    respondWith({ data: [{ id: ID, updated_at: "2026-11-26T13:05:00+00:00" }] });
+    expect(await save(request)).toEqual({ kind: "saved", outcome: "updated" });
+  });
+
+  it("sem a versão carregada: não compara", async () => {
+    const save = setup();
+    respondWith({ data: [{ id: ID, updated_at: loaded }] });
+    expect(await save({ ...request, loadedUpdatedAt: undefined })).toEqual({ kind: "saved", outcome: "updated" });
   });
 });

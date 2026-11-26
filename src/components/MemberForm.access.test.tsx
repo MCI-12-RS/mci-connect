@@ -447,12 +447,12 @@ describe("UX-22: recusas da `create-user-admin` no cadastro novo (Pedro)", () =>
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it("recusa sem código (erro técnico): 'tente de novo' no rodapé, sem o texto do servidor e sem toast (T7)", async () => {
+  it("recusa sem código (erro técnico ou falha da Auditoria): a mensagem de conexão no rodapé, sem o texto do servidor e sem toast (T7; E2.05, T5)", async () => {
     await fillNew();
     createRefusal(500, { error: "Falha ao criar o usuário." });
     submitNew();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível salvar o cadastro. Tente de novo.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.");
     expect(screen.queryByText("Falha ao criar o usuário.")).not.toBeInTheDocument();
     expect(toast).not.toHaveBeenCalled();
   });

@@ -385,7 +385,7 @@ test("RN-12 (AD): com o relatório da semana, outro é recusado; excluído o rel
   ).toBe("1|1");
 });
 
-test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora do seletor, na linha só de leitura, e no relatório depois de salvar, numa chamada só de participantes e sem DELETE", async ({
+test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora do seletor, na linha só de leitura, e no relatório depois de salvar, numa chamada só e sem DELETE", async ({
   page,
 }) => {
   await login(page, env.admin);
@@ -405,7 +405,8 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   await page.getByRole("option", { name: BIA }).click();
   await participantsField.press("Escape");
   await form.getByLabel("Tema da Palavra").fill(`${NAME} tema Teo editado`);
-  // Critério de pronto 6: uma chamada só para os participantes, e nenhum DELETE.
+  // Critério de pronto 6 (E2.01) e 5 (E2.05): uma chamada só, a `save_cell_report`, com o relatório e os
+  // participantes, e nenhum DELETE.
   const writes: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
@@ -414,7 +415,7 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   await form.getByRole("button", { name: "Salvar" }).click();
   await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
   await expect(form).toBeHidden();
-  expect(writes.filter((write) => write.includes("participants"))).toEqual(["POST /rest/v1/rpc/set_cell_report_participants"]);
+  expect(writes).toEqual(["POST /rest/v1/rpc/save_cell_report"]);
   expect(writes.filter((write) => write.startsWith("DELETE"))).toEqual([]);
 
   expect(participantsOf(report(3))).toBe([ANA, BIA, SARA].sort().join(","));

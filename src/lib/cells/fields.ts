@@ -12,10 +12,13 @@ export type CellViewRow = Database["public"]["Views"]["cells_view"]["Row"];
  * ("Pastor", "Pastora") e o G12 "Pastores" (E2.06, RN-11).
  * `can_submit_report` diz se quem consulta pode lançar o relatório da célula
  * (E2.02, RN-13, AQ-4): é a mesma regra da política e do trigger.
+ * `updated_at` é a versão da linha que abre o formulário (E2.05, AQ-7): o
+ * PATCH devolve o dele, e igual quer dizer que o servidor não mudou nada.
+ * Opcional no tipo: só as leituras de célula a trazem.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const CELL_ROW_SELECT =
-  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report";
+  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report, updated_at";
 
 export type CellRow = Pick<
   CellViewRow,
@@ -42,7 +45,8 @@ export type CellRow = Pick<
   | "host_name"
   | "g12_leader_name"
   | "can_submit_report"
->;
+> &
+  Partial<Pick<CellViewRow, "updated_at">>;
 
 /**
  * Linha da lista de Células (E2.09, PR 3): as colunas de `CELL_ROW_SELECT` e a
@@ -52,7 +56,7 @@ export type CellRow = Pick<
  */
 // Uma string literal só (não concatenada): o supabase-js deriva o tipo do resultado dela.
 export const CELL_LIST_SELECT =
-  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report, report_status, report_missing_weeks";
+  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report, updated_at, report_status, report_missing_weeks";
 
 export type CellListRow = CellRow & Pick<CellViewRow, "report_status" | "report_missing_weeks">;
 

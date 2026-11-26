@@ -29,6 +29,7 @@ import {
   needsRoleOptions,
   roleFieldView,
 } from "@/lib/access/member-form";
+import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 import { spToday } from "@/lib/dates/sao-paulo";
 import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { memberRestoreNotices } from "@/lib/deletion/restore";
@@ -222,6 +223,8 @@ const MemberForm = ({
         onClose();
         return;
       case "unchanged":
+        // Sem mudança, pela tela ou pelo servidor: fecha sem o toast de sucesso (E2.05, T5, UXD-9).
+        toast({ title: AUDIT_SAVE_TEXTS.unchanged });
         onClose();
         return;
       case "gate":
@@ -258,7 +261,12 @@ const MemberForm = ({
     const writeValues = memberWriteValues(fields, ministryView, effectiveRoleId(fields, context.role));
     const result = await save.save(
       member
-        ? { kind: "update", memberId: member.id, patch: changedMemberFields(storedMemberValues(member, context.role.initial), writeValues, writeOptions) }
+        ? {
+            kind: "update",
+            memberId: member.id,
+            patch: changedMemberFields(storedMemberValues(member, context.role.initial), writeValues, writeOptions),
+            loadedUpdatedAt: member.updated_at,
+          }
         : {
             kind: "create",
             attemptId,

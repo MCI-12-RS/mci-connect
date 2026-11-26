@@ -147,7 +147,7 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
         onClose();
         return;
       }
-      showResult(await save.save({ kind: "update", cellId: cell.id, patch, outcome }));
+      showResult(await save.save({ kind: "update", cellId: cell.id, patch, outcome, loadedUpdatedAt: cell.updated_at }));
     },
     () => errors.focusNextError(),
   );

@@ -26,7 +26,12 @@ function setup() {
   return { save, invalidate };
 }
 
-const update = (patch: Record<string, string | null>): MemberSaveRequest => ({ kind: "update", memberId: "m1", patch });
+const update = (patch: Record<string, string | null>, loadedUpdatedAt?: string | null): MemberSaveRequest => ({
+  kind: "update",
+  memberId: "m1",
+  patch,
+  loadedUpdatedAt,
+});
 const create = (): MemberSaveRequest => ({
   kind: "create",
   attemptId: "11111111-1111-4111-8111-111111111111",
@@ -79,7 +84,7 @@ describe("useMemberSave: edição (DT-19)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("PATCH só com o que mudou, pedindo só o id de volta; sucesso recarrega as telas da hierarquia e as funções", async () => {
+  it("PATCH só com o que mudou, pedindo só o id e o updated_at de volta; sucesso recarrega as telas da hierarquia e as funções", async () => {
     const { save, invalidate } = setup();
     respondWith({ data: [{ id: "m1" }] });
 
@@ -90,7 +95,7 @@ describe("useMemberSave: edição (DT-19)", () => {
     expect(query.calls).toEqual([
       ["update", { notes: "Nova" }],
       ["eq", "id", "m1"],
-      ["select", "id"],
+      ["select", "id, updated_at"],
     ]);
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
       ["members"],
@@ -99,6 +104,18 @@ describe("useMemberSave: edição (DT-19)", () => {
       ["dashboard"],
       ["role-options"],
     ]);
+  });
+
+  it("o updated_at devolvido igual ao carregado: o servidor não mudou nada (E2.05, AQ-7)", async () => {
+    const { save } = setup();
+    const loaded = "2026-11-26T13:00:00.123456+00:00";
+    respondWith({ data: [{ id: "m1", updated_at: loaded }] });
+    expect(await save(update({ mobile_whatsapp: "(51) 99999-0000" }, loaded))).toEqual({
+      kind: "unchanged",
+    });
+
+    respondWith({ data: [{ id: "m1", updated_at: "2026-11-26T13:05:00.000001+00:00" }] });
+    expect(await save(update({ notes: "Nova" }, loaded))).toEqual({ kind: "saved" });
   });
 
   it("0 linhas: o cadastro sumiu; a lista recarrega e a sessão é conferida (E2.01)", async () => {

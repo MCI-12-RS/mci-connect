@@ -196,7 +196,7 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
     auth.memberId = "me";
   });
 
-  it("Dado um PATCH que volta com a linha, então pede só o id de volta (sem coluna sensível no RETURNING)", async () => {
+  it("Dado um PATCH que volta com a linha, então pede só o id e o updated_at de volta (sem coluna sensível no RETURNING)", async () => {
     respondToRpc("role_options", { data: ANA_OPTIONS });
     const onClose = vi.fn();
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
@@ -208,7 +208,7 @@ describe("MemberForm: cadastro excluído durante a edição", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const save = fakeQueries().find((query) => query.table === "members");
-    expect(save?.calls).toContainEqual(["select", "id"]);
+    expect(save?.calls).toContainEqual(["select", "id, updated_at"]);
   });
 
   it("Dado um PATCH que volta sem linha, então mostra o aviso, não fecha e o Fechar volta para a lista", async () => {
@@ -315,7 +315,7 @@ describe("MemberForm: envio (E2.04, DA-9 e P22)", () => {
     auth.memberId = "me";
   });
 
-  it("Dada a edição sem mudança, 'Salvar alterações' fecha sem nenhuma requisição de gravação", async () => {
+  it("Dada a edição sem mudança, 'Salvar alterações' fecha sem nenhuma requisição de gravação, com 'Nenhuma alteração para salvar.' (E2.05, UX-08)", async () => {
     respondToRpc("role_options", { data: ANA_OPTIONS });
     const onClose = vi.fn();
     render(<MemberForm member={member} onClose={onClose} />, { wrapper: createQueryWrapper() });
@@ -325,7 +325,8 @@ describe("MemberForm: envio (E2.04, DA-9 e P22)", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(fakeQueries().filter((query) => query.table === "members")).toHaveLength(0);
-    expect(toast).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({ title: "Nenhuma alteração para salvar." });
   });
 
   it("Dado um erro de preenchimento, o resumo conta os campos, o foco vai ao primeiro e nada é enviado", async () => {
