@@ -279,8 +279,8 @@ SELECT is(
         'is_active', 'created_at', 'updated_at',
         'meeting_weekday', 'leader_name', 'leader_gender', 'leader_g12_level', 'timothy_name',
         'host_name', 'g12_leader_id', 'g12_leader_name', 'last_report_date', 'search_text',
-        'can_submit_report', 'is_mine', 'leader_is_pastor'],
-  'cells_view: colunas na ordem do spec (E2.02 acrescenta três no fim)');
+        'can_submit_report', 'is_mine', 'leader_is_pastor', 'report_status', 'report_missing_weeks'],
+  'cells_view: colunas na ordem do spec (E2.02 acrescenta três no fim; E2.09, duas depois delas)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum > 0 AND NOT attisdropped),

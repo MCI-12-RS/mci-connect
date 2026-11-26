@@ -188,8 +188,9 @@ SELECT is(
   ARRAY['id','leader_id','timothy_id','host_id','type','meeting_day','meeting_time','street','number','complement',
         'neighborhood','city','state','zip_code','is_active','created_at','updated_at','meeting_weekday','leader_name',
         'leader_gender','leader_g12_level','timothy_name','host_name','g12_leader_id','g12_leader_name',
-        'last_report_date','search_text','can_submit_report','is_mine','leader_is_pastor'],
-  'cells_view: as mesmas colunas, na mesma ordem');
+        'last_report_date','search_text','can_submit_report','is_mine','leader_is_pastor',
+        'report_status','report_missing_weeks'],
+  'cells_view: as mesmas colunas, na mesma ordem (o E2.09 acrescenta duas no fim)');
 SELECT is((SELECT reloptions FROM pg_class WHERE oid = 'public.cells_view'::regclass),
   ARRAY['security_barrier=true', 'security_invoker=false'], 'cells_view: security definer com security_barrier');
 SELECT is((SELECT relowner::regrole::text FROM pg_class WHERE oid = 'public.cells_view'::regclass), 'postgres',
