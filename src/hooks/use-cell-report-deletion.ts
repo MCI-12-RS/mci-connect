@@ -1,20 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyWriteError, refreshesList, type WriteResult } from "@/lib/deletion/outcome";
+import { refreshAfterReportWrite } from "@/lib/query-refresh";
 
 /**
  * Recarrega o que muda quando um relatório sai das listas e das somas: os
- * relatórios, as células (último relatório e pendentes) e os números do
- * Dashboard.
+ * relatórios, as células (a situação do relatório), o vínculo celular dos
+ * membros e os números do Dashboard, sem mostrar o valor de antes nas telas
+ * fechadas (E2.09, RN-09 e AQ-3).
  */
 export function useRefreshCellReportData() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
-      queryClient.invalidateQueries({ queryKey: ["cells"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-    ]);
+  return () => refreshAfterReportWrite(queryClient);
 }
 
 /**

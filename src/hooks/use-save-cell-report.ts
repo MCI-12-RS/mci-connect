@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { requestSessionCheck, requestSessionCheckOnDenied } from "@/lib/auth/session-check";
 import { classifyReportSaveError, type CellReportWrite, type ReportSaveFailure } from "@/lib/cell-reports/report-form";
+import { refreshAfterReportWrite } from "@/lib/query-refresh";
 
 export interface SaveCellReportInput {
   /** O relatório a atualizar: o da edição ou o criado numa tentativa anterior. `null` cria um novo. */
@@ -69,14 +70,9 @@ export function useSaveCellReport() {
     },
     onSuccess: (result) => {
       // O relatório gravado aparece na lista, mesmo que os participantes tenham falhado,
-      // e muda o último relatório da célula e os números da semana no Dashboard.
-      if (result.kind === "saved" || result.step === "participants") {
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
-          queryClient.invalidateQueries({ queryKey: ["cells"] }),
-          queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-        ]);
-      }
+      // e muda a situação da célula, os números da semana no Dashboard e o vínculo
+      // celular dos membros (E2.09, RN-09 e AQ-3).
+      if (result.kind === "saved" || result.step === "participants") void refreshAfterReportWrite(queryClient);
     },
   });
 }

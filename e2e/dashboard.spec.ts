@@ -17,7 +17,7 @@ const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/rpc/my_access"];
 
 const WEEK_CARDS: Record<string, string> = {
   "Relatórios Enviados": "reports_sent",
-  "Células sem Relatório": "cells_pending",
+  "Células com relatório pendente": "cells_pending",
   "Visitantes em Células": "visitors",
   "Células Não Realizadas": "cells_not_held",
 };

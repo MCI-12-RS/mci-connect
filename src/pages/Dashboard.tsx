@@ -8,7 +8,7 @@ import {
   Link2Off,
   Shield,
   FileText,
-  Clock,
+  TriangleAlert,
   UserPlus,
   XCircle,
   User,
@@ -61,7 +61,8 @@ interface SummaryCardSpec {
 
 const WEEK_CARDS: readonly SummaryCardSpec[] = [
   { title: "Relatórios Enviados", field: "reports_sent", icon: FileText, color: "text-success" },
-  { title: "Células sem Relatório", field: "cells_pending", icon: Clock, color: "text-warning" },
+  // O triângulo é o do "Pendente" da lista de Células (E2.09, RN-08, UXD-9); o relógio lá é "Ainda não ocorreu".
+  { title: "Células com relatório pendente", field: "cells_pending", icon: TriangleAlert, color: "text-warning" },
   { title: "Visitantes em Células", field: "visitors", icon: UserPlus, color: "text-accent" },
   { title: "Células Não Realizadas", field: "cells_not_held", icon: XCircle, color: "text-destructive" },
 ];
@@ -102,13 +103,14 @@ interface StatCardProps {
 
 const StatCard = ({ title, value, icon: Icon, color }: StatCardProps) => (
   <Card>
-    <CardHeader className="flex flex-row items-center justify-between pb-2">
+    {/* O título quebra linha sem cortar, com o ícone no alto (E2.09, UXD-9). */}
+    <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
       {title === undefined ? (
         <Skeleton className="h-4 w-32" />
       ) : (
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <CardTitle className="min-w-0 break-words text-sm font-medium leading-snug text-muted-foreground">{title}</CardTitle>
       )}
-      <Icon className={`w-5 h-5 ${color}`} aria-hidden="true" />
+      <Icon className={`w-5 h-5 shrink-0 ${color}`} aria-hidden="true" />
     </CardHeader>
     <CardContent>
       {value === undefined ? (

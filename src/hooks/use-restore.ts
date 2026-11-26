@@ -8,7 +8,7 @@ import {
   type MemberRestoreResult,
   type RestoreResult,
 } from "@/lib/deletion/restore";
-import { refreshAfterMemberWrite } from "@/lib/query-refresh";
+import { refreshAfterMemberWrite, refreshAfterReportWrite } from "@/lib/query-refresh";
 
 // Restauração pelas RPCs `restore_*` (E2.01, RN-15 a RN-17), só para quem tem
 // `manage_roles`. Os hooks não lançam: resolvem com o resultado já
@@ -28,18 +28,12 @@ function useRefreshAfterMemberRestore() {
 
 /**
  * Recarrega o que muda quando um relatório volta: os relatórios (inclusive os
- * excluídos, que dizem se a semana está ocupada), as células (último
- * relatório e pendentes), o vínculo celular dos membros e o Dashboard.
+ * excluídos, que dizem se a semana está ocupada), as células (a situação do
+ * relatório), o vínculo celular dos membros e o Dashboard (E2.09, AQ-3).
  */
 function useRefreshAfterCellReportRestore() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["cell_reports"] }),
-      queryClient.invalidateQueries({ queryKey: ["cells"] }),
-      queryClient.invalidateQueries({ queryKey: ["members"] }),
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-    ]);
+  return () => refreshAfterReportWrite(queryClient);
 }
 
 /** Restaura um membro (RN-16): volta sem cônjuge, sem líder se o líder foi excluído, e com a função padrão se a dele foi apagada. */

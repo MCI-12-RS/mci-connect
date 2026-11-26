@@ -91,12 +91,12 @@ describe("CellReportDeletionFlow: envio da exclusão", () => {
     expect(toast).toHaveBeenCalledWith({ title: "Relatório excluído." });
   });
 
-  it("RN-12 e UX-07: no sucesso, recarrega os relatórios, as células (pendentes, último relatório) e o Dashboard", async () => {
+  it("RN-12 e UX-07 (E2.09, AQ-3): no sucesso, recarrega os relatórios, as células (situação do relatório), os membros (vínculo celular) e o Dashboard", async () => {
     const { onClose, invalidatedKeys } = renderFlow();
     respondToRpc("delete_cell_report", { data: null });
     fireEvent.click(screen.getByRole("button", { name: "Excluir relatório" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(invalidatedKeys()).toEqual([["cell_reports"], ["cells"], ["dashboard"]]);
+    expect(invalidatedKeys()).toEqual([["members"], ["cells"], ["cell_reports"], ["dashboard"]]);
   });
 
   it("UX-24: 'Este relatório não existe ou já foi excluído.' vira toast informativo (não destrutivo), o diálogo fecha e a lista recarrega", async () => {
