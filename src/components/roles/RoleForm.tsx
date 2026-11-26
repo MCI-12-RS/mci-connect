@@ -153,6 +153,9 @@ const RoleForm = ({ role, roles, onClose, onCloseAutoFocus }: RoleFormProps) => 
     } catch (error) {
       const failure = classifyRoleWriteError(error);
       switch (failure.kind) {
+        case "gate":
+          onClose();
+          return;
         case "forbidden":
           toast({ variant: "destructive", title: ACCESS_TEXTS.permissionDenied });
           onClose();

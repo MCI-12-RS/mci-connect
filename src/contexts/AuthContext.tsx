@@ -7,7 +7,8 @@ import { dismiss as dismissToasts } from "@/hooks/use-toast";
 import { MEMBER_ROW_SELECT, type MemberRow } from "@/lib/members/fields";
 import { SERVER_ERROR, type SignInOutcome } from "@/lib/auth/sign-in-result";
 import { shouldEndSession } from "@/lib/auth/session";
-import { isFocusCheckDue, setSessionCheckHandler, singleFlight } from "@/lib/auth/session-check";
+import { isFocusCheckDue, setGateHandler, setSessionCheckHandler, singleFlight } from "@/lib/auth/session-check";
+import { gateCode, type GateCode } from "@/lib/errors";
 import { requestSignIn } from "@/services/auth/sign-in";
 import { refreshAccess, useAccessQuery } from "@/hooks/use-access";
 import { hasPermission as accessHasPermission, type Access } from "@/lib/access/access";
@@ -45,7 +46,22 @@ interface AuthContextType {
   sessionEnded: boolean;
   /** Só mostra ou esconde: quem protege é o banco. As permissões aposentadas não liberam nada (RN-22). */
   hasPermission: (...permissions: PermissionAction[]) => boolean;
+  /**
+   * A conta tem a marca de troca obrigatória (E2.03, RN-08 a RN-10). Enquanto
+   * vale, o acesso e o próprio cadastro não são lidos (RN-09 b), e as rotas
+   * levam à troca (`/change-password`).
+   */
+  mustChangePassword: boolean;
+  /** A marca já foi lida para a sessão atual (ou não há sessão). Antes disso, as rotas esperam. */
+  passwordStatusLoaded: boolean;
+  /** Depois da troca obrigatória: tira a marca, renova a sessão (as outras abas releem) e relê o acesso (P13). */
+  completeForcedChange: () => Promise<void>;
+  /** Relê a marca (`not_flagged` na troca obrigatória, DA-14). */
+  recheckPasswordStatus: () => Promise<void>;
 }
+
+/** A marca de troca obrigatória da sessão atual: ainda não lida, exigida ou não. */
+type PasswordStatus = "unknown" | "required" | "ok";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -61,6 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [passwordStatus, setPasswordStatusState] = useState<PasswordStatus>("unknown");
+  // Muda a cada login e renovação da sessão: o próprio cadastro é relido.
+  const [memberReload, setMemberReload] = useState(0);
   const queryClient = useQueryClient();
   // O usuário da sessão atual, para a verificação ler sem depender do render.
   const userIdRef = useRef<string | null>(null);
@@ -69,20 +88,110 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastFocusCheckRef = useRef<number | null>(null);
   // O fim forçado está em andamento: um evento com sessão (renovação) até o SIGNED_OUT não apaga o aviso.
   const endingRef = useRef(false);
+  // A marca e o usuário a que ela pertence, para os eventos lerem sem depender do render.
+  const passwordStatusRef = useRef<PasswordStatus>("unknown");
+  const statusOwnerRef = useRef<string | null>(null);
+  // A marca que a `sign-in` devolveu, para o SIGNED_IN do login usar sem esperar outra leitura.
+  const signInStatusRef = useRef<PasswordStatus | null>(null);
+  // Só a leitura da marca mais recente vale (uma resposta antiga não desfaz uma nova).
+  const statusReadSeq = useRef(0);
+
+  const setPasswordStatus = useCallback((owner: string | null, status: PasswordStatus) => {
+    statusOwnerRef.current = owner;
+    passwordStatusRef.current = status;
+    setPasswordStatusState(status);
+  }, []);
+
+  // Com a marca, nada de acesso nem de cadastro (E2.03, RN-09 b): o banco recusaria.
+  const canReadAccount = !!user && passwordStatus === "ok";
 
   // O acesso (permissões, função e alcance) vem da `my_access()`, com a chave do usuário da sessão.
-  const { access, loadFailed: accessLoadFailed, retry: retryAccess } = useAccessQuery(user?.id ?? null);
+  const { access, loadFailed: accessLoadFailed, retry: retryAccess } = useAccessQuery(canReadAccount ? user.id : null);
 
-  const loadMemberData = async (userId: string) => {
+  useEffect(() => {
+    if (!user) {
+      setMember(null);
+      return;
+    }
+    if (!canReadAccount) return;
+    const userId = user.id;
     // Pela members_view: o próprio cadastro vem sem máscara.
-    const { data: memberData } = await supabase
+    void supabase
       .from("members_view")
       .select(MEMBER_ROW_SELECT)
       .eq("auth_user_id", userId)
-      .maybeSingle();
+      .maybeSingle()
+      .then(({ data }) => {
+        if (userIdRef.current === userId) setMember(data);
+      });
+  }, [user, canReadAccount, memberReload]);
 
-    setMember(memberData);
-  };
+  /**
+   * Encerra a sessão só neste navegador, com o aviso de sessão encerrada (E2.01,
+   * RN-14; E2.03, RN-16): as sessões no servidor já foram apagadas. O
+   * `ProtectedRoute` leva ao login com o aviso.
+   */
+  const endSessionLocally = useCallback(async () => {
+    if (endingRef.current) return;
+    // O aviso antes de a sessão sumir: o ProtectedRoute redireciona já com ele.
+    endingRef.current = true;
+    setSessionEnded(true);
+    dismissOpenToasts();
+    // Sem log_auth_event: o banco não grava para cadastro excluído (DA-9) nem para sessão apagada.
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) {
+      // O SIGNED_OUT não veio: limpa à mão.
+      endingRef.current = false;
+      userIdRef.current = null;
+      setSession(null);
+      setUser(null);
+      setMember(null);
+      setPasswordStatus(null, "unknown");
+      queryClient.clear();
+    }
+  }, [queryClient, setPasswordStatus]);
+
+  /**
+   * Lê a marca de troca obrigatória (`my_password_status`, E2.03, DT-05). A
+   * sessão apagada encerra a sessão local (RN-16). Outro erro mantém o que já
+   * se sabia e, sem nada lido, segue sem a marca: o portão do banco ainda
+   * leva à troca pelo código.
+   */
+  const readPasswordStatus = useCallback(
+    async (userId: string) => {
+      const seq = ++statusReadSeq.current;
+      const { data, error } = await supabase.rpc("my_password_status");
+      if (seq !== statusReadSeq.current || userIdRef.current !== userId) return;
+      if (error) {
+        if (gateCode(error) === "session_ended") {
+          void endSessionLocally();
+          return;
+        }
+        if (passwordStatusRef.current === "unknown") setPasswordStatus(userId, "ok");
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : null;
+      setPasswordStatus(userId, row?.must_change_password === true ? "required" : "ok");
+    },
+    [endSessionLocally, setPasswordStatus],
+  );
+
+  /** Uma sessão chegou (abertura, login, renovação): a marca é a do login ou é lida. */
+  const onSessionUser = useCallback(
+    (userId: string, reread: boolean) => {
+      const preset = signInStatusRef.current;
+      signInStatusRef.current = null;
+      if (preset) {
+        setPasswordStatus(userId, preset);
+        return;
+      }
+      if (statusOwnerRef.current !== userId) setPasswordStatus(userId, "unknown");
+      else if (!reread) return;
+      // Fora do `onAuthStateChange`: uma chamada ao Supabase dentro dele espera a trava da sessão.
+      setTimeout(() => void readPasswordStatus(userId), 0);
+    },
+    [readPasswordStatus, setPasswordStatus],
+  );
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -104,10 +213,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => loadMemberData(session.user.id), 0);
+          // Login e renovação releem a marca (a troca em outra aba renova a sessão, T2).
+          onSessionUser(session.user.id, event === "SIGNED_IN" || event === "TOKEN_REFRESHED");
+          setMemberReload((n) => n + 1);
           // Sessão renovada: relê o acesso (T12).
           if (event === "TOKEN_REFRESHED") void refreshAccess(queryClient);
         } else {
+          setPasswordStatus(null, "unknown");
           setMember(null);
         }
         setLoading(false);
@@ -118,26 +230,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userIdRef.current = session?.user.id ?? null;
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        loadMemberData(session.user.id);
-      }
+      if (session?.user) onSessionUser(session.user.id, false);
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [queryClient]);
+  }, [queryClient, onSessionUser, setPasswordStatus]);
 
   /**
    * Relê o próprio cadastro na `members_view` (E2.01, RN-14 e DT-20). Sem
    * linha e sem erro, o cadastro foi excluído: encerra a sessão só neste
-   * navegador (as sessões no servidor já foram apagadas) e o `ProtectedRoute`
-   * leva ao login com o aviso. Qualquer erro, inclusive a queda de conexão,
-   * mantém a sessão. Uma releitura por vez.
+   * navegador. Qualquer erro, inclusive a queda de conexão, mantém a sessão.
+   * Com a marca de troca, não lê nada (E2.03, RN-09 b). Uma releitura por vez.
    */
   const [verifySession] = useState(() =>
     singleFlight(async () => {
       const userId = userIdRef.current;
-      if (!userId) return;
+      if (!userId || passwordStatusRef.current === "required") return;
       const result = await supabase
         .from("members_view")
         .select("id")
@@ -145,25 +254,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
       // A sessão mudou durante a releitura (saída, outro login): a resposta não vale mais.
       if (userIdRef.current !== userId || !shouldEndSession(result)) return;
-      // O aviso antes de a sessão sumir: o ProtectedRoute redireciona já com ele.
-      endingRef.current = true;
-      setSessionEnded(true);
-      dismissOpenToasts();
-      // Sem log_auth_event: o banco não grava para cadastro excluído (DA-9).
-      const { error } = await supabase.auth.signOut({ scope: "local" });
-      if (error) {
-        // O SIGNED_OUT não veio: limpa à mão.
-        endingRef.current = false;
-        userIdRef.current = null;
-        setSession(null);
-        setUser(null);
-        setMember(null);
-        queryClient.clear();
-      }
+      await endSessionLocally();
     }),
   );
 
   useEffect(() => setSessionCheckHandler(() => void verifySession()), [verifySession]);
+
+  /**
+   * O portão da senha (E2.03, AQ-3): a marca leva à troca, sem mensagem (o
+   * `ProtectedRoute` redireciona); a sessão apagada vai ao login com o aviso.
+   */
+  const handleGateError = useCallback(
+    (code: GateCode) => {
+      if (!userIdRef.current) return;
+      if (code === "password_change_required") setPasswordStatus(userIdRef.current, "required");
+      else void endSessionLocally();
+    },
+    [endSessionLocally, setPasswordStatus],
+  );
+
+  useEffect(() => setGateHandler(handleGateError), [handleGateError]);
 
   // Volta da aba ou da janela: no máximo uma releitura a cada FOCUS_CHECK_INTERVAL_MS.
   const checkOnFocus = useCallback(() => {
@@ -172,7 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isFocusCheckDue(lastFocusCheckRef.current, now)) return;
     lastFocusCheckRef.current = now;
     void verifySession();
-  }, [verifySession]);
+    if (userIdRef.current) void readPasswordStatus(userIdRef.current);
+  }, [verifySession, readPasswordStatus]);
 
   useEffect(() => {
     document.addEventListener("visibilitychange", checkOnFocus);
@@ -187,19 +298,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Login pela Edge Function `sign-in` (E1.04, RN-13 e RN-14): o único caminho.
    * As falhas esperadas voltam como resultado, sem exceção. No sucesso, a
    * sessão devolvida pela função passa ao cliente do Supabase, que a renova e
-   * a guarda como antes. O login é registrado na Auditoria pelo servidor.
+   * a guarda como antes. A marca de troca obrigatória (E2.03) entra antes da
+   * sessão, para nenhuma tela abrir antes da troca. O login é registrado na
+   * Auditoria pelo servidor.
    */
   const signIn = async (identifier: string, password: string): Promise<SignInOutcome> => {
     const result = await requestSignIn(identifier, password);
     if (result.result !== "ok") return result;
 
+    signInStatusRef.current = result.mustChangePassword ? "required" : "ok";
     const { error } = await supabase.auth.setSession({
       access_token: result.session.access_token,
       refresh_token: result.session.refresh_token,
     });
-    if (error) return SERVER_ERROR;
+    if (error) {
+      signInStatusRef.current = null;
+      return SERVER_ERROR;
+    }
     setSessionEnded(false);
-    return { result: "ok" };
+    return { result: "ok", mustChangePassword: result.mustChangePassword };
   };
 
   const signOut = async () => {
@@ -214,6 +331,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A saída não aconteceu (sem conexão): o próximo SIGNED_OUT não é o deste pedido.
     if (error) signOutRequestedRef.current = false;
   };
+
+  const completeForcedChange = useCallback(async () => {
+    const userId = userIdRef.current;
+    if (!userId) return;
+    setPasswordStatus(userId, "ok");
+    // As outras abas recebem a sessão renovada e releem a marca (T2).
+    await supabase.auth.refreshSession().then(() => {}, () => {});
+    void refreshAccess(queryClient);
+  }, [queryClient, setPasswordStatus]);
+
+  const recheckPasswordStatus = useCallback(async () => {
+    if (userIdRef.current) await readPasswordStatus(userIdRef.current);
+  }, [readPasswordStatus]);
 
   const hasPermission = (...perms: PermissionAction[]) => accessHasPermission(access, ...perms);
 
@@ -234,6 +364,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         sessionEnded,
         hasPermission,
+        mustChangePassword: !!session && passwordStatus === "required",
+        passwordStatusLoaded: !session || passwordStatus !== "unknown",
+        completeForcedChange,
+        recheckPasswordStatus,
       }}
     >
       {children}

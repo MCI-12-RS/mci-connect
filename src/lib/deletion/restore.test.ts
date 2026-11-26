@@ -23,7 +23,15 @@ const appError = (code: string, message: string, extra: object = {}) => ({
   hint: APP_ERROR_HINT,
 });
 
+const gateError = (code: string) => ({ code: "42501", message: "x", details: JSON.stringify({ code }), hint: APP_ERROR_HINT });
+
 describe("classifyRestoreError", () => {
+  it("o 42501 do portão da senha (E2.03) é o portão, antes da falta de permissão", () => {
+    expect(classifyRestoreError(gateError("password_change_required"))).toEqual({ kind: "gate", code: "password_change_required" });
+    expect(classifyRestoreError(gateError("session_ended"))).toEqual({ kind: "gate", code: "session_ended" });
+    expect(refreshesAfterRestore({ kind: "gate" })).toBe(false);
+  });
+
   it("'não está excluído' e 'não encontrado' viram aviso informativo, com a mensagem do servidor (UX-24)", () => {
     expect(classifyRestoreError(appError("not_deleted", "Esta célula não está excluída.", { entity: "cell" }))).toEqual({
       kind: "stale",

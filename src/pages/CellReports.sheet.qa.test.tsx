@@ -161,7 +161,7 @@ describe("Acessibilidade (WCAG 2.4.3): o foco ao fechar o painel no celular", ()
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
     expect(urlParams()).toEqual({ q: "r", report: R2 });
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Fechar" })[0]);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(urlParams()).toEqual({ q: "r" });

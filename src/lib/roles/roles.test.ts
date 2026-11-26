@@ -219,6 +219,10 @@ describe("classifyRoleWriteError", () => {
 
   it("separa permissão, função mudada, Administrador, nome e as demais regras", () => {
     expect(classifyRoleWriteError({ code: "42501", message: "x" })).toEqual({ kind: "forbidden" });
+    // O portão da senha (E2.03) também vem com 42501, mas não é falta de permissão.
+    expect(classifyRoleWriteError({ code: "42501", message: "x", details: JSON.stringify({ code: "session_ended" }), hint: "app_error" })).toEqual({
+      kind: "gate",
+    });
     expect(classifyRoleWriteError(appError("role_changed", RULE_TEXTS.roleChanged))).toEqual({
       kind: "gone",
       message: RULE_TEXTS.roleChanged,

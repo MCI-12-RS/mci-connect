@@ -42,6 +42,20 @@ vi.mock("@/components/MemberForm", async () => {
   };
 });
 
+// "Alterar minha senha" (E2.03, T3): aqui, só o título, para conferir que abre.
+vi.mock("@/components/auth/ChangeOwnPasswordDialog", async () => {
+  const { Dialog, DialogContent, DialogTitle } = await import("@/components/ui/dialog");
+  return {
+    ChangeOwnPasswordDialog: () => (
+      <Dialog open>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>Alterar minha senha</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    ),
+  };
+});
+
 const ITEMS = ["Dashboard", "Membros", "Células", "Relatórios", "Ministérios", "Funções", "Auditoria"];
 
 function persona(permissions: PermissionAction[], overrides: Partial<Access> = {}): Access {
@@ -288,5 +302,38 @@ describe("Menu acessível e alcançável (QA do E2.02)", () => {
     const content = await screen.findByTestId("menu-content");
     expect(content).toHaveClass("overflow-y-auto", "min-h-0", "h-full");
     expect(content).toContainElement(screen.getByRole("button", { name: "Sair" }));
+  });
+});
+
+describe("UX-14 (E2.03, T4): 'Alterar minha senha' no menu", () => {
+  it.each([
+    ["Rita", RITA],
+    ["Pedro", PEDRO],
+    ["Caio", CAIO],
+    ["Hugo (sem função)", HUGO],
+  ])("%s vê o item acima de 'Sair', com 44 px no celular", (_name, access) => {
+    auth.access = access;
+    renderAt("/");
+    const item = screen.getByRole("button", { name: "Alterar minha senha" });
+    const signOut = screen.getByRole("button", { name: "Sair" });
+    expect(item.compareDocumentPosition(signOut) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(item).toHaveClass("min-h-11", "mb-2");
+  });
+
+  it("a conta X (sem cadastro) não vê o item", () => {
+    auth.access = HUGO;
+    auth.member = null;
+    renderAt("/");
+    expect(screen.queryByRole("button", { name: "Alterar minha senha" })).toBeNull();
+  });
+
+  it("no celular, o toque fecha o menu e abre o diálogo", async () => {
+    mobile.value = true;
+    auth.access = CAIO;
+    renderAt("/");
+    fireEvent.click(screen.getByRole("button", { name: "Abrir menu" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Alterar minha senha" }));
+    expect(await screen.findByRole("dialog", { name: "Alterar minha senha" })).toBeInTheDocument();
+    expect(screen.queryByTestId("menu-content")).toBeNull();
   });
 });

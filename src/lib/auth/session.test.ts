@@ -62,7 +62,7 @@ describe("textos do login (UX-09)", () => {
 
 describe("noticeForOutcome", () => {
   it("traduz cada resultado da sign-in na mensagem da tela", () => {
-    expect(noticeForOutcome({ result: "ok" })).toBeNull();
+    expect(noticeForOutcome({ result: "ok", mustChangePassword: false })).toBeNull();
     expect(noticeForOutcome({ result: "invalid_credentials" })).toEqual({ kind: "invalid_credentials" });
     expect(noticeForOutcome({ result: "locked", minutes: 7 })).toEqual({ kind: "locked", minutes: 7 });
     expect(noticeForOutcome({ result: "empty_fields" })).toEqual({ kind: "empty_fields" });

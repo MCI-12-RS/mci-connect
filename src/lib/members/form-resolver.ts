@@ -6,6 +6,8 @@
 import type { FieldErrors, Resolver } from "react-hook-form";
 import type { MinistryFieldsView } from "@/lib/access/member-form";
 import { MEMBER_FORM_TEXTS } from "@/lib/access/texts";
+import { initialPasswordViolation } from "@/lib/auth/password-policy";
+import { initialPasswordErrorMessage } from "@/lib/auth/password-texts";
 import type { MemberFormFieldError } from "./form-errors";
 import { memberRuleValues, memberWriteValues, type MemberFormFields } from "./form-values";
 import { validateMemberForm, type MemberValidationContext } from "./validation";
@@ -17,6 +19,22 @@ export interface MemberFormContext {
   view: MinistryFieldsView;
   /** O campo Função: obrigatório quando é um seletor (E2.02), com a escolha inicial de `role_options`. */
   role: { required: boolean; initial: string | null };
+  /** Cadastro novo: a senha inicial passa pela política (E2.03, RN-07). */
+  initialPassword?: boolean;
+}
+
+/**
+ * O erro da senha inicial (E2.03, RN-07 e UX-31), com o CPF, o celular, o
+ * nascimento e o e-mail digitados no formulário. Vazia e `123456` não dão erro.
+ */
+export function initialPasswordError(fields: MemberFormFields): MemberFormFieldError | null {
+  const code = initialPasswordViolation(fields.password, {
+    cpf: fields.cpf,
+    mobile: fields.mobile_whatsapp,
+    birth_date: fields.birth_date,
+    email: fields.email,
+  });
+  return code ? { field: "password", code, message: initialPasswordErrorMessage(code) } : null;
 }
 
 /** A função que vale: a escolhida ou, sem escolha, a inicial. */
@@ -31,6 +49,8 @@ export function validateMemberFormFields(fields: MemberFormFields, context: Memb
   if (context.role.required && !effectiveRoleId(fields, context.role)) {
     errors.push({ field: "role_id", code: "role_required", message: MEMBER_FORM_TEXTS.roleRequired });
   }
+  const password = context.initialPassword ? initialPasswordError(fields) : null;
+  if (password) errors.push(password);
   return errors;
 }
 

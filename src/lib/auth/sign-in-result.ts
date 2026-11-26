@@ -17,10 +17,15 @@ export type SignInFailure =
   | { result: "empty_fields" }
   | { result: "server_error" };
 
-export type SignInResult = { result: "ok"; session: SignInSession } | SignInFailure;
+/**
+ * O sucesso traz a sessão e a marca de troca obrigatória (E2.03, RN-08 b e
+ * AQ-3). Sem o campo (uma `sign-in` anterior ao E2.03), a marca é `false`: o
+ * portão do banco ainda leva à troca pelo código.
+ */
+export type SignInResult = { result: "ok"; session: SignInSession; mustChangePassword: boolean } | SignInFailure;
 
 /** O que o `AuthContext.signIn` devolve à tela: a sessão fica no cliente do Supabase. */
-export type SignInOutcome = { result: "ok" } | SignInFailure;
+export type SignInOutcome = { result: "ok"; mustChangePassword: boolean } | SignInFailure;
 
 export const SERVER_ERROR: SignInFailure = { result: "server_error" };
 
@@ -47,7 +52,7 @@ export function isSignInSession(value: unknown): value is SignInSession {
   );
 }
 
-export function isSignInOk(result: SignInResult): result is { result: "ok"; session: SignInSession } {
+export function isSignInOk(result: SignInResult): result is Extract<SignInResult, { result: "ok" }> {
   return result.result === "ok";
 }
 
@@ -58,7 +63,7 @@ export function isSignInLocked(result: SignInResult | SignInOutcome): result is 
 /**
  * A resposta tipada a partir do status HTTP e do corpo (já lido como JSON, ou
  * `null` se não for JSON). O status e o `result` precisam bater:
- * 200 `ok` com a sessão; 400 `empty_fields`; 401 `invalid_credentials`;
+ * 200 `ok` com a sessão (e `must_change_password`, booleano ou ausente); 400 `empty_fields`; 401 `invalid_credentials`;
  * 429 `locked` com `retry_after_minutes` (inteiro, no mínimo 1). O resto,
  * inclusive 5xx, 405 e 413, é `server_error`.
  */
@@ -67,7 +72,9 @@ export function parseSignInResponse(status: number, body: unknown): SignInResult
 
   switch (status) {
     case 200:
-      return body.result === "ok" && isSignInSession(body.session)
+      return body.result === "ok" &&
+        isSignInSession(body.session) &&
+        (body.must_change_password === undefined || typeof body.must_change_password === "boolean")
         ? {
             result: "ok",
             session: {
@@ -77,6 +84,7 @@ export function parseSignInResponse(status: number, body: unknown): SignInResult
               expires_at: body.session.expires_at,
               token_type: body.session.token_type,
             },
+            mustChangePassword: body.must_change_password === true,
           }
         : SERVER_ERROR;
     case 400:

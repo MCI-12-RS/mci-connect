@@ -292,7 +292,7 @@ describe("UX-07: conexão, erro do servidor e tempo-limite", () => {
     // O dublê passa pelo serviço de verdade, que fala com o `fetch`.
     signInMock.mockImplementation(async (identifier, password) => {
       const result = await requestSignIn(identifier, password);
-      return result.result === "ok" ? { result: "ok" } : result;
+      return result.result === "ok" ? { result: "ok", mustChangePassword: result.mustChangePassword } : result;
     });
   });
 
@@ -383,7 +383,7 @@ describe("UX-08: envio", () => {
   });
 
   it("Dado o sucesso, então vai para o início", async () => {
-    signInMock.mockResolvedValue({ result: "ok" });
+    signInMock.mockResolvedValue({ result: "ok", mustChangePassword: false });
     renderLogin();
     fill(EMAIL, "segredo");
     await submit();
@@ -628,5 +628,50 @@ describe("Sessão encerrada (T10 do E2.01)", () => {
     await submit();
     expect(message()).not.toHaveTextContent(LOGIN_TEXTS.sessionEnded);
     expect(identifierInput()).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+describe("E2.03: login (T1)", () => {
+  it("UX-01: 'Esqueceu a senha? Fale com o seu líder.' abaixo de Entrar, num <p> sem link nem botão, com ou sem mensagem", async () => {
+    renderLogin();
+    const forgot = screen.getByText("Esqueceu a senha? Fale com o seu líder.");
+    expect(forgot.tagName).toBe("P");
+    expect(forgot.querySelector("a, button")).toBeNull();
+    expect(submitButton().compareDocumentPosition(forgot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    signInMock.mockResolvedValueOnce({ result: "invalid_credentials" });
+    fill(EMAIL, "errada");
+    await submit();
+    expect(screen.getByText("Esqueceu a senha? Fale com o seu líder.")).toBeInTheDocument();
+  });
+
+  it("UX-02: a senha não vira maiúscula nem é corrigida, também com 'Mostrar senha'; sem maxLength", () => {
+    renderLogin();
+    fireEvent.click(showPasswordButton());
+    const input = passwordInput();
+    expect(input).toHaveAttribute("type", "text");
+    expect(input).toHaveAttribute("autocapitalize", "none");
+    expect(input).toHaveAttribute("autocorrect", "off");
+    expect(input).toHaveAttribute("spellcheck", "false");
+    expect(input).not.toHaveAttribute("maxlength");
+    expect(showPasswordButton()).toHaveAttribute("aria-controls", "password");
+  });
+
+  it("RN-08 b: com a marca, o login leva à troca obrigatória com a identificação no estado", async () => {
+    signInMock.mockResolvedValue({ result: "ok", mustChangePassword: true });
+    function Change() {
+      const location = useLocation();
+      return <p>troca {JSON.stringify(location.state)}</p>;
+    }
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/change-password" element={<Change />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fill(EMAIL, "12345678");
+    await submit();
+    expect(screen.getByText(`troca {"username":"${EMAIL}"}`)).toBeInTheDocument();
   });
 });

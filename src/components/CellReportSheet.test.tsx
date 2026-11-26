@@ -103,16 +103,18 @@ describe("CellReportSheet: relatório de célula excluída", () => {
     expect(within(dialog).queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("O '✕' se chama 'Fechar', tem 44 px e fecha; o do SheetContent, em inglês, é o último filho, que fica escondido", async () => {
+  it("O '✕' se chama 'Fechar', tem 44 px e fecha; o do SheetContent é o último filho, que fica escondido", async () => {
     respondWith({ data: report() }, { data: [] });
     const { onClose } = renderSheet();
 
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 19/11/2026" });
-    const close = within(dialog).getByRole("button", { name: "Fechar" });
+    const close = within(dialog).getAllByRole("button", { name: "Fechar" })[0];
     expect(close).toHaveClass("h-11", "w-11");
-    // O jsdom não aplica o CSS: confere que a regra que esconde o "Close" o alcança.
+    // O do SheetContent também se chama "Fechar", mas é o último filho (no jsdom, sem o CSS que o esconde).
+    expect(within(dialog).getAllByRole("button", { name: "Fechar" })).toHaveLength(2);
+    // O jsdom não aplica o CSS: confere que a regra que esconde o "✕" do SheetContent o alcança.
     expect(dialog).toHaveClass("[&>button:last-child]:hidden");
-    expect(dialog.lastElementChild).toHaveAccessibleName("Close");
+    expect(dialog.lastElementChild).toHaveAccessibleName("Fechar");
 
     fireEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);

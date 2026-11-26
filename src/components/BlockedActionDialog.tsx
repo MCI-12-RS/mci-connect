@@ -26,6 +26,8 @@ export interface BlockedActionContentProps {
   action?: BlockedAction;
   /** Referência do botão da ação, para receber o foco. */
   actionRef?: Ref<HTMLButtonElement>;
+  /** Referência de "Fechar", para receber o foco quando o bloqueio aparece num diálogo já aberto (E2.03, T6). */
+  closeRef?: Ref<HTMLButtonElement>;
   /**
    * Leva o foco ao título quando o conteúdo aparece num diálogo já aberto
    * (a verificação virou bloqueio, T3), para o leitor de tela ler o motivo.
@@ -38,7 +40,7 @@ export interface BlockedActionContentProps {
  * botão destrutivo. Fica dentro de um `AlertDialog`; use o
  * `BlockedActionDialog` quando o bloqueio abre sozinho.
  */
-export function BlockedActionContent({ title, children, action, actionRef, focusTitle = false }: BlockedActionContentProps) {
+export function BlockedActionContent({ title, children, action, actionRef, closeRef, focusTitle = false }: BlockedActionContentProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -59,7 +61,9 @@ export function BlockedActionContent({ title, children, action, actionRef, focus
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter className="gap-2 sm:gap-0">
-        <AlertDialogCancel className={cn(DIALOG_FOOTER_BUTTON, "mt-0")}>{DELETION_TEXTS.close}</AlertDialogCancel>
+        <AlertDialogCancel ref={closeRef} className={cn(DIALOG_FOOTER_BUTTON, "mt-0")}>
+          {DELETION_TEXTS.close}
+        </AlertDialogCancel>
         {action && (
           <Button ref={actionRef} type="button" className={DIALOG_FOOTER_BUTTON} onClick={action.onClick}>
             {action.label}
@@ -70,7 +74,7 @@ export function BlockedActionContent({ title, children, action, actionRef, focus
   );
 }
 
-export interface BlockedActionDialogProps extends Omit<BlockedActionContentProps, "actionRef" | "focusTitle"> {
+export interface BlockedActionDialogProps extends Omit<BlockedActionContentProps, "actionRef" | "closeRef" | "focusTitle"> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Ao fechar, leva o foco a quem abriu o diálogo (`useReturnFocus`). */

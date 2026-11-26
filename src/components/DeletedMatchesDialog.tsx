@@ -17,6 +17,7 @@ import { restoreBlockFromRefusal, type MemberRestoreOutcome, type RestoreBlock }
 import type { DeletedMatchesDialogModel, RestorableMatch } from "@/lib/members/deleted-matches";
 import { DELETED_MATCHES_TEXTS, DELETION_TEXTS, MEMBER_RESTORE_TEXTS } from "@/lib/deletion/texts";
 import { cn } from "@/lib/utils";
+import { requestGate } from "@/lib/auth/session-check";
 
 /** O cadastro restaurado a partir do aviso, para o formulário abrir em edição (UX-32). */
 export interface RestoredFromWarning {
@@ -70,6 +71,10 @@ const DeletedMatchesDialog = ({ dialog, registering, onRegisterAnyway, onClose, 
               return;
             case "refused":
               setBlocked({ name: match.name, block: restoreBlockFromRefusal(result.refusal) });
+              return;
+            case "gate":
+              requestGate(result.code);
+              onClose();
               return;
             case "forbidden":
               toast({ variant: "destructive", title: DELETION_TEXTS.permissionDenied });

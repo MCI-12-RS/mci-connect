@@ -1,12 +1,14 @@
 // O que a tela faz com a falha de uma exclusão ou de outra gravação do fluxo
 // (E2.01, "Estados", T2 e UX-11, UX-24, UX-39). Vale para as três entidades.
 import {
+  gateCode,
   isJsonObject,
   isNetworkError,
   isPermissionDenied,
   parseAppError,
   toAppError,
   type AppError,
+  type GateCode,
 } from "@/lib/errors";
 import type { DeletionErrorCode } from "./codes";
 
@@ -14,6 +16,8 @@ import type { DeletionErrorCode } from "./codes";
 const NOT_FOUND_OR_DELETED: DeletionErrorCode = "not_found_or_deleted";
 
 export type WriteFailure =
+  /** Portão da senha (E2.03, AQ-3): o diálogo fecha sem toast, e o portão leva à troca ou ao login. */
+  | { kind: "gate"; code: GateCode }
   /** Sumiu no meio tempo: toast informativo, o diálogo fecha e a lista recarrega (UX-24). */
   | { kind: "gone"; message: string }
   /** Recusa de regra (RN-03, RN-04 e outras): o diálogo de bloqueio, com a mensagem (UX-11). */
@@ -47,6 +51,9 @@ function fromRefusal(refusal: AppError): WriteRefusal {
 
 /** Classifica o erro de uma RPC `delete_*` ou de um PATCH do fluxo (o atalho de inativar). */
 export function classifyWriteError(error: unknown): WriteFailure {
+  // O portão também vem com 42501: vai antes da recusa de permissão.
+  const gate = gateCode(error);
+  if (gate) return { kind: "gate", code: gate };
   if (isPermissionDenied(error)) return { kind: "forbidden" };
   const refusal = parseAppError(error);
   if (refusal) return fromRefusal(refusal);

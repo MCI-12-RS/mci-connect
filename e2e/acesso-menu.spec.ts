@@ -234,8 +234,8 @@ test.describe("UX-11: rota sem permissão", () => {
     const requests: string[] = [];
     page.on("request", (request) => {
       const url = request.url();
-      // A leitura do próprio cadastro e do acesso são do AuthContext, não da tela.
-      if (/\/rest\/v1\//.test(url) && !/rpc\/my_access|members_view\?.*auth_user_id=eq\./.test(url)) requests.push(url);
+      // A leitura do próprio cadastro, do acesso e da marca de troca (E2.03) são do AuthContext, não da tela.
+      if (/\/rest\/v1\//.test(url) && !/rpc\/my_access|rpc\/my_password_status|members_view\?.*auth_user_id=eq\./.test(url)) requests.push(url);
     });
     await page.goto("/roles");
     await expect(page.getByTestId("no-access")).toBeVisible();

@@ -339,6 +339,8 @@ test.describe("UX-08: o líder com o nível e o G12 de um nome só na lista de C
 
 test.describe("UX-07 e UX-20: axe nas listas, nos dois temas", () => {
   test("Membros e Células sem violação, a 360, 768, 1024 e 1280 px, claro e escuro; 'Sem liderança' com ícone e sem laranja fixo", async ({ page }, testInfo) => {
+    // 16 varreduras do axe: com a ação "Redefinir senha" em cada linha (E2.03), passa perto dos 30 s padrão.
+    test.slow();
     await H.signIn(page, H.RITA);
     const summaries: H.AxeSummary[] = [];
     for (const [screen, path] of [["Membros", "/members?size=50"], ["Células", "/cells?size=50"]] as const) {

@@ -140,20 +140,6 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
     state: "Estado",
     statePlaceholder: "UF",
   },
-  /** Senha: como antes (a política é do E2.03). */
-  password: {
-    initial: "Senha para Acesso",
-    initialPlaceholder: "Padrão: 123456",
-    label: "Senha",
-    change: "Alterar Senha",
-    dialogTitle: (name: string): string => `Alterar Senha - ${name}`,
-    newPassword: "Nova Senha",
-    newPasswordPlaceholder: "Mínimo 6 caracteres",
-    changing: "Alterando...",
-    tooShort: "A senha deve ter pelo menos 6 caracteres",
-    changed: "Senha alterada com sucesso",
-    failed: "Erro",
-  },
   roleSelectPlaceholder: "Selecione a função",
   /** P22: o resumo no rodapé ao salvar com erro. */
   errorSummary: (count: number): string => `Confira os campos destacados (${count}).`,

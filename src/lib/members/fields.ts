@@ -27,12 +27,14 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  * entra em SENSITIVE_MEMBER_FIELDS. A gravação continua (`toMemberWritePayload`
  * com `includeRole`), sem lê-la de volta.
  *
- * A `password_reset_status` (E2.03) também fica de fora: chama funções de
- * escopo por linha e só a tela de redefinição de senha a usa.
+ * A `password_reset_status` (E2.03, AQ-2) diz à lista e ao cadastro se a
+ * redefinição de senha é possível (`allowed`, `self`, `role_not_covered`,
+ * `no_account`), e vem nula para quem não tem "Redefinir Senha de Membros".
+ * É opcional no tipo: só as leituras de membro a trazem.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =
-  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code";
+  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code, password_reset_status";
 
 export type MemberRow = Omit<
   MemberViewRow,
@@ -48,7 +50,8 @@ export type MemberRow = Omit<
   | "updated_at"
   | "g12_id"
   | "password_reset_status"
->;
+> &
+  Partial<Pick<MemberViewRow, "password_reset_status">>;
 
 /**
  * Endereço de um membro na `members_view` (o formulário de célula copia o do

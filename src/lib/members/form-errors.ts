@@ -8,8 +8,11 @@
 
 import { MEMBER_FIELDS } from "./codes";
 
-/** Os campos que mostram erro, na ordem da tela (T1): os do E2.04 e, no fim, a Função (E2.02). */
-export const MEMBER_FORM_ERROR_FIELDS = [...MEMBER_FIELDS, "role_id"] as const;
+/**
+ * Os campos que mostram erro, na ordem da tela (T1): os do E2.04 e, no fim, a
+ * Função (E2.02) e a senha inicial do cadastro novo (E2.03, RN-07).
+ */
+export const MEMBER_FORM_ERROR_FIELDS = [...MEMBER_FIELDS, "role_id", "password"] as const;
 
 export type MemberFormErrorField = (typeof MEMBER_FORM_ERROR_FIELDS)[number];
 

@@ -1,13 +1,15 @@
-import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil, History, Eye, type LucideIcon } from "lucide-react";
+import { Home, Users, Shield, LogOut, Network, LayoutGrid, ClipboardList, Menu, Pencil, History, Eye, KeyRound, type LucideIcon } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MemberForm from "@/components/MemberForm";
+import { ChangeOwnPasswordDialog } from "@/components/auth/ChangeOwnPasswordDialog";
+import { OWN_CHANGE_TEXTS } from "@/lib/auth/password-texts";
 import { isNavItemActive } from "@/lib/navigation";
 import { menuItems, ownDataMode, roleDisplayName, type MenuItemKey } from "@/lib/access/access";
 import { ACCESS_TEXTS, MENU_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
@@ -33,6 +35,10 @@ const AppSidebar = () => {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [ownDataOpen, setOwnDataOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  // Ao fechar "Alterar minha senha", o foco volta ao ☰ (celular) ou ao item (desktop) (T3).
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const passwordItemRef = useRef<HTMLButtonElement>(null);
 
   // Os itens seguem as permissões (RN-22, UX-08); a função e "Meus dados", o
   // próprio acesso (RN-23, UXD-13, UXD-14). Sem cadastro, nada do rodapé.
@@ -113,6 +119,18 @@ const AppSidebar = () => {
             )}
           </div>
         )}
+        {/* Todo membro com cadastro troca a própria senha (E2.03, T4, RN-11), 8 px acima de "Sair". */}
+        {member && (
+          <button
+            ref={passwordItemRef}
+            type="button"
+            onClick={() => { setPasswordOpen(true); setOpen(false); }}
+            className="mb-2 w-full flex items-center gap-3 min-h-11 md:min-h-10 px-3 py-2.5 rounded-md text-sm text-left text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <KeyRound className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {OWN_CHANGE_TEXTS.action}
+          </button>
+        )}
         <button
           onClick={() => { signOut(); setOpen(false); }}
           className="w-full flex items-center gap-3 min-h-11 md:min-h-10 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
@@ -134,12 +152,24 @@ const AppSidebar = () => {
       />
     ) : null;
 
+  const passwordDialog = passwordOpen ? (
+    <ChangeOwnPasswordDialog
+      onClose={() => setPasswordOpen(false)}
+      onCloseAutoFocus={(event) => {
+        const target = isMobile ? menuButtonRef.current : passwordItemRef.current;
+        if (!target) return;
+        event.preventDefault();
+        target.focus();
+      }}
+    />
+  ) : null;
+
   if (isMobile) {
     return (
       <>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden" aria-label={MENU_TEXTS.openMenu}>
+            <Button ref={menuButtonRef} variant="ghost" size="icon" className="fixed top-3 left-3 z-50 md:hidden" aria-label={MENU_TEXTS.openMenu}>
               <Menu className="w-5 h-5" aria-hidden="true" />
             </Button>
           </SheetTrigger>
@@ -147,7 +177,7 @@ const AppSidebar = () => {
             side="left"
             className="p-0 w-64 bg-sidebar border-sidebar-border"
             // Ao abrir "Meus dados" pelo menu, o foco fica no diálogo, sem voltar ao gatilho do menu.
-            onCloseAutoFocus={(event) => { if (ownDataOpen) event.preventDefault(); }}
+            onCloseAutoFocus={(event) => { if (ownDataOpen || passwordOpen) event.preventDefault(); }}
             // Só o nome acessível (o título abaixo); o menu não tem descrição.
             aria-describedby={undefined}
           >
@@ -156,6 +186,7 @@ const AppSidebar = () => {
           </SheetContent>
         </Sheet>
         {ownDataDialog}
+        {passwordDialog}
       </>
     );
   }
@@ -166,6 +197,7 @@ const AppSidebar = () => {
         {sidebarContent}
       </aside>
       {ownDataDialog}
+      {passwordDialog}
     </>
   );
 };

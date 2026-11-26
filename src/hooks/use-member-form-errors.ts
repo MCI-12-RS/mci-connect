@@ -8,7 +8,7 @@ import {
   type MemberFormErrorField,
   type ShownFieldErrors,
 } from "@/lib/members/form-errors";
-import { validateMemberFormFields, type MemberFormContext } from "@/lib/members/form-resolver";
+import { initialPasswordError, validateMemberFormFields, type MemberFormContext } from "@/lib/members/form-resolver";
 import type { MemberFormFields } from "@/lib/members/form-values";
 import { validateOnBlur, type BlurCheckedField } from "@/lib/members/validation";
 
@@ -70,6 +70,13 @@ export function useMemberFormErrors(form: MemberForm, context: MemberFormContext
     if (error) form.setError(field, { type: error.code, message: error.message });
   };
 
+  /** Ao sair da senha inicial (E2.03, UX-31): a política, com os dados digitados no formulário. */
+  const checkPasswordOnBlur = () => {
+    if (!contextRef.current.initialPassword) return;
+    const error = initialPasswordError(form.getValues());
+    if (error) form.setError("password", { type: error.code, message: error.message });
+  };
+
   /** Leva o foco ao primeiro campo com erro, na ordem da tela (UX-08, UX-10). */
   const focusFirstError = () => {
     const field = firstErrorField(shownErrors(form));
@@ -85,5 +92,5 @@ export function useMemberFormErrors(form: MemberForm, context: MemberFormContext
     focusFirstError();
   };
 
-  return { shown: shownErrors(form, form.formState), checkOnBlur, focusFirstError, showServerErrors };
+  return { shown: shownErrors(form, form.formState), checkOnBlur, checkPasswordOnBlur, focusFirstError, showServerErrors };
 }

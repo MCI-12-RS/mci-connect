@@ -98,3 +98,22 @@ describe("isFocusCheckDue", () => {
     expect(isFocusCheckDue(1_000, 1_000 + FOCUS_CHECK_INTERVAL_MS)).toBe(true);
   });
 });
+
+describe("portão da senha (E2.03, AQ-3)", () => {
+  it("o código do portão vai para o portão, antes (e no lugar) da releitura do cadastro", async () => {
+    const { handleGateError, requestSessionCheckOnDenied, setGateHandler, setSessionCheckHandler } = await import("./session-check");
+    const gate = vi.fn();
+    const check = vi.fn();
+    const undoGate = setGateHandler(gate);
+    const undoCheck = setSessionCheckHandler(check);
+    const error = { code: "42501", message: "x", details: JSON.stringify({ code: "password_change_required" }), hint: "app_error" };
+    requestSessionCheckOnDenied(error);
+    expect(gate).toHaveBeenCalledWith("password_change_required");
+    expect(check).not.toHaveBeenCalled();
+    requestSessionCheckOnDenied({ code: "42501", message: "permission denied" });
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(handleGateError({ code: "22023" })).toBe(false);
+    undoGate();
+    undoCheck();
+  });
+});

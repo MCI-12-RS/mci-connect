@@ -31,12 +31,6 @@ const ACTION_LABELS: Record<EventAction, string> = {
   delete: "Exclusão",
   restore: "Restauração",
   ...AUTH_ACTION_LABELS,
-  password_reset: "Senha redefinida",
-  password_reset_refused: "Senha redefinida (recusa)",
-  password_changed: "Senha alterada",
-  password_change_failed: "Senha alterada (falha)",
-  password_change_blocked: "Senha alterada (bloqueio)",
-  password_change_required: "Troca de senha exigida",
 };
 
 const ENTITY_LABELS: Record<EventEntity, string> = {
@@ -65,7 +59,7 @@ function hasMetadata(metadata: EventRow["metadata"]): boolean {
   return typeof metadata === "object" && metadata !== null && Object.keys(metadata).length > 0;
 }
 
-/** Segunda linha da descrição dos eventos de login (UX-16). */
+/** Segunda linha da descrição dos eventos de login (UX-16 do E1.04) e de senha (UX-33 do E2.03). */
 function EventSecondLine({ event }: { event: EventRow }) {
   const line = authEventSecondLine(event);
   if (!line) return null;
