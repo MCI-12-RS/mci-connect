@@ -175,11 +175,11 @@ SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.members_view')))
 SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.cells_view')))
           AND NOT ('deleted_by' = ANY(pg_temp.cols('public.cells_view'))),
   'cells_view: sem colunas de exclusão');
-SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 3],
-  'search_text', 'cells_view: nenhuma coluna de exclusão; as três do E2.02 vêm depois de search_text');
-SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 2 : array_length(pg_temp.cols('public.cells_view'), 1)],
-  ARRAY['can_submit_report','is_mine','leader_is_pastor'],
-  'cells_view: can_submit_report, is_mine e leader_is_pastor no fim (E2.02)');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 5],
+  'search_text', 'cells_view: nenhuma coluna de exclusão; as três do E2.02 e as duas do E2.09 vêm depois de search_text');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 4 : array_length(pg_temp.cols('public.cells_view'), 1)],
+  ARRAY['can_submit_report','is_mine','leader_is_pastor','report_status','report_missing_weeks'],
+  'cells_view: can_submit_report, is_mine e leader_is_pastor (E2.02) e report_status e report_missing_weeks (E2.09) no fim');
 
 -- ===========================================================================
 -- 3. RPCs: grants e propriedades (critério de pronto 1) — 54

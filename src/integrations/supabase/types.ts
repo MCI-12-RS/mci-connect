@@ -1004,6 +1004,10 @@ export type Database = {
           meeting_weekday: number | null
           neighborhood: string | null
           number: string | null
+          report_missing_weeks: number | null
+          report_status:
+            | Database["public"]["Enums"]["cell_report_status"]
+            | null
           search_text: string | null
           state: string | null
           street: string | null
@@ -1365,6 +1369,14 @@ export type Database = {
       cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
       cell_types: { Args: never; Returns: string[] }
       cell_weekdays: { Args: never; Returns: string[] }
+      cells_report_situation: {
+        Args: { _at?: string }
+        Returns: {
+          cell_id: string
+          report_missing_weeks: number
+          report_status: Database["public"]["Enums"]["cell_report_status"]
+        }[]
+      }
       change_own_password: {
         Args: {
           _auth_user_id: string
@@ -1584,6 +1596,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      sp_instant: { Args: { _local: string }; Returns: string }
+      sp_local: { Args: { _at: string }; Returns: string }
       sp_now: { Args: never; Returns: string }
       sp_today: { Args: never; Returns: string }
       user_has_permission: {
@@ -1629,6 +1643,13 @@ export type Database = {
       weekday_index: { Args: { _meeting_day: string }; Returns: number }
     }
     Enums: {
+      cell_report_status:
+        | "sent_held"
+        | "sent_not_held"
+        | "not_yet"
+        | "pending"
+        | "next_week"
+        | "no_meeting_day"
       event_action:
         | "create"
         | "update"
@@ -1802,6 +1823,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      cell_report_status: [
+        "sent_held",
+        "sent_not_held",
+        "not_yet",
+        "pending",
+        "next_week",
+        "no_meeting_day",
+      ],
       event_action: [
         "create",
         "update",
