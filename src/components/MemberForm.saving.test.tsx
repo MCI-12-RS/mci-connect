@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
+import { fakeQueries, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { MemberRow } from "@/lib/members/fields";
 import MemberForm from "./MemberForm";
 
@@ -153,6 +153,46 @@ describe("RN-08, UX-14 e UX-19: a gravação que falha no recálculo", () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Membro atualizado com sucesso" }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(FAILURE)).toBeNull();
+  });
+});
+
+describe("E2.05, T5 (UX-08 e UX-09): sem mudança no servidor e falha da Auditoria", () => {
+  const CONNECTION = "Não foi possível salvar o cadastro. Verifique a conexão e tente de novo.";
+
+  it("Dado o updated_at devolvido igual ao carregado, então 'Nenhuma alteração para salvar.', sem o toast de sucesso (AQ-7)", async () => {
+    const loaded = "2026-11-26T13:00:00.123456+00:00";
+    respondToRpc("role_options", { data: roleOptions });
+    const onClose = vi.fn();
+    render(<MemberForm member={{ ...fabio, updated_at: loaded }} onClose={onClose} />, { wrapper });
+    await screen.findByRole("combobox", { name: "Função *" }).catch(() => null);
+    fireEvent.change(screen.getByLabelText("Observações"), { target: { value: "nota nova" } });
+    respondWith({ data: [{ id: "fabio", updated_at: loaded }] });
+
+    save();
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({ title: "Nenhuma alteração para salvar." });
+  });
+
+  it("Dada a falha da Auditoria (CHECK em events), então a mensagem de conexão no rodapé, sem texto técnico e sem toast; a nova tentativa grava uma vez", async () => {
+    const onClose = await renderEdit();
+    respondWith({ error: { code: "23514", message: 'new row for relation "events" violates check constraint "e205_qa_broken"' } });
+    save();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(CONNECTION);
+    expect(document.body.textContent).not.toMatch(/events|constraint|e205/);
+    expect(screen.getByLabelText("Observações")).toHaveValue("nota nova");
+    expect(toast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    respondWith({ data: [{ id: "fabio", updated_at: "2026-11-26T13:05:00+00:00" }] });
+    save();
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(toast).toHaveBeenCalledWith({ title: "Membro atualizado com sucesso" });
+    expect(fakeQueries().filter((query) => query.table === "members")).toHaveLength(2);
   });
 });
 

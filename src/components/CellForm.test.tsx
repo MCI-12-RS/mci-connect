@@ -323,7 +323,7 @@ describe("CellForm: reunião (UX-08, UX-09, UX-19)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const update = cellsWrites()[0];
     expect(update.calls.find(([method]) => method === "update")?.[1]).toEqual({ meeting_time: "19:30", is_active: false });
-    expect(update.calls).toContainEqual(["select", "id"]);
+    expect(update.calls).toContainEqual(["select", "id, updated_at"]);
     expect(toast).toHaveBeenCalledWith({ title: "Célula inativada." });
   });
 });

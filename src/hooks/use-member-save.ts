@@ -14,6 +14,7 @@ import {
 } from "@/lib/access/member-form";
 import { parseCreateMemberRefusal, type DeletedMatch } from "@/lib/members/deleted-matches";
 import type { MemberWrite } from "@/lib/members/fields";
+import { unchangedOnServer } from "@/lib/audit/save";
 
 /** Um cadastro novo, pela `create-user-admin` (E2.04, DT-11). */
 export interface CreateMemberRequest {
@@ -31,13 +32,18 @@ export interface UpdateMemberRequest {
   kind: "update";
   memberId: string;
   patch: MemberWrite;
+  /** O `updated_at` da linha que abriu o formulário (E2.05, AQ-7); indefinido, não compara. */
+  loadedUpdatedAt?: string | null;
 }
 
 export type MemberSaveRequest = CreateMemberRequest | UpdateMemberRequest;
 
 export type MemberSaveResult =
   | { kind: "saved" }
-  /** Sem nenhuma mudança: nada foi enviado (DA-9). */
+  /**
+   * Sem nenhuma mudança: nada foi enviado (DA-9), ou o servidor não mudou nada
+   * (o `updated_at` devolvido é o carregado, E2.05 AQ-7).
+   */
   | { kind: "unchanged" }
   /** A edição voltou sem linha: o cadastro foi excluído ou saiu do escopo no meio tempo (E2.01, DT-19). */
   | { kind: "gone" }
@@ -105,15 +111,19 @@ async function createMember({ attemptId, password, memberData, confirmDeletedMat
 }
 
 /**
- * Só o id de volta: pedir coluna sensível no RETURNING dá 42501 (E1.08, PR 5).
- * Sem linha, o cadastro não existe mais ou saiu do que a pessoa vê (DT-19,
- * AQ-6): nunca um sucesso falso. O erro sobe para o `MutationCache` (o 42501
- * relê o acesso e confere a sessão) e é classificado por quem chamou.
+ * Só o id e o `updated_at` de volta: pedir coluna sensível no RETURNING dá
+ * 42501 (E1.08, PR 5). Sem linha, o cadastro não existe mais ou saiu do que a
+ * pessoa vê (DT-19, AQ-6): nunca um sucesso falso. O `updated_at` igual ao
+ * carregado quer dizer que o servidor não mudou nada (E2.05, AQ-7). O erro
+ * sobe para o `MutationCache` (o 42501 relê o acesso e confere a sessão) e é
+ * classificado por quem chamou.
  */
-async function updateMember({ memberId, patch }: UpdateMemberRequest): Promise<"saved" | "gone"> {
-  const { data, error } = await supabase.from("members").update(patch).eq("id", memberId).select("id");
+async function updateMember({ memberId, patch, loadedUpdatedAt }: UpdateMemberRequest): Promise<"saved" | "unchanged" | "gone"> {
+  const { data, error } = await supabase.from("members").update(patch).eq("id", memberId).select("id, updated_at");
   if (error) throw error;
-  return data?.length ? "saved" : "gone";
+  const row = data?.[0];
+  if (!row) return "gone";
+  return unchangedOnServer(loadedUpdatedAt, row.updated_at) ? "unchanged" : "saved";
 }
 
 /** A falha de uma edição, sem nenhum texto técnico (UX-30). */

@@ -246,9 +246,9 @@ describe("CellReportForm: célula obrigatória", () => {
   });
 });
 
-// Gravação (E2.01, RN-13, T8, DT-19, UX-28 a UX-30): o relatório e, depois,
-// uma chamada só de set_cell_report_participants com o conjunto final.
-// A data é a de hoje: o campo só aceita a semana atual.
+// Gravação (E2.01, RN-13, T8, DT-19, UX-28 a UX-30; E2.05, T5, UX-08 e UX-09):
+// o relatório e o conjunto final de participantes numa chamada só, a
+// save_cell_report. A data é a de hoje: o campo só aceita a semana atual.
 
 const today = format(new Date(), "yyyy-MM-dd");
 const editing: CellReportRow = { ...report, date: today };
@@ -263,6 +263,9 @@ const appError = (code: string, message: string, extra: object = {}) => ({
 });
 
 const SAVE = { name: "Salvar" };
+
+/** A recusa da save_cell_report para o relatório que não existe mais ou foi excluído (DT-19). */
+const GONE = appError("not_found_or_deleted", "Este relatório não existe ou já foi excluído.", { entity: "cell_report" });
 
 /** O formulário com o QueryClient observado: devolve as chaves que ele mandou recarregar. */
 function renderWatched(element: ReactElement) {
@@ -281,14 +284,17 @@ const LISTS = [
   ["cells", "list"],
 ];
 
-/** Nenhuma exclusão nem inclusão direta nos participantes (critério de pronto 6). */
-function expectNoDirectParticipantWrites() {
-  const participantWrites = fakeQueries().filter(
-    (query) => query.table === "cell_report_participants" && /^(insert|delete|update)$/.test(query.methods()[0] ?? ""),
-  );
-  expect(participantWrites).toEqual([]);
-  expect(fakeQueries().some((query) => query.methods().includes("delete"))).toBe(false);
+/** Nenhuma gravação direta no relatório nem nos participantes: só a save_cell_report (E2.05, critério de pronto 5). */
+function expectNoDirectWrites() {
+  const writes = fakeQueries().filter((query) => /^(insert|delete|update|upsert)$/.test(query.methods()[0] ?? ""));
+  expect(writes).toEqual([]);
+  expect(fakeRpcs().filter((call) => call.fn === "set_cell_report_participants")).toEqual([]);
 }
+
+/** As chamadas de gravação: uma por envio. */
+const saveCalls = () => fakeRpcs().filter((call) => call.fn === "save_cell_report");
+
+const saved = (reportId: string, changed = true) => ({ data: [{ report_id: reportId, changed }] });
 
 describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => {
   beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
@@ -306,9 +312,8 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
           { member_id: "m2", member_name: "Sara Reis", member_deleted: true },
         ],
       },
-      { data: [{ id: "r1" }] },
     );
-    respondToRpc("set_cell_report_participants", {});
+    respondToRpc("save_cell_report", saved("r1"));
     const onClose = vi.fn();
     render(<CellReportForm report={editing} onClose={onClose} />, { wrapper: createQueryWrapper() });
 
@@ -319,19 +324,30 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     expect(keptLine.id).not.toBe("");
     expect(screen.getByLabelText(PARTICIPANTS).getAttribute("aria-describedby")?.split(" ")).toContain(keptLine.id);
 
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Esperança" } });
     fireEvent.click(screen.getByRole("button", SAVE));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
 
-    const update = fakeQueries()[1];
-    expect(update.table).toBe("cell_reports");
-    expect(update.methods()).toEqual(["update", "eq", "select"]);
-    expect(update.calls).toContainEqual(["eq", "id", "r1"]);
-    expect(update.calls).toContainEqual(["select", "id"]);
-    // Uma chamada só, com o conjunto final: Ana (escolhida) e Sara (excluída, sem mudança).
-    expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([
-      ["set_cell_report_participants", { _report_id: "r1", _member_ids: ["m1", "m2"] }],
+    // Uma chamada só, com o relatório e o conjunto final: Ana (escolhida) e Sara (excluída, sem mudança).
+    expect(saveCalls().map((call) => call.args)).toEqual([
+      {
+        _report_id: "r1",
+        _report: {
+          cell_id: "c1",
+          date: today,
+          time: "20:00",
+          was_held: true,
+          reason_not_held: null,
+          theme: "Esperança",
+          observations: null,
+          visitors: [],
+          offering: 0,
+        },
+        _participant_ids: ["m1", "m2"],
+      },
     ]);
-    expectNoDirectParticipantWrites();
+    expect(toast).toHaveBeenCalledWith({ title: "Relatório salvo com sucesso" });
+    expectNoDirectWrites();
   });
 
   it("Dado um relatório em edição, enquanto os participantes carregam, então Salvar fica desabilitado", async () => {
@@ -366,24 +382,17 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     expect(screen.getByRole("button", SAVE)).toBeEnabled();
   });
 
-  it("Dado um participante excluído entre a escolha e o envio, então a mensagem fica embaixo do campo, o chip é marcado e a nova tentativa atualiza o mesmo relatório (UX-30)", async () => {
-    respondWith(
-      { data: [{ id: "m7", name: "Maria Mendes" }] },
-      { data: [{ id: "new1" }] },
-      // O relatório gravado recarrega as consultas abertas, inclusive as opções de membro
-      // (E2.09, AQ-3: o relatório muda o vínculo celular).
-      { data: [{ id: "m7", name: "Maria Mendes" }] },
-      { data: [{ id: "new1" }] },
-    );
+  it("Dado um participante excluído entre a escolha e o envio, então a mensagem fica embaixo do campo, o chip é marcado, nada foi gravado e a nova tentativa envia de novo (UX-30; E2.05, RN-14)", async () => {
+    respondWith({ data: [{ id: "m7", name: "Maria Mendes" }] });
     respondToRpc(
-      "set_cell_report_participants",
+      "save_cell_report",
       {
         error: appError("deleted_member_chosen", "Este membro foi excluído e não pode ser escolhido.", {
           field: "member_id",
           member_id: "m7",
         }),
       },
-      {},
+      saved("new1"),
     );
     const onClose = vi.fn();
     render(<CellReportForm initialCell={todayCell} onClose={onClose} />, { wrapper: createQueryWrapper() });
@@ -397,11 +406,8 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     expect(screen.getByText("Este membro foi excluído e não pode ser escolhido.")).toBeInTheDocument();
     expect(screen.getByLabelText(PARTICIPANTS)).toHaveAttribute("aria-invalid", "true");
     await waitFor(() => expect(screen.getByLabelText(PARTICIPANTS)).toHaveFocus());
-    // O aviso fica perto de "Salvar", que é o que resolve, depois do resto do formulário.
-    const unsaved = screen.getByText("O relatório foi salvo, mas os participantes ainda não. Salve de novo para incluí-los.");
-    const FOLLOWS = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(screen.getByLabelText("Observações Gerais").compareDocumentPosition(unsaved) & FOLLOWS).toBeTruthy();
-    expect(unsaved.compareDocumentPosition(screen.getByRole("button", SAVE)) & FOLLOWS).toBeTruthy();
+    // A recusa desfez tudo: não há relatório gravado pela metade (E2.05, RN-14).
+    expect(screen.queryByText(/participantes ainda não/)).not.toBeInTheDocument();
     // O resto do formulário fica como estava.
     expect(screen.getByLabelText("Tema da Palavra")).toHaveValue("Fé que move montanhas");
     expect(onClose).not.toHaveBeenCalled();
@@ -412,23 +418,17 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     fireEvent.click(screen.getByRole("button", SAVE));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
 
-    // A primeira tentativa criou o relatório; a segunda o atualiza, sem criar outro.
-    const writes = fakeQueries().filter((query) => query.table === "cell_reports");
-    expect(writes.map((query) => query.methods()[0])).toEqual(["insert", "update"]);
-    expect(writes[1].calls).toContainEqual(["eq", "id", "new1"]);
-    expect(fakeRpcs().map((call) => call.args)).toEqual([
-      { _report_id: "new1", _member_ids: ["m7"] },
-      { _report_id: "new1", _member_ids: [] },
+    // Nada foi gravado na primeira: as duas tentativas são envios, cada uma com o conjunto daquele momento.
+    expect(saveCalls().map((call) => call.args)).toEqual([
+      expect.objectContaining({ _report_id: null, _participant_ids: ["m7"] }),
+      expect.objectContaining({ _report_id: null, _participant_ids: [] }),
     ]);
-    expectNoDirectParticipantWrites();
+    expectNoDirectWrites();
   });
 
-  it("Dado um relatório novo gravado com os participantes recusados, então o seletor de célula trava, para a nova tentativa não levar o relatório a outra célula", async () => {
-    respondWith(
-      { data: [todayCell] },
-      { data: [{ id: "new1" }] },
-    );
-    respondToRpc("set_cell_report_participants", {
+  it("Dado um relatório novo com os participantes recusados, então nada foi gravado e o seletor de célula continua editável (E2.05, RN-14)", async () => {
+    respondWith({ data: [todayCell] });
+    respondToRpc("save_cell_report", {
       error: appError("too_many_participants", "Um relatório pode ter no máximo 1000 participantes."),
     });
     render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
@@ -440,7 +440,7 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     fireEvent.click(screen.getByRole("button", SAVE));
 
     expect(await screen.findByText("Um relatório pode ter no máximo 1000 participantes.")).toBeInTheDocument();
-    expect(screen.getByLabelText(CELL)).toBeDisabled();
+    expect(screen.getByLabelText(CELL)).toBeEnabled();
   });
 
   it("Dada a célula aberta em Células e excluída antes do envio, então o aviso no topo, com 'Fechar', Salvar desabilitado e as listas recarregadas (UX-30)", async () => {
@@ -453,7 +453,7 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Esta célula foi excluída e não recebe relatórios.");
     await waitFor(() => expect(alert).toHaveFocus());
-    expect(fakeRpcs()).toHaveLength(0);
+    expect(saveCalls()).toHaveLength(1);
     expect(onClose).not.toHaveBeenCalled();
     // A célula não pode ser trocada: nada no formulário resolve.
     expect(screen.getByRole("button", SAVE)).toBeDisabled();
@@ -503,22 +503,23 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
     // Nada no formulário resolve: só restaurar a célula.
     expect(screen.getByRole("button", SAVE)).toBeDisabled();
     expect(within(alert).getByRole("button", { name: "Fechar" })).toBeInTheDocument();
-    expect(fakeRpcs()).toHaveLength(0);
+    expect(saveCalls()).toHaveLength(1);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("Dada a edição sem linha de volta, então 'não existe ou já foi excluído', Salvar desabilitado e 'Fechar' volta para a lista (DT-19)", async () => {
-    respondWith({ data: [] }, { data: [] });
+  it("Dada a edição recusada com 'não existe ou já foi excluído', então o aviso, Salvar desabilitado e 'Fechar' volta para a lista (DT-19)", async () => {
+    respondWith({ data: [] }, { error: GONE });
     const onClose = vi.fn();
     const invalidatedKeys = renderWatched(<CellReportForm report={editing} onClose={onClose} />);
     await waitFor(() => expect(screen.getByRole("button", SAVE)).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Novo tema" } });
 
     fireEvent.click(screen.getByRole("button", SAVE));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Este relatório não existe ou já foi excluído. As alterações não foram salvas.");
     expect(screen.getByRole("button", SAVE)).toBeDisabled();
-    expect(fakeRpcs()).toHaveLength(0);
+    expect(saveCalls()).toHaveLength(1);
     // As listas recarregam já, antes de qualquer botão.
     expect(invalidatedKeys()).toEqual(LISTS);
 
@@ -527,10 +528,11 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
   });
 
   it("Depois do 'não existe ou já foi excluído', 'Cancelar' também volta para a lista já recarregada (DT-19)", async () => {
-    respondWith({ data: [] }, { data: [] });
+    respondWith({ data: [] }, { error: GONE });
     const onClose = vi.fn();
     const invalidatedKeys = renderWatched(<CellReportForm report={editing} onClose={onClose} />);
     await waitFor(() => expect(screen.getByRole("button", SAVE)).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Novo tema" } });
     fireEvent.click(screen.getByRole("button", SAVE));
     await screen.findByRole("alert");
 
@@ -551,6 +553,115 @@ describe("CellReportForm: participantes excluídos e gravação (E2.01)", () => 
       variant: "destructive",
       title: "Já existe um relatório dessa célula nesta semana (domingo a sábado).",
     });
+  });
+});
+
+// Salvar sem mudança e falha da Auditoria, do servidor ou da rede (E2.05, T5, UX-08 e UX-09).
+describe("CellReportForm: sem mudança e falha ao salvar (E2.05, T5)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+    auth.permissions = new Set();
+  });
+
+  const ANA = { data: [{ member_id: "m1", member_name: "Ana Souza", member_deleted: false }] };
+  const CONNECTION = "Não foi possível salvar o relatório. Verifique a conexão e tente de novo.";
+
+  it("UX-08: na edição, 'Salvar' sem nenhuma mudança fecha sem nenhuma requisição de gravação, com 'Nenhuma alteração para salvar.'", async () => {
+    respondWith(ANA);
+    const onClose = vi.fn();
+    render(<CellReportForm report={editing} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    await screen.findByLabelText("Remover Ana Souza");
+    // Digitar e voltar ao valor original não conta.
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Outro" } });
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Fé" } });
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(saveCalls()).toHaveLength(0);
+    expectNoDirectWrites();
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({ title: "Nenhuma alteração para salvar." });
+  });
+
+  it("Dado só um participante retirado, então é mudança: grava numa chamada, com o conjunto final", async () => {
+    respondWith(ANA);
+    respondToRpc("save_cell_report", saved("r1"));
+    const onClose = vi.fn();
+    render(<CellReportForm report={editing} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    fireEvent.click(await screen.findByLabelText("Remover Ana Souza"));
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(saveCalls().map((call) => call.args)).toEqual([expect.objectContaining({ _report_id: "r1", _participant_ids: [] })]);
+    expect(toast).toHaveBeenCalledWith({ title: "Relatório salvo com sucesso" });
+  });
+
+  it("Dado que a tela acha que mudou e o servidor não (changed: false), então o mesmo aviso de 'sem mudança' (AQ-7)", async () => {
+    respondWith(ANA);
+    respondToRpc("save_cell_report", saved("r1", false));
+    const onClose = vi.fn();
+    render(<CellReportForm report={editing} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    await screen.findByLabelText("Remover Ana Souza");
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Fé " } });
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(toast).toHaveBeenCalledWith({ title: "Nenhuma alteração para salvar." });
+    expect(toast).not.toHaveBeenCalledWith({ title: "Relatório salvo com sucesso" });
+  });
+
+  it.each([
+    ["a falha da Auditoria (CHECK em events)", { code: "23514", message: 'new row for relation "events" violates check constraint "e205_qa_broken"' }],
+    ["um erro 5xx", { code: "XX000", message: "internal error" }],
+    ["a queda de rede", { code: "", message: "TypeError: Failed to fetch" }],
+  ])("UX-09: com %s, o formulário fica aberto com os dados, a mensagem de conexão junto de 'Salvar', sem toast; a nova tentativa grava uma vez", async (_label, error) => {
+    respondToRpc("save_cell_report", { error }, saved("new1"));
+    const onClose = vi.fn();
+    render(<CellReportForm initialCell={todayCell} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Fé que move montanhas" } });
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(CONNECTION);
+    expect(alert).not.toHaveTextContent(/events|constraint|internal|fetch/i);
+    // Logo acima dos botões.
+    expect(alert.compareDocumentPosition(screen.getByRole("button", SAVE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByLabelText("Tema da Palavra")).toHaveValue("Fé que move montanhas");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", SAVE)).toHaveFocus());
+    expect(screen.getByRole("button", SAVE)).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(saveCalls()).toHaveLength(2);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({ title: "Relatório salvo com sucesso" });
+  });
+
+  it("Enquanto envia, 'Salvando…' desabilitado, e um duplo toque não envia duas vezes", async () => {
+    let release = () => {};
+    respondToRpc("save_cell_report", { ...saved("new1"), until: new Promise<void>((resolve) => (release = resolve)) });
+    const onClose = vi.fn();
+    render(<CellReportForm initialCell={todayCell} onClose={onClose} />, { wrapper: createQueryWrapper() });
+    const button = screen.getByRole("button", SAVE);
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(await screen.findByRole("button", { name: "Salvando…" })).toBeDisabled();
+    release();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(saveCalls()).toHaveLength(1);
   });
 });
 

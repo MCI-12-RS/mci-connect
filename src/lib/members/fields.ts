@@ -31,10 +31,14 @@ export const UNNAMED_MEMBER_LABEL = "Membro sem nome";
  * redefinição de senha é possível (`allowed`, `self`, `role_not_covered`,
  * `no_account`), e vem nula para quem não tem "Redefinir Senha de Membros".
  * É opcional no tipo: só as leituras de membro a trazem.
+ *
+ * O `updated_at` (E2.05, AQ-7) é a versão da linha que abre o formulário: o
+ * PATCH devolve o dele, e igual quer dizer que o servidor não mudou nada
+ * ("Nenhuma alteração para salvar."). Também opcional no tipo.
  */
 // Uma string literal só: o supabase-js deriva o tipo do resultado dela.
 export const MEMBER_ROW_SELECT =
-  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code, password_reset_status";
+  "id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code, password_reset_status, updated_at";
 
 export type MemberRow = Omit<
   MemberViewRow,
@@ -56,7 +60,7 @@ export type MemberRow = Omit<
   | "updated_by_kind"
   | "updated_by_name"
 > &
-  Partial<Pick<MemberViewRow, "password_reset_status">>;
+  Partial<Pick<MemberViewRow, "password_reset_status" | "updated_at">>;
 
 /**
  * Endereço de um membro na `members_view` (o formulário de célula copia o do

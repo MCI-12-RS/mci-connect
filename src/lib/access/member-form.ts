@@ -294,16 +294,17 @@ export type MemberSaveFailureCause = "network" | "recalc" | "other";
 
 /**
  * O aviso de uma gravação que falhou sem recusa: só "tente de novo", nunca o
- * texto técnico (UX-30 do E2.04, UX-19 do E2.06).
+ * texto técnico (UX-30 do E2.04, UX-19 do E2.06). O erro que a tela não
+ * reconhece (inclusive a falha da Auditoria, que não tem código próprio) é a
+ * mensagem de conexão (E2.05, T5, RN-14 e AQ-8).
  */
 export function memberSaveFailureMessage(cause: MemberSaveFailureCause): string {
   switch (cause) {
     case "network":
+    case "other":
       return MEMBER_FORM_TEXTS.saveNetworkError;
     case "recalc":
       return SAVE_TEXTS.recalcFailed;
-    case "other":
-      return MEMBER_FORM_TEXTS.saveFailed;
   }
 }
 

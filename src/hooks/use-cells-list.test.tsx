@@ -29,7 +29,7 @@ describe("useCellsList (RN-01, RN-03, RN-04)", () => {
     expect(queries[0].table).toBe("cells_view");
     expect(queries[0].calls).toEqual([
       ["select", CELL_LIST_SELECT, { count: "exact" }],
-      ["order", "created_at", { ascending: false }],
+      ["order", "created_at", { ascending: false, nullsFirst: false }],
       ["order", "id"],
       ["range", 1100, 1199],
     ]);

@@ -20,7 +20,8 @@ export function useCellsList({ page, pageSize, search }: ListParams) {
       const [from, to] = toRange(page, pageSize);
       return fetchListPage(
         withSearch(supabase.from("cells_view").select(CELL_LIST_SELECT, { count: "exact" }), patterns)
-          .order("created_at", { ascending: false })
+          // O cadastro do legado pode não ter data (E2.05, DT-03): fica no fim.
+          .order("created_at", { ascending: false, nullsFirst: false })
           .order("id")
           .range(from, to),
         () => withSearch(supabase.from("cells_view").select("id", { count: "exact", head: true }), patterns),

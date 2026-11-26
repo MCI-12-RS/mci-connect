@@ -1,5 +1,6 @@
 // Gravação do formulário de relatório: os dados enviados e o que a tela faz
 // com cada falha (E2.01, T7, T8, DT-19 e "Estados").
+import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 import { CELL_INACTIVE } from "@/lib/cells/codes";
 import type { Database } from "@/integrations/supabase/types";
 import { isJsonObject, isNetworkError, isPermissionDenied, parseAppError, type AppError } from "@/lib/errors";
@@ -9,17 +10,18 @@ import type { DeletionErrorCode } from "@/lib/deletion/codes";
 /** Textos do formulário de relatório. */
 export const CELL_REPORT_FORM_TEXTS = {
   saved: "Relatório salvo com sucesso",
+  buttons: {
+    save: "Salvar",
+    /** Enquanto envia: desabilitado, sem envio duplo (E2.05, T5). */
+    saving: "Salvando…",
+  },
   weekTaken: "Já existe um relatório dessa célula nesta semana (domingo a sábado).",
   outsideCurrentWeek: "A data do relatório precisa estar dentro da semana atual (de domingo a sábado).",
-  /** Não está no spec: queda de conexão ao salvar ("O formulário mantém os dados"). */
-  networkError: "Não foi possível salvar. Verifique a conexão e tente de novo.",
-  /** Não está no spec: falha técnica ao salvar (UX-39). */
-  failed: "Não foi possível salvar o relatório. Tente de novo.",
   /**
-   * Não está no spec: o relatório foi gravado e os participantes não (são duas
-   * chamadas até o E2.11). Salvar de novo atualiza o mesmo relatório.
+   * Falha da Auditoria, do servidor ou da rede, ou erro que a tela não reconhece: nada foi gravado, e a
+   * mensagem fica junto de "Salvar" (E2.05, T5, RN-14 e AQ-8).
    */
-  participantsNotSaved: "O relatório foi salvo, mas os participantes ainda não. Salve de novo para incluí-los.",
+  connection: AUDIT_SAVE_TEXTS.connection.report,
   /** Não está no spec: os participantes salvos não carregaram na edição (e Salvar fica desabilitado). */
   participantsLoadFailed: "Não foi possível carregar os participantes. Tente de novo para poder salvar.",
 } as const;
@@ -54,6 +56,15 @@ export function parseVisitors(text: string | undefined): string[] {
     .filter((name) => name.length > 0);
 }
 
+/**
+ * Texto opcional: vazio ou só espaços vira nulo. O banco compara o valor gravado
+ * antes e depois (E2.05, RN-04): sem isso, o campo vazio que abriu como nulo
+ * contaria como alterado em qualquer edição.
+ */
+function optionalText(text: string | undefined): string | null {
+  return text && text.trim() !== "" ? text : null;
+}
+
 /** O relatório a gravar. "Não houve célula" grava só o motivo, sem tema, visitantes nem oferta. */
 export function toReportWrite(values: ReportFormInput): CellReportWrite {
   const held = values.was_held !== false;
@@ -62,9 +73,9 @@ export function toReportWrite(values: ReportFormInput): CellReportWrite {
     date: values.date,
     time: values.time,
     was_held: held,
-    reason_not_held: held ? null : values.reason_not_held,
-    theme: held ? values.theme : null,
-    observations: held ? values.observations : null,
+    reason_not_held: held ? null : optionalText(values.reason_not_held),
+    theme: held ? optionalText(values.theme) : null,
+    observations: held ? optionalText(values.observations) : null,
     visitors: held ? parseVisitors(values.visitors) : [],
     offering: held ? (values.offering ?? 0) : 0,
   };
@@ -95,8 +106,13 @@ export type ReportSaveFailure =
    * a lista de células e o acesso.
    */
   | { kind: "cellInactive" }
-  /** Demais falhas: um aviso com a mensagem, e o formulário como estava. */
-  | { kind: "error"; message: string };
+  /** Regra da semana (REL-02, REL-03) ou texto de trigger: o toast com a mensagem, e o formulário como estava. */
+  | { kind: "error"; message: string }
+  /**
+   * Nada foi gravado por falha da Auditoria, do servidor ou da rede, ou por um erro sem regra conhecida
+   * (E2.05, T5, RN-14): a mensagem de conexão junto de "Salvar", com os dados mantidos.
+   */
+  | { kind: "connection" };
 
 const PARTICIPANT_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["deleted_member_chosen", "too_many_participants"]);
 const CELL_DELETED_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["cell_deleted", "report_cell_deleted"]);
@@ -129,22 +145,35 @@ function errorMessage(error: unknown): string | null {
   return isJsonObject(error) && typeof error.message === "string" && error.message ? error.message : null;
 }
 
-/** Classifica a falha ao gravar o relatório ou os participantes. */
+/**
+ * Um `CHECK` de tabela recusou (a mensagem do Postgres cita a constraint), e
+ * não o trigger da semana, que levanta o 23514 com o texto dele. Não é regra
+ * que a tela conheça: por exemplo, a falha da Auditoria (E2.05, DT-18).
+ */
+function isTableCheckViolation(error: unknown): boolean {
+  return /violates check constraint/i.test(errorMessage(error) ?? "");
+}
+
+/** Classifica a falha ao gravar o relatório com os participantes. */
 export function classifyReportSaveError(error: unknown): ReportSaveFailure {
   if (isPermissionDenied(error)) return { kind: "refused", message: DELETION_TEXTS.permissionDenied, clearCell: false };
   const refusal = parseAppError(error);
   if (refusal) return fromRefusal(refusal);
-  if (isNetworkError(error)) return { kind: "error", message: CELL_REPORT_FORM_TEXTS.networkError };
+  if (isNetworkError(error)) return { kind: "connection" };
   switch (isJsonObject(error) ? error.code : null) {
     // Um relatório por célula por semana (REL-03): o trigger e, na corrida, o índice único.
     case UNIQUE_VIOLATION:
       return { kind: "error", message: CELL_REPORT_FORM_TEXTS.weekTaken };
     // Só a semana atual (REL-02).
     case CHECK_VIOLATION:
-      return { kind: "error", message: CELL_REPORT_FORM_TEXTS.outsideCurrentWeek };
-    case RAISED_BY_TRIGGER:
-      return { kind: "error", message: errorMessage(error) ?? CELL_REPORT_FORM_TEXTS.failed };
+      return isTableCheckViolation(error)
+        ? { kind: "connection" }
+        : { kind: "error", message: CELL_REPORT_FORM_TEXTS.outsideCurrentWeek };
+    case RAISED_BY_TRIGGER: {
+      const message = errorMessage(error);
+      return message ? { kind: "error", message } : { kind: "connection" };
+    }
     default:
-      return { kind: "error", message: CELL_REPORT_FORM_TEXTS.failed };
+      return { kind: "connection" };
   }
 }

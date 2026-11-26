@@ -1,6 +1,7 @@
 // Textos do cadastro de célula (E2.08: "Textos de tela" do Negócio e "Textos"
 // da UX). Os do endereço e do CEP ficam em `src/lib/address/texts.ts`, comuns
-// ao cadastro de membro.
+// ao cadastro de membro. "Sem mudança" e a mensagem de conexão vêm do E2.05 (T5).
+import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 
 /** As mensagens das regras, iguais às do banco (Formato dos erros, AQ-1). */
 export const CELL_RULE_TEXTS = {
@@ -68,7 +69,7 @@ export const CELL_FORM_TEXTS = {
     saving: "Salvando…",
   },
   close: "Fechar",
-  connectionFailed: "Não foi possível salvar a célula. Verifique a conexão e tente de novo.",
+  connectionFailed: AUDIT_SAVE_TEXTS.connection.cell,
   discard: {
     title: "Descartar as alterações?",
     description: "O que você digitou não será salvo.",
@@ -80,7 +81,7 @@ export const CELL_FORM_TEXTS = {
     updated: "Célula atualizada.",
     inactivated: "Célula inativada.",
     reactivated: "Célula reativada.",
-    unchanged: "Nenhuma alteração para salvar.",
+    unchanged: AUDIT_SAVE_TEXTS.unchanged,
   },
 } as const;
 

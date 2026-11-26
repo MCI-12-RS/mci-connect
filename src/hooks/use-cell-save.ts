@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { refreshAccess } from "@/hooks/use-access";
+import { unchangedOnServer } from "@/lib/audit/save";
 import { requestSessionCheck, requestSessionCheckOnDenied } from "@/lib/auth/session-check";
 import { retriedCellPatch, type CellPatch } from "@/lib/cells/changes";
 import { classifyCellSaveError, type CellSaveFailure } from "@/lib/cells/codes";
@@ -22,6 +23,8 @@ export interface UpdateCellRequest {
   cellId: string;
   patch: CellPatch;
   outcome: Exclude<CellSaveOutcome, "created" | "unchanged">;
+  /** O `updated_at` da linha que abriu o formulário (E2.05, AQ-7); indefinido, não compara. */
+  loadedUpdatedAt?: string | null;
 }
 
 export type CellSaveRequest = CreateCellRequest | UpdateCellRequest;
@@ -61,7 +64,9 @@ export type CellSaveResult =
  *   achada só vale como sucesso se for a mesma do envio; se a pessoa corrigiu
  *   o formulário depois da tentativa sem resposta, as correções vão num PATCH
  *   (só o que mudou) e o resultado é o desse PATCH.
- * - Edição: PATCH só do que mudou, pedindo o `id` de volta; sem linha, `gone`.
+ * - Edição: PATCH só do que mudou, pedindo o `id` e o `updated_at` de volta;
+ *   sem linha, `gone`. O `updated_at` igual ao carregado quer dizer que o
+ *   servidor não mudou nada: o resultado é `unchanged` (E2.05, AQ-7).
  * - Depois de gravar, as telas com totais, G12 e o acesso recarregam (P44, AQ-8).
  */
 export function useCellSave() {
@@ -82,17 +87,26 @@ export function useCellSave() {
     return { kind: "failed", failure };
   };
 
-  /** O PATCH pedindo o `id` de volta; sem linha, `gone` (E2.01, DT-19). */
-  const patchCell = async (cellId: string, patch: CellPatch, outcome: CellSaveOutcome): Promise<CellSaveResult> => {
+  /**
+   * O PATCH pedindo o `id` e o `updated_at` de volta; sem linha, `gone` (E2.01,
+   * DT-19). Com a versão carregada, o mesmo `updated_at` é `unchanged` (AQ-7).
+   */
+  const patchCell = async (
+    cellId: string,
+    patch: CellPatch,
+    outcome: CellSaveOutcome,
+    loadedUpdatedAt?: string | null,
+  ): Promise<CellSaveResult> => {
     const { data, error } = await withTimeout((signal) =>
-      supabase.from("cells").update(patch).eq("id", cellId).select("id").abortSignal(signal),
+      supabase.from("cells").update(patch).eq("id", cellId).select("id, updated_at").abortSignal(signal),
     );
     if (error) return failed(error);
-    if (!data?.length) {
+    const row = data?.[0];
+    if (!row) {
       requestSessionCheck();
       return { kind: "gone" };
     }
-    return { kind: "saved", outcome };
+    return { kind: "saved", outcome: unchangedOnServer(loadedUpdatedAt, row.updated_at) ? "unchanged" : outcome };
   };
 
   /**
@@ -131,8 +145,8 @@ export function useCellSave() {
     return result;
   };
 
-  const update = ({ cellId, patch, outcome }: UpdateCellRequest): Promise<CellSaveResult> =>
-    patchCell(cellId, patch, outcome);
+  const update = ({ cellId, patch, outcome, loadedUpdatedAt }: UpdateCellRequest): Promise<CellSaveResult> =>
+    patchCell(cellId, patch, outcome, loadedUpdatedAt);
 
   const mutation = useMutation({
     mutationFn: async (request: CellSaveRequest): Promise<CellSaveResult> => {

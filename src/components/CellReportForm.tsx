@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
-import { useSaveCellReport, type SaveCellReportResult } from "@/hooks/use-save-cell-report";
+import { useCellReportSave, type CellReportSaveResult } from "@/hooks/use-cell-report-save";
 import { CELL_OPTIONS_QUERY_KEY, useCellOptions, toCellOption } from "@/hooks/use-cell-options";
 import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
@@ -32,6 +32,8 @@ import {
   type KeptParticipant,
 } from "@/lib/cell-reports/participants";
 import { CELL_REPORT_FORM_TEXTS, toReportWrite } from "@/lib/cell-reports/report-form";
+import { isCellReportChanged } from "@/lib/cell-reports/changes";
+import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 import { CELL_REPORT_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
 import { onlyItem, type SelectOption } from "@/lib/selectors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -88,7 +90,7 @@ const calculateCellDate = (meetingDay: string) => {
 const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const saveMutation = useSaveCellReport();
+  const save = useCellReportSave();
   const cellInputId = useId();
   const participantsInputId = useId();
   const keptLineId = useId();
@@ -109,8 +111,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     cellOptionsQuery.data?.pages.flatMap((page) => page.items).find((cell) => cell.id === cellId) ?? null;
 
   // A célula já conhecida: a da tela de Células ou a do relatório em edição.
-  // Nos dois casos o seletor fica travado (e também depois que um relatório
-  // novo foi gravado e os participantes falharam).
+  // Nos dois casos o seletor fica travado.
   const knownCell = initialCell ?? (report ? cellOfReport(report) : null);
   // Relatório novo aberto sem célula (Relatórios, Dashboard): quando a pessoa
   // pode lançar numa célula só, ela já vem escolhida, com a data e o horário
@@ -120,9 +121,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   const firstCellsQuery = useCellOptions({ search: "", enabled: canAutoPickCell });
   const cellAutoPickDone = useRef(false);
 
-  // Depois que a primeira tentativa gravou o relatório, a célula também fica:
-  // a nova tentativa atualiza esse relatório e não o leva para outra célula.
-  const isCellFixed = (savedId: string | null) => !!report || !!initialCell || !!savedId;
+  const isCellFixed = !!report || !!initialCell;
 
   // Seletor de participantes: membros visíveis e ativos, 20 por vez (RN-07).
   // As opções escolhidas ficam guardadas com o nome, que não depende das
@@ -143,13 +142,11 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   // Participantes excluídos entre a escolha e o envio, marcados no chip (UX-30).
   const [flaggedIds, setFlaggedIds] = useState<string[]>([]);
 
-  // O relatório a atualizar: o da edição ou o criado numa tentativa cujos
-  // participantes falharam. Assim, a nova tentativa não cria outro.
-  const [savedReportId, setSavedReportId] = useState<string | null>(report?.id ?? null);
-  // O relatório foi gravado e os participantes não (são duas chamadas até o E2.11).
-  const [participantsUnsaved, setParticipantsUnsaved] = useState(false);
   const [notice, setNotice] = useState<FormNotice | null>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
+  // Nada foi gravado por falha da Auditoria, do servidor ou da rede (E2.05, T5, RN-14).
+  const [connectionFailed, setConnectionFailed] = useState(false);
+  const primaryRef = useRef<HTMLButtonElement>(null);
 
   // O aviso recebe o foco, e a tela rola até ele (E2.01 T8; E2.08 T8).
   useEffect(() => {
@@ -158,21 +155,26 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     noticeRef.current?.scrollIntoView?.({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [notice]);
 
+  // Os dados entram na montagem (o diálogo monta o formulário a cada abertura).
+  const [openingValues] = useState<ReportFormValues>(() => ({
+    cell_id: report?.cell_id || initialCell?.id || "",
+    date: report?.date || format(new Date(), "yyyy-MM-dd"),
+    time: report?.time?.substring(0, 5) || "19:00",
+    was_held: report ? report.was_held : true,
+    reason_not_held: report?.reason_not_held || "",
+    theme: report?.theme || "",
+    observations: report?.observations || "",
+    visitors: (report?.visitors || []).join(", "),
+    offering: report?.offering || 0,
+    participant_ids: [],
+  }));
   const form = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
-    defaultValues: {
-      cell_id: report?.cell_id || initialCell?.id || "",
-      date: report?.date || format(new Date(), "yyyy-MM-dd"),
-      time: report?.time?.substring(0, 5) || "19:00",
-      was_held: report ? report.was_held : true,
-      reason_not_held: report?.reason_not_held || "",
-      theme: report?.theme || "",
-      observations: report?.observations || "",
-      visitors: (report?.visitors || []).join(", "),
-      offering: report?.offering || 0,
-      participant_ids: [],
-    },
+    defaultValues: openingValues,
   });
+  // A referência do "algo mudou?" na edição (T5): o relatório aberto e, quando
+  // carregam, todos os participantes salvos.
+  const openingParticipantIds = useRef<string[]>([]);
 
   // Na edição, os participantes salvos, com o nome e se o cadastro foi excluído.
   const savedParticipantsQuery = useCellReportParticipants(report?.id);
@@ -184,6 +186,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   useEffect(() => {
     if (!savedParticipants || !report?.id || loadedParticipantsOf.current === report.id) return;
     loadedParticipantsOf.current = report.id;
+    openingParticipantIds.current = savedParticipants.map((p) => p.member_id);
     const { editable, kept: keptParticipants } = splitSavedParticipants(savedParticipants);
     setParticipants(editable);
     setKept(keptParticipants);
@@ -216,6 +219,11 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
 
   const showSaveError = (message: string) => toast({ variant: "destructive", title: message });
 
+  // Depois de uma falha de envio, o foco volta a "Salvar", que serve de "Tentar de novo" (T5).
+  useEffect(() => {
+    if (connectionFailed && !save.isPending) primaryRef.current?.focus();
+  }, [connectionFailed, save.isPending]);
+
   /** Nada no formulário resolve: as listas recarregam já, para qualquer jeito de fechar voltar a elas atualizadas. */
   const showFinalNotice = (message: string) => {
     setNotice({ kind: "final", message });
@@ -226,15 +234,18 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   };
 
   /** Fecha com o toast, ou mostra a falha sem perder o que foi digitado. */
-  const handleSaveResult = (result: SaveCellReportResult) => {
+  const handleSaveResult = (result: CellReportSaveResult) => {
     if (result.kind === "saved") {
-      toast({ title: CELL_REPORT_FORM_TEXTS.saved });
+      // O servidor não mudou nada: o mesmo aviso de quando a tela percebe (E2.05, T5, AQ-7).
+      toast({ title: result.changed ? CELL_REPORT_FORM_TEXTS.saved : AUDIT_SAVE_TEXTS.unchanged });
       onClose();
       return;
     }
-    setSavedReportId(result.reportId);
-    if (result.step === "participants") setParticipantsUnsaved(true);
     const { failure } = result;
+    if (failure.kind === "connection") {
+      setConnectionFailed(true);
+      return;
+    }
     if (failure.kind === "gone") {
       showFinalNotice(CELL_REPORT_DELETION_TEXTS.deletedWhileEditing);
       return;
@@ -244,7 +255,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
       // deixam de oferecê-la; os dados digitados ficam.
       void Promise.all([queryClient.invalidateQueries({ queryKey: ["cells"] }), refreshAccess(queryClient)]);
       const message = cellInactiveReportMessage(hasPermission("edit_cell"));
-      if (isCellFixed(result.reportId)) {
+      if (isCellFixed) {
         // Aberto pela lista: a célula está travada, e só resta fechar.
         showFinalNotice(message);
         return;
@@ -258,7 +269,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     if (failure.kind === "refused") {
       // Escopo ou função mudaram (T11): a tela relê o acesso (P13).
       void refreshAccess(queryClient);
-      if (failure.clearCell && isCellFixed(result.reportId)) {
+      if (failure.clearCell && isCellFixed) {
         // A célula veio escolhida de fora e não pode ser trocada aqui: só resta fechar.
         showFinalNotice(failure.message);
         return;
@@ -274,7 +285,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     }
     if (failure.kind === "blocked") {
       // Célula excluída: só outra célula resolveria, e só o relatório novo aberto em Relatórios deixa trocá-la.
-      if (failure.cellDeleted && isCellFixed(result.reportId)) showFinalNotice(failure.message);
+      if (failure.cellDeleted && isCellFixed) showFinalNotice(failure.message);
       else setNotice({ kind: "blocked", message: failure.message });
       return;
     }
@@ -291,18 +302,27 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     }
   };
 
-  const onSubmit = (values: ReportFormValues) => {
+  const onSubmit = async (values: ReportFormValues) => {
+    if (save.isPending) return;
+    const reportWrite = toReportWrite(values);
+    // Sem reunião, os participantes ficam como estão.
+    const participantIds = values.was_held ? finalParticipantIds(values.participant_ids, kept ?? []) : null;
+    // Na edição, sem nenhuma mudança, nada vai ao servidor (E2.05, T5, UXD-9).
+    if (
+      report &&
+      !isCellReportChanged(
+        { report: toReportWrite(openingValues), participantIds: openingParticipantIds.current },
+        { report: reportWrite, participantIds },
+      )
+    ) {
+      toast({ title: AUDIT_SAVE_TEXTS.unchanged });
+      onClose();
+      return;
+    }
     setNotice(null);
-    saveMutation.mutate(
-      {
-        reportId: savedReportId,
-        report: toReportWrite(values),
-        // Sem reunião, os participantes ficam como estão.
-        participantIds: values.was_held ? finalParticipantIds(values.participant_ids, kept ?? []) : null,
-      },
-      // O hook não lança; uma falha fora do previsto pede para tentar de novo.
-      { onSuccess: handleSaveResult, onError: () => showSaveError(CELL_REPORT_FORM_TEXTS.failed) },
-    );
+    setConnectionFailed(false);
+    const result = await save.save({ reportId: report?.id ?? null, report: reportWrite, participantIds });
+    if (result) handleSaveResult(result);
   };
 
   /** Escolha no seletor: os marcados que saíram levam junto a mensagem do campo. */
@@ -372,7 +392,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
                       setSelectedCell(findLoadedCell(option?.value));
                       field.onChange(option?.value ?? "");
                     }}
-                    isDisabled={isCellFixed(savedReportId)}
+                    isDisabled={isCellFixed}
                     placeholder="Buscar por líder, rua ou bairro…"
                     noResultsLabel={cellSearch.term ? "Nenhuma célula encontrada" : SELECT_TEXTS.noCellsToReport}
                   />
@@ -572,20 +592,24 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
           </div>
         )}
 
-        {/* Perto de "Salvar", que é o que resolve; o foco fica no campo de participantes. */}
-        {participantsUnsaved && !notice && (
-          <Alert>
-            <Info className="h-4 w-4" aria-hidden="true" />
-            <AlertDescription>{CELL_REPORT_FORM_TEXTS.participantsNotSaved}</AlertDescription>
+        {/* Logo acima dos botões: "Salvar" volta a ficar habilitado e serve de "Tentar de novo" (T5). */}
+        {connectionFailed && !save.isPending && (
+          <Alert role="alert" variant="destructive">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription className="text-foreground">{CELL_REPORT_FORM_TEXTS.connection}</AlertDescription>
           </Alert>
         )}
 
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} disabled={saveMutation.isPending}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={saveMutation.isPending || participantsPending || notice?.kind === "final"}>
-            {saveMutation.isPending ? "Salvando..." : "Salvar"}
+          <Button
+            ref={primaryRef}
+            type="submit"
+            disabled={save.isPending || participantsPending || notice?.kind === "final"}
+          >
+            {save.isPending ? CELL_REPORT_FORM_TEXTS.buttons.saving : CELL_REPORT_FORM_TEXTS.buttons.save}
           </Button>
         </div>
       </form>
