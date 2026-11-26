@@ -1,25 +1,25 @@
-// Gravação de célula pelo formulário atual (E2.08, PR 2, ajuste mínimo): o
-// estado do formulário aceita campos vazios enquanto a pessoa preenche, e a
-// gravação só sai com as cinco colunas obrigatórias (RN-02, RN-05, RN-06). A
-// regra vale no banco; aqui ela só evita a ida ao servidor. Sem React e sem
-// Supabase.
+// Os valores do formulário de célula e a gravação do cadastro (E2.08, RN-02,
+// RN-05 a RN-07, RN-11; DT-09). A regra vale no banco; aqui ela só monta o que
+// vai ao servidor. Sem React e sem Supabase.
 import type { Database } from "@/integrations/supabase/types";
+import { maskCep } from "@/lib/address/cep";
+import { readHhmmOnBlur, toHhmm } from "@/lib/time/hhmm";
 import { DEFAULT_CELL_TYPE } from "./cell-types";
 import type { CellRow } from "./fields";
-import { CELL_RULE_TEXTS } from "./texts";
 
-type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
+export type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
+export type CellUpdate = Database["public"]["Tables"]["cells"]["Update"];
 
-/** Os campos que o formulário grava, sem `id` e sem `is_active` (só na edição). */
-export type CellWritePayload = Omit<CellInsert, "id" | "is_active" | "created_at" | "updated_at" | "deleted_at" | "deleted_by">;
-
+/** O formulário: campos vazios enquanto a pessoa preenche. */
 export interface CellFormValues {
   leader_id: string | null;
   timothy_id: string | null;
   host_id: string | null;
   type: string;
-  meeting_day: string | null;
-  meeting_time: string | null;
+  /** O valor da RN-05 ("Quarta"); vazio sem dia escolhido. */
+  meeting_day: string;
+  /** "HH:mm", como o campo mostra (P62). */
+  meeting_time: string;
   street: string;
   number: string;
   complement: string;
@@ -30,7 +30,8 @@ export interface CellFormValues {
   is_active: boolean;
 }
 
-export type CellRequiredField = "leader_id" | "timothy_id" | "host_id" | "meeting_day" | "meeting_time";
+/** As colunas de endereço, opcionais (RN-09). */
+export const CELL_ADDRESS_COLUMNS = ["zip_code", "street", "number", "complement", "neighborhood", "city", "state"] as const;
 
 /** Célula nova: sem pessoas, sem dia e sem horário (P-CEL-02); o tipo padrão (P-CEL-03); ativa (RN-11). */
 export const EMPTY_CELL_FORM: CellFormValues = {
@@ -38,8 +39,8 @@ export const EMPTY_CELL_FORM: CellFormValues = {
   timothy_id: null,
   host_id: null,
   type: DEFAULT_CELL_TYPE,
-  meeting_day: null,
-  meeting_time: null,
+  meeting_day: "",
+  meeting_time: "",
   street: "",
   number: "",
   complement: "",
@@ -50,59 +51,57 @@ export const EMPTY_CELL_FORM: CellFormValues = {
   is_active: true,
 };
 
-/** O formulário a partir da linha gravada (`cells_view`), sem inventar valores. */
+/** O formulário a partir da linha gravada (`cells_view`), sem inventar valores; o horário sem segundos. */
 export function cellFormFromRow(row: CellRow): CellFormValues {
   return {
     leader_id: row.leader_id ?? null,
     timothy_id: row.timothy_id ?? null,
     host_id: row.host_id ?? null,
     type: row.type ?? DEFAULT_CELL_TYPE,
-    meeting_day: row.meeting_day ?? null,
-    meeting_time: row.meeting_time ?? null,
+    meeting_day: row.meeting_day ?? "",
+    meeting_time: toHhmm(row.meeting_time),
     street: row.street ?? "",
     number: row.number ?? "",
     complement: row.complement ?? "",
     neighborhood: row.neighborhood ?? "",
     city: row.city ?? "",
     state: row.state ?? "",
-    zip_code: row.zip_code ?? "",
+    zip_code: maskCep(row.zip_code ?? ""),
     is_active: row.is_active !== false,
   };
 }
 
-const filled = (value: string | null | undefined): value is string => !!value && value.trim() !== "";
+/** O texto opcional como vai ao banco: aparado, e vazio vira nulo. */
+export function optionalText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
 
-export type CellWriteResult =
-  | { ok: true; payload: CellWritePayload }
-  | { ok: false; field: CellRequiredField; message: string };
+/** O horário como vai ao banco: o lido ao sair do campo ("20" → "20:00"). */
+export function meetingTimeToWrite(value: string): string {
+  return readHhmmOnBlur(value);
+}
 
 /**
- * A gravação, ou o primeiro campo obrigatório vazio, na ordem da tela (RN-14):
- * líder, timóteo, anfitrião, dia e horário.
+ * O cadastro novo, com o `id` gerado ao abrir o formulário (DT-09). Sem
+ * `is_active`: a célula nova sempre começa ativa (RN-11). Só chamar depois de
+ * `validateCellForm` sem erros.
  */
-export function buildCellWrite(values: CellFormValues): CellWriteResult {
-  const { leader_id, timothy_id, host_id, meeting_day, meeting_time } = values;
-  if (!filled(leader_id)) return { ok: false, field: "leader_id", message: CELL_RULE_TEXTS.leaderRequired };
-  if (!filled(timothy_id)) return { ok: false, field: "timothy_id", message: CELL_RULE_TEXTS.timothyRequired };
-  if (!filled(host_id)) return { ok: false, field: "host_id", message: CELL_RULE_TEXTS.hostRequired };
-  if (!filled(meeting_day)) return { ok: false, field: "meeting_day", message: CELL_RULE_TEXTS.meetingDayRequired };
-  if (!filled(meeting_time)) return { ok: false, field: "meeting_time", message: CELL_RULE_TEXTS.meetingTimeRequired };
+export function toCellInsert(values: CellFormValues, id: string): CellInsert {
   return {
-    ok: true,
-    payload: {
-      leader_id,
-      timothy_id,
-      host_id,
-      type: values.type,
-      meeting_day,
-      meeting_time,
-      street: values.street,
-      number: values.number,
-      complement: values.complement,
-      neighborhood: values.neighborhood,
-      city: values.city,
-      state: values.state,
-      zip_code: values.zip_code,
-    },
+    id,
+    leader_id: values.leader_id ?? "",
+    timothy_id: values.timothy_id ?? "",
+    host_id: values.host_id ?? "",
+    type: values.type,
+    meeting_day: values.meeting_day,
+    meeting_time: meetingTimeToWrite(values.meeting_time),
+    zip_code: optionalText(values.zip_code),
+    street: optionalText(values.street),
+    number: optionalText(values.number),
+    complement: optionalText(values.complement),
+    neighborhood: optionalText(values.neighborhood),
+    city: optionalText(values.city),
+    state: optionalText(values.state),
   };
 }

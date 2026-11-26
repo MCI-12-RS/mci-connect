@@ -29,3 +29,13 @@ describe("weekdayInSentence", () => {
     expect(weekdayInSentence("Segunda-feira")).toBe("Segunda-feira");
   });
 });
+
+describe("WEEKDAY_OPTIONS (E2.08, RN-05, UXD-4)", () => {
+  it("de segunda a domingo, com o rótulo do legado e o valor gravado (a tabela de casos)", async () => {
+    const { WEEKDAY_OPTIONS, weekdayLongLabel } = await import("./weekdays");
+    const { cellRulesCases } = await import("@/test/cell-rules-cases");
+    expect(WEEKDAY_OPTIONS.map((o) => ({ label: o.label, value: o.value }))).toEqual(cellRulesCases.weekday_options);
+    expect(weekdayLongLabel("Quarta")).toBe("Quarta-feira");
+    expect(weekdayLongLabel("Feriado")).toBe("Feriado");
+  });
+});

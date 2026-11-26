@@ -1,31 +1,55 @@
-// Endereço da célula a partir do cadastro do anfitrião (E1.08, RN-11).
+// Endereço da célula a partir do cadastro do anfitrião (E2.08, RN-10, DT-11,
+// P61; E1.08). Sem React e sem Supabase.
 import type { MemberAddress } from "@/lib/members/fields";
 
 export interface CellAddressFields {
-  street?: string | null;
-  number?: string | null;
-  complement?: string | null;
-  neighborhood?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip_code?: string | null;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zip_code: string;
 }
 
 /**
- * Preenche o endereço com o do anfitrião, mantendo o valor atual onde o do
- * anfitrião estiver vazio. Sem acesso aos dados sensíveis do anfitrião
- * (`sensitive_visible` falso), só bairro, cidade e UF são copiados.
+ * - `full`: os sete campos vieram do anfitrião (com os dados sensíveis);
+ * - `partial`: bairro, cidade e estado vieram, e CEP, rua, número e complemento ficaram vazios;
+ * - `unavailable`: nada visível; o endereço não mudou.
  */
-export function applyHostAddress<T extends CellAddressFields>(form: T, host: MemberAddress): T {
+export type HostAddressOutcome = "full" | "partial" | "unavailable";
+
+const text = (value: string | null | undefined): string => value ?? "";
+const filled = (value: string | null | undefined): boolean => !!value && value.trim() !== "";
+
+/**
+ * Substitui o endereço pelo do anfitrião (P-CEL-07: nunca uma mistura):
+ * - com `sensitive_visible`, os sete campos passam a ser os dele, inclusive vazios;
+ * - sem, bairro, cidade e estado vêm dele, e CEP, rua, número e complemento ficam vazios;
+ * - com os campos visíveis todos vazios (ou sem o anfitrião), o endereço não muda. O resultado
+ *   é o mesmo para o endereço vazio e o mascarado, para não revelar qual é (RN-10).
+ */
+export function applyHostAddress<T extends CellAddressFields>(
+  address: T,
+  host: MemberAddress | null,
+): { address: T; outcome: HostAddressOutcome } {
+  if (!host) return { address, outcome: "unavailable" };
   const sensitive = host.sensitive_visible === true;
+  const visible = sensitive
+    ? [host.street, host.number, host.complement, host.neighborhood, host.city, host.state, host.zip_code]
+    : [host.neighborhood, host.city, host.state];
+  if (!visible.some(filled)) return { address, outcome: "unavailable" };
   return {
-    ...form,
-    street: (sensitive && host.street) || form.street,
-    number: (sensitive && host.number) || form.number,
-    complement: (sensitive && host.complement) || form.complement,
-    zip_code: (sensitive && host.zip_code) || form.zip_code,
-    neighborhood: host.neighborhood || form.neighborhood,
-    city: host.city || form.city,
-    state: host.state || form.state,
+    address: {
+      ...address,
+      street: sensitive ? text(host.street) : "",
+      number: sensitive ? text(host.number) : "",
+      complement: sensitive ? text(host.complement) : "",
+      zip_code: sensitive ? text(host.zip_code) : "",
+      neighborhood: text(host.neighborhood),
+      city: text(host.city),
+      state: text(host.state),
+    },
+    outcome: sensitive ? "full" : "partial",
   };
 }

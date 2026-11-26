@@ -1,4 +1,4 @@
-import { Ban, Check, CheckCircle2, MinusCircle, PauseCircle, X } from "lucide-react";
+import { Ban, Check, CheckCircle2, PauseCircle, X } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { STATUS_TEXTS } from "@/lib/status";
@@ -19,14 +19,16 @@ export const MemberStatusBadge = ({ active }: { active: boolean }) =>
     </StatusBadge>
   );
 
-/** Ativa ou Inativa, numa célula. */
+/**
+ * Ativa ou Inativa, numa célula (E2.08, T7 e P6): "Ativa" sem ícone; "Inativa"
+ * com o `PauseCircle`, para não depender da cor. Também no cabeçalho do
+ * formulário da célula gravada inativa (P60).
+ */
 export const CellStatusBadge = ({ active }: { active: boolean }) =>
   active ? (
-    <StatusBadge tone="success" icon={CheckCircle2}>
-      {STATUS_TEXTS.cellActive}
-    </StatusBadge>
+    <StatusBadge tone="success">{STATUS_TEXTS.cellActive}</StatusBadge>
   ) : (
-    <StatusBadge tone="muted" icon={MinusCircle}>
+    <StatusBadge tone="muted" icon={PauseCircle}>
       {STATUS_TEXTS.cellInactive}
     </StatusBadge>
   );

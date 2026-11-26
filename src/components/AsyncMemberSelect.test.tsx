@@ -74,7 +74,7 @@ describe("AsyncMemberSelect / PaginatedSelect (RN-07)", () => {
     const [query] = fakeQueries();
     expect(query.table).toBe("members_view");
     expect(query.calls).toEqual([
-      ["select", "id, name"],
+      ["select", "id, name, is_active, gender"],
       ["neq", "id", "m-self"],
       ["order", "name"],
       ["order", "id"],

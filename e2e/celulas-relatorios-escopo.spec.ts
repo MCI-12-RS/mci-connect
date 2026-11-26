@@ -453,11 +453,10 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     await signIn(page, PEDRO);
     await openList(page, "/cells", NAME);
     await editCellButton(page, ANDRE).click();
-    const dialog = page.getByRole("dialog", { name: "Editar Célula" });
+    const dialog = page.getByRole("dialog", { name: /^Editar célula/ });
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel("Horário").fill("21:15");
+    await dialog.getByLabel("Horário *").fill("21:15");
     await dialog.getByRole("button", { name: /Salvar|Atualizar/ }).click();
-    // O toast "Endereço carregado em parte" (anfitrião sem endereço) pode ocupar o lugar do de sucesso: vale o diálogo fechado e o banco.
     await expect(dialog).toBeHidden();
     expect(cellValue(1, "meeting_time")).toBe("21:15:00");
   });
@@ -515,31 +514,27 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     expect(cellValue(1, "deleted_at")).toBe("");
   });
 
-  test("UX-24: no formulário de Pedro a dica de alcance fica acima dos três campos; tirar Caio de anfitrião de C2 não envia nada (E2.08, RN-02), com os dados mantidos", async ({ page }) => {
+  test("UX-24: no formulário de Pedro a dica de alcance fica acima dos três campos; os três seletores sem 'Limpar' (E2.08, P64) e a recusa de escopo pela API", async ({ page }) => {
     await signIn(page, PEDRO);
     await openList(page, "/cells", NAME);
     await editCellButton(page, DIEGO).click();
-    const dialog = page.getByRole("dialog", { name: "Editar Célula" });
+    const dialog = page.getByRole("dialog", { name: /^Editar célula/ });
     await expect(dialog).toBeVisible();
 
     const hint = dialog.getByText("Líder, timóteo e anfitrião são escolhidos entre as pessoas do seu ministério.");
     await expect(hint).toBeVisible();
     const hintBox = await hint.boundingBox();
-    for (const label of ["Líder *", "Timóteo (Auxiliar)", "Anfitrião"]) {
+    for (const label of ["Líder *", "Timóteo *", "Anfitrião *"]) {
       const box = await dialog.getByText(label, { exact: true }).boundingBox();
       expect(hintBox!.y, `a dica fica acima de "${label}"`).toBeLessThan(box!.y);
     }
 
-    // O anfitrião salvo (Caio) aparece pelo nome. Desde o E2.08 (RN-02), a célula não fica sem
-    // anfitrião: salvar sem ele não envia nada e avisa o campo. A mensagem da RN-09 (c) no topo,
-    // que só o servidor dá, fica no teste de componente do CellForm.
+    // O anfitrião salvo (Caio) aparece pelo nome. Desde o E2.08 (RN-02, P64), os três seletores são
+    // obrigatórios e não têm "Limpar": a célula não fica sem anfitrião pela tela. A mensagem da
+    // RN-09 (c) no topo, que só o servidor dá, fica no teste de componente do CellForm.
     await expect(dialog.getByText(CAIO.name)).toBeVisible();
-    await dialog.getByRole("button", { name: "Limpar seleção" }).last().click();
-    await dialog.getByRole("button", { name: /Salvar|Atualizar/ }).click();
-    await expect(toast(page, "Escolha o anfitrião da célula.")).toBeVisible();
-    await expect(dialog).toBeVisible();
-    // O diálogo continua aberto, com os dados mantidos; nada mudou no banco.
-    await expect(dialog.getByLabel("Horário")).toHaveValue("20:00:00");
+    await expect(dialog.getByRole("button", { name: "Limpar seleção" })).toHaveCount(0);
+    await expect(dialog.getByLabel("Horário *")).toHaveValue("20:00");
     expect(cellValue(2, "host_id")).toBe(memberId(CAIO));
 
     // Pela API, a recusa de escopo do E2.02 vem antes da regra do E2.08 (RN-14).
@@ -553,7 +548,7 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     await signIn(page, PEDRO);
     await openList(page, "/cells", NAME);
     await editCellButton(page, DIEGO).click();
-    const dialog = page.getByRole("dialog", { name: "Editar Célula" });
+    const dialog = page.getByRole("dialog", { name: /^Editar célula/ });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(CAIO.name)).toBeVisible();
     await expect(dialog.getByText("Membro sem nome")).toHaveCount(0);
@@ -847,7 +842,7 @@ test.describe("UX-31: 320 px sem rolagem horizontal", () => {
       }
       await openList(page, "/cells", NAME);
       await editCellButton(page, ANDRE).click();
-      const dialog = page.getByRole("dialog", { name: "Editar Célula" });
+      const dialog = page.getByRole("dialog", { name: /^Editar célula/ });
       await expect(dialog).toBeVisible();
       expect(await overflow(), "formulário de célula").toBeLessThanOrEqual(0);
       const box = await dialog.boundingBox();
@@ -899,7 +894,7 @@ test.describe("Capturas da revisão de UI (E2E_CAPTURE_DIR)", () => {
       open: async (page) => {
         await openList(page, "/cells", NAME);
         await editCellButton(page, ANDRE).click();
-        await expect(page.getByRole("dialog", { name: "Editar Célula" })).toBeVisible();
+        await expect(page.getByRole("dialog", { name: /^Editar célula/ })).toBeVisible();
         await expect(page.getByText("Membro sem nome")).toHaveCount(0);
       },
     },

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { MemberViewRow } from "@/lib/members/fields";
 import { withSearch } from "@/lib/list-query";
 import { MEMBER_HINT_TEXTS } from "@/lib/members/texts";
+import { personLabel } from "@/lib/members/labels";
 import { toSearchPatterns } from "@/lib/search";
 import {
   OPTIONS_STALE_TIME_MS,
@@ -12,7 +13,8 @@ import {
   type SelectOption,
 } from "@/lib/selectors";
 
-export type MemberOptionRow = Pick<MemberViewRow, "id" | "name"> & {
+export type MemberOptionRow = Pick<MemberViewRow, "id" | "name"> &
+  Partial<Pick<MemberViewRow, "is_active" | "gender">> & {
   /** Discípulo (direto ou indireto) da pessoa do cadastro: não pode ser o líder dela (RN-13, AQ-4). */
   is_descendant?: boolean;
 };
@@ -37,6 +39,14 @@ export interface MemberOptionsParams {
 export function toMemberOption(member: MemberOptionRow): SelectOption {
   const option = { value: member.id, label: member.name };
   return member.is_descendant ? { ...option, disabledReason: MEMBER_HINT_TEXTS.discipleOfThisPerson } : option;
+}
+
+/**
+ * A opção com a marca de situação (E2.08, P63): "Fábio Lima (inativo)". A
+ * pessoa inativa continua escolhível (RN-04).
+ */
+export function toMarkedMemberOption(member: MemberOptionRow): SelectOption {
+  return { ...toMemberOption(member), label: personLabel(member) };
 }
 
 /**
@@ -75,7 +85,7 @@ export function useMemberOptions({
     getNextPageParam: (lastPage: OptionsPage<MemberOptionRow>) => lastPage.nextOffset,
     queryFn: async ({ pageParam }): Promise<OptionsPage<MemberOptionRow>> => {
       const [from, to] = optionsPageRange(pageParam);
-      let query = withSearch(supabase.from("members_view").select("id, name"), toSearchPatterns(search));
+      let query = withSearch(supabase.from("members_view").select("id, name, is_active, gender"), toSearchPatterns(search));
       if (activeOnly) query = query.eq("is_active", true);
       if (excludeId) query = query.neq("id", excludeId);
       const { data, error } = await query.order("name").order("id").range(from, to);

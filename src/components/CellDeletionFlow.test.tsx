@@ -136,7 +136,7 @@ describe("CellDeletionFlow: envio da exclusão", () => {
     respondToRpc("delete_cell", { data: null });
     fireEvent.click(screen.getByRole("button", { name: "Excluir célula" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(invalidatedKeys()).toEqual([["members"], ["cells"], ["cell_reports"], ["dashboard"]]);
+    expect(invalidatedKeys()).toEqual([["members"], ["cells"], ["cell_reports"], ["dashboard"], ["access"]]);
   });
 
   it("UX-24: 'Esta célula não existe ou já foi excluída.' vira toast informativo (não destrutivo), o diálogo fecha e a lista recarrega", async () => {

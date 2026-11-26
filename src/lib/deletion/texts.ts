@@ -77,7 +77,6 @@ export const MEMBER_LINKS_TEXTS = {
   cells: (total: number) => (total === 1 ? "1 célula" : `${total} células`),
   /** "{Papel} na célula de {Líder}"; o dia e a hora vêm depois, separados por vírgula. */
   cellRole: (roles: string, leader: string) => `${roles} na célula de ${leader}`,
-  inactiveMember: "(inativo)",
   inactiveCell: "(inativa)",
   more: (count: number) => `e mais ${count}`,
   help:

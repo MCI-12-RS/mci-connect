@@ -204,9 +204,9 @@ test("RN-06 (AD): os seletores de líder, timóteo, anfitrião, cônjuge, líder
 
   // Célula nova: líder, timóteo e anfitrião.
   await openList(page, "/cells", NAME);
-  await page.getByRole("button", { name: "Nova Célula" }).click();
-  const cellForm = page.getByRole("dialog", { name: "Nova Célula" });
-  for (const label of ["Líder *", "Timóteo (Auxiliar)", "Anfitrião"]) {
+  await page.getByRole("button", { name: "Nova célula" }).click();
+  const cellForm = page.getByRole("dialog", { name: "Nova célula" });
+  for (const label of ["Líder *", "Timóteo *", "Anfitrião *"]) {
     const names = await optionsFor(page, cellForm.getByLabel(label, { exact: true }), `${NAME} Qui`);
     expect(names, label).toContain(QUIRINO);
     expect(names, label).not.toContain(QUINTINO);

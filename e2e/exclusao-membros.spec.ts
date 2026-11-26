@@ -256,7 +256,7 @@ test("RN-04 e UX-10 (AD): o bloqueio de Gil lista os 4 discípulos (Léo inativo
 
   // UX-10: a célula abre o formulário da célula.
   await dialog.getByRole("button", { name: `Timóteo na célula de ${NAME} Carlos Lima, quarta, 20:00` }).click();
-  const cellForm = page.getByRole("dialog", { name: "Editar Célula" });
+  const cellForm = page.getByRole("dialog", { name: /^Editar célula/ });
   await expect(cellForm).toBeVisible();
   await expect(cellForm.getByText(`${NAME} Carlos Lima`).first()).toBeVisible();
   await cellForm.getByRole("button", { name: "Cancelar" }).click();

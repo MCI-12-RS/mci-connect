@@ -1,10 +1,13 @@
 import { useState, type Ref } from "react";
 import { PaginatedSelect, type PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
-import { useMemberName, useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
+import { useMemberName, useMemberOptions, toMarkedMemberOption, toMemberOption } from "@/hooks/use-member-options";
+import type { MemberStatus } from "@/hooks/use-member-statuses";
+import { personLabel } from "@/lib/members/labels";
 import { useOptionsPagination, useSelectSearch } from "@/hooks/use-paginated-select";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
 import type { SelectOption } from "@/lib/selectors";
 import { SELECT_TEXTS } from "@/lib/access/texts";
+import { LOADING_LABEL } from "@/components/select/select-a11y";
 
 interface AsyncMemberSelectProps {
   value: string | null;
@@ -41,6 +44,21 @@ interface AsyncMemberSelectProps {
    * para quem não vê a igreja toda, P11). Padrão: "Nenhum membro encontrado".
    */
   noResultsLabel?: string;
+  /** Botão de limpar a escolha. Padrão: com. Seletor obrigatório: sem (P64). */
+  isClearable?: boolean;
+  /** Campo obrigatório para o leitor de tela (`aria-required`). */
+  "aria-required"?: boolean;
+  /**
+   * A marca "(inativo)" ou "(inativa)" nas opções e no valor (E2.08, P63). O
+   * valor de abertura recebe a marca pela situação lida em `useMemberStatuses`
+   * (`valueStatus`); quem está fora do escopo fica só com o nome.
+   */
+  markInactive?: boolean;
+  /**
+   * A situação da pessoa do valor de abertura, com `markInactive`: `undefined`
+   * enquanto carrega (o nome fica LOADING_LABEL), `null` fora do escopo.
+   */
+  valueStatus?: MemberStatus | null;
 }
 
 /**
@@ -61,10 +79,14 @@ const AsyncMemberSelect = ({
   "aria-invalid": ariaInvalid,
   noResultsLabel = SELECT_TEXTS.noMembers,
   descendantOf = null,
+  isClearable = true,
+  "aria-required": ariaRequired,
+  markInactive = false,
+  valueStatus,
 }: AsyncMemberSelectProps) => {
   const search = useSelectSearch();
   const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen, descendantOf });
-  const pagination = useOptionsPagination(options, toMemberOption);
+  const pagination = useOptionsPagination(options, markInactive ? toMarkedMemberOption : toMemberOption);
 
   // A opção escolhida agora já tem o nome; o valor que veio de fora (edição)
   // busca o nome no banco.
@@ -75,9 +97,18 @@ const AsyncMemberSelect = ({
   const knownName = picked && picked.value === value ? picked.label : savedName;
   const { data: fetchedName, isPending } = useMemberName(value, { enabled: !knownName });
 
+  // A escolha feita agora já traz a marca na opção; o valor que veio de fora espera a situação (P63).
+  const pickedNow = !!picked && picked.value === value;
+  const awaitingStatus = markInactive && !pickedNow && valueStatus === undefined;
   let selected: SelectOption | null = null;
   if (value) {
-    const label = knownName ?? (isPending ? "Carregando…" : fetchedName || UNNAMED_MEMBER_LABEL);
+    const name = knownName ?? (isPending ? null : fetchedName || UNNAMED_MEMBER_LABEL);
+    const label =
+      name === null || awaitingStatus
+        ? LOADING_LABEL
+        : markInactive && !pickedNow && valueStatus
+          ? personLabel({ name, is_active: valueStatus.is_active, gender: valueStatus.gender })
+          : name;
     selected = { value, label };
   }
 
@@ -96,7 +127,8 @@ const AsyncMemberSelect = ({
       noResultsLabel={noResultsLabel}
       aria-describedby={describedBy}
       aria-invalid={ariaInvalid}
-      isClearable
+      aria-required={ariaRequired}
+      isClearable={isClearable}
     />
   );
 };

@@ -1,5 +1,6 @@
 // Gravação do formulário de relatório: os dados enviados e o que a tela faz
 // com cada falha (E2.01, T7, T8, DT-19 e "Estados").
+import { CELL_INACTIVE } from "@/lib/cells/codes";
 import type { Database } from "@/integrations/supabase/types";
 import { isJsonObject, isNetworkError, isPermissionDenied, parseAppError, type AppError } from "@/lib/errors";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
@@ -88,6 +89,12 @@ export type ReportSaveFailure =
    * desmarcada e o seletor recarrega.
    */
   | { kind: "refused"; message: string; clearCell: boolean }
+  /**
+   * A célula foi inativada enquanto o formulário estava aberto (E2.08, RN-11 c, T8): `Alert` no topo, com
+   * a orientação conforme quem lê pode editar a célula (`cellInactiveReportMessage`). A tela desatualiza
+   * a lista de células e o acesso.
+   */
+  | { kind: "cellInactive" }
   /** Demais falhas: um aviso com a mensagem, e o formulário como estava. */
   | { kind: "error"; message: string };
 
@@ -95,6 +102,7 @@ const PARTICIPANT_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["dele
 const CELL_DELETED_CODES: ReadonlySet<string> = new Set<DeletionErrorCode>(["cell_deleted", "report_cell_deleted"]);
 
 function fromRefusal(refusal: AppError): ReportSaveFailure {
+  if (refusal.code === CELL_INACTIVE) return { kind: "cellInactive" };
   if (refusal.code === "not_found_or_deleted") {
     // No lançamento, a célula que a pessoa não vê é tratada como inexistente (E2.02, RN-09 a, AQ-5).
     if (refusal.detail.entity === "cell") return { kind: "blocked", message: refusal.message, cellDeleted: true };

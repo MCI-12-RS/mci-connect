@@ -96,8 +96,5 @@ export function applyMask(value: string, caret: number, mask: (value: string) =>
   return { value: masked, caret: masked.length };
 }
 
-/** CEP: "00000-000", até 8 dígitos (sem regra própria: o endereço é opcional). */
-export function maskCep(value: string): string {
-  const digits = digitsOf(value).slice(0, 8);
-  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
-}
+/** A máscara do CEP é a do módulo de endereço (E2.08, DT-12). */
+export { maskCep } from "@/lib/address/cep";

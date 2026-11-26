@@ -17,8 +17,8 @@ const TONES: Readonly<Record<StatusTone, string>> = {
 
 export interface StatusBadgeProps {
   tone: StatusTone;
-  /** Ícone do estado (decorativo: o texto diz o estado). */
-  icon: LucideIcon;
+  /** Ícone do estado (decorativo: o texto diz o estado). Opcional só no estado comum ("Ativa", E2.08 T7). */
+  icon?: LucideIcon;
   /** O estado, em texto: "Célula excluída". */
   children: ReactNode;
   className?: string;
@@ -32,7 +32,7 @@ export interface StatusBadgeProps {
  */
 const StatusBadge = ({ tone, icon: Icon, children, className, title }: StatusBadgeProps) => (
   <span className={cn(badgeVariants({ variant: "outline" }), "gap-1 text-foreground", TONES[tone], className)} title={title}>
-    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+    {Icon && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
     {children}
   </span>
 );

@@ -38,7 +38,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { refreshAccess } from "@/hooks/use-access";
 import { memberSearchEmptyLabel, peopleLimitedToMinistry } from "@/lib/access/access";
 import { REPORT_FORM_TEXTS, SELECT_TEXTS } from "@/lib/access/texts";
-import { describedBy } from "@/lib/a11y";
+import { describedBy, prefersReducedMotion } from "@/lib/a11y";
+import { cellInactiveReportMessage } from "@/lib/cells/texts";
 import { FieldHint } from "@/components/members/FormFieldParts";
 
 const reportSchema = z.object({
@@ -93,7 +94,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   const keptLineId = useId();
   const scopeHintId = useId();
   const hiddenWarningId = useId();
-  const { access } = useAuth();
+  const { access, hasPermission } = useAuth();
   // Quem vê só o ministério escolhe participantes só do ministério (T8, P11).
   const showScopeHint = peopleLimitedToMinistry(access);
 
@@ -150,8 +151,11 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
   const [notice, setNotice] = useState<FormNotice | null>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
 
+  // O aviso recebe o foco, e a tela rola até ele (E2.01 T8; E2.08 T8).
   useEffect(() => {
-    if (notice) noticeRef.current?.focus();
+    if (!notice) return;
+    noticeRef.current?.focus();
+    noticeRef.current?.scrollIntoView?.({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [notice]);
 
   const form = useForm<ReportFormValues>({
@@ -233,6 +237,22 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     const { failure } = result;
     if (failure.kind === "gone") {
       showFinalNotice(CELL_REPORT_DELETION_TEXTS.deletedWhileEditing);
+      return;
+    }
+    if (failure.kind === "cellInactive") {
+      // A célula foi inativada no meio tempo (E2.08, RN-11 c, T8): a lista e o atalho do Dashboard
+      // deixam de oferecê-la; os dados digitados ficam.
+      void Promise.all([queryClient.invalidateQueries({ queryKey: ["cells"] }), refreshAccess(queryClient)]);
+      const message = cellInactiveReportMessage(hasPermission("edit_cell"));
+      if (isCellFixed(result.reportId)) {
+        // Aberto pela lista: a célula está travada, e só resta fechar.
+        showFinalNotice(message);
+        return;
+      }
+      // Aberto por Relatórios: a célula é desmarcada, e o seletor recarrega sem as inativas.
+      setSelectedCell(null);
+      form.setValue("cell_id", "");
+      setNotice({ kind: "blocked", message });
       return;
     }
     if (failure.kind === "refused") {
@@ -318,7 +338,7 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
       {/* min-w-0: dentro do grid do diálogo, um nome longo não alarga o formulário. */}
       <form onSubmit={form.handleSubmit(onSubmit)} className="min-w-0 space-y-6">
         {notice && (
-          <Alert ref={noticeRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
+          <Alert ref={noticeRef} role="alert" tabIndex={-1} variant="destructive" className="focus:outline-none">
             <AlertCircle className="h-4 w-4" aria-hidden="true" />
             <AlertDescription className="space-y-3 text-foreground">
               <p>{notice.message}</p>
