@@ -38,10 +38,9 @@ export const MEMBER_ROW_SELECT =
 
 export type MemberRow = Omit<
   MemberViewRow,
-  | "is_cell_leader"
-  | "is_cell_timothy"
-  | "is_cell_host"
-  | "attended_last_30_days"
+  // O vínculo celular e a situação de liderança (E2.07) servem aos filtros e ao Dashboard; a lista não os mostra.
+  | "leadership_status"
+  | "cell_links"
   | "search_text"
   | "male_cells"
   | "female_cells"
