@@ -12,7 +12,7 @@ import {
   type PermissionInfo,
 } from "@/lib/access/permissions";
 import { ROLE_TEXTS, RULE_TEXTS } from "@/lib/access/texts";
-import { isNetworkError, isPermissionDenied, parseAppError } from "@/lib/errors";
+import { gateCode, isNetworkError, isPermissionDenied, parseAppError } from "@/lib/errors";
 
 export type RoleViewRow = Database["public"]["Views"]["roles_view"]["Row"];
 
@@ -234,6 +234,8 @@ const ADMIN_PROTECTED_CODE = "admin_role_protected";
 
 /** O que a tela faz com a falha de uma gravação de função (`save_role` ou `delete_role`). */
 export type RoleWriteFailure =
+  /** Portão da senha (E2.03, AQ-3): o `MutationCache` já o avisou; o diálogo fecha sem toast. */
+  | { kind: "gate" }
   /** 42501: o toast "Você não tem permissão para esta ação." e o diálogo fecha (UX-30). */
   | { kind: "forbidden" }
   /** A função mudou ou sumiu em outra tela: toast informativo, o diálogo fecha e a lista recarrega ("Estados"). */
@@ -251,6 +253,8 @@ export type RoleWriteFailure =
 
 /** Classifica o erro de `save_role` ou `delete_role` para a tela. */
 export function classifyRoleWriteError(error: unknown): RoleWriteFailure {
+  // O portão também vem com 42501: vai antes da recusa de permissão.
+  if (gateCode(error)) return { kind: "gate" };
   if (isPermissionDenied(error)) return { kind: "forbidden" };
   const refusal = parseAppError(error);
   if (refusal) {

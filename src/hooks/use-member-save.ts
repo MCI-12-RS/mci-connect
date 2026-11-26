@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { refreshAccess } from "@/hooks/use-access";
 import { ROLE_OPTIONS_QUERY_KEY } from "@/hooks/use-role-options";
 import { requestGate, requestSessionCheck } from "@/lib/auth/session-check";
-import { isGateCode, isJsonObject, isNetworkError, isRecalcFailure, readFunctionErrorBody, RECALC_FAILURE_CODE } from "@/lib/errors";
+import { gateCode, isGateCode, isJsonObject, isNetworkError, isRecalcFailure, readFunctionErrorBody, RECALC_FAILURE_CODE } from "@/lib/errors";
 import { refreshAfterMemberWrite } from "@/lib/query-refresh";
 import {
   memberRefusalFromCreate,
@@ -41,6 +41,11 @@ export type MemberSaveResult =
   | { kind: "unchanged" }
   /** A edição voltou sem linha: o cadastro foi excluído ou saiu do escopo no meio tempo (E2.01, DT-19). */
   | { kind: "gone" }
+  /**
+   * O portão da senha (E2.03, AQ-3) recusou: o portão já foi avisado e leva à
+   * troca ou ao login. O formulário não mostra nada.
+   */
+  | { kind: "gate" }
   /** O cadastro novo tem dados de um excluído (E2.01, RN-18). */
   | { kind: "deletedMatches"; matches: DeletedMatch[]; accountEmail: boolean }
   /** Recusa de regra ou de permissão: nos campos ou no `Alert` do topo (T5). */
@@ -51,7 +56,7 @@ export type MemberSaveResult =
    */
   | { kind: "failed"; cause: MemberSaveFailureCause };
 
-type CreateOutcome = Extract<MemberSaveResult, { kind: "saved" | "deletedMatches" | "refused" | "failed" }>;
+type CreateOutcome = Extract<MemberSaveResult, { kind: "saved" | "gate" | "deletedMatches" | "refused" | "failed" }>;
 
 /**
  * Tempo-limite do cadastro, o mesmo do login (`SIGN_IN_TIMEOUT_MS`). Sem rede a
@@ -84,7 +89,7 @@ async function createMember({ attemptId, password, memberData, confirmDeletedMat
     // O portão da senha (E2.03, AQ-3): o 403 leva o código; a marca leva à troca, e a sessão apagada, ao login.
     if (body?.kind === "message" && isGateCode(body.code)) {
       requestGate(body.code);
-      return { kind: "failed", cause: "other" };
+      return { kind: "gate" };
     }
     if (body?.kind === "deletedMatches") return { kind: "deletedMatches", matches: body.matches, accountEmail: body.accountEmail };
     // A falha no recálculo é um `app_error`, mas não é recusa de regra: "tente de novo" no rodapé (E2.06, AQ-5).
@@ -113,6 +118,8 @@ async function updateMember({ memberId, patch }: UpdateMemberRequest): Promise<"
 
 /** A falha de uma edição, sem nenhum texto técnico (UX-30). */
 function classifyUpdateError(error: unknown): MemberSaveResult {
+  // O portão também vem com 42501, e o `MutationCache` já o avisou: nada de "sem permissão" (E2.03).
+  if (gateCode(error)) return { kind: "gate" };
   // Antes das recusas: a falha no recálculo também vem como `app_error` (E2.06, AQ-5).
   if (isRecalcFailure(error)) return { kind: "failed", cause: "recalc" };
   const refusal = memberRefusalFromError(error);

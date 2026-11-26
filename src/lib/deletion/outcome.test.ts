@@ -12,7 +12,14 @@ const appError = (code: string, message: string, extra: object = {}) => ({
   hint: APP_ERROR_HINT,
 });
 
+const gateError = (code: string) => ({ code: "42501", message: "x", details: JSON.stringify({ code }), hint: APP_ERROR_HINT });
+
 describe("classifyWriteError", () => {
+  it("Dado o 42501 do portão da senha (E2.03), então é o portão, antes da falta de permissão", () => {
+    expect(classifyWriteError(gateError("password_change_required"))).toEqual({ kind: "gate", code: "password_change_required" });
+    expect(classifyWriteError(gateError("session_ended"))).toEqual({ kind: "gate", code: "session_ended" });
+  });
+
   it("Dado 'não existe ou já foi excluído', então o registro sumiu, com a mensagem do servidor (UX-24)", () => {
     expect(
       classifyWriteError(appError("not_found_or_deleted", "Este cadastro não existe ou já foi excluído.", { entity: "member" })),
@@ -103,6 +110,7 @@ describe("refreshesList", () => {
 
   it("nas demais falhas, a lista fica como está", () => {
     expect(refreshesList({ kind: "forbidden" })).toBe(false);
+    expect(refreshesList({ kind: "gate", code: "session_ended" })).toBe(false);
     expect(refreshesList({ kind: "network" })).toBe(false);
     expect(refreshesList({ kind: "unexpected" })).toBe(false);
     expect(refreshesList({ kind: "refused", refusal: { code: "x", message: "m", detail: {} } })).toBe(false);

@@ -152,7 +152,7 @@ export function FormDialog({ title, texts: TEXTS, onClose, onOpenAutoFocus, onCl
           onPointerDownOutside={onPointerDownOutside}
           onCloseAutoFocus={onCloseAutoFocus}
           className="md:max-w-3xl"
-          bodyClassName="scroll-pb-6 scroll-pt-12"
+          bodyClassName="scroll-pb-6 scroll-pt-12 pb-8"
           footer={footer}
         >
           {children}

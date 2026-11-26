@@ -299,7 +299,7 @@ describe("Relatórios: o ?report=<id> da URL (Navegação e rotas, UX-27)", () =
     renderReports(`/cell-reports?report=${R2}`);
     const dialog = await screen.findByRole("dialog", { name: "Relatório de 12/11/2026" });
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Fechar" })[0]);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const card = screen.getByRole("button", { name: VIEW_RUI });

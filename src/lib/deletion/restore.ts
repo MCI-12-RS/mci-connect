@@ -3,11 +3,13 @@
 // os textos da confirmação e do resultado do membro e os bloqueios, os
 // antecipados pela lista (AQ-3) e os do servidor.
 import {
+  gateCode,
   isJsonObject,
   isNetworkError,
   isPermissionDenied,
   parseAppError,
   type AppError,
+  type GateCode,
   type JsonObject,
 } from "@/lib/errors";
 import { CELL_ROLE_LABELS } from "@/lib/cells/roles";
@@ -22,6 +24,8 @@ const PERSON_DELETED: DeletionErrorCode = "restore_person_deleted";
 const WEEK_TAKEN: DeletionErrorCode = "restore_week_taken";
 
 export type RestoreFailure =
+  /** Portão da senha (E2.03, AQ-3): sem toast; o portão leva à troca ou ao login. */
+  | { kind: "gate"; code: GateCode }
   /** Não está mais excluído (ou sumiu): toast informativo, e a lista recarrega (UX-24). */
   | { kind: "stale"; message: string }
   /** Recusa de regra (RN-16 b e e, RN-17): o diálogo de bloqueio, com a mensagem (UX-23). */
@@ -38,6 +42,9 @@ export type RestoreResult = { kind: "done" } | RestoreFailure;
 
 /** Classifica o erro de uma RPC `restore_*`. */
 export function classifyRestoreError(error: unknown): RestoreFailure {
+  // O portão também vem com 42501: vai antes da recusa de permissão.
+  const gate = gateCode(error);
+  if (gate) return { kind: "gate", code: gate };
   if (isPermissionDenied(error)) return { kind: "forbidden" };
   const refusal = parseAppError(error);
   if (refusal) {

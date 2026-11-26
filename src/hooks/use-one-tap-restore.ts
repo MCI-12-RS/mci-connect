@@ -5,6 +5,7 @@ import type { ReturnFocus } from "@/hooks/use-return-focus";
 import type { RestoreBlock, RestoreResult } from "@/lib/deletion/restore";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
 import type { AppError } from "@/lib/errors";
+import { requestGate } from "@/lib/auth/session-check";
 
 /** O diálogo de bloqueio aberto: "Não é possível restaurar {item}", o motivo e a ação que resolve. */
 export interface OpenRestoreBlock {
@@ -54,6 +55,9 @@ export function useOneTapRestore<Row>(options: OneTapRestoreOptions<Row>, focus:
         return;
       case "refused":
         openBlock(row, options.blockFromRefusal(row, result.refusal), button);
+        return;
+      case "gate":
+        requestGate(result.code);
         return;
       case "forbidden":
         toast({ variant: "destructive", title: DELETION_TEXTS.permissionDenied });

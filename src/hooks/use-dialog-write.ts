@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { requestSessionCheck } from "@/lib/auth/session-check";
+import { requestGate, requestSessionCheck } from "@/lib/auth/session-check";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
 import type { WriteResult } from "@/lib/deletion/outcome";
 import type { AppError } from "@/lib/errors";
@@ -24,6 +24,7 @@ export interface WriteResultHandlers {
  *
  * - feita: toast do sucesso e fecha;
  * - sumiu no meio tempo: toast informativo e fecha (UX-24);
+ * - portão da senha (E2.03): fecha sem toast, e o portão leva à troca ou ao login;
  * - sem permissão: toast "Você não tem permissão para esta ação." e fecha (UX-39);
  * - recusa de regra: `onRefused`;
  * - queda de conexão ou falha técnica: o aviso no diálogo, que continua aberto.
@@ -43,6 +44,10 @@ export function useDialogWrite(onClose: () => void) {
         // "0 linhas" e 42501 também são o que um membro excluído recebe (RN-14): confere a própria sessão.
         requestSessionCheck();
         toast({ title: result.message });
+        onClose();
+        return;
+      case "gate":
+        requestGate(result.code);
         onClose();
         return;
       case "forbidden":

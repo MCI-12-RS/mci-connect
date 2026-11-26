@@ -25,6 +25,7 @@ import {
 } from "@/lib/deletion/restore";
 import { DELETION_TEXTS, MEMBER_RESTORE_TEXTS } from "@/lib/deletion/texts";
 import { cn } from "@/lib/utils";
+import { requestGate } from "@/lib/auth/session-check";
 
 type Step =
   | { kind: "confirm" }
@@ -129,6 +130,10 @@ const RestoreMemberDialog = ({ member, onClose, onCloseAutoFocus }: RestoreMembe
               return;
             case "refused":
               setStep({ kind: "blocked", block: restoreBlockFromRefusal(result.refusal) });
+              return;
+            case "gate":
+              requestGate(result.code);
+              onClose();
               return;
             case "forbidden":
               toast({ variant: "destructive", title: DELETION_TEXTS.permissionDenied });

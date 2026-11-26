@@ -43,6 +43,9 @@ const RoleDeleteFlow = ({ role, onClose, onCloseAutoFocus }: RoleDeleteFlowProps
     } catch (failure) {
       const result = classifyRoleWriteError(failure);
       switch (result.kind) {
+        case "gate":
+          onClose();
+          return;
         case "forbidden":
           toast({ variant: "destructive", title: ACCESS_TEXTS.permissionDenied });
           onClose();

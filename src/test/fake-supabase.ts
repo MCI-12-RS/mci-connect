@@ -14,6 +14,9 @@
 export interface FakeError {
   code: string;
   message: string;
+  /** O `app_error` do banco: `details` em JSON e `hint = 'app_error'`. */
+  details?: string;
+  hint?: string;
 }
 
 export interface FakeResponse {

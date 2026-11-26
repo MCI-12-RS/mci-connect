@@ -14,7 +14,8 @@ vi.mock("@/integrations/supabase/client", async () => {
 });
 
 const sessionCheck = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/auth/session-check", () => ({ requestSessionCheck: sessionCheck }));
+const gate = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/auth/session-check", () => ({ requestSessionCheck: sessionCheck, requestGate: gate }));
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -52,6 +53,23 @@ beforeEach(() => {
   resetFakeSupabase();
   invoke.mockReset();
   sessionCheck.mockReset();
+  gate.mockReset();
+});
+
+describe("useMemberSave: portão da senha (E2.03, AQ-3)", () => {
+  it("o 403 da create-user-admin com o código do portão avisa o portão e não mostra falha", async () => {
+    const { save } = setup();
+    functionError(403, { error: "Troque sua senha.", code: "password_change_required" });
+    expect(await save(create())).toEqual({ kind: "gate" });
+    expect(gate).toHaveBeenCalledWith("password_change_required");
+  });
+
+  it("o 42501 do portão na edição não vira recusa de permissão (o MutationCache avisa o portão)", async () => {
+    const { save } = setup();
+    respondWith({ error: { code: "42501", message: "x", details: JSON.stringify({ code: "session_ended" }), hint: "app_error" } });
+    expect(await save(update({ notes: "x" }))).toEqual({ kind: "gate" });
+    expect(sessionCheck).not.toHaveBeenCalled();
+  });
 });
 
 describe("useMemberSave: edição (DT-19)", () => {

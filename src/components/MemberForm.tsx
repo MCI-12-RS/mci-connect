@@ -224,6 +224,9 @@ const MemberForm = ({
       case "unchanged":
         onClose();
         return;
+      case "gate":
+        // O portão leva à troca de senha ou ao login; o formulário sai junto.
+        return;
       case "gone":
         setDeletedWhileEditing(true);
         return;
