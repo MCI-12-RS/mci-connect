@@ -32,8 +32,9 @@ class NoopResizeObserver {
 const carlos: CellRow = {
   id: "c1",
   leader_id: "l1",
-  timothy_id: null,
-  host_id: null,
+  // E2.08 (RN-02, RN-03): toda célula tem as três pessoas; aqui, Carlos nos três papéis.
+  timothy_id: "l1",
+  host_id: "l1",
   type: "Evangelística",
   meeting_day: "Quarta",
   meeting_time: "20:00:00",
@@ -49,8 +50,8 @@ const carlos: CellRow = {
   leader_g12_level: 2,
   leader_is_pastor: false,
   leader_gender: "M",
-  timothy_name: null,
-  host_name: null,
+  timothy_name: "Carlos Lima",
+  host_name: "Carlos Lima",
   g12_leader_name: "Vera",
   can_submit_report: true,
 };
@@ -212,5 +213,69 @@ describe("CellForm: nomes salvos fora do escopo (DT-23, UX-20)", () => {
     expect(screen.getByText("Caio Nunes")).toBeInTheDocument();
     expect(screen.queryByText("Membro sem nome")).not.toBeInTheDocument();
     expect(fakeRpcs().some((call) => call.fn === "member_names")).toBe(false);
+  });
+});
+
+// E2.08 (PR 2, ajuste mínimo): sem os padrões Sábado e 19:00, "Célula Ativa" só na edição e nada
+// enviado sem as três pessoas, o dia e o horário (RN-02, RN-05, RN-06, RN-11).
+describe("CellForm: regras do cadastro (E2.08, PR 2)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+  });
+
+  function renderNew() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CellForm cell={null} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("Célula nova: sem dia e sem horário escolhidos, Evangelística, e sem 'Célula Ativa'", () => {
+    renderNew();
+    expect(screen.getByLabelText("Horário")).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Dia da Semana" })).toHaveTextContent("Selecione o dia");
+    expect(screen.getByRole("combobox", { name: "Tipo" })).toHaveTextContent("Evangelística");
+    expect(screen.queryByLabelText("Célula Ativa")).not.toBeInTheDocument();
+  });
+
+  it("Salvar a célula nova vazia não envia nada e avisa o primeiro campo que falta (o líder)", () => {
+    renderNew();
+    fireEvent.click(screen.getByRole("button", { name: "Criar Célula" }));
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: "Escolha o líder da célula." }));
+    expect(fakeQueries().some((query) => query.table === "cells")).toBe(false);
+  });
+
+  it("Na edição, 'Célula Ativa' aparece; sem o timóteo, nada é enviado e o aviso diz o campo", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CellForm cell={{ ...carlos, timothy_id: null, timothy_name: null }} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByLabelText("Célula Ativa")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: "Escolha o timóteo da célula." }));
+    expect(fakeQueries().some((query) => query.table === "cells")).toBe(false);
+  });
+
+  it("Na edição completa, o PATCH leva a situação, e o cadastro novo nunca leva is_active", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CellForm cell={carlos} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    respondWith({ data: [{ id: "c1" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await vi.waitFor(() => expect(fakeQueries().some((query) => query.table === "cells")).toBe(true));
+    const update = fakeQueries().find((query) => query.table === "cells");
+    const patch = update?.calls.find(([method]) => method === "update")?.[1];
+    expect(patch).toMatchObject({ leader_id: "l1", timothy_id: "l1", host_id: "l1", meeting_day: "Quarta", is_active: true });
   });
 });

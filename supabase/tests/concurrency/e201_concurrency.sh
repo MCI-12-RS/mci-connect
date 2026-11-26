@@ -238,8 +238,8 @@ done
 # ---------------------------------------------------------------------------
 echo "== 4a. Restauração do relatório R (trava primeiro) × relatório S na mesma semana"
 base
-q "INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time)
-     VALUES ('$C1', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
+q "INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
+     VALUES ('$C1', '$M_OLD', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
    INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
      VALUES ('$R1', '$C1', $WEEK, '10:00', 'R', true)" >/dev/null
 session "$U1" "SELECT public.delete_cell_report('$R1');" >/dev/null
@@ -254,8 +254,8 @@ check "só um relatório não excluído na semana" \
 
 echo "== 4b. Relatório S (trava primeiro) × restauração do relatório R na mesma semana"
 base
-q "INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time)
-     VALUES ('$C1', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
+q "INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
+     VALUES ('$C1', '$M_OLD', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
    INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
      VALUES ('$R1', '$C1', $WEEK, '10:00', 'R', true)" >/dev/null
 session "$U1" "SELECT public.delete_cell_report('$R1');" >/dev/null
@@ -274,8 +274,8 @@ setup5() {
   base
   q "INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email) VALUES
        ('$M_HOST', 'E201 Conc Quintino', 'M', '$M_AD1', true, '$M_HOST@teste.invalid'), ('$M_LEADER', 'E201 Conc Rui', 'M', '$M_AD1', true, '$M_LEADER@teste.invalid');
-     INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time)
-       VALUES ('$C1', '$M_LEADER', '$M_HOST', 'Evangelística', 'Terça', '20:00')" >/dev/null
+     INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
+       VALUES ('$C1', '$M_LEADER', '$M_LEADER', '$M_HOST', 'Evangelística', 'Terça', '20:00')" >/dev/null
   session "$U1" "SELECT public.delete_cell('$C1');" >/dev/null
 }
 echo "== 5a. Exclusão do anfitrião (trava primeiro) × restauração da célula"

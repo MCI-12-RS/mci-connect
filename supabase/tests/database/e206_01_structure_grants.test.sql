@@ -72,13 +72,15 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
   (pg_temp.c(2),  pg_temp.m(15), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Quinta',  '20:00', true),
   (pg_temp.c(3),  pg_temp.m(13), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Terça',   '19:30', true),
   (pg_temp.c(4),  pg_temp.m(11), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Sexta',   '20:00', true),
-  (pg_temp.c(5),  pg_temp.m(9),  pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Sábado',  '20:00', false),
+  (pg_temp.c(5),  pg_temp.m(9),  pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Sábado',  '20:00', true),
   (pg_temp.c(6),  pg_temp.m(17), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Quarta',  '20:00', true),
   (pg_temp.c(7),  pg_temp.m(19), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Quinta',  '20:00', true),
   (pg_temp.c(8),  pg_temp.m(12), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Terça',   '20:00', true),
   (pg_temp.c(9),  pg_temp.m(23), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Sexta',   '19:00', true),
   (pg_temp.c(10), pg_temp.m(10), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Segunda', '20:00', true),
   (pg_temp.c(11), pg_temp.m(9),  pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Domingo', '18:00', true);
+-- C5: inativa. E2.08 (RN-11): a célula nova sempre começa ativa; é inativada depois.
+UPDATE public.cells SET is_active = false WHERE id = pg_temp.c(5);
 -- C11: excluída (logo depois de criada, como a RPC faz: deleted_at, sem somar nada)
 UPDATE public.cells SET deleted_at = now(), deleted_by = pg_temp.m(14) WHERE id = pg_temp.c(11);
 

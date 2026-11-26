@@ -83,8 +83,8 @@ LANGUAGE sql IMMUTABLE AS $$
                 _name, 'M', _email, _leader, _leader IS NOT NULL, _spouse, _auth)
 $$;
 CREATE FUNCTION pg_temp.ins_cell(_leader uuid) RETURNS text LANGUAGE sql IMMUTABLE AS $$
-  SELECT format('INSERT INTO public.cells (leader_id, host_id, type, meeting_day, meeting_time)
-                 VALUES (%L, %L, %L, %L, %L)', _leader, _leader, 'Evangelística', 'Quarta', '20:00')
+  SELECT format('INSERT INTO public.cells (leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
+                 VALUES (%L, %L, %L, %L, %L, %L)', _leader, _leader, _leader, 'Evangelística', 'Quarta', '20:00')
 $$;
 CREATE FUNCTION pg_temp.ins_report(_cell uuid, _date date DEFAULT NULL) RETURNS text LANGUAGE sql STABLE AS $$
   SELECT format('INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
@@ -151,14 +151,14 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, email, 
 
 -- c1 e c2 e c6: de Yara; c3, c4, c5 e c8: de Otávio; c7: de Otávio com Edu de timóteo.
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
-  (pg_temp.c(1), pg_temp.m(25), NULL,          pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(2), pg_temp.m(25), NULL,          pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(3), pg_temp.m(31), NULL,          pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(4), pg_temp.m(31), NULL,          pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(5), pg_temp.m(31), NULL,          pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(6), pg_temp.m(25), NULL,          pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(1), pg_temp.m(25), pg_temp.m(25), pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(2), pg_temp.m(25), pg_temp.m(25), pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(3), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(4), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(5), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(6), pg_temp.m(25), pg_temp.m(25), pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
   (pg_temp.c(7), pg_temp.m(31), pg_temp.m(27), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(8), pg_temp.m(31), NULL,          pg_temp.m(31), 'Evangelística', 'Quarta', '20:00');
+  (pg_temp.c(8), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00');
 
 -- Relatórios da semana atual (antes das exclusões).
 --   r1: c4, excluído              r2: c3 (célula excluída)

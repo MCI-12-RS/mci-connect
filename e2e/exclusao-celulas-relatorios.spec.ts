@@ -116,12 +116,12 @@ test.beforeAll(async () => {
        (${lit(member(91))}, '${NAME} Mauro Melo', 'M', false, true, ${lit(authIds.mb)}, ${lit(role(2))}, ${lit(MB.email)});
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id, mobile_whatsapp) VALUES
        ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true, ${lit(role(3))}, ${lit(mobileOf(n))})`).join(",\n       ")};
-     INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time, street, number, neighborhood) VALUES
-       (${lit(cell(1))}, ${lit(member(5))}, ${lit(member(5))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '1', 'Centro'),
-       (${lit(cell(2))}, ${lit(member(6))}, ${lit(member(6))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '2', 'Centro'),
-       (${lit(cell(3))}, ${lit(member(7))}, ${lit(member(7))}, 'Discipulado', 'Domingo', '00:00', 'Rua QA', '3', 'Centro'),
-       (${lit(cell(4))}, ${lit(member(9))}, ${lit(member(9))}, 'Evangelística', 'Quarta', '20:00', 'Rua QA', '4', 'Centro'),
-       (${lit(cell(5))}, ${lit(member(10))}, ${lit(member(10))}, 'Discipulado', 'Quinta', '20:00', 'Rua QA', '5', 'Centro');
+     INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, neighborhood) VALUES
+       (${lit(cell(1))}, ${lit(member(5))}, ${lit(member(5))}, ${lit(member(5))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '1', 'Centro'),
+       (${lit(cell(2))}, ${lit(member(6))}, ${lit(member(6))}, ${lit(member(6))}, 'Evangelística', 'Domingo', '00:00', 'Rua QA', '2', 'Centro'),
+       (${lit(cell(3))}, ${lit(member(7))}, ${lit(member(7))}, ${lit(member(7))}, 'Discipulado', 'Domingo', '00:00', 'Rua QA', '3', 'Centro'),
+       (${lit(cell(4))}, ${lit(member(9))}, ${lit(member(9))}, ${lit(member(9))}, 'Evangelística', 'Quarta', '20:00', 'Rua QA', '4', 'Centro'),
+       (${lit(cell(5))}, ${lit(member(10))}, ${lit(member(10))}, ${lit(member(10))}, 'Discipulado', 'Quinta', '20:00', 'Rua QA', '5', 'Centro');
      INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held, visitors, offering) VALUES
        (${lit(report(1))}, ${lit(cell(1))}, ${lit(weekStart)}, '00:00', '${NAME} tema Rui', true, ARRAY['V1', 'V2'], 50),
        (${lit(report(2))}, ${lit(cell(2))}, ${lit(weekStart)}, '00:00', '${NAME} tema Zeca', true, '{}', 0),

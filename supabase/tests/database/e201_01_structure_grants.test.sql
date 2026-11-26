@@ -375,9 +375,9 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadersh
   (pg_temp.m(3), 'E201 Est Marido',   'M', false, NULL, false,         pg_temp.m(4), true),
   (pg_temp.m(4), 'E201 Est Esposa',   'F', false, NULL, false,         pg_temp.m(3), true),
   (pg_temp.m(5), 'E201 Est Solo',     'M', false, NULL, false,         NULL,         true);
-INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time) VALUES
-  (pg_temp.c(1), pg_temp.m(1), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(2), pg_temp.m(5), 'Evangelística', 'Quinta', '20:00');
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
+  (pg_temp.c(1), pg_temp.m(1), pg_temp.m(1), pg_temp.m(1), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(2), pg_temp.m(5), pg_temp.m(5), pg_temp.m(5), 'Evangelística', 'Quinta', '20:00');
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
   (pg_temp.r(1), pg_temp.c(1), '2026-11-04', '20:00', 'Um', true);
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (pg_temp.r(1), pg_temp.m(2));

@@ -173,17 +173,17 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           deleted_by: string | null
-          host_id: string | null
+          host_id: string
           id: string
           is_active: boolean
-          leader_id: string | null
-          meeting_day: string | null
-          meeting_time: string | null
+          leader_id: string
+          meeting_day: string
+          meeting_time: string
           neighborhood: string | null
           number: string | null
           state: string | null
           street: string | null
-          timothy_id: string | null
+          timothy_id: string
           type: string
           updated_at: string
           zip_code: string | null
@@ -194,17 +194,17 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
-          host_id?: string | null
+          host_id: string
           id?: string
           is_active?: boolean
-          leader_id?: string | null
-          meeting_day?: string | null
-          meeting_time?: string | null
+          leader_id: string
+          meeting_day: string
+          meeting_time: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
           street?: string | null
-          timothy_id?: string | null
+          timothy_id: string
           type?: string
           updated_at?: string
           zip_code?: string | null
@@ -215,17 +215,17 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           deleted_by?: string | null
-          host_id?: string | null
+          host_id?: string
           id?: string
           is_active?: boolean
-          leader_id?: string | null
-          meeting_day?: string | null
-          meeting_time?: string | null
+          leader_id?: string
+          meeting_day?: string
+          meeting_time?: string
           neighborhood?: string | null
           number?: string | null
           state?: string | null
           street?: string | null
-          timothy_id?: string | null
+          timothy_id?: string
           type?: string
           updated_at?: string
           zip_code?: string | null
@@ -1361,7 +1361,10 @@ export type Database = {
       }
       can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
+      cell_default_type: { Args: never; Returns: string }
       cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
+      cell_types: { Args: never; Returns: string[] }
+      cell_weekdays: { Args: never; Returns: string[] }
       change_own_password: {
         Args: {
           _auth_user_id: string
@@ -1442,6 +1445,7 @@ export type Database = {
       is_placeholder_email: { Args: { _email: string }; Returns: boolean }
       is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
       is_valid_email: { Args: { _email: string }; Returns: boolean }
+      is_valid_meeting_time: { Args: { _t: string }; Returns: boolean }
       is_valid_person_name: { Args: { _name: string }; Returns: boolean }
       log_auth_event: {
         Args: {
@@ -1514,6 +1518,7 @@ export type Database = {
       }
       normalize_digits: { Args: { _value: string }; Returns: string }
       normalize_email: { Args: { _value: string }; Returns: string }
+      normalize_meeting_time: { Args: { _t: string }; Returns: string }
       normalize_mobile: { Args: { _value: string }; Returns: string }
       normalize_person_name: { Args: { _name: string }; Returns: string }
       placeholder_email_domain: { Args: never; Returns: string }

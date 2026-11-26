@@ -134,29 +134,29 @@ VALUES
   -- 02: ministério B; só o anfitrião (Alberto) é do ministério A.
   (pg_temp.c(2),  pg_temp.m(10), pg_temp.m(11), pg_temp.m(7),  'Discipulado',   'Terça',   '19:30',
    'Av. Brasil', '200', 'São João', 'Porto Alegre', 'RS', '2026-11-02 10:00-03'),
-  -- 03: sem timóteo, sem anfitrião e sem endereço.
-  (pg_temp.c(3),  pg_temp.m(7),  NULL,          NULL,          'Evangelística', 'Quarta',  '20:00',
+  -- 03: o líder também é timóteo e anfitrião (RN-03 do E2.08); sem endereço.
+  (pg_temp.c(3),  pg_temp.m(7),  pg_temp.m(7),  pg_temp.m(7),  'Evangelística', 'Quarta',  '20:00',
    NULL, NULL, NULL, NULL, NULL, '2026-11-03 10:00-03'),
   -- 04: líder do ministério B, timóteo do ministério A (abaixo do cônjuge do G12), anfitriã inativa.
   (pg_temp.c(4),  pg_temp.m(11), pg_temp.m(9),  pg_temp.m(13), 'Macrocélula',   'Sábado',  '16:00',
    'Rua Ipê', '40', 'Ipiranga', 'Canoas', 'RS', '2026-11-04 10:00-03'),
-  -- 05: líder sem líder e sem ser pastor.
-  (pg_temp.c(5),  pg_temp.m(12), NULL,          NULL,          'Evangelística', 'Domingo', '18:00',
+  -- 05: líder sem líder e sem ser pastor (também timóteo e anfitrião).
+  (pg_temp.c(5),  pg_temp.m(12), pg_temp.m(12), pg_temp.m(12), 'Evangelística', 'Domingo', '18:00',
    NULL, NULL, NULL, NULL, NULL, '2026-11-05 10:00-03'),
-  -- 06: líder pastor; anfitriã é a cônjuge do G12 A.
-  (pg_temp.c(6),  pg_temp.m(1),  NULL,          pg_temp.m(4),  'Discipulado',   'Sexta',   '20:00',
+  -- 06: líder pastor (também timóteo); anfitriã é a cônjuge do G12 A.
+  (pg_temp.c(6),  pg_temp.m(1),  pg_temp.m(1),  pg_temp.m(4),  'Discipulado',   'Sexta',   '20:00',
    NULL, NULL, NULL, NULL, NULL, '2026-11-06 10:00-03'),
-  -- 07: dia desconhecido; líder inativa.
-  (pg_temp.c(7),  pg_temp.m(13), pg_temp.m(10), NULL,          'Evangelística', 'Feriado', '20:00',
+  -- 07: líder inativa (também anfitriã). O E2.08 não aceita mais dia fora da lista.
+  (pg_temp.c(7),  pg_temp.m(13), pg_temp.m(10), pg_temp.m(13), 'Evangelística', 'Quinta',  '20:00',
    NULL, NULL, NULL, NULL, NULL, '2026-11-07 10:00-03'),
-  -- 08: sem líder, sem timóteo, sem anfitrião, sem horário.
-  (pg_temp.c(8),  NULL,          NULL,          NULL,          'Evangelística', 'Quinta',  NULL,
+  -- 08: Xavier nos três papéis (antes do E2.08, célula sem pessoas): só quem vê a igreja toda.
+  (pg_temp.c(8),  pg_temp.m(12), pg_temp.m(12), pg_temp.m(12), 'Evangelística', 'Quinta',  '19:00',
    NULL, NULL, NULL, NULL, NULL, '2026-11-08 10:00-03'),
-  -- 09: líder é o próprio G12; anfitrião João da Silva.
-  (pg_temp.c(9),  pg_temp.m(3),  NULL,          pg_temp.m(14), 'Evangelística', 'Quinta',  '20:00',
+  -- 09: líder é o próprio G12 (também timóteo); anfitrião João da Silva.
+  (pg_temp.c(9),  pg_temp.m(3),  pg_temp.m(3),  pg_temp.m(14), 'Evangelística', 'Quinta',  '20:00',
    'Rua São José', '9', 'Jardim Botânico', 'Porto Alegre', 'RS', '2026-11-09 10:00-03'),
-  -- 10: líder abaixo da cônjuge do G12.
-  (pg_temp.c(10), pg_temp.m(14), NULL,          NULL,          'Discipulado',   'Quarta',  '19:00',
+  -- 10: líder abaixo da cônjuge do G12 (também timóteo e anfitrião).
+  (pg_temp.c(10), pg_temp.m(14), pg_temp.m(14), pg_temp.m(14), 'Discipulado',   'Quarta',  '19:00',
    'Rua Ágata', '5', 'Glória', 'Porto Alegre', 'RS', '2026-11-10 10:00-03');
 
 -- Datas: 2026-11-01, 08, 15 e 22 são domingos.
@@ -407,7 +407,7 @@ SELECT pg_temp.login(9);
 SET LOCAL ROLE authenticated;
 SELECT * FROM pg_temp.parity('Pastor view_own_ministry');
 SELECT set_eq($$ SELECT id FROM public.cells_view WHERE id::text LIKE 'd1080000%' $$,
-  pg_temp.cs(1, 2, 3, 4, 6, 7, 9, 10), 'Pastor: a árvore inteira (RN-05 do E2.02); só a célula 05 (Xavier, sem líder) e a 08 (sem pessoas) ficam de fora');
+  pg_temp.cs(1, 2, 3, 4, 6, 7, 9, 10), 'Pastor: a árvore inteira (RN-05 do E2.02); só as células 05 e 08 (Xavier, sem líder) ficam de fora');
 SELECT set_eq($$ SELECT id FROM public.cell_reports_view WHERE id::text LIKE 'e1080000%' $$,
   pg_temp.rs(1, 2, 3, 4, 5, 7, 8, 9, 10, 11), 'Pastor: os relatórios das células da árvore inteira');
 RESET ROLE;
@@ -514,8 +514,8 @@ SELECT results_eq(
   'G12: líder sem líder (não pastor) → nulo, e sem nível (E2.06 RN-01: sem liderança)');
 SELECT results_eq(
   format('SELECT leader_name, g12_leader_id, g12_leader_name, leader_g12_level FROM public.cells_view WHERE id = %L', pg_temp.c(8)),
-  $$ VALUES (NULL::text, NULL::uuid, NULL::text, NULL::int) $$,
-  'G12: célula sem líder → tudo nulo (a tela mostra "—")');
+  $$ VALUES ('Xavier Xisto'::text, NULL::uuid, NULL::text, NULL::int) $$,
+  'G12: célula de líder sem liderança → G12 e nível nulos (a tela mostra "—"); o E2.08 não aceita célula sem líder');
 
 -- Nomes e gênero do líder
 SELECT results_eq(
@@ -524,14 +524,15 @@ SELECT results_eq(
   'cells_view: nomes do líder, do timóteo e do anfitrião e o gênero do líder');
 SELECT results_eq(
   format('SELECT leader_name, timothy_name, host_name FROM public.cells_view WHERE id = %L', pg_temp.c(3)),
-  $$ VALUES ('Alberto Alves'::text, NULL::text, NULL::text) $$,
-  'cells_view: célula sem timóteo e sem anfitrião');
+  $$ VALUES ('Alberto Alves'::text, 'Alberto Alves'::text, 'Alberto Alves'::text) $$,
+  'cells_view: o mesmo membro nos três papéis (RN-03 do E2.08)');
 
 -- Dia da semana
 SELECT results_eq(
-  format('SELECT meeting_day, meeting_weekday FROM public.cells_view WHERE id IN (%L, %L, %L, %L, %L) ORDER BY meeting_weekday NULLS LAST',
+  format('SELECT * FROM (SELECT meeting_day, meeting_weekday FROM public.cells_view WHERE id IN (%L, %L, %L, %L, %L) '
+         'UNION ALL SELECT ''Feriado'', public.weekday_index(''Feriado'')) x ORDER BY meeting_weekday NULLS LAST',
          pg_temp.c(5), pg_temp.c(1), pg_temp.c(10), pg_temp.c(4), pg_temp.c(7)),
-  $$ VALUES ('Domingo'::text, 0), ('Segunda'::text, 1), ('Quarta'::text, 3), ('Sábado'::text, 6), ('Feriado'::text, NULL::int) $$,
+  $$ VALUES ('Domingo'::text, 0), ('Segunda'::text, 1), ('Quarta'::text, 3), ('Quinta'::text, 4), ('Sábado'::text, 6), ('Feriado'::text, NULL::int) $$,
   'meeting_weekday: Domingo = 0 … Sábado = 6; dia desconhecido → nulo');
 
 -- Último relatório

@@ -298,7 +298,7 @@ test.describe("UX-08: o líder com o nível e o G12 de um nome só na lista de C
 
   test.beforeAll(() => {
     for (const c of extra) {
-      sql(env, `INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time, is_active) VALUES (${lit(H.cellId(c.n))}, ${lit(H.memberId(c.leader))}, 'Evangelística', 'Quarta', '20:00', true);`);
+      sql(env, `INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active) VALUES (${lit(H.cellId(c.n))}, ${lit(H.memberId(c.leader))}, ${lit(H.memberId(c.leader))}, ${lit(H.memberId(c.leader))}, 'Evangelística', 'Quarta', '20:00', true);`);
     }
   });
   test.afterAll(() => {

@@ -22,8 +22,9 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 const carlos: CellRow = {
   id: "c1",
   leader_id: "l1",
-  timothy_id: null,
-  host_id: null,
+  // E2.08 (RN-02, RN-03): toda célula tem as três pessoas; aqui, Carlos nos três papéis.
+  timothy_id: "l1",
+  host_id: "l1",
   type: "Evangelística",
   meeting_day: "Quarta",
   meeting_time: "20:00:00",
@@ -39,8 +40,8 @@ const carlos: CellRow = {
   leader_g12_level: 2,
   leader_is_pastor: false,
   leader_gender: "M",
-  timothy_name: null,
-  host_name: null,
+  timothy_name: "Carlos Lima",
+  host_name: "Carlos Lima",
   g12_leader_name: "Vera",
   can_submit_report: true,
 };

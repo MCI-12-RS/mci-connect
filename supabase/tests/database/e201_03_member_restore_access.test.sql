@@ -181,8 +181,8 @@ SELECT pg_temp.m(60 + n), 'Repetido ' || lpad(n::text, 2, '0'), 'M', pg_temp.m(2
   FROM generate_series(1, 11) n;
 
 -- Bruno participou de 12 relatórios (semanas passadas).
-INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time) VALUES
-  (pg_temp.c(1), pg_temp.m(6), pg_temp.m(6), 'Evangelística', 'Quarta', '20:00');
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
+  (pg_temp.c(1), pg_temp.m(6), pg_temp.m(6), pg_temp.m(6), 'Evangelística', 'Quarta', '20:00');
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
 SELECT pg_temp.r(k), pg_temp.c(1), public.week_start(public.sp_today()) - 7 * k + 3, '20:00', 'Tema ' || k, true

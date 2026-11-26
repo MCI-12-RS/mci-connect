@@ -107,12 +107,12 @@ test.beforeAll(() => {
        ${people.map(([n, name, gender]) => `(${lit(member(n))}, ${lit(name)}, '${gender}', false, true, ${lit(mobileOf(n))})`).join(",\n       ")};
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number, neighborhood) VALUES
        (${lit(cell(1))}, ${lit(member(1))}, ${lit(member(2))}, ${lit(member(3))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA3 das Flores', '120', 'Centro'),
-       (${lit(cell(2))}, ${lit(member(4))}, NULL, ${lit(member(4))}, 'Discipulado', 'Sexta', '19:30', true, 'Rua QA3 do Sol', '45', 'Centro'),
-       (${lit(cell(3))}, ${lit(member(6))}, NULL, ${lit(member(7))}, 'Evangelística', 'Terça', '20:00', true, 'Rua QA3 da Lua', '7', 'Centro'),
-       (${lit(cell(4))}, ${lit(member(8))}, NULL, ${lit(member(8))}, 'Evangelística', 'Domingo', '18:00', true, 'Rua QA3 do Mar', '9', 'Centro'),
-       (${lit(cell(5))}, ${lit(member(9))}, NULL, ${lit(member(9))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA3 do Rio', '3', 'Centro'),
-       (${lit(cell(6))}, ${lit(member(10))}, NULL, ${lit(member(10))}, 'Macrocélula', 'Sábado', '16:00', true, 'Rua QA3 da Serra', '2', 'Centro'),
-       (${lit(cell(7))}, ${lit(member(11))}, NULL, ${lit(member(11))}, 'Discipulado', 'Quinta', '19:00', true, 'Rua QA3 do Vale', '8', 'Centro');
+       (${lit(cell(2))}, ${lit(member(4))}, ${lit(member(4))}, ${lit(member(4))}, 'Discipulado', 'Sexta', '19:30', true, 'Rua QA3 do Sol', '45', 'Centro'),
+       (${lit(cell(3))}, ${lit(member(6))}, ${lit(member(6))}, ${lit(member(7))}, 'Evangelística', 'Terça', '20:00', true, 'Rua QA3 da Lua', '7', 'Centro'),
+       (${lit(cell(4))}, ${lit(member(8))}, ${lit(member(8))}, ${lit(member(8))}, 'Evangelística', 'Domingo', '18:00', true, 'Rua QA3 do Mar', '9', 'Centro'),
+       (${lit(cell(5))}, ${lit(member(9))}, ${lit(member(9))}, ${lit(member(9))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA3 do Rio', '3', 'Centro'),
+       (${lit(cell(6))}, ${lit(member(10))}, ${lit(member(10))}, ${lit(member(10))}, 'Macrocélula', 'Sábado', '16:00', true, 'Rua QA3 da Serra', '2', 'Centro'),
+       (${lit(cell(7))}, ${lit(member(11))}, ${lit(member(11))}, ${lit(member(11))}, 'Discipulado', 'Quinta', '19:00', true, 'Rua QA3 do Vale', '8', 'Centro');
      SET LOCAL session_replication_role = replica;
      INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
        (${lit(CARLOS_REPORT)}, ${lit(cell(2))}, public.week_start(public.sp_today()) - 16, '19:30', '${NAME} tema de Carlos', true),

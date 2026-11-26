@@ -176,14 +176,14 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_
 SELECT pg_temp.m(50 + n), 'Participante Número ' || n, 'M', pg_temp.m(36), true, pg_temp.mob(50 + n) FROM generate_series(1, 8) n;
 
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active) VALUES
-  (pg_temp.c(1), pg_temp.m(10), NULL, pg_temp.m(10), 'Evangelística', 'Quarta',  '20:00', true),
-  (pg_temp.c(2), pg_temp.m(26), NULL, pg_temp.m(25), 'Discipulado',   'Terça',   '20:00', true),
-  (pg_temp.c(3), pg_temp.m(30), NULL, pg_temp.m(30), 'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(4), pg_temp.m(31), NULL, pg_temp.m(31), 'Evangelística', 'Sexta',   '20:00', true),
-  (pg_temp.c(5), pg_temp.m(33), NULL, pg_temp.m(33), 'Evangelística', 'Domingo', '10:00', true),
-  (pg_temp.c(6), pg_temp.m(40), NULL, pg_temp.m(40), 'Evangelística', 'Quinta',  '20:00', true),
-  (pg_temp.c(7), pg_temp.m(34), NULL, pg_temp.m(34), 'Discipulado',   'Quinta',  '20:00', true),
-  (pg_temp.c(8), pg_temp.m(36), NULL, pg_temp.m(36), 'Evangelística', 'Domingo', '09:00', true);
+  (pg_temp.c(1), pg_temp.m(10), pg_temp.m(10), pg_temp.m(10), 'Evangelística', 'Quarta',  '20:00', true),
+  (pg_temp.c(2), pg_temp.m(26), pg_temp.m(26), pg_temp.m(25), 'Discipulado',   'Terça',   '20:00', true),
+  (pg_temp.c(3), pg_temp.m(30), pg_temp.m(30), pg_temp.m(30), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(4), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Sexta',   '20:00', true),
+  (pg_temp.c(5), pg_temp.m(33), pg_temp.m(33), pg_temp.m(33), 'Evangelística', 'Domingo', '10:00', true),
+  (pg_temp.c(6), pg_temp.m(40), pg_temp.m(40), pg_temp.m(40), 'Evangelística', 'Quinta',  '20:00', true),
+  (pg_temp.c(7), pg_temp.m(34), pg_temp.m(34), pg_temp.m(34), 'Discipulado',   'Quinta',  '20:00', true),
+  (pg_temp.c(8), pg_temp.m(36), pg_temp.m(36), pg_temp.m(36), 'Evangelística', 'Domingo', '09:00', true);
 
 -- Semana atual (triggers ligados).
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, visitors, offering, was_held) VALUES
@@ -529,8 +529,9 @@ SELECT is(pg_temp.try(1, format('SELECT public.restore_cell(%L)', pg_temp.c(2)))
   'DA-5: com mais de uma pessoa excluída, a mensagem cita a primeira (líder, timóteo, anfitrião)');
 SELECT is(pg_temp.try(1, format('SELECT public.restore_cell(%L)', pg_temp.c(2))) -> 'detail' -> 'people',
   jsonb_build_array(jsonb_build_object('role', 'leader', 'member_id', pg_temp.m(26), 'member_name', 'Rui Ramos'),
+                    jsonb_build_object('role', 'timothy', 'member_id', pg_temp.m(26), 'member_name', 'Rui Ramos'),
                     jsonb_build_object('role', 'host', 'member_id', pg_temp.m(25), 'member_name', 'Quintino Quadros')),
-  'DA-5: os detalhes trazem todas');
+  'DA-5: os detalhes trazem todas (Rui é líder e timóteo, RN-03 do E2.08)');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(26)))), '00000', 'RN-17: Rui é restaurado');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT * FROM public.restore_member(%L)', pg_temp.m(25)))), '00000', 'RN-17: Quintino é restaurado');
 CREATE TEMP TABLE rui0 AS SELECT total_cells FROM private.member_hierarchy WHERE member_id = pg_temp.m(26);

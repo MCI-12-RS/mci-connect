@@ -231,9 +231,11 @@ UPDATE public.members SET spouse_id = pg_temp.m(36) WHERE id = pg_temp.m(35);
 
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active) VALUES
   (pg_temp.c(1), pg_temp.m(10), pg_temp.m(5), pg_temp.m(10), 'Evangelística', 'Quarta',  '20:00', true),
-  (pg_temp.c(2), pg_temp.m(11), NULL,         pg_temp.m(5),  'Discipulado',   'Sexta',   '19:30', false),
-  (pg_temp.c(3), pg_temp.m(15), NULL,         pg_temp.m(15), 'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(4), pg_temp.m(3),  NULL,         pg_temp.m(3),  'Evangelística', 'Terça',   '20:00', true);
+  (pg_temp.c(2), pg_temp.m(11), pg_temp.m(11), pg_temp.m(5),  'Discipulado',   'Sexta',   '19:30', true),
+  (pg_temp.c(3), pg_temp.m(15), pg_temp.m(15), pg_temp.m(15), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(4), pg_temp.m(3),  pg_temp.m(3),  pg_temp.m(3),  'Evangelística', 'Terça',   '20:00', true);
+-- E2.08 (RN-11): a célula nova sempre começa ativa; a de Marcos é inativada depois.
+UPDATE public.cells SET is_active = false WHERE id = pg_temp.c(2);
 
 -- Nina participou de 20 relatórios (semanas passadas, com replica: fora da semana atual).
 SET LOCAL session_replication_role = replica;

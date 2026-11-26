@@ -268,7 +268,7 @@ SELECT is(pg_temp.cellflags(7), 'C1:true/true C2:true/false C3:true/false', 'AQ-
 SELECT is(pg_temp.cellflags(16), 'C1:true/false C2:true/false C3:true/false', 'AQ-1: Rita lança todas e nenhuma é dela');
 SELECT is(pg_temp.val(19, 'SELECT count(*)::text FROM public.cells_view'), '0', 'AQ-1: a conta X não vê célula');
 SELECT pg_temp.run('lp',
-  format('INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time) VALUES (%L, %L, ''Evangelística'', ''Sábado'', ''18:00'')', pg_temp.c(9), pg_temp.m(1)),
+  format('INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES (%L, %L, %L, %L, ''Evangelística'', ''Sábado'', ''18:00'')', pg_temp.c(9), pg_temp.m(1), pg_temp.m(1), pg_temp.m(1)),
   ARRAY[pg_temp.pv(16, format($q$SELECT leader_is_pastor::text FROM public.cells_view WHERE id = %L$q$, pg_temp.c(9))),
         pg_temp.pv(16, format($q$SELECT leader_is_pastor::text FROM public.cells_view WHERE id = %L$q$, pg_temp.c(1)))]);
 SELECT is(v[1], 'true', 'AQ-1: leader_is_pastor é verdadeiro para a célula de Samuel (pastor)') FROM sb WHERE k = 'lp';

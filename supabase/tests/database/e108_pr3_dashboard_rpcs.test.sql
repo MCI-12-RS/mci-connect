@@ -162,51 +162,56 @@ SELECT private.rebuild_member_hierarchy();
 -- Semana de referência W: domingo 2026-03-01 a sábado 2026-03-07.
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active) VALUES
   -- Ministério A: casos de "Células sem relatório" em W.
-  (pg_temp.c(1),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Domingo', '18:00', true),
-  (pg_temp.c(2),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(3),  pg_temp.m(5),  NULL,          NULL,         'Discipulado',   'Terça',   '20:00', true),
-  (pg_temp.c(4),  pg_temp.m(6),  NULL,          NULL,         'Discipulado',   'Quarta',  '20:00', true),
-  (pg_temp.c(5),  pg_temp.m(5),  pg_temp.m(7),  NULL,         'Macrocélula',   'Quinta',  '20:00', true),
-  (pg_temp.c(6),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Sexta',   '20:00', true),
-  (pg_temp.c(7),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Sábado',  '16:00', true),
-  -- 08: sem horário; 09: dia desconhecido; 10: inativa; 15: sem dia.
-  (pg_temp.c(8),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Quinta',  NULL,    true),
-  (pg_temp.c(9),  pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Feriado', '20:00', true),
-  (pg_temp.c(10), pg_temp.m(5),  NULL,          NULL,         'Discipulado',   'Segunda', '20:00', false),
+  (pg_temp.c(1),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Domingo', '18:00', true),
+  (pg_temp.c(2),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(3),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Discipulado',   'Terça',   '20:00', true),
+  (pg_temp.c(4),  pg_temp.m(6), pg_temp.m(6),         pg_temp.m(6), 'Discipulado',   'Quarta',  '20:00', true),
+  (pg_temp.c(5),  pg_temp.m(5), pg_temp.m(7),  pg_temp.m(5), 'Macrocélula',   'Quinta',  '20:00', true),
+  (pg_temp.c(6),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Sexta',   '20:00', true),
+  (pg_temp.c(7),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Sábado',  '16:00', true),
+  -- 08: quinta 23:59 (o último minuto do dia); 09 e 15: o último relatório é de uma
+  -- semana seguinte a W (antes do E2.08, dia desconhecido e dia nulo); 10: inativa.
+  (pg_temp.c(8),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Quinta',  '23:59', true),
+  (pg_temp.c(9),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Quinta',  '20:00', true),
+  (pg_temp.c(10), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Discipulado',   'Segunda', '20:00', true),
   -- 11: relatório visível em W; 12: relatório em W invisível para P3 (P3 vê a
   -- célula só pela anfitriã Hana); 13: último relatório na semana anterior;
   -- 14: relatório de "não houve célula" em W.
-  (pg_temp.c(11), pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(12), pg_temp.m(15), NULL,          pg_temp.m(8), 'Discipulado',   'Terça',   '20:00', true),
-  (pg_temp.c(13), pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Quarta',  '19:00', true),
-  (pg_temp.c(14), pg_temp.m(5),  NULL,          NULL,         'Evangelística', 'Segunda', '19:00', true),
-  (pg_temp.c(15), pg_temp.m(5),  NULL,          NULL,         'Macrocélula',   NULL,      '20:00', true),
+  (pg_temp.c(11), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(12), pg_temp.m(15), pg_temp.m(15), pg_temp.m(8), 'Discipulado',   'Terça',   '20:00', true),
+  (pg_temp.c(13), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Quarta',  '19:00', true),
+  (pg_temp.c(14), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Segunda', '19:00', true),
+  (pg_temp.c(15), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Macrocélula',   'Sexta',   '20:00', true),
   -- Ministério B (invisível para P3).
-  (pg_temp.c(16), pg_temp.m(15), NULL,          NULL,         'Evangelística', 'Quarta',  '20:00', true),
+  (pg_temp.c(16), pg_temp.m(15), pg_temp.m(15),         pg_temp.m(15), 'Evangelística', 'Quarta',  '20:00', true),
   -- Ranking: Rui 1 + Renan 2 (masculinas), Raquel 1 + Rosa 3 (femininas),
-  -- mais uma célula inativa da Rosa, que não conta.
-  (pg_temp.c(17), pg_temp.m(16), NULL,          NULL,         'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(18), pg_temp.m(18), NULL,          NULL,         'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(19), pg_temp.m(18), NULL,          NULL,         'Evangelística', 'Segunda', '20:00', true),
-  (pg_temp.c(20), pg_temp.m(19), NULL,          NULL,         'Discipulado',   'Segunda', '20:00', true),
-  (pg_temp.c(21), pg_temp.m(19), NULL,          NULL,         'Discipulado',   'Segunda', '20:00', true),
-  (pg_temp.c(22), pg_temp.m(19), NULL,          NULL,         'Discipulado',   'Segunda', '20:00', true),
-  (pg_temp.c(23), pg_temp.m(19), NULL,          NULL,         'Discipulado',   'Segunda', '20:00', false),
-  (pg_temp.c(24), pg_temp.m(20), NULL,          NULL,         'Discipulado',   'Segunda', '20:00', true),
+  -- mais uma célula inativa da Rosa, que não conta. Toda célula tem as três pessoas
+  -- (RN-02 do E2.08): quem não tem timóteo ou anfitrião próprio repete o líder.
+  (pg_temp.c(17), pg_temp.m(16), pg_temp.m(16),         pg_temp.m(16), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(18), pg_temp.m(18), pg_temp.m(18),         pg_temp.m(18), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(19), pg_temp.m(18), pg_temp.m(18),         pg_temp.m(18), 'Evangelística', 'Segunda', '20:00', true),
+  (pg_temp.c(20), pg_temp.m(19), pg_temp.m(19),         pg_temp.m(19), 'Discipulado',   'Segunda', '20:00', true),
+  (pg_temp.c(21), pg_temp.m(19), pg_temp.m(19),         pg_temp.m(19), 'Discipulado',   'Segunda', '20:00', true),
+  (pg_temp.c(22), pg_temp.m(19), pg_temp.m(19),         pg_temp.m(19), 'Discipulado',   'Segunda', '20:00', true),
+  (pg_temp.c(23), pg_temp.m(19), pg_temp.m(19),         pg_temp.m(19), 'Discipulado',   'Segunda', '20:00', true),
+  (pg_temp.c(24), pg_temp.m(20), pg_temp.m(20),         pg_temp.m(20), 'Discipulado',   'Segunda', '20:00', true),
   -- Eduardo & Lea: 2 células do discípulo Rafael.
-  (pg_temp.c(25), pg_temp.m(23), NULL,          NULL,         'Evangelística', 'Terça',   '20:00', true),
-  (pg_temp.c(26), pg_temp.m(23), NULL,          NULL,         'Evangelística', 'Terça',   '20:00', true),
+  (pg_temp.c(25), pg_temp.m(23), pg_temp.m(23),         pg_temp.m(23), 'Evangelística', 'Terça',   '20:00', true),
+  (pg_temp.c(26), pg_temp.m(23), pg_temp.m(23),         pg_temp.m(23), 'Evangelística', 'Terça',   '20:00', true),
   -- Carla 1; Davi 2 (contam para Fábio, não para Carla).
-  (pg_temp.c(27), pg_temp.m(24), NULL,          NULL,         'Discipulado',   'Terça',   '20:00', true),
-  (pg_temp.c(28), pg_temp.m(25), NULL,          NULL,         'Evangelística', 'Terça',   '20:00', true),
-  (pg_temp.c(29), pg_temp.m(25), NULL,          NULL,         'Evangelística', 'Terça',   '20:00', true),
+  (pg_temp.c(27), pg_temp.m(24), pg_temp.m(24),         pg_temp.m(24), 'Discipulado',   'Terça',   '20:00', true),
+  (pg_temp.c(28), pg_temp.m(25), pg_temp.m(25),         pg_temp.m(25), 'Evangelística', 'Terça',   '20:00', true),
+  (pg_temp.c(29), pg_temp.m(25), pg_temp.m(25),         pg_temp.m(25), 'Evangelística', 'Terça',   '20:00', true),
   -- Eva 2; Hugo 1; Helena (inativa) 1; Carlos 1; Clara 1.
-  (pg_temp.c(30), pg_temp.m(28), NULL,          NULL,         'Discipulado',   'Quarta',  '20:00', true),
-  (pg_temp.c(31), pg_temp.m(28), NULL,          NULL,         'Discipulado',   'Quarta',  '20:00', true),
-  (pg_temp.c(32), pg_temp.m(29), NULL,          NULL,         'Evangelística', 'Quarta',  '20:00', true),
-  (pg_temp.c(33), pg_temp.m(30), NULL,          NULL,         'Discipulado',   'Quarta',  '20:00', true),
-  (pg_temp.c(34), pg_temp.m(31), NULL,          NULL,         'Evangelística', 'Quinta',  '20:00', true),
-  (pg_temp.c(35), pg_temp.m(32), NULL,          NULL,         'Discipulado',   'Quinta',  '20:00', true);
+  (pg_temp.c(30), pg_temp.m(28), pg_temp.m(28),         pg_temp.m(28), 'Discipulado',   'Quarta',  '20:00', true),
+  (pg_temp.c(31), pg_temp.m(28), pg_temp.m(28),         pg_temp.m(28), 'Discipulado',   'Quarta',  '20:00', true),
+  (pg_temp.c(32), pg_temp.m(29), pg_temp.m(29),         pg_temp.m(29), 'Evangelística', 'Quarta',  '20:00', true),
+  (pg_temp.c(33), pg_temp.m(30), pg_temp.m(30),         pg_temp.m(30), 'Discipulado',   'Quarta',  '20:00', true),
+  (pg_temp.c(34), pg_temp.m(31), pg_temp.m(31),         pg_temp.m(31), 'Evangelística', 'Quinta',  '20:00', true),
+  (pg_temp.c(35), pg_temp.m(32), pg_temp.m(32),         pg_temp.m(32), 'Discipulado',   'Quinta',  '20:00', true);
+
+-- E2.08 (RN-11): a célula nova sempre começa ativa; as inativas são inativadas depois.
+UPDATE public.cells SET is_active = false WHERE id IN (pg_temp.c(10), pg_temp.c(23));
 
 SET LOCAL session_replication_role = replica;
 
@@ -226,7 +231,9 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, theme, observations, v
   (pg_temp.r(5), pg_temp.c(11), '2026-03-08', '20:00', 'Depois',    NULL,    ARRAY['Visitante Depois'],               true),
   (pg_temp.r(6), pg_temp.c(10), public.sp_today() - 30, '20:00', 'Trinta',    NULL, '{}', true),
   (pg_temp.r(7), pg_temp.c(9),  public.sp_today() - 31, '20:00', 'Trinta e um', NULL, '{}', true),
-  (pg_temp.r(8), pg_temp.c(16), public.sp_today() - 1,  '20:00', 'Ontem',     NULL, '{}', true);
+  (pg_temp.r(8), pg_temp.c(16), public.sp_today() - 1,  '20:00', 'Ontem',     NULL, '{}', true),
+  -- E2.08: a célula 15 fica fora das pendentes de W pelo relatório de uma semana seguinte.
+  (pg_temp.r(9), pg_temp.c(15), '2026-03-16', '20:00', 'Depois de W', NULL, '{}', true);
 
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(6), pg_temp.m(9)),   -- Paulo Trinta: há 30 dias (conta)
@@ -521,15 +528,15 @@ SELECT is(pg_temp.pending('2026-03-04 19:59:00-03'), 4::bigint, 'RN-08/P3: quart
 SELECT is(pg_temp.pending('2026-03-04 20:00:00-03'), 5::bigint, 'RN-08a/P3: quarta 20:00: a célula de quarta entra');
 SELECT is(pg_temp.pending('2026-03-05 19:59:00-03'), 5::bigint, 'RN-08/P3: quinta 19:59: a de quinta ainda não conta');
 SELECT is(pg_temp.pending('2026-03-05 20:00:00-03'), 6::bigint, 'RN-08a/P3: quinta 20:00: a célula de quinta entra');
-SELECT is(pg_temp.pending('2026-03-05 23:59:58-03'), 6::bigint,
-  'RN-08/P3: quinta 23:59:58: a célula de quinta sem horário ainda não conta');
-SELECT is(pg_temp.pending('2026-03-05 23:59:59-03'), 7::bigint,
-  'RN-08/P3: quinta 23:59:59: a célula sem horário (meeting_time nulo) entra no fim do dia');
+SELECT is(pg_temp.pending('2026-03-05 23:58:59-03'), 6::bigint,
+  'RN-08/P3: quinta 23:58:59: a célula de quinta 23:59 ainda não conta');
+SELECT is(pg_temp.pending('2026-03-05 23:59:00-03'), 7::bigint,
+  'RN-08/P3: quinta 23:59: a célula de quinta 23:59 entra no último minuto do dia');
 SELECT is(pg_temp.pending('2026-03-06 19:59:00-03'), 7::bigint, 'RN-08/P3: sexta 19:59: a de sexta ainda não conta');
 SELECT is(pg_temp.pending('2026-03-06 20:00:00-03'), 8::bigint, 'RN-08a/P3: sexta 20:00: a célula de sexta entra');
 SELECT is(pg_temp.pending('2026-03-07 15:59:00-03'), 8::bigint, 'RN-08/P3: sábado 15:59: a de sábado ainda não conta');
 SELECT is(pg_temp.pending('2026-03-07 16:00:00-03'), 9::bigint,
-  'RN-08/P3: sábado 16:00: a de sábado entra; dia desconhecido, dia nulo, inativa e as com relatório na semana ficam fora');
+  'RN-08/P3: sábado 16:00: a de sábado entra; a inativa, as com relatório na semana e as com relatório posterior ficam fora');
 
 -- O mesmo instante em UTC (segunda 19:59 e 20:00 em Brasília).
 SELECT is(pg_temp.pending('2026-03-02 22:59:00+00'), 1::bigint,
@@ -822,8 +829,9 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, has_leadersh
 -- pendentes, se não fosse o relatório de quarta.
 INSERT INTO public.members (id, name, gender, leader_id, has_leadership, is_active, is_baptized)
 SELECT pg_temp.m(1000 + n), 'Volume ' || n, 'F', pg_temp.m(19), true, true, true FROM generate_series(1, 1100) n;
-INSERT INTO public.cells (id, leader_id, type, meeting_day, meeting_time, is_active)
-SELECT pg_temp.c(1000 + n), pg_temp.m(1000 + n), 'Evangelística', 'Segunda', '20:00', true FROM generate_series(1, 1100) n;
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active)
+SELECT pg_temp.c(1000 + n), pg_temp.m(1000 + n), pg_temp.m(1000 + n), pg_temp.m(1000 + n),
+       'Evangelística', 'Segunda', '20:00', true FROM generate_series(1, 1100) n;
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, visitors, was_held)
 SELECT pg_temp.r(1000 + n), pg_temp.c(1000 + n), '2026-03-04', '20:00', 'Volume', ARRAY['V'], true
   FROM generate_series(1, 1100) n;
