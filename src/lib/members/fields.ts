@@ -50,6 +50,11 @@ export type MemberRow = Omit<
   | "updated_at"
   | "g12_id"
   | "password_reset_status"
+  // A autoria (E2.05, AQ-1) é lida por id ao abrir o registro, nunca nas listas (DT-15).
+  | "created_by_kind"
+  | "created_by_name"
+  | "updated_by_kind"
+  | "updated_by_name"
 > &
   Partial<Pick<MemberViewRow, "password_reset_status">>;
 

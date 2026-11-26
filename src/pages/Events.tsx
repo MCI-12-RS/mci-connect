@@ -22,12 +22,14 @@ import type { Enums, Tables } from "@/integrations/supabase/types";
 
 type EventRow = Tables<"events">;
 type EventAction = Enums<"event_action">;
-type EventEntity = Enums<"event_entity">;
+// A entidade "Participante" sai da tela (E2.05, RN-20 f): os eventos de participante de antes do passo
+// foram convertidos em eventos do relatório.
+type EventEntity = Exclude<Enums<"event_entity">, "cell_report_participant">;
 
 // A ordem é a do filtro "Ação" (UX-15).
 const ACTION_LABELS: Record<EventAction, string> = {
   create: "Criação",
-  update: "Atualização",
+  update: "Alteração",
   delete: "Exclusão",
   restore: "Restauração",
   ...AUTH_ACTION_LABELS,
@@ -37,7 +39,7 @@ const ENTITY_LABELS: Record<EventEntity, string> = {
   member: "Membro",
   cell: "Célula",
   cell_report: "Relatório",
-  cell_report_participant: "Participante",
+  role: "Função",
   auth: "Autenticação",
 };
 
@@ -48,6 +50,9 @@ function isEventAction(value: string): value is EventAction {
 function isEventEntity(value: string): value is EventEntity {
   return Object.prototype.hasOwnProperty.call(ENTITY_LABELS, value);
 }
+
+/** Um evento de participante que não foi convertido (formato desconhecido) aparece como do relatório. */
+const entityLabel = (entity: string) => (isEventEntity(entity) ? ENTITY_LABELS[entity] : ENTITY_LABELS.cell_report);
 
 /** "10/11/2026, 14:32", sempre no horário de Brasília, qualquer que seja o fuso do navegador. */
 const formatDateTime = (iso: string) => {
@@ -214,7 +219,7 @@ const Events = () => {
                       <TableCell>
                         <Badge variant="outline">{ACTION_LABELS[e.action] || e.action}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{ENTITY_LABELS[e.entity] || e.entity}</TableCell>
+                      <TableCell className="text-sm">{entityLabel(e.entity)}</TableCell>
                       <TableCell className="text-sm">
                         {e.description}
                         <EventSecondLine event={e} />
@@ -254,7 +259,7 @@ const Events = () => {
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Entidade</Label>
-                      <p>{ENTITY_LABELS[selected.entity] || selected.entity}</p>
+                      <p>{entityLabel(selected.entity)}</p>
                     </div>
                   </div>
                   {!isAuthEvent(selected) && selected.entity_label && (
