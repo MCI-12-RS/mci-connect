@@ -24,9 +24,10 @@
 --    Os dois valem para todos os papéis; só a carga em replica passa por fora,
 --    e ali valem os NOT NULL e os CHECKs.
 --
--- O ab_enforce_cell_scope (E2.02) já ignora o papel vazio: (b) só confere
--- quem entra com valor não nulo; (c) é a célula continuar visível. A recusa
--- do papel vazio é *_required, do ad_ (conferido para a tarefa 5).
+-- O ab_enforce_cell_scope (E2.02) vem antes: (b) só confere quem entra com
+-- valor não nulo; (c) é a célula continuar visível. Se esvaziar um papel
+-- tirar a célula da vista de quem grava, a recusa é a do escopo
+-- (would_leave_scope); senão, é *_required, do ad_ (conferido na tarefa 5).
 --
 -- Pode rodar de novo sem erro: os triggers novos saem antes das correções e
 -- voltam no fim; CREATE OR REPLACE; CHECKs em DO com guarda de
