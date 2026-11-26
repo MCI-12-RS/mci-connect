@@ -42,7 +42,12 @@ rerun() {
   else echo "  FAIL  $(basename "$f"): $(echo "$out" | head -3)"; FAILS=$((FAILS + 1)); fi
 }
 rerun "$M1" "$STATE1"
-rerun "$M2" "$STATE2"
+# A migration 2 recria a cells_view. Depois do E2.05 (a autoria no fim da view), o CREATE OR REPLACE VIEW dela
+# falha por desenho (não tira colunas): a reexecução só vale antes do E2.05.
+HAS_E205=$(echo "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.cells_view'::regclass AND attname = 'created_by_kind' AND NOT attisdropped;" \
+           | $PSQL -X -q -At 2>&1)
+if [ "$HAS_E205" = "1" ]; then echo "  SKIP  $(basename "$M2"): a cells_view já tem as colunas do E2.05"
+else rerun "$M2" "$STATE2"; fi
 
 # Dados mínimos para as guardas (fictícios, em replica, desfeitos no ROLLBACK).
 SEED="SET LOCAL session_replication_role = replica;

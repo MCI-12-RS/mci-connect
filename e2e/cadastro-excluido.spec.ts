@@ -161,7 +161,9 @@ test.beforeAll(async () => {
   );
   rpcsAs(env, adminId, [1, 2, 3, 4, 5, 6, 7].map((n) => `public.delete_member(${lit(member(n))})`));
   // A data que o spec usa no exemplo (RN-18): "excluído em 10/11/2026".
-  sql(env, `UPDATE public.members SET deleted_at = '2026-11-10T15:00:00Z' WHERE id = ${lit(member(1))}`);
+  // A data da exclusão vem do relógio do servidor (E2.05, RN-06): a data fixa do teste só sem triggers.
+  sql(env, `BEGIN; SET LOCAL session_replication_role = replica;
+            UPDATE public.members SET deleted_at = '2026-11-10T15:00:00Z' WHERE id = ${lit(member(1))}; COMMIT;`);
 });
 
 test.afterAll(async () => {

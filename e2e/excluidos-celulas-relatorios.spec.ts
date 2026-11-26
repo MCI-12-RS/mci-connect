@@ -137,12 +137,12 @@ test.beforeAll(() => {
      INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
      VALUES (${lit(S_TAKEN)}, ${lit(cell(4))}, public.week_start(public.sp_today()) + 1, '18:00', '${NAME} tema S', true);
      UPDATE public.cells SET deleted_at = '2026-11-12T13:05:00Z', deleted_by = ${admin} WHERE id = ${lit(cell(1))};
-     UPDATE public.cells SET deleted_at = '2026-11-15T18:00:00Z', deleted_by = NULL WHERE id = ${lit(cell(2))};
+     UPDATE public.cells SET deleted_at = '2026-11-15T18:00:00Z', deleted_by = NULL, deleted_by_kind = NULL WHERE id = ${lit(cell(2))};
      UPDATE public.cells SET deleted_at = '2026-11-18T01:30:00Z', deleted_by = ${admin} WHERE id = ${lit(cell(3))};
      UPDATE public.cells SET deleted_at = '2026-11-05T10:00:00Z', deleted_by = ${admin} WHERE id = ${lit(cell(6))};
      UPDATE public.cells SET deleted_at = '2026-11-04T10:00:00Z', deleted_by = ${admin} WHERE id = ${lit(cell(7))};
      UPDATE public.cell_reports SET deleted_at = '2026-11-23T15:00:00Z', deleted_by = ${admin} WHERE id = ${lit(R_TAKEN)};
-     UPDATE public.cell_reports SET deleted_at = '2026-11-22T23:59:00Z', deleted_by = NULL WHERE id = ${lit(R_LAST)};
+     UPDATE public.cell_reports SET deleted_at = '2026-11-22T23:59:00Z', deleted_by = NULL, deleted_by_kind = NULL WHERE id = ${lit(R_LAST)};
      UPDATE public.cell_reports SET deleted_at = '2026-11-20T03:00:00Z', deleted_by = ${admin} WHERE id = ${lit(R_RACE)};
      ${PAG.map((n) => `UPDATE public.cell_reports SET deleted_at = timestamptz '2026-10-01T12:00:00Z' + interval '${n} hours' WHERE id = ${lit(pagReport(n))};`).join("\n     ")}
      COMMIT;`,

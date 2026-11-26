@@ -9,7 +9,14 @@ set -uo pipefail
 PSQL=${PSQL:-"docker exec -i supabase_db_mci-connect psql -U postgres"}
 DIR=$(cd "$(dirname "$0")/../../migrations" && pwd)
 FAILS=0
+# As migrations 4 e 5 recriam a members_view. Depois do E2.05 (a autoria no fim da view), o CREATE OR REPLACE
+# VIEW delas falha por desenho (não tira colunas): a reexecução delas só vale antes do E2.05.
+HAS_E205=$(echo "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.members_view'::regclass AND attname = 'created_by_kind' AND NOT attisdropped;" \
+           | $PSQL -X -q -At 2>&1)
 for f in "$DIR"/*_e203_0[1-5]_*.sql; do
+  if [ "$HAS_E205" = "1" ] && grep -q 'VIEW public.members_view' "$f"; then
+    echo "  SKIP  $(basename "$f"): a members_view já tem as colunas do E2.05"; continue
+  fi
   OUT=$({ echo 'BEGIN;'; cat "$f"; echo; echo 'SELECT count(*) FROM auth.users WHERE coalesce(encrypted_password, '"''"') <> '"''"';'; echo 'ROLLBACK;'; } \
         | $PSQL -X -q -At -v ON_ERROR_STOP=1 2>&1)
   RC=$?

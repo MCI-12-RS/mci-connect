@@ -86,7 +86,7 @@ function cleanup() {
   sql(`BEGIN;
 SET LOCAL session_replication_role = replica;
 DELETE FROM public.events WHERE entity_label LIKE '${NAME}%' OR actor_label LIKE '${NAME}%' OR (entity = 'auth' AND occurred_at > now() - interval '1 hour');
-UPDATE public.members SET leader_id = NULL, has_leadership = false, deleted_by = NULL WHERE name LIKE '${NAME}%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, deleted_by = NULL, deleted_by_kind = NULL WHERE name LIKE '${NAME}%';
 DELETE FROM public.members WHERE name LIKE '${NAME}%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);
 DELETE FROM private.sign_in_throttle;

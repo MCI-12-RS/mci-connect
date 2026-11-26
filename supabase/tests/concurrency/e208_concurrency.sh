@@ -56,7 +56,7 @@ SET LOCAL session_replication_role = replica;
 DELETE FROM public.cell_report_participants WHERE report_id IN (SELECT id FROM public.cell_reports WHERE cell_id::text LIKE 'f208c0de%');
 DELETE FROM public.cell_reports WHERE id::text LIKE 'f208c0de%' OR cell_id::text LIKE 'f208c0de%';
 DELETE FROM public.cells WHERE id::text LIKE 'f208c0de%';
-UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f208c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL, deleted_by_kind = NULL WHERE id::text LIKE 'f208c0de%';
 DELETE FROM public.members WHERE id::text LIKE 'f208c0de%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f208c0de%';

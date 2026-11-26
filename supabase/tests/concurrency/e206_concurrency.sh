@@ -65,7 +65,7 @@ BEGIN;
 SET LOCAL session_replication_role = replica;
 DELETE FROM public.cells WHERE id::text LIKE 'f206c0de%';
 DELETE FROM private.member_hierarchy WHERE member_id::text LIKE 'f206c0de%';  -- em replica a FK em cascata não roda
-UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f206c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL, deleted_by_kind = NULL WHERE id::text LIKE 'f206c0de%';
 DELETE FROM public.members WHERE id::text LIKE 'f206c0de%';
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f206c0de%';
 DELETE FROM public.roles WHERE id::text LIKE 'f206c0de%';
