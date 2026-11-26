@@ -25,6 +25,24 @@ export interface UpdateCellRequest {
 
 export type CellSaveRequest = CreateCellRequest | UpdateCellRequest;
 
+/**
+ * Tempo-limite da gravação, o mesmo do cadastro de membro (E2.04, T7). Sem
+ * rede a chamada pode nunca voltar; passado o limite, é uma queda de conexão,
+ * e a nova tentativa é segura (o cadastro confere antes; o PATCH é o mesmo).
+ */
+export const CELL_SAVE_TIMEOUT_MS = 20_000;
+
+/** A chamada com um sinal que a cancela depois do tempo-limite. */
+async function withTimeout<T>(run: (signal: AbortSignal) => PromiseLike<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CELL_SAVE_TIMEOUT_MS);
+  try {
+    return await run(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type CellSaveResult =
   | { kind: "saved"; outcome: CellSaveOutcome }
   /** A edição voltou sem linha: a célula foi excluída ou saiu do escopo (E2.01, DT-19). */
@@ -66,7 +84,7 @@ export function useCellSave() {
       if (!error && data) return { kind: "saved", outcome: "created" };
     }
     uncertainAttempts.current.add(insert.id);
-    const { error } = await supabase.from("cells").insert(insert);
+    const { error } = await withTimeout((signal) => supabase.from("cells").insert(insert).abortSignal(signal));
     if (!error) return { kind: "saved", outcome: "created" };
     const result = failed(error);
     // Uma recusa do servidor é certa: nada foi gravado.
@@ -77,7 +95,9 @@ export function useCellSave() {
   };
 
   const update = async ({ cellId, patch, outcome }: UpdateCellRequest): Promise<CellSaveResult> => {
-    const { data, error } = await supabase.from("cells").update(patch).eq("id", cellId).select("id");
+    const { data, error } = await withTimeout((signal) =>
+      supabase.from("cells").update(patch).eq("id", cellId).select("id").abortSignal(signal),
+    );
     if (error) return failed(error);
     if (!data?.length) {
       requestSessionCheck();
