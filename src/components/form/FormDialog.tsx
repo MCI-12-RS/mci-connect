@@ -14,7 +14,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import ResponsiveDialogContent from "@/components/ResponsiveDialogContent";
 import LongAlertDialogContent, { DIALOG_FOOTER_BUTTON } from "@/components/LongAlertDialogContent";
 import { cn } from "@/lib/utils";
-import { FormErrorSummary } from "@/components/members/FormErrorSummary";
+import { FormErrorSummary } from "@/components/form/FormErrorSummary";
 import { useSlowPending } from "@/hooks/use-slow-pending";
 import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
 

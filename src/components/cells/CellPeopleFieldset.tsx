@@ -40,6 +40,8 @@ interface CellPeopleFieldsetProps {
   /** Uma escolha no seletor de Anfitrião, inclusive a volta ao gravado (UXD-8). */
   onHostPicked: (hostId: string) => void;
   hostAddress: HostAddressUi;
+  /** O formulário está gravando: sem nova escolha de anfitrião (e sem nova busca do endereço). */
+  hostDisabled?: boolean;
 }
 
 const HOST_OUTCOME_TEXT: Readonly<Record<HostAddressOutcome, string>> = {
@@ -100,6 +102,7 @@ export function CellPeopleFieldset({
   noResultsLabel,
   onHostPicked,
   hostAddress,
+  hostDisabled = false,
 }: CellPeopleFieldsetProps) {
   const { control } = useFormContext<CellFormValues>();
   const hostNoticeShown = hostAddress.status !== "idle" || !!hostAddress.outcome;
@@ -137,6 +140,7 @@ export function CellPeopleFieldset({
               aria-describedby={describedIds}
               markInactive
               valueStatus={statusOf(field)}
+              isDisabled={field === "host_id" && hostDisabled}
             />
           )}
         />

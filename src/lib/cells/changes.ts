@@ -1,7 +1,17 @@
 // O que mudou no formulário de célula (E2.08, T6; E2.05): a edição manda só o
 // que mudou, e sem mudança nada vai ao servidor. Sem React e sem Supabase.
 import { cepDigits } from "@/lib/address/cep";
-import { CELL_ADDRESS_COLUMNS, meetingTimeToWrite, optionalText, type CellFormValues, type CellUpdate } from "./write";
+import type { CellStoredRow } from "./fields";
+import {
+  CELL_ADDRESS_COLUMNS,
+  cellFormFromInsert,
+  cellFormFromRow,
+  meetingTimeToWrite,
+  optionalText,
+  type CellFormValues,
+  type CellInsert,
+  type CellUpdate,
+} from "./write";
 
 /** O PATCH só com as colunas que mudaram. */
 export type CellPatch = Pick<
@@ -50,4 +60,16 @@ export function changedCellFields(stored: CellFormValues, current: CellFormValue
 /** Algo mudou: fechar pede "Descartar as alterações?" (UX-25). */
 export function isCellFormDirty(stored: CellFormValues, current: CellFormValues): boolean {
   return Object.keys(changedCellFields(stored, current)).length > 0;
+}
+
+/**
+ * A nova tentativa de cadastro achou a célula do mesmo `id` (DT-09): o que o
+ * envio atual tem de diferente dela. Vazio, é a mesma célula e o cadastro deu
+ * certo; senão, a pessoa corrigiu o formulário depois de uma tentativa que
+ * chegou ao servidor sem resposta, e as correções vão num PATCH. A situação
+ * fica como está gravada (o cadastro não a escolhe, RN-11).
+ */
+export function retriedCellPatch(stored: CellStoredRow, insert: CellInsert): CellPatch {
+  const before = cellFormFromRow(stored);
+  return changedCellFields(before, { ...cellFormFromInsert(insert), is_active: before.is_active });
 }

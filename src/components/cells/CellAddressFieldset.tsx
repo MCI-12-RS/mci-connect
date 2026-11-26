@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,15 +21,28 @@ const CEP_FIELDS = ["street", "neighborhood", "city", "state"] as const;
  * O CEP digitado preenche rua, bairro, cidade e estado (`CepField`); o CEP que
  * vem do anfitrião não dispara a busca.
  */
-export const CellAddressFieldset = forwardRef<HTMLFieldSetElement>((_props, ref) => {
+interface CellAddressFieldsetProps {
+  /** O formulário está gravando: o CEP fica desabilitado, e a resposta de uma busca em voo é ignorada. */
+  busy: boolean;
+  /** O CEP mudou o endereço: o aviso do anfitrião deixa de valer (UXD-8). */
+  onCepFilled: () => void;
+}
+
+export const CellAddressFieldset = forwardRef<HTMLFieldSetElement, CellAddressFieldsetProps>(({ busy, onCepFilled }, ref) => {
   const { control, register, getValues, setValue } = useFormContext<CellFormValues>();
+  // A busca do CEP pode voltar durante o envio: o valor atual, e não o da digitação.
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   const fillFromCep = (found: CepAddress) => {
+    if (busyRef.current) return;
     const current = { street: getValues("street"), neighborhood: getValues("neighborhood"), city: getValues("city"), state: getValues("state") };
     const next = applyCepAddress(current, found);
-    for (const field of CEP_FIELDS) {
-      if (next[field] !== current[field]) setValue(field, next[field], { shouldDirty: true });
-    }
+    const changed = CEP_FIELDS.filter((field) => next[field] !== current[field]);
+    for (const field of changed) setValue(field, next[field], { shouldDirty: true });
+    if (changed.length > 0) onCepFilled();
   };
 
   const textField = (field: TextField, label: string, className?: string) => (
@@ -55,6 +68,7 @@ export const CellAddressFieldset = forwardRef<HTMLFieldSetElement>((_props, ref)
               onBlur={field.onBlur}
               inputRef={field.ref}
               onFound={fillFromCep}
+              disabled={busy}
             />
           )}
         />

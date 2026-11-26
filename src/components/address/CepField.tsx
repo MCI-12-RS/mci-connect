@@ -20,6 +20,8 @@ interface CepFieldProps {
   name?: string;
   /** "Meus dados" só para leitura: sem máscara, sem busca e sem placeholder. */
   readOnly?: boolean;
+  /** O formulário está gravando: sem digitação e sem nova busca. */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -32,7 +34,18 @@ interface CepFieldProps {
  * dispara (UXD-9). Não encontrado e falha são avisos (P21): não marcam o campo
  * como inválido, não entram no resumo e somem quando o CEP muda.
  */
-export function CepField({ id, value, onChange, onBlur, onFound, inputRef, name, readOnly = false, className }: CepFieldProps) {
+export function CepField({
+  id,
+  value,
+  onChange,
+  onBlur,
+  onFound,
+  inputRef,
+  name,
+  readOnly = false,
+  disabled = false,
+  className,
+}: CepFieldProps) {
   const { status, lookup, reset } = useCepLookup();
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +95,7 @@ export function CepField({ id, value, onChange, onBlur, onFound, inputRef, name,
         autoComplete="off"
         maxLength={9}
         readOnly={readOnly}
+        disabled={disabled}
         placeholder={readOnly ? undefined : TEXTS.zipCodePlaceholder}
         value={value}
         onChange={readOnly ? undefined : handleChange}

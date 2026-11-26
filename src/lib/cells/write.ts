@@ -5,7 +5,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { maskCep } from "@/lib/address/cep";
 import { readHhmmOnBlur, toHhmm } from "@/lib/time/hhmm";
 import { DEFAULT_CELL_TYPE } from "./cell-types";
-import type { CellRow } from "./fields";
+import type { CellStoredRow } from "./fields";
 
 export type CellInsert = Database["public"]["Tables"]["cells"]["Insert"];
 export type CellUpdate = Database["public"]["Tables"]["cells"]["Update"];
@@ -52,7 +52,7 @@ export const EMPTY_CELL_FORM: CellFormValues = {
 };
 
 /** O formulário a partir da linha gravada (`cells_view`), sem inventar valores; o horário sem segundos. */
-export function cellFormFromRow(row: CellRow): CellFormValues {
+export function cellFormFromRow(row: CellStoredRow): CellFormValues {
   return {
     leader_id: row.leader_id ?? null,
     timothy_id: row.timothy_id ?? null,
@@ -103,5 +103,29 @@ export function toCellInsert(values: CellFormValues, id: string): CellInsert {
     neighborhood: optionalText(values.neighborhood),
     city: optionalText(values.city),
     state: optionalText(values.state),
+  };
+}
+
+/**
+ * O formulário a partir do cadastro enviado: o inverso de `toCellInsert`, para
+ * comparar o enviado com a célula achada na nova tentativa (DT-09). A célula
+ * nova é ativa (RN-11).
+ */
+export function cellFormFromInsert(insert: CellInsert): CellFormValues {
+  return {
+    leader_id: insert.leader_id || null,
+    timothy_id: insert.timothy_id || null,
+    host_id: insert.host_id || null,
+    type: insert.type ?? DEFAULT_CELL_TYPE,
+    meeting_day: insert.meeting_day ?? "",
+    meeting_time: toHhmm(insert.meeting_time),
+    street: insert.street ?? "",
+    number: insert.number ?? "",
+    complement: insert.complement ?? "",
+    neighborhood: insert.neighborhood ?? "",
+    city: insert.city ?? "",
+    state: insert.state ?? "",
+    zip_code: maskCep(insert.zip_code ?? ""),
+    is_active: insert.is_active !== false,
   };
 }

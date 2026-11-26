@@ -131,6 +131,8 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
   const submit = form.handleSubmit(
     async (values) => {
       if (busy) return;
+      // O endereço do anfitrião que ainda não chegou não muda o que vai ao servidor.
+      hostAddress.cancel();
       setTopMessage(null);
       setFailure(null);
       if (!cell) {
@@ -205,6 +207,7 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
             statusOf={statusOf}
             showScopeHint={showScopeHint}
             noResultsLabel={memberSearchEmptyLabel(access)}
+            hostDisabled={busy}
             onHostPicked={(hostId) => {
               setHostOutcome(null);
               void hostAddress.request(hostId);
@@ -221,7 +224,7 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
 
           <Separator />
 
-          <CellAddressFieldset ref={addressRef} />
+          <CellAddressFieldset ref={addressRef} busy={busy} onCepFilled={() => setHostOutcome(null)} />
         </form>
       </FormProvider>
     </CellFormDialog>

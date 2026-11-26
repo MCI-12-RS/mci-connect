@@ -397,6 +397,40 @@ describe("CellForm: endereço do anfitrião (UX-13 a UX-17)", () => {
   });
 });
 
+describe("CellForm: endereço durante o envio e depois do CEP", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("o CEP digitado depois do anfitrião troca o aviso do anfitrião pelo do CEP", async () => {
+    const viaCep = { logradouro: "Av. Ipiranga", bairro: "Azenha", localidade: "Porto Alegre", uf: "RS" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(viaCep), { status: 200 })));
+    renderForm(null);
+    await pickPerson("host_id", "Carla Dias", { data: CARLA_ADDRESS });
+    await screen.findByText("Endereço preenchido com o do anfitrião.");
+    fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "90160000" } });
+    await waitFor(() => expect(screen.getByLabelText("Rua")).toHaveValue("Av. Ipiranga"));
+    expect(screen.queryByText("Endereço preenchido com o do anfitrião.")).not.toBeInTheDocument();
+  });
+
+  it("durante o envio o Anfitrião e o CEP ficam desabilitados, e o endereço do anfitrião que chega depois não muda o formulário", async () => {
+    renderForm(c1);
+    let releaseFabio: () => void = () => {};
+    let releaseSave: () => void = () => {};
+    await pickPerson("host_id", "Fábio Lima", {
+      data: FABIO_ADDRESS,
+      until: new Promise<void>((resolve) => (releaseFabio = resolve)),
+    });
+    respondWith({ data: [{ id: "c1" }], until: new Promise<void>((resolve) => (releaseSave = resolve)) });
+    fireEvent.click(button("Salvar alterações"));
+    await waitFor(() => expect(cellsWrites()).toHaveLength(1));
+    expect(document.getElementById("host_id")).toBeDisabled();
+    expect(screen.getByLabelText("CEP")).toBeDisabled();
+    await act(async () => releaseFabio());
+    expect(screen.getByLabelText("Rua")).toHaveValue("Rua das Flores");
+    expect(cellsWrites()[0].calls.find(([method]) => method === "update")?.[1]).toEqual({ host_id: "fabio" });
+    await act(async () => releaseSave());
+  });
+});
+
 describe("CellForm: recusas do servidor (UX-11, UX-12)", () => {
   const appError = (code: string, message: string, detail: Record<string, unknown> = {}) => ({
     error: { code: "22023", message, details: JSON.stringify({ code, ...detail }), hint: "app_error" },
@@ -469,13 +503,31 @@ describe("CellForm: cadastro idempotente (DT-09, AQ-3)", () => {
     respondWith({ error: { code: "", message: "TypeError: Failed to fetch" } });
     fireEvent.click(button("Criar célula"));
     await screen.findByText("Não foi possível salvar a célula. Verifique a conexão e tente de novo.");
-    const id = cellsWrites()[0].calls.find(([method]) => method === "insert")?.[1];
-    respondWith({ data: { id: "achou" } });
+    const sent = cellsWrites()[0].calls.find(([method]) => method === "insert")?.[1] as { id: string };
+    // A célula achada é a mesma do envio (o horário volta com os segundos).
+    respondWith({ data: { ...sent, meeting_time: "20:00:00", is_active: true } });
     fireEvent.click(button("Criar célula"));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(cellsWrites()).toHaveLength(1);
     const check = fakeQueries().filter((query) => query.table === "cells_view").at(-1);
-    expect(check?.calls).toContainEqual(["eq", "id", (id as { id: string }).id]);
+    expect(check?.calls).toContainEqual(["eq", "id", sent.id]);
+    expect(toast).toHaveBeenCalledWith({ title: "Célula criada." });
+  });
+
+  it("a pessoa corrigiu o horário depois da queda: a célula achada recebe o PATCH só do horário, e 'Célula criada.'", async () => {
+    const { onClose } = renderForm(null);
+    await fillNewCell();
+    respondWith({ error: { code: "", message: "TypeError: Failed to fetch" } });
+    fireEvent.click(button("Criar célula"));
+    await screen.findByText("Não foi possível salvar a célula. Verifique a conexão e tente de novo.");
+    const sent = cellsWrites()[0].calls.find(([method]) => method === "insert")?.[1] as { id: string };
+    fireEvent.change(screen.getByLabelText("Horário *"), { target: { value: "1930" } });
+    respondWith({ data: { ...sent, meeting_time: "20:00:00", is_active: true } }, { data: [{ id: sent.id }] });
+    fireEvent.click(button("Criar célula"));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const patch = cellsWrites()[1];
+    expect(patch.calls).toContainEqual(["update", { meeting_time: "19:30" }]);
+    expect(patch.calls).toContainEqual(["eq", "id", sent.id]);
     expect(toast).toHaveBeenCalledWith({ title: "Célula criada." });
   });
 

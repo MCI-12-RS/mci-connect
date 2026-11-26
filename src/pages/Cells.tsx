@@ -254,7 +254,7 @@ const Cells = () => {
                     returnFocus.setOpener(e.currentTarget);
                     setFormOpen(true);
                   }}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:w-auto md:h-10"
                 >
                   <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
                   {CELLS_PAGE_TEXTS.newCell}

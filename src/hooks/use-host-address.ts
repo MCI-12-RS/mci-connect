@@ -45,6 +45,12 @@ export function useHostAddress(onLoaded: (address: MemberAddress | null) => void
     [queryClient],
   );
 
+  /** O envio do formulário começou: a resposta que ainda vier não muda mais o endereço enviado. */
+  const cancel = useCallback(() => {
+    token.current += 1;
+    setStatus((current) => (current === "loading" ? "idle" : current));
+  }, []);
+
   const retry = useCallback(() => {
     if (lastHostId.current) void request(lastHostId.current);
   }, [request]);
@@ -57,5 +63,5 @@ export function useHostAddress(onLoaded: (address: MemberAddress | null) => void
     [],
   );
 
-  return { status, request, retry };
+  return { status, request, retry, cancel };
 }

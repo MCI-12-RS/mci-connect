@@ -59,6 +59,8 @@ interface AsyncMemberSelectProps {
    * enquanto carrega (o nome fica LOADING_LABEL), `null` fora do escopo.
    */
   valueStatus?: MemberStatus | null;
+  /** Sem escolha enquanto o formulário grava. */
+  isDisabled?: boolean;
 }
 
 /**
@@ -83,6 +85,7 @@ const AsyncMemberSelect = ({
   "aria-required": ariaRequired,
   markInactive = false,
   valueStatus,
+  isDisabled,
 }: AsyncMemberSelectProps) => {
   const search = useSelectSearch();
   const options = useMemberOptions({ search: search.term, activeOnly, excludeId, enabled: search.isMenuOpen, descendantOf });
@@ -115,6 +118,7 @@ const AsyncMemberSelect = ({
   return (
     <PaginatedSelect
       inputId={inputId}
+      isDisabled={isDisabled}
       focusRef={focusRef}
       search={search}
       pagination={pagination}
