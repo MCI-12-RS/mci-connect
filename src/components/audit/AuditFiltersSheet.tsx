@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EMPTY_AUDIT_FILTERS, isPeriodInverted, type AuditFilters } from "@/lib/audit/url-params";
 import { AUDIT_TEXTS } from "@/lib/audit/texts";
+import { SHEET_HIDE_DEFAULT_CLOSE, SheetCloseButton } from "@/components/SheetCloseButton";
+import { cn } from "@/lib/utils";
 import { FilterSelects } from "./FilterSelects";
 import { PeriodFieldset } from "./PeriodFieldset";
 
@@ -55,10 +57,11 @@ export function AuditFiltersSheet({ open, filters, historyMode, today, onApply, 
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent
         side="bottom"
-        className="flex max-h-[90dvh] flex-col gap-0 p-0 motion-reduce:animate-none"
+        className={cn("flex max-h-[90dvh] flex-col gap-0 p-0 motion-reduce:animate-none", SHEET_HIDE_DEFAULT_CLOSE)}
         onCloseAutoFocus={onCloseAutoFocus}
       >
-        <SheetHeader className="border-b p-4 pr-12 text-left">
+        <SheetCloseButton label={AUDIT_TEXTS.sheet.close} />
+        <SheetHeader className="border-b p-4 pr-14 text-left">
           <SheetTitle>{FILTERS.sheetTitle}</SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">

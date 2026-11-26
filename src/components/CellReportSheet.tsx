@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Info, X } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { CellDeletedBadge, HeldStatusBadge } from "@/components/StatusBadges";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { toReportSheetView, type ReportSheetView } from "@/lib/cell-reports/repo
 import type { CellReportDetailRow } from "@/lib/cell-reports/fields";
 import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
 import { RecordAuthorship } from "@/components/RecordAuthorship";
+import { SheetCloseButton } from "@/components/SheetCloseButton";
 import { CELL_REPORT_DELETION_TEXTS, CELL_REPORT_SHEET_TEXTS } from "@/lib/deletion/texts";
 
 // Painel de consulta de um relatório ("Ver relatório", E2.01 T7 e UXD-7). Só
@@ -24,17 +25,8 @@ const SKELETON_LINES = 6;
 
 const SKELETON = "motion-reduce:animate-none";
 
-/**
- * O "✕" do painel, no lugar do que o `SheetContent` traz: com 44×44 px (no
- * celular, o painel ocupa a tela, e só ele fecha) e o nome em pt-BR.
- */
-const CloseButton = () => (
-  <SheetClose asChild>
-    <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 h-11 w-11" aria-label={TEXTS.close}>
-      <X className="h-4 w-4" aria-hidden="true" />
-    </Button>
-  </SheetClose>
-);
+/** O "✕" do painel (44×44 px; no celular, o painel ocupa a tela, e só ele fecha). */
+const CloseButton = () => <SheetCloseButton label={TEXTS.close} />;
 
 /** Um campo do relatório: o nome e o valor. */
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (

@@ -13,6 +13,8 @@ import {
 } from "@/lib/audit/events";
 import type { AuditRecordRef } from "@/lib/audit/url-params";
 import { AUDIT_TEXTS } from "@/lib/audit/texts";
+import { SHEET_HIDE_DEFAULT_CLOSE, SheetCloseButton } from "@/components/SheetCloseButton";
+import { cn } from "@/lib/utils";
 import { ChangeList } from "./ChangeList";
 import { HistoryLink } from "./HistoryLink";
 
@@ -40,13 +42,16 @@ function EventDetails({ event, historyRecord, onClose }: EventDetailsProps) {
   const record = eventRecord(event);
   const sameRecord = !!record && !!historyRecord && record.type === historyRecord.type && record.id === historyRecord.id;
   return (
-    <div className="mt-6 space-y-6 text-sm">
-      <dl className="space-y-4">
+    <div className="mt-6 space-y-4 text-sm">
+      <dl>
         <Field label={TEXTS.actor}>{actorText(event) ?? AUDIT_TEXTS.noActor}</Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={TEXTS.action}>{actionLabel(event.action)}</Field>
-          <Field label={TEXTS.entity}>{entityLabel(event.entity)}</Field>
-        </div>
+      </dl>
+      {/* Ação e Entidade lado a lado: cada `div` agrupa o seu par `dt`/`dd`, direto no `dl`. */}
+      <dl className="grid grid-cols-2 gap-3">
+        <Field label={TEXTS.action}>{actionLabel(event.action)}</Field>
+        <Field label={TEXTS.entity}>{entityLabel(event.entity)}</Field>
+      </dl>
+      <dl className="space-y-4">
         {!auth && event.entity_label && <Field label={TEXTS.record}>{event.entity_label}</Field>}
         {event.description && <Field label={TEXTS.description}>{event.description}</Field>}
         {auth &&
@@ -92,12 +97,13 @@ export function AuditEventSheet({ event, historyRecord, onClose, onCloseAutoFocu
   return (
     <Sheet open={!!event} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
-        className="w-full overflow-y-auto sm:max-w-lg motion-reduce:animate-none"
+        className={cn("w-full overflow-y-auto sm:max-w-lg motion-reduce:animate-none", SHEET_HIDE_DEFAULT_CLOSE)}
         onCloseAutoFocus={onCloseAutoFocus}
       >
         {event && (
           <>
-            <SheetHeader className="pr-8 text-left">
+            <SheetCloseButton label={TEXTS.close} />
+            <SheetHeader className="pr-12 text-left">
               <SheetTitle>{TEXTS.title}</SheetTitle>
               <SheetDescription>{eventDateTime(event.occurred_at).long}</SheetDescription>
             </SheetHeader>
