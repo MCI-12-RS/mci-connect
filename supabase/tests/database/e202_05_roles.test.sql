@@ -293,13 +293,13 @@ SELECT is((SELECT is_system FROM public.roles WHERE name = 'Administrador'), tru
 SELECT is((SELECT is_default FROM public.roles WHERE name = 'Membro'), true, 'RN-16: a Membro é a padrão');
 SELECT is((SELECT is_default FROM public.roles WHERE name = 'Líder'), false, 'RN-16: a Líder não é a padrão');
 SELECT is((SELECT string_agg(permission::text, ',' ORDER BY permission::text) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id WHERE r.name = 'Líder'),
-  'create_cell,create_member,delete_cell,delete_cell_report,delete_member,edit_cell,edit_cell_report,edit_member,edit_own_data,submit_own_cell_report,view_dashboard,view_own_ministry',
-  'RN-16: a Líder tem exatamente as 12 permissões da tabela');
+  'change_member_password,create_cell,create_member,delete_cell,delete_cell_report,delete_member,edit_cell,edit_cell_report,edit_member,edit_own_data,submit_own_cell_report,view_dashboard,view_own_ministry',
+  'RN-16: a Líder tem exatamente as 13 permissões da tabela (12 do E2.02 + Redefinir Senha de Membros, RN-01 do E2.03)');
 SELECT is((SELECT string_agg(permission::text, ',' ORDER BY permission::text) FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id WHERE r.name = 'Membro'),
   'edit_own_data,submit_own_cell_report,view_dashboard,view_own_ministry',
   'RN-16: a Membro tem exatamente as 4 permissões da tabela');
-SELECT is((SELECT count(*)::int FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id WHERE r.name = 'Líder' AND rp.permission IN ('view_members', 'view_roles', 'view_sensitive_data', 'change_member_password', 'assign_role', 'manage_roles', 'view_all_church')), 0,
-  'RN-16: a Líder não tem Visualizar Membros (legado), Funções, Dados Sensíveis, Senha, Atribuir Função nem a igreja toda');
+SELECT is((SELECT count(*)::int FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id WHERE r.name = 'Líder' AND rp.permission IN ('view_members', 'view_roles', 'view_sensitive_data', 'assign_role', 'manage_roles', 'view_all_church')), 0,
+  'RN-16: a Líder não tem Visualizar Membros (legado), Funções, Dados Sensíveis, Atribuir Função nem a igreja toda (a Senha entrou no E2.03)');
 SELECT is((SELECT count(*)::int FROM public.role_permissions rp JOIN public.roles r ON r.id = rp.role_id WHERE r.name = 'Administrador'), cardinality(public.active_permissions()),
   'RN-16: a Administrador tem uma linha por permissão ativa (documentação)');
 SELECT is((SELECT count(*)::int FROM public.role_permissions WHERE permission IN ('view_members', 'view_own_ministry_dashboard')), 0, 'RN-22: nenhuma linha de permissão aposentada sobrou');

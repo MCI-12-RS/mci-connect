@@ -6,7 +6,7 @@
 -- estrutura) e os critérios de pronto 1 a 3.
 --
 -- Cobre:
---   - authenticated sem EXECUTE em user_has_permission, is_admin,
+--   - authenticated sem EXECUTE em user_has_permission (is_admin saiu no E2.03),
 --     role_effective_permissions, viewer_permissions e _viewer_scope_anchors;
 --     service_role com EXECUTE;
 --   - as quatro funções obsoletas não existem e nenhum prosrc, política, view
@@ -264,21 +264,21 @@ INSERT INTO universe
 GRANT SELECT ON universe TO authenticated;
 GRANT SELECT ON lbl TO authenticated;
 
-SELECT plan(213);
+SELECT plan(209);
 
 -- ===========================================================================
 -- 1. RN-23: o que authenticated não executa mais.
 -- ===========================================================================
 SELECT is(has_function_privilege('authenticated', f::regprocedure, 'EXECUTE'), false, 'RN-23: authenticated sem EXECUTE em ' || f)
-  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)', 'public.is_admin(uuid)',
+  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)',
                     'public.role_effective_permissions(uuid)', 'public.viewer_permissions()',
                     'public._viewer_scope_anchors()']) f;
 SELECT is(has_function_privilege('service_role', f::regprocedure, 'EXECUTE'), true, 'RN-23: service_role com EXECUTE em ' || f)
-  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)', 'public.is_admin(uuid)',
+  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)',
                     'public.role_effective_permissions(uuid)', 'public.viewer_permissions()',
                     'public._viewer_scope_anchors()']) f;
 SELECT is(has_function_privilege('anon', f::regprocedure, 'EXECUTE'), false, 'RN-23: anon sem EXECUTE em ' || f)
-  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)', 'public.is_admin(uuid)',
+  FROM unnest(ARRAY['public.user_has_permission(uuid, public.permission_action)',
                     'public.role_effective_permissions(uuid)', 'public.viewer_permissions()',
                     'public._viewer_scope_anchors()']) f;
 
@@ -304,7 +304,10 @@ SELECT is((SELECT count(*)::int FROM pg_views WHERE schemaname = 'public' AND de
 -- Caio pergunta sobre os outros: erro de permissão ou resposta vazia.
 SELECT is(pg_temp.code(9, format('SELECT public.user_has_permission(%L, ''manage_roles'')', pg_temp.u(16))), '42501',
   'RN-23: Caio pergunta se Rita tem Gerenciar Funções: 42501');
-SELECT is(pg_temp.code(9, format('SELECT public.is_admin(%L)', pg_temp.u(16))), '42501', 'RN-23: Caio pergunta se Rita é administradora: 42501');
+-- is_admin saiu no E2.03 (migration 5, risco 12 do E2.02): nada mais a usava.
+SELECT is(to_regprocedure('public.is_admin(uuid)'), NULL, 'E2.03: public.is_admin(uuid) foi removida');
+SELECT is((SELECT count(*)::int FROM pg_proc WHERE pronamespace IN ('public'::regnamespace, 'private'::regnamespace)
+            AND prosrc ~ '\mis_admin\M'), 0, 'E2.03: nenhum prosrc cita is_admin');
 SELECT is(pg_temp.code(9, 'SELECT public._viewer_scope_anchors()'), '42501', 'RN-23: Caio lê as âncoras de escopo: 42501');
 SELECT is(pg_temp.code(9, format('SELECT public.role_effective_permissions(%L)', pg_temp.role('Administrador'))), '42501',
   'RN-23: Caio lê as permissões efetivas de uma função: 42501');
@@ -426,7 +429,7 @@ INSERT INTO newfn VALUES
   ('public.delete_role(uuid)', true), ('public.check_member_insert(jsonb)', true),
   ('public.viewer_can_insert_cell()', true), ('public.viewer_can_insert_cell_report(uuid)', true),
   ('public.viewer_can_insert_cell_report_participant(uuid)', true),
-  ('public.user_has_permission(uuid, public.permission_action)', false), ('public.is_admin(uuid)', false),
+  ('public.user_has_permission(uuid, public.permission_action)', false),
   ('public.role_effective_permissions(uuid)', false), ('public.viewer_permissions()', false),
   ('public._viewer_scope_anchors()', false);
 SELECT is(has_function_privilege('anon', sig::regprocedure, 'EXECUTE'), false, 'anon sem EXECUTE em ' || sig) FROM newfn ORDER BY sig;

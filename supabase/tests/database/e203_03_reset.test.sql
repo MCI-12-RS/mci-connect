@@ -15,13 +15,15 @@
 --   - RN-16: a redefinição apaga todas as sessões do alvo e mantém as de quem redefiniu;
 --   - RN-17: o conteúdo dos eventos, nenhuma senha, hash ou origem na Auditoria, falha da Auditoria.
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
+-- PR 4 (portão ligado): o alvo redefinido volta a agir só depois de "trocar a senha" (pg_temp.changed), e a
+-- redefinição com a sessão apagada ou com a marca é recusada pelo portão, sem registro de recusa.
 -- Rodar com: supabase test db
 
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(105);
+SELECT plan(108);
 
 -- ---------------------------------------------------------------------------
 -- Ids fixos: u = auth, m = membros, s = sessões, role = funções de teste.
@@ -203,6 +205,15 @@ SELECT pg_temp.see_all();
 
 -- Segredos devolvidos pela API (para provar que não vão para a Auditoria).
 CREATE TEMP TABLE secrets (s text);
+-- PR 4 (portão ligado): depois de redefinido, o alvo tem a marca e nenhuma sessão, e a API o recusa.
+-- "Concluiu a troca obrigatória" para quem volta a agir no teste: tira a marca e abre a sessão 1 de novo.
+CREATE FUNCTION pg_temp.changed(_n int) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE private.account_passwords
+     SET must_change = false, must_change_reason = NULL, must_change_since = NULL, temp_expires_at = NULL
+   WHERE auth_user_id = pg_temp.u(_n);
+  INSERT INTO auth.sessions (id, user_id) VALUES (pg_temp.s(_n, 1), pg_temp.u(_n)) ON CONFLICT DO NOTHING;
+END $$;
 CREATE FUNCTION pg_temp.keep(_r jsonb) RETURNS jsonb LANGUAGE sql AS
 $$ WITH x AS (INSERT INTO secrets SELECT _r ->> 'password' WHERE _r ->> 'password' IS NOT NULL) SELECT _r $$;
 
@@ -255,6 +266,7 @@ SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(7, 10))), 'ok', 'RN-02: André red
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(7, 8))), 'ok', 'RN-02: André redefine Beatriz (cônjuge, de outro ministério): aceita');
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(7, 3))), 'ok', 'RN-02: André redefine Pedro (o G12 dele, Líder): aceita');
 SELECT is(pg_temp.take('password_reset') -> 0 ->> 'description', 'Senha redefinida', 'RN-17: cada redefinição aceita vira o evento "Senha redefinida"');
+SELECT pg_temp.changed(3);   -- Pedro, redefinido por André, troca a senha e volta a agir
 SELECT pg_temp.see_all();
 
 CREATE TEMP TABLE s1 AS SELECT pg_temp.snap() AS v;
@@ -272,6 +284,7 @@ SELECT is((SELECT array_agg(e ->> 'error_reason' ORDER BY e ->> 'error_reason') 
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(15, 17))), 'ok', 'RN-02: Rita (Administrador) redefine Olga (Administrador): aceita');
 SELECT is(pg_temp.rst(3, 1) ->> 'code', 'not_found', 'RN-02: Pedro não vê os pastores: tentar Samuel dá not_found');
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(2, 1))), 'ok', 'RN-02: Magda (cônjuge de Samuel, Líder) redefine Samuel: aceita');
+SELECT pg_temp.changed(1);
 SELECT is(pg_temp.rst(1, 16) ->> 'code', 'not_found', 'RN-02: Samuel tenta Ester (sem liderança): not_found');
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(15, 16))), 'ok', 'RN-02: Rita redefine Ester: aceita');
 
@@ -297,6 +310,7 @@ SELECT is(pg_temp.rst(15, 15),
   jsonb_build_object('result', 'refused', 'code', 'self', 'message', 'Para trocar a sua senha, use "Alterar minha senha".'),
   'RN-02: Rita tenta redefinir a própria senha: self, com o texto do PO');
 SELECT is(pg_temp.take('password_reset_refused') -> 0 ->> 'error_reason', 'Própria senha', 'RN-02: motivo "Própria senha" na Auditoria');
+SELECT pg_temp.changed(9);
 SELECT is(pg_temp.rst(9, 18) ->> 'code', 'no_permission', 'RN-02: a ordem: Caio contra Nina (excluída) recebe no_permission, a permissão vem primeiro');
 
 -- DA-1: id que não existe ou nulo.
@@ -461,8 +475,15 @@ SELECT is(pg_temp.api(9, 'SELECT to_jsonb(t) FROM (SELECT * FROM public.my_passw
   'RN-16: o código é session_ended');
 SELECT is(pg_temp.api(9, 'SELECT to_jsonb(t) FROM (SELECT * FROM public.my_password_status()) t', 0) ->> 'must_change_password', 'true',
   'RN-16: sem session_id nas claims (token de função, sem sessão) a consulta responde');
--- Quem redefiniu com a sessão apagada também é barrado nas funções com portão: a redefinição como Caio (sessão apagada) não passa.
--- (no PR 1 o portão só vale para my_password_status e as trocas; as views são do PR 4.)
+-- Portão (PR 4): com a sessão apagada, Caio não chega à redefinição (session_ended, antes da permissão);
+-- com uma sessão viva e a marca, recebe password_change_required. Nada é registrado como recusa.
+SELECT pg_temp.see_all();
+SELECT is(pg_temp.api(9, format('SELECT public.reset_member_password(%L)', pg_temp.m(10)), 2) #>> '{detail,code}', 'session_ended',
+  'RN-16 (portão): a redefinição com a sessão apagada dá session_ended');
+INSERT INTO auth.sessions (id, user_id) VALUES (pg_temp.s(9, 3), pg_temp.u(9));
+SELECT is(pg_temp.api(9, format('SELECT public.reset_member_password(%L)', pg_temp.m(10)), 3) #>> '{detail,code}', 'password_change_required',
+  'RN-09 (portão): com a marca, a redefinição dá password_change_required');
+SELECT is(pg_temp.take('password_reset_refused'), '[]'::jsonb, 'RN-09/RN-16: o portão recusa antes de qualquer registro de recusa');
 
 -- ===========================================================================
 -- RN-17: a Auditoria
@@ -481,6 +502,7 @@ SELECT is((SELECT count(*)::int FROM public.events e, secrets s WHERE e::text LI
 SELECT is((SELECT count(*)::int FROM public.events e WHERE e::text LIKE '%$2a$%' OR e::text LIKE '%Caminho2024%' OR e::text LIKE '%Forte@2024x%'), 0,
   'RN-17: nenhum evento contém hash, a senha antiga ou a senha da massa');
 SELECT is((SELECT count(*)::int FROM public.events e WHERE e::text ~ '198\.18\.'), 0, 'RN-17: nenhum evento de redefinição contém a origem');
+SELECT pg_temp.changed(9);
 SELECT is(pg_temp.api(9, 'SELECT to_jsonb(count(*)) FROM public.events'), '0'::jsonb, 'RN-17: Caio (sem "Visualizar Auditoria") não lê eventos pela API');
 SELECT ok((pg_temp.api(2, 'SELECT to_jsonb(count(*)) FROM public.events') = '0'::jsonb), 'RN-17: nem a Líder Magda');
 
