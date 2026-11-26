@@ -84,7 +84,7 @@ const FABIO_ADDRESS = {
 };
 
 /** A célula sendo editada: a fila começa pela leitura da situação das três pessoas (P63). */
-function renderForm(cell: CellRow | null, { statuses = [] as unknown[] } = {}) {
+function renderForm(cell: CellRow | null, { statuses = [] }: { statuses?: object[] } = {}) {
   optionsServed = false;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, "invalidateQueries");

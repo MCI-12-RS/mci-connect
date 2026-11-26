@@ -1,4 +1,4 @@
-import { useRef, type ChangeEvent, type Ref } from "react";
+import type { ChangeEvent, Ref } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,6 @@ interface CepFieldProps {
  */
 export function CepField({ id, value, onChange, onBlur, onFound, inputRef, name, readOnly = false, className }: CepFieldProps) {
   const { status, lookup, reset } = useCepLookup();
-  const lastLookedUp = useRef<string | null>(null);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
@@ -47,12 +46,11 @@ export function CepField({ id, value, onChange, onBlur, onFound, inputRef, name,
 
     const digits = cepDigits(masked.value);
     if (!isCompleteCep(digits)) {
-      lastLookedUp.current = null;
       if (status !== "idle") reset();
       return;
     }
-    if (digits === lastLookedUp.current) return;
-    lastLookedUp.current = digits;
+    // Só quando o CEP mudou nesta digitação ou colagem: o valor anterior pode ter vindo do anfitrião.
+    if (digits === cepDigits(value)) return;
     void lookup(digits).then((result) => {
       if (result?.kind === "found") onFound(result.address);
     });
