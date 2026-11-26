@@ -5,7 +5,7 @@
 -- Rodar com: supabase test db
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(79);
+SELECT plan(81);
 
 -- ---------------------------------------------------------------------------
 -- Ids e chamadas pela API
@@ -436,6 +436,12 @@ SELECT is(pg_temp.nev('member', pg_temp.m(5), (SELECT s FROM m21)), 1, 'RN-14: u
 -- ===========================================================================
 SELECT is((SELECT count(*)::int FROM public.events WHERE entity <> 'auth' AND (description ~ '\d{4}-\d{2}-\d{2}' OR entity_label ~ '\d{4}-\d{2}-\d{2}')), 0,
   'RN-20 e: nenhuma descrição ou registro de evento com data aaaa-mm-dd');
+
+-- Revisão do PR 1: entrada sem a célula ou em formato inválido volta como app_error, nunca como erro cru.
+SELECT is(pg_temp.api(3, $$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, '{}') r$$),
+  '{"error": "22023", "code": "cell_required"}'::jsonb, 'save_cell_report sem a célula: app_error cell_required');
+SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, jsonb_build_object('cell_id', %L::uuid, 'date', 'não é data')) r$$, pg_temp.c(1))),
+  '{"error": "22023", "code": "invalid_input"}'::jsonb, 'save_cell_report com data inválida: app_error invalid_input');
 
 SELECT * FROM finish();
 ROLLBACK;

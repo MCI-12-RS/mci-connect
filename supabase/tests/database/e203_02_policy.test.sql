@@ -190,21 +190,25 @@ FROM policy_cases c WHERE c.context IN ('policy', 'login') ORDER BY c.id;
 -- initial (RN-07): vazia ou exatamente 123456 grava 123456 sem a política; o resto passa pela política.
 -- A marca é "initial", sem validade. Recusada: nada no cofre.
 -- ---------------------------------------------------------------------------
-SELECT is(pg_temp.run_initial(c),
+-- Um comando por caso (\gexec): o teto de 5 s da senha (DT-19 do E1.04) conta desde o início do comando,
+-- e todos os casos num comando só somariam o custo do bcrypt e da Auditoria de cada cadastro.
+SELECT format($q$SELECT is(pg_temp.run_initial(c),
   CASE WHEN c.expected IS NOT NULL THEN c.expected || '|vault=0'
        ELSE 'ok|' || CASE WHEN c.password IN ('', '123456') THEN '123456' ELSE 'digitada' END || '|initial|sem validade' END,
   'RN-07 ' || c.id || ': set_initial_password')
-FROM policy_cases c WHERE c.context = 'initial' ORDER BY c.id;
+FROM policy_cases c WHERE c.id = %L$q$, c.id)
+FROM policy_cases c WHERE c.context = 'initial' ORDER BY c.id \gexec
 
 -- ---------------------------------------------------------------------------
 -- change_voluntary e change_forced (RN-10 a RN-13, DA-7): vazios, política, "igual à atual", confirmação.
 -- ---------------------------------------------------------------------------
-SELECT is(pg_temp.run_change(c),
+SELECT format($q$SELECT is(pg_temp.run_change(c),
   CASE WHEN c.expected IS NULL THEN 'ok|-|-'
        WHEN c.expected = 'empty_fields' THEN 'empty_fields|-|-'
        ELSE 'invalid|' || c.expected || '|' || c.field END,
   'RN-13 ' || c.id || ': change_own_password (' || c.context || ')')
-FROM policy_cases c WHERE c.context IN ('change_voluntary', 'change_forced') ORDER BY c.id;
+FROM policy_cases c WHERE c.id = %L$q$, c.id)
+FROM policy_cases c WHERE c.context IN ('change_voluntary', 'change_forced') ORDER BY c.id \gexec
 
 -- ---------------------------------------------------------------------------
 -- Conferência de sincronia da própria tabela (o Vitest confere o SQL gerado).

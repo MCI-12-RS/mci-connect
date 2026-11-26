@@ -957,7 +957,14 @@ DECLARE
   _before timestamptz;
   _after timestamptz;
 BEGIN
-  _r := jsonb_populate_record(NULL::public.cell_reports, _in);
+  BEGIN
+    _r := jsonb_populate_record(NULL::public.cell_reports, _in);
+  EXCEPTION WHEN invalid_text_representation OR invalid_datetime_format OR datetime_field_overflow
+                 OR numeric_value_out_of_range OR invalid_parameter_value THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', HINT = 'app_error',
+      MESSAGE = 'Os dados do relatório estão em formato inválido.',
+      DETAIL  = '{"code": "invalid_input", "entity": "cell_report"}';
+  END;
   _cols := ARRAY(SELECT u.k
                    FROM unnest(ARRAY['cell_id', 'date', 'time', 'was_held', 'reason_not_held', 'theme',
                                      'observations', 'visitors', 'offering']) WITH ORDINALITY u (k, o)
@@ -965,6 +972,11 @@ BEGIN
                   ORDER BY u.o);
 
   IF _report_id IS NULL THEN
+    IF NOT (_in ? 'cell_id') OR _r.cell_id IS NULL THEN
+      RAISE EXCEPTION USING ERRCODE = '22023', HINT = 'app_error',
+        MESSAGE = 'Escolha a célula do relatório.',
+        DETAIL  = '{"code": "cell_required", "field": "cell_id", "entity": "cell_report"}';
+    END IF;
     EXECUTE format('INSERT INTO public.cell_reports (%s) VALUES (%s) RETURNING id',
                    (SELECT string_agg(quote_ident(k), ', ') FROM unnest(_cols) k),
                    (SELECT string_agg(format('($1).%I', k), ', ') FROM unnest(_cols) k))
