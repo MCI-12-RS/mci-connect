@@ -499,6 +499,11 @@ BEGIN
   _c := pg_temp.ids(_n, 'SELECT id FROM pg_temp.universe WHERE kind = ''c'' AND public.viewer_sees_cell(id) ORDER BY id');
   IF _a IS DISTINCT FROM _b THEN _out := _out || 'células: view <> tabela'; END IF;
   IF _a IS DISTINCT FROM _c THEN _out := _out || 'células: view <> viewer_sees_cell'; END IF;
+  -- E2.08 (DT-07): a coluna can_submit_report é o direito de lançar com a célula ativa.
+  _a := pg_temp.ids(_n, 'SELECT id FROM public.cells_view WHERE id::text LIKE ''d2020000%'' AND can_submit_report ORDER BY id');
+  _c := pg_temp.ids(_n, $q$SELECT u.id FROM pg_temp.universe u JOIN public.cells c ON c.id = u.id
+      WHERE u.kind = 'c' AND public.viewer_sees_cell(u.id) AND c.is_active AND public.can_submit_report(u.id) ORDER BY u.id$q$);
+  IF _a IS DISTINCT FROM _c THEN _out := _out || 'células: can_submit_report <> is_active AND can_submit_report(id)'; END IF;
   -- relatórios
   _a := pg_temp.ids(_n, 'SELECT id FROM public.cell_reports_view WHERE id::text LIKE ''e2020000%'' ORDER BY id');
   _b := pg_temp.ids(_n, 'SELECT id FROM public.cell_reports WHERE id::text LIKE ''e2020000%'' ORDER BY id');
