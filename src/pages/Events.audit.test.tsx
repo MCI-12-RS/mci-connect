@@ -257,6 +257,27 @@ describe("UX-16 e P34: cards no celular", () => {
   });
 });
 
+describe("UX-15 e UX-17: cartões e folha de filtros até 1023 px", () => {
+  it("a 900 px, cartões e o botão 'Filtros'", async () => {
+    setWidth(900);
+    respondWith({ data: [igorChange], count: 1 });
+    renderPage();
+    await screen.findByText("Alterou o membro Igor Nunes");
+    expect(screen.queryByTestId("audit-event-table")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filtros" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Ação" })).not.toBeInTheDocument();
+  });
+
+  it("a 1024 px, a tabela e os filtros na barra, com o desempate estável por id", async () => {
+    setWidth(1024);
+    respondWith({ data: [igorChange], count: 1 });
+    renderPage();
+    expect(await screen.findByTestId("audit-event-table")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Ação" })).toBeInTheDocument();
+    expect(lastPageQuery().calls).toContainEqual(["order", "id", { ascending: false }]);
+  });
+});
+
 describe("UX-17: tabela no computador", () => {
   it("as 6 colunas e a descrição como botão que abre o painel", async () => {
     respondWith({ data: [igorChange], count: 1 });

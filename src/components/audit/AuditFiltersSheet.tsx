@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { EMPTY_AUDIT_FILTERS, isPeriodInverted, type AuditFilters } from "@/lib/audit/url-params";
@@ -31,13 +31,15 @@ export function AuditFiltersSheet({ open, filters, historyMode, today, onApply, 
   const [periodInvalid, setPeriodInvalid] = useState(false);
   const toRef = useRef<HTMLInputElement>(null);
 
-  // Abre sempre com os filtros em vigor.
-  useEffect(() => {
+  // Abre sempre com os filtros em vigor; com o painel aberto, o rascunho não é reescrito.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setDraft(filters);
       setPeriodInvalid(false);
     }
-  }, [open, filters]);
+  }
 
   const change = (changes: Partial<AuditFilters>) => {
     setDraft((current) => ({ ...current, ...changes }));

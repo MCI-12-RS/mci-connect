@@ -14,7 +14,7 @@ const COLUMNS = AUDIT_TEXTS.columns;
 
 /**
  * A tabela no computador (E2.05, T7 e P34): a descrição é o botão que abre o painel pelo teclado; o
- * clique na linha é só um atalho do mouse. Entre 768 e 1023 px, a entidade vai para o lado da ação.
+ * clique na linha é só um atalho do mouse. Só a partir de 1024 px.
  */
 export function AuditEventTable({ events, showEntity, onOpen }: AuditEventTableProps) {
   return (
@@ -24,7 +24,7 @@ export function AuditEventTable({ events, showEntity, onOpen }: AuditEventTableP
           <TableHead className="whitespace-nowrap">{COLUMNS.occurredAt}</TableHead>
           <TableHead>{COLUMNS.actor}</TableHead>
           <TableHead>{COLUMNS.action}</TableHead>
-          {showEntity && <TableHead className="hidden lg:table-cell">{COLUMNS.entity}</TableHead>}
+          {showEntity && <TableHead>{COLUMNS.entity}</TableHead>}
           <TableHead>{COLUMNS.description}</TableHead>
           <TableHead>{COLUMNS.status}</TableHead>
         </TableRow>
@@ -46,12 +46,9 @@ export function AuditEventTable({ events, showEntity, onOpen }: AuditEventTableP
               <TableCell className="whitespace-nowrap align-top text-sm">{eventDateTime(event.occurred_at).short}</TableCell>
               <TableCell className="align-top text-sm">{actorText(event) ?? AUDIT_TEXTS.noActor}</TableCell>
               <TableCell className="align-top">
-                <div className="flex flex-col items-start gap-1">
-                  <ActionBadge action={event.action} />
-                  {showEntity && <span className="text-sm lg:hidden">{entityLabel(event.entity)}</span>}
-                </div>
+                <ActionBadge action={event.action} />
               </TableCell>
-              {showEntity && <TableCell className="hidden align-top text-sm lg:table-cell">{entityLabel(event.entity)}</TableCell>}
+              {showEntity && <TableCell className="align-top text-sm">{entityLabel(event.entity)}</TableCell>}
               <TableCell className="align-top text-sm">
                 <button
                   type="button"

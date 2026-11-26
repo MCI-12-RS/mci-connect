@@ -37,7 +37,7 @@ export function FilterChips({ chips, onRemove, onClearAll, filtersButtonRef }: F
           key={chip.key}
           type="button"
           data-chip={chip.key}
-          className="inline-flex h-9 items-center gap-1 rounded-full border bg-muted px-3 text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-11 items-center gap-1 rounded-full border bg-muted px-3 text-sm text-foreground md:h-9 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={AUDIT_TEXTS.chips.remove(chip.text)}
           onClick={() => remove(index)}
         >
@@ -45,7 +45,7 @@ export function FilterChips({ chips, onRemove, onClearAll, filtersButtonRef }: F
           <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </button>
       ))}
-      <Button type="button" variant="ghost" className="h-9" onClick={onClearAll}>
+      <Button type="button" variant="ghost" className="h-11 md:h-9" onClick={onClearAll}>
         {AUDIT_TEXTS.filters.clearAll}
       </Button>
     </div>

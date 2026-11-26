@@ -36,8 +36,11 @@ import {
 import { AUDIT_TEXTS as TEXTS } from "@/lib/audit/texts";
 import { cn } from "@/lib/utils";
 
-/** A partir daqui, os filtros ficam acima da lista e a lista vira tabela (T7). */
-const DESKTOP_MIN_WIDTH = 768;
+/**
+ * A partir daqui, os filtros ficam acima da lista e a lista vira tabela (T7). Abaixo de 1024 px a
+ * tabela de seis colunas quebra a descrição e esconde o Status: cartões e a folha de filtros.
+ */
+const DESKTOP_MIN_WIDTH = 1024;
 
 /** O título do histórico de um registro (T9): "Histórico de {Nome}", com o badge de excluído. */
 function historyTitle(record: AuditRecordRef, label: AuditRecordLabel | null): string {
@@ -191,16 +194,31 @@ const Events = () => {
     );
   } else if (data) {
     content = (
-      <div
-        className={cn("transition-opacity motion-reduce:transition-none", query.isPlaceholderData && "opacity-60")}
-        aria-busy={query.isPlaceholderData || undefined}
-      >
-        {desktop ? (
-          <AuditEventTable events={data.rows} showEntity={!record} onOpen={openEvent} />
-        ) : (
-          <AuditEventList events={data.rows} showEntity={!record} onOpen={openEvent} />
+      <>
+        {query.isError && (
+          <div className="px-4 pb-4">
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+              <AlertDescription className="space-y-3 text-foreground">
+                <p>{TEXTS.refreshFailed}</p>
+                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void query.refetch()}>
+                  {TEXTS.tryAgain}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
         )}
-      </div>
+        <div
+          className={cn("transition-opacity motion-reduce:transition-none", query.isPlaceholderData && "opacity-60")}
+          aria-busy={query.isPlaceholderData || undefined}
+        >
+          {desktop ? (
+            <AuditEventTable events={data.rows} showEntity={!record} onOpen={openEvent} />
+          ) : (
+            <AuditEventList events={data.rows} showEntity={!record} onOpen={openEvent} />
+          )}
+        </div>
+      </>
     );
   }
 

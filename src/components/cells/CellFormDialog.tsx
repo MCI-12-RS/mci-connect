@@ -8,7 +8,6 @@ const DIALOG_TEXTS = {
   readOnlyClose: CELL_FORM_TEXTS.close,
   errorSummary: CELL_FORM_TEXTS.errorSummary,
   buttons: { cancel: CELL_FORM_TEXTS.buttons.cancel },
-  discard: CELL_FORM_TEXTS.discard,
 };
 
 interface CellFormDialogProps {

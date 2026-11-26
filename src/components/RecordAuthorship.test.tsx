@@ -98,10 +98,17 @@ describe("T1: o bloco de autoria", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it("o registro não veio (excluído ou fora do escopo): nada aparece", () => {
+  it("o registro não veio (excluído ou fora do escopo): sem 'Visualizar Auditoria', nada aparece", () => {
     hook.state = { data: null, isPending: false, isError: false, refetch: vi.fn() };
     renderBlock();
     expect(screen.queryByTestId("record-authorship")).not.toBeInTheDocument();
+  });
+
+  it("o registro não veio, mas quem audita ainda tem 'Ver histórico'", () => {
+    permissions.add("view_audit_log");
+    hook.state = { data: null, isPending: false, isError: false, refetch: vi.fn() };
+    renderBlock();
+    expect(screen.getByRole("link", { name: "Ver histórico de Igor Nunes" })).toHaveAttribute("href", expect.stringContaining("/events"));
   });
 });
 

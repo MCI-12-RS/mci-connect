@@ -41,12 +41,6 @@ export const AUTHORSHIP_TEXTS = {
     cell: (leader: string) => `Ver histórico da célula de ${leader}`,
     cell_report: (date: string) => `Ver histórico do relatório de ${date}`,
   },
-  discard: {
-    title: "Descartar as alterações?",
-    description: "O que você digitou não será salvo.",
-    confirm: "Descartar",
-    keepEditing: "Continuar editando",
-  },
 } as const;
 
 /** A Auditoria (T7 a T10). */
@@ -101,6 +95,8 @@ export const AUDIT_TEXTS = {
   empty: "Nenhum evento registrado.",
   emptyFiltered: "Nenhum evento encontrado para estes filtros.",
   loadFailed: "Não foi possível carregar a Auditoria. Verifique a conexão e tente de novo.",
+  /** A lista anterior continua na tela, mas a nova consulta (página, filtro ou atualização) falhou. */
+  refreshFailed: "Não foi possível atualizar a lista. Os eventos mostrados podem estar desatualizados.",
   tryAgain: "Tentar de novo",
   /** "dd/mm/aaaa às HH:mm" (cards e painel). */
   dateTime: (date: string, time: string) => `${date} às ${time}`,

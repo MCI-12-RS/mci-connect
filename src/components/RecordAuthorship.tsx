@@ -1,24 +1,14 @@
 import { useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { History } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import LongAlertDialogContent, { DIALOG_FOOTER_BUTTON } from "@/components/LongAlertDialogContent";
+import { DiscardChangesDialog } from "@/components/form/DiscardChangesDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRecordAuthorship } from "@/hooks/use-record-authorship";
 import { authorshipLines, recordHistoryPath, type Authorship, type AuthorshipEntity } from "@/lib/audit/authorship";
 import { AUTHORSHIP_TEXTS as TEXTS } from "@/lib/audit/texts";
-import { cn } from "@/lib/utils";
 
 interface RecordAuthorshipProps {
   entity: AuthorshipEntity;
@@ -85,8 +75,11 @@ export function RecordAuthorship({ entity, recordId, recordName, authorship: pre
     );
   } else if (authorship) {
     body = <AuthorshipText entity={entity} authorship={authorship} />;
+  } else if (canAudit) {
+    // A autoria não veio (excluído no meio tempo ou fora do escopo), mas quem audita ainda chega ao histórico.
+    body = <div className="flex-1" />;
   } else {
-    // O registro não veio (excluído no meio tempo ou fora do escopo): nada a mostrar.
+    // O registro não veio e quem consulta não audita: nada a mostrar.
     return null;
   }
 
@@ -105,23 +98,7 @@ export function RecordAuthorship({ entity, recordId, recordName, authorship: pre
       </div>
       <Separator />
 
-      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-        <LongAlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle>{TEXTS.discard.title}</AlertDialogTitle>
-            <AlertDialogDescription>{TEXTS.discard.description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogAction
-              className={cn(buttonVariants({ variant: "destructive" }), DIALOG_FOOTER_BUTTON)}
-              onClick={() => navigate(historyPath)}
-            >
-              {TEXTS.discard.confirm}
-            </AlertDialogAction>
-            <AlertDialogCancel className={cn(DIALOG_FOOTER_BUTTON, "mt-0")}>{TEXTS.discard.keepEditing}</AlertDialogCancel>
-          </AlertDialogFooter>
-        </LongAlertDialogContent>
-      </AlertDialog>
+      <DiscardChangesDialog open={confirmDiscard} onOpenChange={setConfirmDiscard} onDiscard={() => navigate(historyPath)} />
     </div>
   );
 }

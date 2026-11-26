@@ -16,7 +16,7 @@ interface AuditFiltersProps {
 }
 
 /**
- * Os filtros a partir de 768 px (E2.05, T7): acima da lista, valendo na hora. O período inválido ("Até"
+ * Os filtros a partir de 1024 px (E2.05, T7): acima da lista, valendo na hora. O período inválido ("Até"
  * antes de "De") mostra o erro e não consulta o servidor (P33).
  */
 export function AuditFilters({ search, filters, historyMode, today, onChange, onClearAll }: AuditFiltersProps) {
@@ -36,7 +36,8 @@ export function AuditFilters({ search, filters, historyMode, today, onChange, on
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 items-end gap-3">
+      {/* Os rótulos "Buscar" e "Período" alinhados pelo topo, mesmo com o erro do período abaixo. */}
+      <div className="grid grid-cols-2 items-start gap-3">
         {search}
         <PeriodFieldset
           from={from}

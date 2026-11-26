@@ -73,7 +73,12 @@ export function useEventsList(params: EventsListParams, { enabled = true } = {})
         return query;
       };
       const result = await fetchListPage(
-        filtered(false).order("occurred_at", { ascending: false }).order("seq", { ascending: false }).range(from, to),
+        filtered(false)
+          .order("occurred_at", { ascending: false })
+          .order("seq", { ascending: false })
+          // `seq` pode ser nulo: o `id` desempata, para a página não trocar linhas entre consultas.
+          .order("id", { ascending: false })
+          .range(from, to),
         () => filtered(true),
       );
       return {
