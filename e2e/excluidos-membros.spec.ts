@@ -161,8 +161,8 @@ test.beforeAll(async () => {
     env,
     `BEGIN;
      SET LOCAL session_replication_role = replica;
-     INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time, is_active)
-     VALUES (${lit(id(3, 1))}, ${lit(member(1))}, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true);
+     INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active)
+     VALUES (${lit(id(3, 1))}, ${lit(member(1))}, ${lit(member(1))}, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true);
      UPDATE public.members SET deleted_at = '2026-11-10T17:32:00Z', deleted_by = (SELECT id FROM public.members WHERE auth_user_id = ${lit(adminId)}) WHERE id = ${lit(member(11))};
      UPDATE public.members SET deleted_at = '2026-11-02T12:10:00Z', deleted_by = NULL WHERE id = ${lit(member(12))};
      UPDATE public.members SET deleted_at = '2026-11-20T11:00:00Z', deleted_by = ${lit(member(90))} WHERE id = ${lit(member(13))};

@@ -536,8 +536,8 @@ INSERT INTO sb VALUES ('del', pg_temp.sandbox($setup$
     (pg_temp.m(40), 'ExcA', 'M', pg_temp.m(7), now()),
     (pg_temp.m(41), 'ExcB', 'M', pg_temp.m(14), now());
   INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, deleted_at) VALUES
-    (pg_temp.c(4), pg_temp.m(12), NULL, NULL, 'Evangelística', 'Sexta', '20:00', now()),
-    (pg_temp.c(5), pg_temp.m(15), NULL, NULL, 'Evangelística', 'Sexta', '20:00', now());
+    (pg_temp.c(4), pg_temp.m(12), pg_temp.m(12), pg_temp.m(12), 'Evangelística', 'Sexta', '20:00', now()),
+    (pg_temp.c(5), pg_temp.m(15), pg_temp.m(15), pg_temp.m(15), 'Evangelística', 'Sexta', '20:00', now());
   SET LOCAL session_replication_role = replica;
   INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, deleted_at) VALUES
     (pg_temp.r(4), pg_temp.c(1), public.week_start(public.sp_today()) - 10, '20:00', true, 'R4', now()),

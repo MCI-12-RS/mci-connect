@@ -515,7 +515,7 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     expect(cellValue(1, "deleted_at")).toBe("");
   });
 
-  test("UX-24: no formulário de Pedro a dica de alcance fica acima dos três campos; tirar Caio de anfitrião de C2 mostra a mensagem da RN-09 no topo, com os dados mantidos", async ({ page }) => {
+  test("UX-24: no formulário de Pedro a dica de alcance fica acima dos três campos; tirar Caio de anfitrião de C2 não envia nada (E2.08, RN-02), com os dados mantidos", async ({ page }) => {
     await signIn(page, PEDRO);
     await openList(page, "/cells", NAME);
     await editCellButton(page, DIEGO).click();
@@ -530,15 +530,22 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
       expect(hintBox!.y, `a dica fica acima de "${label}"`).toBeLessThan(box!.y);
     }
 
-    // O anfitrião salvo (Caio) aparece pelo nome; limpar e salvar tira C2 da vista de Pedro.
+    // O anfitrião salvo (Caio) aparece pelo nome. Desde o E2.08 (RN-02), a célula não fica sem
+    // anfitrião: salvar sem ele não envia nada e avisa o campo. A mensagem da RN-09 (c) no topo,
+    // que só o servidor dá, fica no teste de componente do CellForm.
     await expect(dialog.getByText(CAIO.name)).toBeVisible();
     await dialog.getByRole("button", { name: "Limpar seleção" }).last().click();
     await dialog.getByRole("button", { name: /Salvar|Atualizar/ }).click();
-    const alert = dialog.getByRole("alert").filter({ hasText: "deixaria de ver esta célula" });
-    await expect(alert).toBeVisible();
-    await expect(alert).toHaveText(MSG.wouldLeaveCell);
+    await expect(toast(page, "Escolha o anfitrião da célula.")).toBeVisible();
+    await expect(dialog).toBeVisible();
     // O diálogo continua aberto, com os dados mantidos; nada mudou no banco.
     await expect(dialog.getByLabel("Horário")).toHaveValue("20:00:00");
+    expect(cellValue(2, "host_id")).toBe(memberId(CAIO));
+
+    // Pela API, a recusa de escopo do E2.02 vem antes da regra do E2.08 (RN-14).
+    const r = await api(page, "PATCH", `cells?id=eq.${cellId(2)}&select=id`, { host_id: null });
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.message).toBe(MSG.wouldLeaveCell);
     expect(cellValue(2, "host_id")).toBe(memberId(CAIO));
   });
 

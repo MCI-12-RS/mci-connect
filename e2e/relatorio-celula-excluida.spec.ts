@@ -140,10 +140,10 @@ test.beforeAll(async () => {
        (${lit(member(8))}, ${lit(ZULEICA)}, 'F', false, true, ${lit(role(3))}, ${lit(mobileOf(8))}),
        (${lit(member(9))}, ${lit(HUGO)}, 'M', false, true, ${lit(role(3))}, ${lit(mobileOf(9))});
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number, neighborhood) VALUES
-       (${lit(cell(1))}, ${lit(member(1))}, NULL, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA4 das Flores', '120', 'Centro'),
-       (${lit(cell(2))}, ${lit(member(6))}, NULL, ${lit(member(6))}, 'Discipulado', 'Quarta', '20:00', true, 'Rua QA4 do Sol', '45', 'Centro'),
-       (${lit(cell(3))}, ${lit(member(7))}, NULL, ${lit(member(7))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA4 da Lua', '7', 'Centro'),
-       (${lit(cell(4))}, ${lit(member(9))}, NULL, ${lit(member(9))}, 'Discipulado', 'Quarta', '20:00', true, 'Rua QA4 do Mar', '9', 'Centro');
+       (${lit(cell(1))}, ${lit(member(1))}, ${lit(member(1))}, ${lit(member(1))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA4 das Flores', '120', 'Centro'),
+       (${lit(cell(2))}, ${lit(member(6))}, ${lit(member(6))}, ${lit(member(6))}, 'Discipulado', 'Quarta', '20:00', true, 'Rua QA4 do Sol', '45', 'Centro'),
+       (${lit(cell(3))}, ${lit(member(7))}, ${lit(member(7))}, ${lit(member(7))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua QA4 da Lua', '7', 'Centro'),
+       (${lit(cell(4))}, ${lit(member(9))}, ${lit(member(9))}, ${lit(member(9))}, 'Discipulado', 'Quarta', '20:00', true, 'Rua QA4 do Mar', '9', 'Centro');
      SET LOCAL session_replication_role = replica;
      INSERT INTO public.members (id, name, gender, has_leadership, is_active, role_id) VALUES
        ${parts.join(",\n       ")};

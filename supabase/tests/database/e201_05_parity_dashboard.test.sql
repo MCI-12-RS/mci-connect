@@ -276,18 +276,18 @@ SELECT pg_temp.m(n), 'Membro V ' || n, CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END
   FROM generate_series(101, 199) n;
 
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
-  (pg_temp.c(1),  pg_temp.m(6),  pg_temp.m(8),  pg_temp.m(15), 'Evangelística', 'Segunda', '20:00'),
-  (pg_temp.c(2),  pg_temp.m(10), pg_temp.m(11), pg_temp.m(7),  'Discipulado',   'Terça',   '19:30'),
-  (pg_temp.c(3),  pg_temp.m(7),  NULL,          NULL,          'Evangelística', 'Quarta',  '20:00'),
-  (pg_temp.c(4),  pg_temp.m(11), pg_temp.m(9),  pg_temp.m(13), 'Macrocélula',   'Sábado',  '16:00'),
-  (pg_temp.c(5),  pg_temp.m(12), NULL,          NULL,          'Evangelística', 'Domingo', '18:00'),
-  (pg_temp.c(6),  pg_temp.m(1),  NULL,          pg_temp.m(4),  'Discipulado',   'Sexta',   '20:00'),
-  (pg_temp.c(7),  pg_temp.m(14), NULL,          NULL,          'Evangelística', 'Quarta',  '19:00'),
-  (pg_temp.c(8),  pg_temp.m(25), NULL,          NULL,          'Evangelística', 'Quinta',  '20:00'),
-  (pg_temp.c(9),  pg_temp.m(15), NULL,          pg_temp.m(7),  'Discipulado',   'Quinta',  '20:00'),
-  (pg_temp.c(10), pg_temp.m(6),  NULL,          NULL,          'Discipulado',   'Domingo', '09:00');
-INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time)
-SELECT pg_temp.c(n), pg_temp.m(n + 1), pg_temp.m(n + 1),
+  (pg_temp.c(1),  pg_temp.m(6), pg_temp.m(8), pg_temp.m(15), 'Evangelística', 'Segunda', '20:00'),
+  (pg_temp.c(2),  pg_temp.m(10), pg_temp.m(11), pg_temp.m(7), 'Discipulado',   'Terça',   '19:30'),
+  (pg_temp.c(3),  pg_temp.m(7), pg_temp.m(7), pg_temp.m(7), 'Evangelística', 'Quarta',  '20:00'),
+  (pg_temp.c(4),  pg_temp.m(11), pg_temp.m(9), pg_temp.m(13), 'Macrocélula',   'Sábado',  '16:00'),
+  (pg_temp.c(5),  pg_temp.m(12), pg_temp.m(12), pg_temp.m(12), 'Evangelística', 'Domingo', '18:00'),
+  (pg_temp.c(6),  pg_temp.m(1), pg_temp.m(1), pg_temp.m(4), 'Discipulado',   'Sexta',   '20:00'),
+  (pg_temp.c(7),  pg_temp.m(14), pg_temp.m(14), pg_temp.m(14), 'Evangelística', 'Quarta',  '19:00'),
+  (pg_temp.c(8),  pg_temp.m(25), pg_temp.m(25), pg_temp.m(25), 'Evangelística', 'Quinta',  '20:00'),
+  (pg_temp.c(9),  pg_temp.m(15), pg_temp.m(15), pg_temp.m(7), 'Discipulado',   'Quinta',  '20:00'),
+  (pg_temp.c(10), pg_temp.m(6), pg_temp.m(6), pg_temp.m(6), 'Discipulado',   'Domingo', '09:00');
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
+SELECT pg_temp.c(n), pg_temp.m(n + 1), pg_temp.m(n + 1), pg_temp.m(n + 1),
        CASE WHEN n < 112 THEN 'Evangelística' WHEN n < 117 THEN 'Discipulado' ELSE 'Macrocélula' END,
        'Quarta', '20:00'
   FROM generate_series(100, 119) n;
@@ -355,10 +355,10 @@ SELECT x.what, pg_temp.code(pg_temp.try(30, x.sql)) AS code
 INSERT INTO public.members (id, name, gender, has_leadership, is_active, mobile_whatsapp) VALUES
   ('f2010500-0000-0000-0000-000000000001', 'Alheio Excluído E201-05', 'M', false, true, pg_temp.mob(901)),
   ('f2010500-0000-0000-0000-000000000002', 'Alheia Líder E201-05',    'F', false, true, pg_temp.mob(902));
-INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time) VALUES
-  ('f2010500-0000-0000-0000-000000000011', 'f2010500-0000-0000-0000-000000000002',
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
+  ('f2010500-0000-0000-0000-000000000011', 'f2010500-0000-0000-0000-000000000002', 'f2010500-0000-0000-0000-000000000002',
    'f2010500-0000-0000-0000-000000000002', 'Evangelística', 'Domingo', '00:00'),
-  ('f2010500-0000-0000-0000-000000000012', 'f2010500-0000-0000-0000-000000000002',
+  ('f2010500-0000-0000-0000-000000000012', 'f2010500-0000-0000-0000-000000000002', 'f2010500-0000-0000-0000-000000000002',
    'f2010500-0000-0000-0000-000000000002', 'Discipulado', 'Domingo', '00:00');
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
   ('f2010500-0000-0000-0000-000000000021', 'f2010500-0000-0000-0000-000000000011', pg_temp.ws(), '00:00', 'Alheio excluído', true),

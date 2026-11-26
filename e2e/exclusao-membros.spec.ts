@@ -112,7 +112,8 @@ test.beforeAll(async () => {
        (${lit(member(5))}, '${NAME} Léo Martins', 'M', ${lit(member(1))}, true, false, ${lit(role(3))}, ${lit(mobileOf(5))});
      INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active, street, number) VALUES
        (${lit(cell(1))}, ${lit(member(6))}, ${lit(member(1))}, ${lit(member(6))}, 'Evangelística', 'Quarta', '20:00', true, 'Rua das Flores', '120'),
-       (${lit(cell(2))}, ${lit(member(7))}, NULL, ${lit(member(1))}, 'Discipulado', 'Sexta', '19:30', false, 'Rua do Sol', '45');
+       (${lit(cell(2))}, ${lit(member(7))}, ${lit(member(7))}, ${lit(member(1))}, 'Discipulado', 'Sexta', '19:30', true, 'Rua do Sol', '45');
+     UPDATE public.cells SET is_active = false WHERE id = ${lit(cell(2))};
      SET LOCAL session_replication_role = replica;
      INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
        (${lit(report(1))}, ${lit(cell(1))}, public.week_start(public.sp_today()) - 4, '20:00', '${NAME} tema', true);
@@ -435,7 +436,7 @@ test("RN-04 (LE): depois de reatribuir os discípulos, trocar o timóteo da cél
   sql(
     env,
     `UPDATE public.members SET leader_id = ${lit(member(6))} WHERE id IN (${[3, 4, 5].map((n) => lit(member(n))).join(", ")});
-     UPDATE public.cells SET timothy_id = NULL WHERE id = ${lit(cell(1))};`,
+     UPDATE public.cells SET timothy_id = ${lit(member(6))} WHERE id = ${lit(cell(1))};`,
   );
   rpcAs(env, adminId, `public.delete_cell(${lit(cell(2))})`);
 

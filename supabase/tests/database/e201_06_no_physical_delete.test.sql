@@ -100,9 +100,9 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_us
   (pg_temp.m(6), 'Paula Participante', 'F', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(6)),
   (pg_temp.m(7), 'Sara Saiu',          'F', pg_temp.m(1), true, NULL, NULL, pg_temp.mob(7));
 
-INSERT INTO public.cells (id, leader_id, host_id, type, meeting_day, meeting_time) VALUES
-  (pg_temp.c(1), pg_temp.m(4), pg_temp.m(4), 'Evangelística', 'Quarta', '20:00'),
-  (pg_temp.c(2), pg_temp.m(4), pg_temp.m(4), 'Discipulado',   'Quinta', '20:00');
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
+  (pg_temp.c(1), pg_temp.m(4), pg_temp.m(4), pg_temp.m(4), 'Evangelística', 'Quarta', '20:00'),
+  (pg_temp.c(2), pg_temp.m(4), pg_temp.m(4), pg_temp.m(4), 'Discipulado',   'Quinta', '20:00');
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES
   (pg_temp.r(1), pg_temp.c(1), public.sp_today(), '20:00', 'Com participantes', true),
   (pg_temp.r(2), pg_temp.c(2), public.sp_today(), '20:00', 'Sem participantes', true);

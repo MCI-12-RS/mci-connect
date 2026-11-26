@@ -165,8 +165,8 @@ export async function seed(env: E2EEnv) {
     sql(
       env,
       `INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active)
-       VALUES (${lit(cellId(cell.n))}, ${lit(memberId(cell.leader))}, ${cell.timothy ? lit(memberId(cell.timothy)) : "NULL"},
-               ${cell.host ? lit(memberId(cell.host)) : "NULL"}, 'Evangelística', 'Quarta', '20:00', true);`,
+       VALUES (${lit(cellId(cell.n))}, ${lit(memberId(cell.leader))}, ${lit(memberId(cell.timothy ?? cell.leader))},
+               ${lit(memberId(cell.host ?? cell.leader))}, 'Evangelística', 'Quarta', '20:00', true);`,
     );
   }
   // Inativos e excluídos por último (o líder inativo e o cadastro excluído não aceitam novos vínculos).
