@@ -184,6 +184,9 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
   (pg_temp.c(6), pg_temp.m(40), pg_temp.m(40), pg_temp.m(40), 'Evangelística', 'Quinta',  '20:00', true),
   (pg_temp.c(7), pg_temp.m(34), pg_temp.m(34), pg_temp.m(34), 'Discipulado',   'Quinta',  '20:00', true),
   (pg_temp.c(8), pg_temp.m(36), pg_temp.m(36), pg_temp.m(36), 'Evangelística', 'Domingo', '09:00', true);
+-- E2.09 (RN-06): a célula inserida agora só conta a partir de agora; a massa conta "desde sempre".
+UPDATE private.cell_active_periods SET periods = '{(,)}'
+ WHERE cell_id IN (SELECT pg_temp.c(n) FROM generate_series(1, 8) n);
 
 -- Semana atual (triggers ligados).
 INSERT INTO public.cell_reports (id, cell_id, date, time, theme, visitors, offering, was_held) VALUES

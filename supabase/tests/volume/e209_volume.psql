@@ -1,0 +1,218 @@
+-- E2.09 (PR 1): volume de referência e metas de "Desempenho".
+-- Spec: docs/specs/e2-09-situacao-relatorio.md (repositório apps-mci), "Desempenho":
+-- o volume do E1.08 (20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações).
+--
+-- Metas:
+--   - página da lista (com report_status e report_missing_weeks) com total, sem filtro: abaixo de 300 ms;
+--   - página com report_status = 'pending' e total: abaixo de 300 ms (o teto do E2.10 é 2 s);
+--   - dashboard_summary: abaixo de 800 ms e no máximo 150 ms a mais que o cálculo antigo das pendentes;
+--   - SELECT 1 ... WHERE id = … e count(*) sem filtro: o plano não chama cell_report_situation;
+--   - gravação que muda a situação da célula (inativar): no máximo 1 ms a mais que sem o trigger novo.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e209_volume.psql > e209_explain.txt
+-- A saída traz o EXPLAIN (ANALYZE, BUFFERS) de cada operação e uma linha "META" por medida, com o tempo
+-- (a mediana de 5 execuções nas leituras; o melhor de várias rodadas desfeitas nas gravações) e o limite.
+
+\set ON_ERROR_STOP on
+\set cell_cols 'id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, timothy_name, host_name, g12_leader_name, can_submit_report, is_mine, report_status, report_missing_weeks'
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas (a árvore do volume do E2.02/E2.08): 2 pastores casados (1 e 2), 12 G12 (3 a 14) e 12
+-- discípulos por pessoa até 20.000. 1 = pastor (Líder), 2 = Administrador, 3 = G12 (Líder).
+INSERT INTO auth.users (id, email)
+SELECT ('a2090900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e209-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2090900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2090900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2090900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2090900-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       n % 10 <> 0,
+       n > 2,
+       CASE WHEN n <= 3 THEN ('a2090900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células, 10% inativas, cadastradas há 500 dias (o backfill usa esse created_at: risco 4).
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active, created_at)
+SELECT ('d2090900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2090900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2090900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2090900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       (ARRAY['19:00', '20:00', '23:30'])[1 + n % 3]::time,
+       'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0,
+       now() - interval '500 days'
+  FROM generate_series(1, 1500) n;
+
+-- 100 mil relatórios em semanas passadas, com buracos: cada célula pula as semanas em que
+-- (i / 1500 + n) % 5 = 0, para haver semanas anteriores sem relatório; nesta semana, metade tem.
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2090900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2090900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', i % 7 <> 0, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i
+ WHERE (i / 1500 + i % 1500) % 5 <> 0;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme)
+SELECT ('e2090900-0000-0001-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('d2090900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()), '20:00', true, 'Semana atual'
+  FROM generate_series(1, 1500, 2) n;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT r.id, ('c2090900-0000-0000-0000-' || lpad((15 + ((row_number() OVER ()) * 7919 + k) % 19980)::text, 12, '0'))::uuid
+  FROM public.cell_reports r, generate_series(0, 7) k
+ WHERE r.id::text LIKE 'e2090900-0000-0000-%';
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+SELECT 'BACKFILL linhas criadas', private.backfill_cell_active_periods();
+SELECT 'CONFERÊNCIA invariante vazio', NOT EXISTS (SELECT 1 FROM private.cell_active_period_problems()) AS ok;
+ANALYZE private.member_hierarchy; ANALYZE private.cell_active_periods;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' (inativas=' || (SELECT count(*) FROM public.cells WHERE NOT is_active) || ') reports=' || (SELECT count(*) FROM public.cell_reports)
+    || ' participants=' || (SELECT count(*) FROM public.cell_report_participants) AS volume;
+
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2090900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+-- Tempo de uma gravação, em ms, como a pessoa n: o melhor de _rounds, cada rodada desfeita.
+CREATE FUNCTION pg_temp.undo_ms(_n int, _sql text, _rounds int DEFAULT 30) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    BEGIN
+      PERFORM pg_temp.as_member(_n);
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      _t := clock_timestamp();
+      EXECUTE _sql;
+      _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+      IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+      RAISE EXCEPTION 'undo' USING ERRCODE = 'P0099';
+    EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+    END;
+  END LOOP;
+  EXECUTE 'RESET ROLE';
+  RETURN round(_best, 2);
+END $$;
+-- Tempo de uma leitura, em ms: a mediana de _rounds execuções (depois de uma de aquecimento).
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _xs numeric[] := '{}'; i int;
+BEGIN
+  EXECUTE _sql;
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _xs := _xs || (extract(epoch FROM clock_timestamp() - _t) * 1000)::numeric;
+  END LOOP;
+  RETURN round((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM unnest(_xs) x)::numeric, 1);
+END $$;
+
+SELECT 'CONFERÊNCIA distribuição (Administrador, agora)', report_status, count(*)
+  FROM public.cells_report_situation(now()) GROUP BY report_status ORDER BY report_status;
+
+\echo
+\echo '######## cells_view: página e total, sem filtro e com report_status = pending ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cells_view;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cells_view WHERE report_status = ''pending'' ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cells_view WHERE report_status = 'pending';
+SELECT 'META Administrador: página + total, sem filtro (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META Administrador: página + total, report_status = pending (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view WHERE report_status = ''pending'' ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view WHERE report_status = 'pending'$q$) AS ms;
+SELECT 'META Administrador: página + total, report_missing_weeks = 1 (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view WHERE report_missing_weeks = 1 ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view WHERE report_missing_weeks = 1$q$) AS ms;
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT 'META G12: página + total, sem filtro (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view$q$) AS ms;
+SELECT 'META G12: página + total, report_status = pending (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cells_view WHERE report_status = ''pending'' ORDER BY created_at DESC, id LIMIT 25', :'cell_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cells_view WHERE report_status = 'pending'$q$) AS ms;
+RESET ROLE;
+
+\echo
+\echo '######## DT-06: sem as colunas novas, o plano não chama cell_report_situation ########'
+SELECT id AS any_cell FROM public.cells WHERE id::text LIKE 'd2090900%' ORDER BY id LIMIT 1 \gset
+SELECT set_config('vol.any_cell', :'any_cell', true) \gset ignore_
+CREATE TEMP TABLE plans (q text, plan text);
+DO $$
+DECLARE _l text; _p text;
+BEGIN
+  _p := '';
+  FOR _l IN EXECUTE format('EXPLAIN (VERBOSE, COSTS OFF) SELECT 1 FROM public.cells_view WHERE id = %L', current_setting('vol.any_cell', true)) LOOP _p := _p || _l || E'\n'; END LOOP;
+  INSERT INTO pg_temp.plans VALUES ('by_id', _p);
+  _p := '';
+  FOR _l IN EXECUTE 'EXPLAIN (VERBOSE, COSTS OFF) SELECT count(*) FROM public.cells_view' LOOP _p := _p || _l || E'\n'; END LOOP;
+  INSERT INTO pg_temp.plans VALUES ('count', _p);
+END $$;
+SELECT 'META plano sem cell_report_situation (SELECT 1 por id; count(*))', q, plan NOT LIKE '%cell_report_situation%' AS ok FROM pg_temp.plans ORDER BY q;
+
+\echo
+\echo '######## dashboard_summary (Administrador) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary();
+SELECT 'META dashboard_summary (ms, meta 800)', pg_temp.ms('SELECT * FROM public.dashboard_summary()') AS ms;
+-- As pendentes: o cálculo antigo (E1.08) × o novo (cells_report_situation), sobre a mesma view.
+SELECT 'META pendentes, cálculo antigo do E1.08 (ms)',
+       pg_temp.ms($q$SELECT count(*) FROM public.cells_view cv
+                     WHERE cv.is_active AND cv.meeting_weekday IS NOT NULL
+                       AND (public.week_start(public.sp_today()) + cv.meeting_weekday) + cv.meeting_time <= public.sp_now()
+                       AND coalesce(cv.last_report_date, '-infinity'::date) < public.week_start(public.sp_today())$q$) AS ms;
+SELECT 'META pendentes, cálculo novo (ms; a diferença para o antigo tem meta 150)',
+       pg_temp.ms($q$SELECT count(*) FROM public.cells_report_situation(now()) s WHERE s.report_status = 'pending'$q$) AS ms;
+RESET ROLE;
+
+\echo
+\echo '######## Gravação que muda a situação: inativar (trigger novo × sem ele) ########'
+SELECT id AS cell_active FROM public.cells WHERE is_active AND id::text LIKE 'd2090900%' ORDER BY id LIMIT 1 \gset
+\set inactivate 'UPDATE public.cells SET is_active = false WHERE id = \'' :cell_active '\''
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SAVEPOINT s;
+EXPLAIN (ANALYZE, BUFFERS) :inactivate;
+ROLLBACK TO s;
+RESET ROLE;
+CREATE TEMP TABLE inact (with_trigger boolean, ms numeric);
+SELECT format($f$
+  INSERT INTO inact SELECT true, pg_temp.undo_ms(2, %1$L);
+  ALTER TABLE public.cells DISABLE TRIGGER trg_cell_active_period;
+  INSERT INTO inact SELECT false, pg_temp.undo_ms(2, %1$L);
+  ALTER TABLE public.cells ENABLE TRIGGER trg_cell_active_period;
+$f$, :'inactivate') AS block \gset
+:block
+:block
+:block
+:block
+:block
+SELECT 'META inativar com o trigger (ms)', min(ms) FROM inact WHERE with_trigger;
+SELECT 'META inativar sem o trigger (ms)', min(ms) FROM inact WHERE NOT with_trigger;
+SELECT 'META diferença do trigger novo na inativação (ms, meta 1)',
+       (SELECT min(ms) FROM inact WHERE with_trigger) - (SELECT min(ms) FROM inact WHERE NOT with_trigger) AS ms;
+SELECT 'CONFERÊNCIA o trigger está ligado de novo', tgenabled = 'O' AS ligado
+  FROM pg_trigger WHERE tgrelid = 'public.cells'::regclass AND tgname = 'trg_cell_active_period';
+
+ROLLBACK;

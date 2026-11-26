@@ -34,7 +34,14 @@ rerun() {
     echo "  PASS  roda de novo sem erro e sem mudar nada: $(basename "$f")"
   else echo "  FAIL  $(basename "$f"): $(echo "$OUT" | head -3)"; FAILS=$((FAILS + 1)); fi
 }
-for f in "$DIR"/*_e208_01_*.sql; do rerun "$f" "$STATE1"; done
+# A migration 1 recria a cells_view com as colunas do E2.08. Depois do E2.09 (report_status no fim), o
+# CREATE OR REPLACE VIEW dela falha por desenho (não tira colunas): a reexecução só vale antes do E2.09.
+HAS_E209=$(echo "SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.cells_view'::regclass AND attname = 'report_status' AND NOT attisdropped;" \
+           | $PSQL -X -q -At 2>&1)
+for f in "$DIR"/*_e208_01_*.sql; do
+  if [ "$HAS_E209" = "1" ]; then echo "  SKIP  $(basename "$f"): a cells_view já tem as colunas do E2.09"
+  else rerun "$f" "$STATE1"; fi
+done
 M2=$(ls "$DIR"/*_e208_02_*.sql)
 rerun "$M2" "$STATE2"
 

@@ -5,7 +5,8 @@
 --   - RN-08 (dashboard no banco, semana de domingo a sábado no horário de
 --     Brasília), com _at fixo:
 --       (a) células de segunda a sexta entram em "Células sem relatório"
---           depois do horário (antes só domingo e sábado entravam);
+--           no prazo (desde o E2.09: horário + 1 hora, só nas semanas que
+--           contam, e o relatório de uma semana posterior não tira a célula);
 --       (b) o ranking G12 conta cada célula da subárvore uma vez só;
 --       (c) "Sem vínculo celular" com a janela de 30 dias, em qualquer célula;
 --       (d) um relatório da semana, visível ou não, tira a célula das pendentes;
@@ -26,7 +27,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(205);
+SELECT plan(209);
 
 -- ---------------------------------------------------------------------------
 -- Ids fixos da massa: a(uth), b (roles), c (membros), d (células), e (relatórios).
@@ -169,8 +170,8 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
   (pg_temp.c(5),  pg_temp.m(5), pg_temp.m(7),  pg_temp.m(5), 'Macrocélula',   'Quinta',  '20:00', true),
   (pg_temp.c(6),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Sexta',   '20:00', true),
   (pg_temp.c(7),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Sábado',  '16:00', true),
-  -- 08: quinta 23:59 (o último minuto do dia); 09 e 15: o último relatório é de uma
-  -- semana seguinte a W (antes do E2.08, dia desconhecido e dia nulo); 10: inativa.
+  -- 08: quinta 23:59 (o prazo cai na sexta, 00:59); 09 e 15: o último relatório é de uma
+  -- semana seguinte a W, que não conta para W (E2.09, risco 13 do E1.08); 10: inativa.
   (pg_temp.c(8),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Quinta',  '23:59', true),
   (pg_temp.c(9),  pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Evangelística', 'Quinta',  '20:00', true),
   (pg_temp.c(10), pg_temp.m(5), pg_temp.m(5),         pg_temp.m(5), 'Discipulado',   'Segunda', '20:00', true),
@@ -212,6 +213,12 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
 
 -- E2.08 (RN-11): a célula nova sempre começa ativa; as inativas são inativadas depois.
 UPDATE public.cells SET is_active = false WHERE id IN (pg_temp.c(10), pg_temp.c(23));
+-- E2.09 (RN-06): a célula inserida agora só conta a partir de agora. As ativas da massa
+-- contam "desde sempre", para a semana W (março de 2026) contar.
+UPDATE private.cell_active_periods p SET periods = '{(,)}'
+  FROM public.cells c
+ WHERE c.id = p.cell_id AND c.is_active
+   AND c.id IN (SELECT pg_temp.c(n) FROM generate_series(1, 35) n);
 
 SET LOCAL session_replication_role = replica;
 
@@ -232,7 +239,7 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, theme, observations, v
   (pg_temp.r(6), pg_temp.c(10), public.sp_today() - 30, '20:00', 'Trinta',    NULL, '{}', true),
   (pg_temp.r(7), pg_temp.c(9),  public.sp_today() - 31, '20:00', 'Trinta e um', NULL, '{}', true),
   (pg_temp.r(8), pg_temp.c(16), public.sp_today() - 1,  '20:00', 'Ontem',     NULL, '{}', true),
-  -- E2.08: a célula 15 fica fora das pendentes de W pelo relatório de uma semana seguinte.
+  -- E2.09 (risco 13 do E1.08): o relatório de uma semana seguinte não tira a célula 15 das pendentes de W.
   (pg_temp.r(9), pg_temp.c(15), '2026-03-16', '20:00', 'Depois de W', NULL, '{}', true);
 
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
@@ -269,8 +276,8 @@ GRANT SELECT ON pg_temp.linked_members, pg_temp.cell_last_report TO authenticate
 
 -- RN-05: os números de dashboard_summary(_at) = as mesmas contagens nas tabelas
 -- sob o RLS atual, para quem está logado agora. A semana e o dia são
--- calculados aqui de novo, sem as funções da migration. "Sem relatório" segue
--- o contrato: nenhum relatório (visível ou não) a partir do domingo da semana.
+-- calculados aqui de novo, sem as funções da migration. Desde o E2.09, as
+-- pendentes são as "Pendente" de cells_report_situation(_at) (RN-08 de lá).
 CREATE FUNCTION pg_temp.summary_parity(_who text, _at timestamptz) RETURNS SETOF text LANGUAGE plpgsql AS $$
 DECLARE
   _local timestamp := _at AT TIME ZONE 'America/Sao_Paulo';
@@ -305,20 +312,12 @@ BEGIN
       WHERE r.date BETWEEN _ws AND _we),
     _who || ': relatórios, visitantes e não realizadas = cell_reports da semana sob RLS (RN-05)');
 
+  -- E2.09 (RN-08): o card é a contagem de "Pendente" da mesma função da lista, no mesmo momento.
   RETURN NEXT is(
     s.cells_pending,
-    (SELECT count(*)
-       FROM public.cells c
-       CROSS JOIN LATERAL (
-         SELECT array_position(ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'],
-                               c.meeting_day) - 1 AS dow
-       ) d
-      WHERE c.is_active
-        AND d.dow IS NOT NULL
-        AND (_ws + d.dow) + coalesce(c.meeting_time, '23:59:59'::time) <= _local
-        AND NOT EXISTS (SELECT 1 FROM pg_temp.cell_last_report l
-                         WHERE l.cell_id = c.id AND l.last_date >= _ws)),
-    _who || ': células sem relatório = cells sob RLS sem nenhum relatório na semana, visível ou não (RN-05)');
+    (SELECT count(*) FROM public.cells_report_situation(_at) x
+      WHERE x.report_status = 'pending'::public.cell_report_status),
+    _who || ': células com relatório pendente = "Pendente" de cells_report_situation(_at) (RN-08 do E2.09)');
 END $$;
 
 -- RN-05: tipos de célula e ranking G12 = contagens nas tabelas sob RLS.
@@ -473,12 +472,12 @@ SET LOCAL ROLE authenticated;
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
        FROM public.dashboard_summary('2026-03-07 23:59:00-03') $$,
-  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 9::bigint) $$,
-  'RN-08/P3: sábado 23:59 ainda é a semana 01/03–07/03: 3 relatórios visíveis, 5 visitantes, 1 não realizada, 9 pendentes');
+  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 11::bigint) $$,
+  'RN-08/P3: sábado 23:59 ainda é a semana 01/03–07/03: 3 relatórios visíveis, 5 visitantes, 1 não realizada, 11 pendentes');
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
        FROM public.dashboard_summary('2026-03-07 23:59:59-03') $$,
-  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 9::bigint) $$,
+  $$ VALUES ('2026-03-01'::date, '2026-03-07'::date, 3::bigint, 5::bigint, 1::bigint, 11::bigint) $$,
   'RN-08/P3: sábado 23:59:59 ainda é a mesma semana');
 SELECT results_eq(
   $$ SELECT week_start, week_end, reports_sent, visitors, cells_not_held, cells_pending
@@ -499,7 +498,7 @@ SELECT is((SELECT week_start FROM public.dashboard_summary('2026-03-08 03:00:00+
 SET LOCAL timezone = 'Asia/Tokyo';
 SELECT results_eq(
   $$ SELECT week_start, cells_pending FROM public.dashboard_summary('2026-03-07 23:59:00-03') $$,
-  $$ VALUES ('2026-03-01'::date, 9::bigint) $$,
+  $$ VALUES ('2026-03-01'::date, 11::bigint) $$,
   'RN-08: com a sessão em Asia/Tokyo, o mesmo instante dá a mesma semana e as mesmas pendentes');
 SET LOCAL timezone = 'UTC';
 SELECT results_eq(
@@ -511,38 +510,52 @@ SELECT results_eq(
   'RN-08: sem _at, a semana é a de hoje em Brasília (sessão em UTC)');
 RESET timezone;
 
--- Linha do tempo de W (P3). Cada célula entra exatamente no horário da reunião — 25 verificações
-SELECT is(pg_temp.pending('2026-03-01 17:59:59-03'), 0::bigint, 'RN-08/P3: domingo 17:59:59: nenhuma pendente');
-SELECT is(pg_temp.pending('2026-03-01 18:00:00-03'), 1::bigint, 'RN-08/P3: domingo 18:00: a célula de domingo entra');
-SELECT is(pg_temp.pending('2026-03-02 19:59:00-03'), 1::bigint,
-  'RN-08/P3: segunda 19:59: a célula de segunda 20:00 ainda não conta (a de segunda 19:00 tem relatório "não houve")');
-SELECT is(pg_temp.pending('2026-03-02 20:00:00-03'), 2::bigint,
-  'RN-08a/P3: segunda 20:00: a célula de segunda entra (a inativa e a com relatório não)');
-SELECT is(pg_temp.pending('2026-03-03 19:59:00-03'), 2::bigint, 'RN-08/P3: terça 19:59: a de terça ainda não conta');
-SELECT is(pg_temp.pending('2026-03-03 20:00:00-03'), 3::bigint,
-  'RN-08a/P3: terça 20:00: a célula de terça entra (a de terça com relatório invisível não, RN-08d)');
-SELECT is(pg_temp.pending('2026-03-04 18:59:00-03'), 3::bigint, 'RN-08/P3: quarta 18:59: nada novo');
-SELECT is(pg_temp.pending('2026-03-04 19:00:00-03'), 4::bigint,
-  'RN-08/P3: quarta 19:00: entra a célula cujo último relatório é da semana anterior');
-SELECT is(pg_temp.pending('2026-03-04 19:59:00-03'), 4::bigint, 'RN-08/P3: quarta 19:59: a de quarta 20:00 ainda não conta');
-SELECT is(pg_temp.pending('2026-03-04 20:00:00-03'), 5::bigint, 'RN-08a/P3: quarta 20:00: a célula de quarta entra');
-SELECT is(pg_temp.pending('2026-03-05 19:59:00-03'), 5::bigint, 'RN-08/P3: quinta 19:59: a de quinta ainda não conta');
-SELECT is(pg_temp.pending('2026-03-05 20:00:00-03'), 6::bigint, 'RN-08a/P3: quinta 20:00: a célula de quinta entra');
-SELECT is(pg_temp.pending('2026-03-05 23:58:59-03'), 6::bigint,
-  'RN-08/P3: quinta 23:58:59: a célula de quinta 23:59 ainda não conta');
-SELECT is(pg_temp.pending('2026-03-05 23:59:00-03'), 7::bigint,
-  'RN-08/P3: quinta 23:59: a célula de quinta 23:59 entra no último minuto do dia');
-SELECT is(pg_temp.pending('2026-03-06 19:59:00-03'), 7::bigint, 'RN-08/P3: sexta 19:59: a de sexta ainda não conta');
-SELECT is(pg_temp.pending('2026-03-06 20:00:00-03'), 8::bigint, 'RN-08a/P3: sexta 20:00: a célula de sexta entra');
-SELECT is(pg_temp.pending('2026-03-07 15:59:00-03'), 8::bigint, 'RN-08/P3: sábado 15:59: a de sábado ainda não conta');
-SELECT is(pg_temp.pending('2026-03-07 16:00:00-03'), 9::bigint,
-  'RN-08/P3: sábado 16:00: a de sábado entra; a inativa, as com relatório na semana e as com relatório posterior ficam fora');
+-- Linha do tempo de W (P3). Desde o E2.09 (RN-02), cada célula entra no prazo: 1 hora
+-- depois do horário da reunião, e não no horário — 21 verificações
+SELECT is(pg_temp.pending('2026-03-01 18:59:59-03'), 0::bigint, 'RN-08/P3: domingo 18:59:59: nenhuma pendente');
+SELECT is(pg_temp.pending('2026-03-01 19:00:00-03'), 1::bigint, 'RN-08/P3: domingo 19:00: a célula de domingo 18:00 entra');
+SELECT is(pg_temp.pending('2026-03-02 20:59:00-03'), 1::bigint,
+  'RN-08/P3: segunda 20:59: a célula de segunda 20:00 ainda não conta (a de segunda 19:00 tem relatório "não houve")');
+SELECT is(pg_temp.pending('2026-03-02 21:00:00-03'), 2::bigint,
+  'RN-08a/P3: segunda 21:00: a célula de segunda entra (a inativa e a com relatório não)');
+SELECT is(pg_temp.pending('2026-03-03 20:59:00-03'), 2::bigint, 'RN-08/P3: terça 20:59: a de terça ainda não conta');
+SELECT is(pg_temp.pending('2026-03-03 21:00:00-03'), 3::bigint,
+  'RN-08a/P3: terça 21:00: a célula de terça entra (a de terça com relatório da semana não, RN-08d)');
+SELECT is(pg_temp.pending('2026-03-04 19:59:00-03'), 3::bigint, 'RN-08/P3: quarta 19:59: nada novo');
+SELECT is(pg_temp.pending('2026-03-04 20:00:00-03'), 4::bigint,
+  'RN-08/P3: quarta 20:00: entra a célula de quarta 19:00, cujo último relatório é da semana anterior');
+SELECT is(pg_temp.pending('2026-03-04 20:59:00-03'), 4::bigint, 'RN-08/P3: quarta 20:59: a de quarta 20:00 ainda não conta');
+SELECT is(pg_temp.pending('2026-03-04 21:00:00-03'), 5::bigint, 'RN-08a/P3: quarta 21:00: a célula de quarta entra');
+SELECT is(pg_temp.pending('2026-03-05 20:59:00-03'), 5::bigint, 'RN-08/P3: quinta 20:59: as de quinta ainda não contam');
+SELECT is(pg_temp.pending('2026-03-05 21:00:00-03'), 7::bigint,
+  'RN-08a/P3: quinta 21:00: as duas células de quinta 20:00 entram (a 9 tem relatório numa semana seguinte: risco 13)');
+SELECT is(pg_temp.pending('2026-03-05 23:59:59-03'), 7::bigint,
+  'RN-08/P3: quinta 23:59:59: a célula de quinta 23:59 ainda não conta (o prazo cai na sexta)');
+SELECT is(pg_temp.pending('2026-03-06 00:58:59-03'), 7::bigint,
+  'RN-02/P3: sexta 00:58:59: a célula de quinta 23:59 ainda não conta');
+SELECT is(pg_temp.pending('2026-03-06 00:59:00-03'), 8::bigint,
+  'RN-02/P3: sexta 00:59: a célula de quinta 23:59 entra (prazo no dia seguinte)');
+SELECT is(pg_temp.pending('2026-03-06 20:59:00-03'), 8::bigint, 'RN-08/P3: sexta 20:59: as de sexta ainda não contam');
+SELECT is(pg_temp.pending('2026-03-06 21:00:00-03'), 10::bigint,
+  'RN-08a/P3: sexta 21:00: as duas células de sexta entram (a 15 tem relatório numa semana seguinte: risco 13)');
+SELECT is(pg_temp.pending('2026-03-07 16:59:00-03'), 10::bigint, 'RN-08/P3: sábado 16:59: a de sábado ainda não conta');
+SELECT is(pg_temp.pending('2026-03-07 17:00:00-03'), 11::bigint,
+  'RN-08/P3: sábado 17:00: a de sábado entra; a inativa e as com relatório na semana ficam fora');
 
--- O mesmo instante em UTC (segunda 19:59 e 20:00 em Brasília).
-SELECT is(pg_temp.pending('2026-03-02 22:59:00+00'), 1::bigint,
-  'RN-08/P3: 22:59 UTC de segunda = 19:59 em Brasília: ainda não conta');
-SELECT is(pg_temp.pending('2026-03-02 23:00:00+00'), 2::bigint,
-  'RN-08/P3: 23:00 UTC de segunda = 20:00 em Brasília: conta');
+-- O mesmo instante em UTC (segunda 20:59 e 21:00 em Brasília).
+SELECT is(pg_temp.pending('2026-03-02 23:59:00+00'), 1::bigint,
+  'RN-08/P3: 23:59 UTC de segunda = 20:59 em Brasília: ainda não conta');
+SELECT is(pg_temp.pending('2026-03-03 00:00:00+00'), 2::bigint,
+  'RN-08/P3: 00:00 UTC de terça = 21:00 de segunda em Brasília: conta');
+
+-- E2.09 (risco 13 do E1.08): o relatório de uma semana posterior não tira a célula das pendentes
+-- da semana consultada; o da própria semana tira — 3 verificações
+SELECT is((SELECT report_status FROM public.cells_report_situation('2026-03-07 23:59-03') WHERE cell_id = pg_temp.c(15)),
+  'pending'::public.cell_report_status, 'risco 13: a célula 15 (relatório em 16/03) está "Pendente" em W');
+SELECT is((SELECT report_status FROM public.cells_report_situation('2026-03-07 23:59-03') WHERE cell_id = pg_temp.c(11)),
+  'sent_held'::public.cell_report_status, 'risco 13: a célula 11 (relatórios em W e em 08/03) está "Enviado" em W');
+SELECT is((SELECT report_status FROM public.cells_report_situation('2026-03-17 12:00-03') WHERE cell_id = pg_temp.c(15)),
+  'sent_held'::public.cell_report_status, 'risco 13: na semana do relatório (16/03), a célula 15 está "Enviado"');
 
 -- RN-08d: a célula 12 é visível para P3 (pela anfitriã) e, desde o E2.02 (RN-04), o relatório dela também.
 -- O relatório de uma célula do ministério B (16) continua invisível.
@@ -837,6 +850,8 @@ SELECT pg_temp.r(1000 + n), pg_temp.c(1000 + n), '2026-03-04', '20:00', 'Volume'
   FROM generate_series(1, 1100) n;
 SET LOCAL session_replication_role = origin;
 SELECT private.rebuild_member_hierarchy();
+-- E2.09 (DA-5): células inseridas em replica ganham o histórico pelo backfill (contam a partir de agora).
+SELECT private.backfill_cell_active_periods();
 
 -- Os conjuntos da paridade, recalculados com o volume.
 TRUNCATE pg_temp.linked_members, pg_temp.cell_last_report;
