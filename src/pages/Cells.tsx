@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
 import CellReportForm from "@/components/CellReportForm";
@@ -8,13 +7,11 @@ import CellDeletionFlow from "@/components/CellDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
-import { CellStatusBadge } from "@/components/StatusBadges";
-import LevelSuffix from "@/components/hierarchy/LevelSuffix";
+import CellCard from "@/components/cells/CellCard";
+import CellsTable from "@/components/cells/CellsTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -22,8 +19,6 @@ import { TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
-import { cellG12, cellLeaderLevel, formatG12Label } from "@/lib/cells/labels";
-import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -77,9 +72,6 @@ const Cells = () => {
   const canDeleteCell = hasPermission("delete_cell");
 
   const cellHasActions = (c: CellRow) => canSubmitReport(c) || canEditCell || canDeleteCell;
-
-  const anyCellHasActions = cells.some(cellHasActions);
-  const columnCount = anyCellHasActions ? 7 : 6;
 
   // "Excluídas": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
   const deletedButton = hasPermission("manage_roles") && (
@@ -161,25 +153,6 @@ const Cells = () => {
     </div>
   );
 
-  /** O G12 da célula (RN-11): o nome, "Pastores" ou "—", lido como "nenhum". */
-  const renderG12 = (c: CellRow) =>
-    cellG12(c).kind === "none" ? (
-      <>
-        <span aria-hidden="true">{CELLS_LIST_TEXTS.g12None}</span>
-        <span className="sr-only">{CELLS_LIST_TEXTS.g12NoneSpoken}</span>
-      </>
-    ) : (
-      formatG12Label(c)
-    );
-
-  /** "André Souza (144)": o líder com o nível do P40, que quebra entre as palavras. */
-  const renderLeader = (c: CellRow, className: string) => (
-    <span className={`${className} break-words`}>
-      {c.leader_name || "Sem líder"}
-      {c.leader_name && <LevelSuffix {...cellLeaderLevel(c)} />}
-    </span>
-  );
-
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar as células</p>;
@@ -188,47 +161,7 @@ const Cells = () => {
     return (
       <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {cells.map((c) => (
-          <div key={c.id} className="px-4 py-4 space-y-3">
-            {/* Header */}
-            {/* Com a fonte ampliada, as ações descem para a linha de baixo. */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="grow basis-32 min-w-0">
-                <p className="text-sm">{renderLeader(c, "font-semibold")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {CELLS_LIST_TEXTS.g12Label} {renderG12(c)}
-                </p>
-              </div>
-              {cellHasActions(c) && renderMobileActions(c)}
-            </div>
-
-            {/* Team */}
-            <div className="flex gap-4 text-xs text-muted-foreground">
-              {c.timothy_name && (
-                <span>Timóteo: <span className="font-medium text-foreground">{c.timothy_name}</span></span>
-              )}
-              {c.host_name && (
-                <span>Anfitrião: <span className="font-medium text-foreground">{c.host_name}</span></span>
-              )}
-            </div>
-
-            {/* Footer: badges + schedule */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{c.type}</Badge>
-                <CellStatusBadge active={c.is_active === true} />
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {c.meeting_day} · {c.meeting_time?.substring(0, 5) || "—"}
-              </span>
-            </div>
-
-            {/* Address */}
-            {c.street && (
-              <p className="text-xs text-muted-foreground">
-                {c.street}, {c.number || "s/n"} — {c.neighborhood || ""}
-              </p>
-            )}
-          </div>
+          <CellCard key={c.id} cell={c} actions={cellHasActions(c) ? renderMobileActions(c) : null} />
         ))}
       </div>
     );
@@ -284,55 +217,13 @@ const Cells = () => {
             renderMobileCards()
           ) : (
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Líder</TableHead>
-                    <TableHead>G12</TableHead>
-                    <TableHead>Endereço</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Dia / Hora</TableHead>
-                    <TableHead>{CELLS_LIST_TEXTS.columnStatus}</TableHead>
-                    {anyCellHasActions && <ActionsHead>Ações</ActionsHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody aria-busy={refreshing}>
-                  {isLoading ? (
-                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : isError ? (
-                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar as células</TableCell></TableRow>
-                  ) : cells.length === 0 ? (
-                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</TableCell></TableRow>
-                  ) : (
-                    cells.map((c) => (
-                      <TableRow key={c.id} className={refreshing ? "opacity-60" : undefined}>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            {renderLeader(c, "text-sm font-medium")}
-                            <div className="flex flex-col text-xs text-muted-foreground italic">
-                              {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
-                              {c.host_name && <span>Anfitrião: {c.host_name}</span>}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">{renderG12(c)}</TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex flex-col">
-                            <span className="font-medium">{c.street ? `${c.street}, ${c.number || "s/n"}` : "—"}</span>
-                            <span className="text-xs text-muted-foreground">{c.neighborhood || "—"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell><Badge variant="outline">{c.type}</Badge></TableCell>
-                        <TableCell className="text-sm">{c.meeting_day} às {c.meeting_time?.substring(0, 5) || "—"}</TableCell>
-                        <TableCell>
-                          <CellStatusBadge active={c.is_active === true} />
-                        </TableCell>
-                        {anyCellHasActions && <ActionsCell>{cellHasActions(c) && renderDesktopActions(c)}</ActionsCell>}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <CellsTable
+                rows={cells}
+                isLoading={isLoading}
+                isError={isError}
+                refreshing={refreshing}
+                renderActions={(c) => (cellHasActions(c) ? renderDesktopActions(c) : null)}
+              />
             </CardContent>
           )}
 
