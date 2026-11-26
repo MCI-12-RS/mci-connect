@@ -166,7 +166,9 @@ INSERT INTO exempt VALUES
   ('normalize_person_name', 'texto'), ('is_valid_cpf', 'texto'), ('is_valid_email', 'texto'),
   ('is_valid_person_name', 'texto'), ('mobile_match_key', 'texto'), ('is_placeholder_email', 'texto'),
   ('placeholder_email_domain', 'constante'), ('placeholder_email_domains', 'constante'),
-  ('member_has_login_identifier', 'texto'), ('birth_date_problem', 'data');
+  ('member_has_login_identifier', 'texto'), ('birth_date_problem', 'data'),
+  ('cell_weekdays', 'lista fixa (E2.08)'), ('cell_types', 'lista fixa (E2.08)'), ('cell_default_type', 'constante (E2.08)'),
+  ('normalize_meeting_time', 'horário (E2.08)'), ('is_valid_meeting_time', 'horário (E2.08)');
 SELECT is((SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p JOIN exempt e ON e.fn = p.proname
             WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND e.fn NOT IN ('my_password_status', 'log_auth_event')),
   NULL, 'RN-09: as utilitárias da lista fechada são todas SECURITY INVOKER');
