@@ -84,6 +84,10 @@ abstract class FakeBuilder implements PromiseLike<FakeResult> {
   single(...args: unknown[]): this {
     return this.record("single", args);
   }
+  /** O sinal de cancelamento (tempo-limite) não muda a resposta falsa. */
+  abortSignal(...args: unknown[]): this {
+    return this.record("abortSignal", args);
+  }
 
   /** Os métodos chamados, na ordem, sem os argumentos. */
   methods(): string[] {

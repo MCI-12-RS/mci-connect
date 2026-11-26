@@ -79,6 +79,8 @@ describe.each([
     expect(client.getQueryData(access.queryKey)).toBe("valor 1");
     expect(client.getQueryData(roles.queryKey)).toBe("valor 1");
     expect(client.getQueryData(events.queryKey)).toBe("valor 1");
-    expect(client.getQueryState(access.queryKey)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(roles.queryKey)?.isInvalidated).toBe(false);
+    // O acesso nunca é descartado; só a gravação de célula o relê (E2.08, AQ-8, DT-14).
+    expect(client.getQueryState(access.queryKey)?.isInvalidated).toBe(refresh === refreshAfterCellWrite);
   });
 });

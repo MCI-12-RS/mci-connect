@@ -27,13 +27,12 @@ import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
 import type { CellRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
+import { CELLS_PAGE_TEXTS } from "@/lib/cells/texts";
 import { listSubtitle } from "@/lib/access/access";
 
 const Cells = () => {
   const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
-  // Durante o envio, o formulário não fecha por "✕", `Esc` nem toque fora (E2.06, P44).
-  const [cellSaving, setCellSaving] = useState(false);
   const [editingCell, setEditingCell] = useState<CellRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
@@ -61,7 +60,7 @@ const Cells = () => {
     setEditingCell(cell);
     setFormOpen(true);
   };
-  const handleClose = () => { setFormOpen(false); setEditingCell(null); setCellSaving(false); };
+  const handleClose = () => { setFormOpen(false); setEditingCell(null); };
   const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setSelectedCellForReport(cell);
@@ -69,7 +68,8 @@ const Cells = () => {
   };
   const handleCloseReport = () => { setReportFormOpen(false); setSelectedCellForReport(null); };
 
-  // "Novo relatório" (RN-13, UX-23): a mesma regra do banco, calculada na cells_view (AQ-4).
+  // "Novo relatório" (RN-13, UX-23; E2.08, RN-11 c): a mesma regra do banco, calculada na
+  // cells_view (AQ-4, AQ-7), que já é falsa para a célula inativa.
   const canSubmitReport = (c: CellRow) => c.can_submit_report === true;
 
   // "Editar" só com "Editar Célula": ser líder ou timóteo não basta (RN-12).
@@ -110,7 +110,6 @@ const Cells = () => {
           size="icon"
           className={buttonClass}
           onClick={(e) => handleOpenReport(c, e.currentTarget)}
-          title="Novo Relatório"
           aria-label={CELL_DELETION_TEXTS.newReportLabel(leaderLabel(c.leader_name))}
         >
           <FilePlus className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
@@ -130,8 +129,10 @@ const Cells = () => {
     </>
   );
 
+  // Alinhadas pelo fim (P65): "Editar" e "Excluir" ficam na mesma coluna em todas as linhas,
+  // com ou sem "Novo relatório".
   const renderDesktopActions = (c: CellRow) => (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       {renderFrequentActions(c, "h-8 w-8")}
       {canDeleteCell && (
         <Button
@@ -212,7 +213,7 @@ const Cells = () => {
 
             {/* Footer: badges + schedule */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{c.type}</Badge>
                 <CellStatusBadge active={c.is_active === true} />
               </div>
@@ -253,10 +254,10 @@ const Cells = () => {
                     returnFocus.setOpener(e.currentTarget);
                     setFormOpen(true);
                   }}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:w-auto md:h-10"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nova Célula
+                  <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+                  {CELLS_PAGE_TEXTS.newCell}
                 </Button>
               )}
             </div>
@@ -347,17 +348,8 @@ const Cells = () => {
           )}
         </Card>
 
-        <Dialog open={formOpen} onOpenChange={(open) => !open && !cellSaving && handleClose()}>
-          <DialogContent
-            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
-            onCloseAutoFocus={returnFocus.onCloseAutoFocus}
-          >
-            <DialogHeader>
-              <DialogTitle>{editingCell ? "Editar Célula" : "Nova Célula"}</DialogTitle>
-            </DialogHeader>
-            <CellForm cell={editingCell} onClose={handleClose} onPendingChange={setCellSaving} />
-          </DialogContent>
-        </Dialog>
+        {/* O formulário traz o próprio diálogo (E2.08, T1 e T6: rodapé com o resumo e o descartar). */}
+        {formOpen && <CellForm cell={editingCell} onClose={handleClose} onCloseAutoFocus={returnFocus.onCloseAutoFocus} />}
 
         <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
           <DialogContent

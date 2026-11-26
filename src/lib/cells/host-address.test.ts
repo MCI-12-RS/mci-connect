@@ -1,64 +1,69 @@
 import { describe, it, expect } from "vitest";
 import { applyHostAddress } from "./host-address";
 
-const form = {
+const typed = {
   leader_id: "leader-1",
-  street: "Rua Antiga",
+  street: "Rua A",
   number: "1",
-  complement: "",
+  complement: "fundos",
   neighborhood: "Bairro Antigo",
   city: "Canoas",
   state: "RS",
-  zip_code: "92000000",
+  zip_code: "92000-000",
 };
 
-const host = {
-  street: "Rua Nova",
-  number: "20",
-  complement: "casa 2",
+const carla = {
+  street: "Rua das Flores",
+  number: "100",
+  complement: "ap. 2",
   neighborhood: "Centro",
   city: "Porto Alegre",
   state: "RS",
-  zip_code: "90000000",
+  zip_code: "90010-000",
 };
 
-describe("applyHostAddress (RN-11)", () => {
-  it("copia o endereço inteiro quando os dados do anfitrião são visíveis", () => {
-    expect(applyHostAddress(form, { ...host, sensitive_visible: true })).toEqual({
-      leader_id: "leader-1",
-      street: "Rua Nova",
-      number: "20",
-      complement: "casa 2",
-      neighborhood: "Centro",
-      city: "Porto Alegre",
-      state: "RS",
-      zip_code: "90000000",
+describe("applyHostAddress (E2.08, RN-10, DT-11, P-CEL-07)", () => {
+  it("com os dados sensíveis (Rita), os sete campos passam a ser os do anfitrião: full", () => {
+    expect(applyHostAddress(typed, { ...carla, sensitive_visible: true })).toEqual({
+      address: { leader_id: "leader-1", ...carla },
+      outcome: "full",
     });
   });
 
-  it("sem acesso aos dados sensíveis, copia só bairro, cidade e UF", () => {
-    const masked = { ...host, street: null, number: null, complement: null, zip_code: null, sensitive_visible: false };
-    expect(applyHostAddress(form, masked)).toEqual({
-      ...form,
-      neighborhood: "Centro",
-      city: "Porto Alegre",
-      state: "RS",
+  it("substitui também onde o anfitrião não tem dado (nunca uma mistura)", () => {
+    const partialHost = { ...carla, complement: null, number: null, sensitive_visible: true };
+    const { address } = applyHostAddress(typed, partialHost);
+    expect(address.complement).toBe("");
+    expect(address.number).toBe("");
+    expect(address.street).toBe("Rua das Flores");
+  });
+
+  it("sem os dados sensíveis (Pedro): bairro, cidade e estado do anfitrião; CEP, rua, número e complemento vazios", () => {
+    const masked = { ...carla, street: null, number: null, complement: null, zip_code: null, sensitive_visible: false };
+    expect(applyHostAddress(typed, masked)).toEqual({
+      address: { ...typed, street: "", number: "", complement: "", zip_code: "", neighborhood: "Centro", city: "Porto Alegre", state: "RS" },
+      outcome: "partial",
     });
   });
 
-  it("não copia rua e CEP sem sensitive_visible, mesmo que venham preenchidos", () => {
-    const result = applyHostAddress(form, { ...host, sensitive_visible: false });
-    expect(result.street).toBe("Rua Antiga");
-    expect(result.zip_code).toBe("92000000");
+  it("sem sensitive_visible, rua e CEP nunca entram, mesmo que venham preenchidos (UX-14)", () => {
+    const { address } = applyHostAddress(typed, { ...carla, sensitive_visible: false });
+    expect(address.street).toBe("");
+    expect(address.number).toBe("");
+    expect(address.zip_code).toBe("");
   });
 
-  it("mantém o valor atual onde o do anfitrião está vazio", () => {
-    const empty = { street: "", number: null, complement: null, neighborhood: null, city: "", state: null, zip_code: null, sensitive_visible: true };
-    expect(applyHostAddress(form, empty)).toEqual(form);
+  it("nada visível (Gabriel, sem endereço): o endereço não muda: unavailable", () => {
+    const empty = { street: null, number: null, complement: null, neighborhood: null, city: null, state: null, zip_code: null, sensitive_visible: true };
+    expect(applyHostAddress(typed, empty)).toEqual({ address: typed, outcome: "unavailable" });
   });
 
-  it("sensitive_visible nulo conta como sem acesso: não copia rua, número, complemento nem CEP", () => {
-    const result = applyHostAddress(form, { ...host, sensitive_visible: null });
-    expect(result).toEqual({ ...form, neighborhood: "Centro", city: "Porto Alegre", state: "RS" });
+  it("para quem não vê os sensíveis, o anfitrião só com rua e CEP dá o mesmo resultado do vazio (UX-15)", () => {
+    const onlyStreet = { street: null, number: null, complement: null, neighborhood: null, city: null, state: null, zip_code: null, sensitive_visible: false };
+    expect(applyHostAddress(typed, onlyStreet)).toEqual({ address: typed, outcome: "unavailable" });
+  });
+
+  it("anfitrião fora do escopo (null): unavailable, sem mudar nada", () => {
+    expect(applyHostAddress(typed, null)).toEqual({ address: typed, outcome: "unavailable" });
   });
 });

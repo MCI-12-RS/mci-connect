@@ -234,7 +234,7 @@ describe("Células: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2
     respondToRpc("member_names", { data: [{ id: "l1", name: "Carlos Lima" }] });
     act(() => edit.focus());
     fireEvent.click(edit);
-    const form = await screen.findByRole("dialog", { name: "Editar Célula" });
+    const form = await screen.findByRole("dialog", { name: "Editar célula" });
 
     fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
 

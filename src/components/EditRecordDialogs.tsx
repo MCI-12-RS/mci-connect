@@ -1,6 +1,5 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { AlertCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +7,7 @@ import MemberForm from "@/components/MemberForm";
 import { MemberFormDialog } from "@/components/members/MemberFormDialog";
 import type { RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import CellForm from "@/components/CellForm";
+import { CellFormDialog } from "@/components/cells/CellFormDialog";
 import { useMember } from "@/hooks/use-member";
 import { useCell } from "@/hooks/use-cell";
 import { CELL_DELETION_TEXTS, DELETION_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
@@ -17,8 +17,6 @@ import { MEMBER_FORM_LAYOUT_TEXTS } from "@/lib/members/texts";
 // membro, E2.01 T3, e o "Definir líder" depois de restaurar um membro, T5).
 // Leem o registro na view e mostram o formulário de sempre; fechar ou salvar
 // volta para a lista.
-
-const DIALOG_CONTENT = "max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full";
 
 interface LoadStateProps {
   isPending: boolean;
@@ -123,30 +121,27 @@ export function EditMemberDialog({ memberId, onClose, onCloseAutoFocus, defineLe
   return <MemberFormById memberId={memberId} onClose={onClose} onCloseAutoFocus={onCloseAutoFocus} defineLeader={defineLeader} />;
 }
 
-/** "Editar Célula" de uma célula pelo id. */
+/** "Editar célula" de uma célula pelo id. Enquanto lê (ou se falhar), o mesmo diálogo do formulário. */
 export function EditCellDialog({ cellId, onClose, onCloseAutoFocus }: EditByIdDialogProps & { cellId: string }) {
   const { data: cell, isPending, isError, refetch } = useCell(cellId);
-  // Durante o envio, o formulário não fecha por "✕", `Esc` nem toque fora (E2.06, P44).
-  const [saving, setSaving] = useState(false);
+  // A troca do diálogo do carregando pelo do formulário não devolve o foco a quem abriu (WCAG 2.4.3).
+  const loaded = useRef(false);
+  loaded.current = !!cell;
+  const closeLoadingFocus = (event: Event) => {
+    if (loaded.current) event.preventDefault();
+    else onCloseAutoFocus?.(event);
+  };
+  if (cell) return <CellForm cell={cell} onClose={onClose} onCloseAutoFocus={onCloseAutoFocus} />;
   return (
-    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent className={DIALOG_CONTENT} aria-describedby={undefined} onCloseAutoFocus={onCloseAutoFocus}>
-        <DialogHeader>
-          <DialogTitle>Editar Célula</DialogTitle>
-        </DialogHeader>
-        {cell ? (
-          <CellForm cell={cell} onClose={onClose} onPendingChange={setSaving} />
-        ) : (
-          <LoadState
-            isPending={isPending}
-            isError={isError}
-            isMissing={!isPending && !isError}
-            missingText={CELL_DELETION_TEXTS.notFoundOrDeleted}
-            errorText={CELL_DELETION_TEXTS.loadFailed}
-            onRetry={() => void refetch()}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <CellFormDialog isEditing onClose={onClose} onCloseAutoFocus={closeLoadingFocus}>
+      <LoadState
+        isPending={isPending}
+        isError={isError}
+        isMissing={!isPending && !isError}
+        missingText={CELL_DELETION_TEXTS.notFoundOrDeleted}
+        errorText={CELL_DELETION_TEXTS.loadFailed}
+        onRetry={() => void refetch()}
+      />
+    </CellFormDialog>
   );
 }

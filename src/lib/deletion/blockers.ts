@@ -3,6 +3,7 @@
 // pré-checagem `check_member_deletion`) e monta os grupos do diálogo.
 import { isJsonObject, type AppError, type JsonObject } from "@/lib/errors";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
+import { personLabel } from "@/lib/members/labels";
 import { formatCellRoles, isCellRole, type CellRole } from "@/lib/cells/roles";
 import { weekdayInSentence } from "@/lib/cells/weekdays";
 import type { DeletionErrorCode } from "./codes";
@@ -119,8 +120,7 @@ export interface BlockerGroup {
 
 /** "Léo Martins (inativo)". */
 export function formatLinkedDisciple(disciple: LinkedDisciple): string {
-  const name = disciple.name || UNNAMED_MEMBER_LABEL;
-  return disciple.is_active ? name : `${name} ${MEMBER_LINKS_TEXTS.inactiveMember}`;
+  return personLabel({ name: disciple.name, is_active: disciple.is_active });
 }
 
 /** "Anfitrião na célula de Marcos Dias, sexta, 19:30 (inativa)". */

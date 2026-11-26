@@ -132,8 +132,6 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
   /** Endereço: como antes. */
   address: {
     zipCode: "CEP",
-    zipCodeLoading: "Buscando...",
-    zipCodePlaceholder: "00000-000",
     street: "Rua",
     number: "Número",
     complement: "Complemento",
@@ -167,4 +165,10 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
     confirm: "Descartar",
     keepEditing: "Continuar editando",
   },
+} as const;
+
+/** A marca de situação da pessoa nos seletores e nas listas (E2.08, P63; E2.01, T3). */
+export const PERSON_MARK_TEXTS = {
+  inactiveMale: "(inativo)",
+  inactiveFemale: "(inativa)",
 } as const;

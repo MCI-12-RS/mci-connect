@@ -74,6 +74,8 @@ interface PaginatedMenuContextValue {
   focusInput: () => void;
   /** Id do texto que a tela liga ao campo de busca (`aria-describedby`). */
   descriptionId: string | undefined;
+  /** Campo obrigatório (`aria-required` no campo de busca; E2.08, P64). */
+  required: boolean;
 }
 
 const PaginatedMenuContext = createContext<PaginatedMenuContextValue | null>(null);
@@ -214,13 +216,14 @@ function ClearIndicator({ clearValue }: ClearIndicatorProps<SelectOption, boolea
  */
 function DeferredBlurInput(props: InputProps<SelectOption, boolean, GroupBase<SelectOption>>) {
   const { onBlur } = props;
-  const { descriptionId } = usePaginatedMenu();
+  const { descriptionId, required } = usePaginatedMenu();
   const timer = useRef<number>();
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const invalid = props["aria-invalid"] === true || props["aria-invalid"] === "true";
   return (
     <components.Input
       {...props}
+      aria-required={required || undefined}
       aria-describedby={describedByWithError(
         props["aria-describedby"],
         invalid ? props["aria-errormessage"] : undefined,
@@ -290,6 +293,8 @@ export interface PaginatedSelectProps<IsMulti extends boolean> {
   "aria-errormessage"?: string;
   /** Id de um texto que descreve o campo (por exemplo, quem continua no relatório fora do seletor). */
   "aria-describedby"?: string;
+  /** Campo obrigatório, para o leitor de tela. */
+  "aria-required"?: boolean;
 }
 
 export function PaginatedSelect<IsMulti extends boolean = false>({
@@ -307,6 +312,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   "aria-invalid": ariaInvalid,
   "aria-errormessage": ariaErrorMessage,
   "aria-describedby": descriptionId,
+  "aria-required": ariaRequired = false,
 }: PaginatedSelectProps<IsMulti>) {
   const selectRef = useRef<SelectInstance<SelectOption, IsMulti, GroupBase<SelectOption>>>(null);
   const focusedAction = useRef<SelectOption | null>(null);
@@ -338,8 +344,8 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   // no AsyncMemberSelect.test.tsx acusa se uma atualização o quebrar.
   const hoverOption = useCallback((option: SelectOption) => selectRef.current?.onOptionHover(option), []);
   const menuContext = useMemo(
-    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput, descriptionId }),
-    [pagination, prefetchValues, runAction, hoverOption, focusInput, descriptionId],
+    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput, descriptionId, required: ariaRequired }),
+    [pagination, prefetchValues, runAction, hoverOption, focusInput, descriptionId, ariaRequired],
   );
 
   // Dentro de um Dialog do Radix, o Esc fecharia o diálogo inteiro (ele escuta

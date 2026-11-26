@@ -33,11 +33,20 @@ export function refreshAfterMemberWrite(queryClient: QueryClient): Promise<void>
   return refreshHierarchyQueries(queryClient);
 }
 
+/** O acesso de quem está logado (`ACCESS_QUERY_KEY` de `use-access`): a chave inteira é `["access", userId]`. */
+const ACCESS_ROOT: QueryKey = ["access"];
+
 /**
  * Depois de toda gravação de célula: cadastro, edição, inativação, exclusão e
  * restauração. A célula muda os totais de células de toda a cadeia do líder,
- * então desatualiza as mesmas telas que a gravação de membro.
+ * então desatualiza as mesmas telas que a gravação de membro, e também o
+ * acesso: o atalho "Novo relatório" do Dashboard depende de haver célula ativa
+ * em que a pessoa lança (`my_access().can_submit_some_report`; E2.08, AQ-8, DT-14).
+ * O acesso nunca é descartado, só relido.
  */
-export function refreshAfterCellWrite(queryClient: QueryClient): Promise<void> {
-  return refreshHierarchyQueries(queryClient);
+export async function refreshAfterCellWrite(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
+    refreshHierarchyQueries(queryClient),
+    queryClient.invalidateQueries({ queryKey: ACCESS_ROOT }, { cancelRefetch: false }),
+  ]);
 }

@@ -43,6 +43,33 @@ export type CellRow = Pick<
   | "can_submit_report"
 >;
 
+/**
+ * As colunas que o formulário de célula grava, lidas de volta na conferência
+ * da nova tentativa de cadastro (DT-09): a célula achada só vale como a mesma
+ * se elas forem iguais ao que está sendo enviado.
+ */
+export const CELL_STORED_SELECT =
+  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active";
+
+export type CellStoredRow = Pick<
+  CellViewRow,
+  | "id"
+  | "leader_id"
+  | "timothy_id"
+  | "host_id"
+  | "type"
+  | "meeting_day"
+  | "meeting_time"
+  | "street"
+  | "number"
+  | "complement"
+  | "neighborhood"
+  | "city"
+  | "state"
+  | "zip_code"
+  | "is_active"
+>;
+
 /** Resumo da célula no formulário de relatório: rótulo, dia e horário sugeridos. */
 export const CELL_SUMMARY_SELECT = "id, leader_name, meeting_day, meeting_time, street, number, neighborhood";
 

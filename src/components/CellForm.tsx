@@ -1,408 +1,233 @@
-import { useState, useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useEffect, useId, useRef, useState } from "react";
+import { FormProvider, useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useSlowPending } from "@/hooks/use-slow-pending";
-import { useMemberAddress } from "@/hooks/use-member-address";
-import AsyncMemberSelect from "@/components/AsyncMemberSelect";
-import type { PaginatedSelectHandle } from "@/components/select/PaginatedSelect";
-import { applyHostAddress } from "@/lib/cells/host-address";
-import type { CellRow } from "@/lib/cells/fields";
-import { WEEKDAYS } from "@/lib/cells/weekdays";
-import { CELL_TYPES } from "@/lib/cells/cell-types";
-import {
-  buildCellWrite,
-  cellFormFromRow,
-  EMPTY_CELL_FORM,
-  type CellFormValues,
-  type CellWritePayload,
-} from "@/lib/cells/write";
-import { CELL_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
-import { requestSessionCheck } from "@/lib/auth/session-check";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
-import { refreshAccess } from "@/hooks/use-access";
+import { useToast } from "@/hooks/use-toast";
+import { useCellSave, type CellSaveResult } from "@/hooks/use-cell-save";
+import { useCellFormErrors } from "@/hooks/use-cell-form-errors";
+import { useHostAddress } from "@/hooks/use-host-address";
+import { useMemberStatuses } from "@/hooks/use-member-statuses";
+import { CellFormDialog } from "@/components/cells/CellFormDialog";
+import { CellPeopleFieldset } from "@/components/cells/CellPeopleFieldset";
+import { CellMeetingFieldset } from "@/components/cells/CellMeetingFieldset";
+import { CellAddressFieldset } from "@/components/cells/CellAddressFieldset";
 import { memberSearchEmptyLabel, peopleLimitedToMinistry } from "@/lib/access/access";
-import { cellRefusalFromError, type CellFormRefusal, type CellPersonField } from "@/lib/access/cell-form";
-import { CELL_FORM_TEXTS } from "@/lib/access/texts";
+import { prefersReducedMotion } from "@/lib/a11y";
+import { changedCellFields, isCellFormDirty } from "@/lib/cells/changes";
+import type { CellRow } from "@/lib/cells/fields";
+import { cellFormResolver } from "@/lib/cells/form-resolver";
+import { applyHostAddress, type HostAddressOutcome } from "@/lib/cells/host-address";
+import { saveOutcome, saveOutcomeToast } from "@/lib/cells/situation";
+import { CELL_FORM_TEXTS as TEXTS } from "@/lib/cells/texts";
+import { CELL_ADDRESS_COLUMNS, EMPTY_CELL_FORM, cellFormFromRow, toCellInsert, type CellFormValues } from "@/lib/cells/write";
+import { CELL_DELETION_TEXTS, DELETION_TEXTS } from "@/lib/deletion/texts";
 import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
-import { isRecalcFailure } from "@/lib/errors";
-import { refreshAfterCellWrite } from "@/lib/query-refresh";
-import { describedBy } from "@/lib/a11y";
-import { FieldError, FieldHint } from "@/components/members/FormFieldParts";
-
-type CellField = keyof CellFormValues;
-
-/** "gone": a edição não voltou com a linha, porque a célula foi excluída no meio tempo (E2.01, DT-19). */
-type SaveResult = "saved" | "gone";
+import type { MemberAddress } from "@/lib/members/fields";
 
 interface CellFormProps {
-  /** Célula em edição: a linha da cells_view. */
+  /** Célula em edição: a linha da cells_view. `null`: "Nova célula". */
   cell: CellRow | null;
   onClose: () => void;
-  /**
-   * A gravação começou ou terminou. Quem abre o diálogo não o deixa fechar
-   * durante o envio ("✕", `Esc` e o toque fora; E2.06, T5 e P44).
-   */
-  onPendingChange?: (pending: boolean) => void;
+  /** Ao fechar, leva o foco a quem abriu o formulário (`useReturnFocus`). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
-const BRAZILIAN_STATES = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
-  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
-];
-
-const CellForm = ({ cell, onClose, onPendingChange }: CellFormProps) => {
+/**
+ * O formulário de célula (E2.08, T1 a T6): o diálogo responsivo (P1) com os
+ * grupos "Pessoas da célula", "Reunião" e "Endereço da célula", a conferência
+ * ao salvar (P22) e a gravação (`useCellSave`). A regra fica em
+ * `src/lib/cells`, e vale no banco; a tela só a replica.
+ */
+const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEditing = !!cell;
   const { access } = useAuth();
-  // Quem vê só o ministério escolhe as três pessoas entre as do ministério (T7, P11).
-  const showPeopleHint = peopleLimitedToMinistry(access);
-  const searchEmptyLabel = memberSearchEmptyLabel(access);
+  const isEditing = !!cell;
+  const storedActive = cell ? cell.is_active !== false : null;
+  const formId = `${useId()}-cell-form`;
 
-  // A célula entra já na montagem (o diálogo monta o formulário a cada
-  // abertura): o seletor guarda o valor de abertura para mostrar o nome salvo
-  // (`savedLabel`, DT-23), e um valor preenchido depois, num efeito, cairia na
-  // `member_names`, que não resolve quem está fora do escopo (UX-20).
-  const [form, setForm] = useState<CellFormValues>(() => (cell ? cellFormFromRow(cell) : EMPTY_CELL_FORM));
-  // A célula foi excluída (ou saiu do escopo) enquanto era editada.
-  const [deletedWhileEditing, setDeletedWhileEditing] = useState(false);
-  const deletedAlertRef = useRef<HTMLDivElement>(null);
+  // Os dados entram na montagem (o diálogo monta o formulário a cada abertura):
+  // o seletor guarda o valor de abertura para mostrar o nome salvo (DT-23).
+  const [opening] = useState<CellFormValues>(() => (cell ? cellFormFromRow(cell) : EMPTY_CELL_FORM));
+  // O cadastro novo é idempotente pelo id gerado ao abrir (DT-09).
+  const [attemptId] = useState(() => crypto.randomUUID());
 
+  const form = useForm<CellFormValues>({
+    defaultValues: opening,
+    resolver: cellFormResolver,
+    reValidateMode: "onSubmit",
+    shouldFocusError: false,
+  });
+  const errors = useCellFormErrors(form);
+
+  // A marca "(inativo)" de quem está gravado (P63, DA-10).
+  const statuses = useMemberStatuses(cell ? [cell.leader_id, cell.timothy_id, cell.host_id] : []);
+  const statusOf = (field: "leader_id" | "timothy_id" | "host_id") => {
+    const id = cell?.[field];
+    if (!id || statuses.isError) return null;
+    if (!statuses.data) return undefined;
+    return statuses.data.get(id) ?? null;
+  };
+
+  // O endereço do anfitrião, a cada escolha (RN-10, P61, UXD-8).
+  const [hostOutcome, setHostOutcome] = useState<HostAddressOutcome | null>(null);
+  const applyHost = (host: MemberAddress | null) => {
+    const current = form.getValues();
+    const { address, outcome } = applyHostAddress(current, host);
+    for (const column of CELL_ADDRESS_COLUMNS) {
+      if (address[column] !== current[column]) form.setValue(column, address[column], { shouldDirty: true });
+    }
+    setHostOutcome(outcome);
+  };
+  const hostAddress = useHostAddress(applyHost);
+  const addressRef = useRef<HTMLFieldSetElement>(null);
+  const goToAddress = () => {
+    addressRef.current?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    form.setFocus("zip_code");
+  };
+
+  const save = useCellSave();
+  const [topMessage, setTopMessage] = useState<string | null>(null);
+  const [gone, setGone] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const topAlertRef = useRef<HTMLDivElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const busy = save.isPending;
+
+  // O `Alert` do topo recebe o foco, e a tela rola até ele (T5).
   useEffect(() => {
-    if (deletedWhileEditing) deletedAlertRef.current?.focus();
-  }, [deletedWhileEditing]);
+    if (!topMessage && !gone) return;
+    topAlertRef.current?.focus();
+    topAlertRef.current?.scrollIntoView?.({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [topMessage, gone]);
 
-  // Recusas do servidor (T11, UX-22): no topo, com o foco e rolando até ele, ou embaixo do campo.
-  const [topRefusal, setTopRefusal] = useState<string | null>(null);
-  const [fieldError, setFieldError] = useState<{ field: CellPersonField; message: string } | null>(null);
-  const refusalAlertRef = useRef<HTMLDivElement>(null);
-  const leaderSelectRef = useRef<PaginatedSelectHandle>(null);
-  const timothySelectRef = useRef<PaginatedSelectHandle>(null);
-  const hostSelectRef = useRef<PaginatedSelectHandle>(null);
-
-  // O erro embaixo do campo leva o foco a ele.
+  // Depois de uma falha de envio, o foco volta à ação primária, que serve de "Tentar de novo" (T6).
   useEffect(() => {
-    const refs = { leader_id: leaderSelectRef, timothy_id: timothySelectRef, host_id: hostSelectRef };
-    if (fieldError) refs[fieldError.field].current?.focus();
-  }, [fieldError]);
+    if (failure && !busy) primaryRef.current?.focus();
+  }, [failure, busy]);
 
-  useEffect(() => {
-    if (!topRefusal) return;
-    refusalAlertRef.current?.focus();
-    refusalAlertRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-  }, [topRefusal]);
-
-  const showRefusal = (refusal: CellFormRefusal) => {
-    if (refusal.rereadAccess) void refreshAccess(queryClient);
-    if (refusal.field) {
-      setTopRefusal(null);
-      setFieldError({ field: refusal.field, message: refusal.message });
-    } else {
-      setFieldError(null);
-      setTopRefusal(refusal.message);
+  const showResult = (result: CellSaveResult) => {
+    switch (result.kind) {
+      case "saved":
+        toast({ title: saveOutcomeToast(result.outcome) });
+        onClose();
+        return;
+      case "gone":
+        setGone(true);
+        return;
+      case "failed": {
+        const { failure: cause } = result;
+        if (cause.kind === "field") errors.showServerError(cause.field, cause.message);
+        else if (cause.kind === "top") setTopMessage(cause.message);
+        else setFailure(cause.kind === "recalc" ? SAVE_TEXTS.recalcFailed : TEXTS.connectionFailed);
+      }
     }
   };
 
-  // Falha sem recusa (recálculo da hierarquia, falha transitória ou técnica):
-  // num `Alert` acima dos botões, com os dados mantidos e o foco no botão
-  // primário, que serve de "Tentar de novo" (E2.06, T5 e RN-08).
-  const [saveFailure, setSaveFailure] = useState<string | null>(null);
-  const primaryRef = useRef<HTMLButtonElement>(null);
-
-  const errorFor = (field: CellPersonField) => (fieldError?.field === field ? fieldError.message : null);
-
-  // Endereço do anfitrião: carregado no cadastro e quando o anfitrião muda na
-  // edição. Vem da members_view, que mascara rua, número e CEP para quem não
-  // pode vê-los.
-  const hostToLoad = form.host_id && (!isEditing || form.host_id !== cell?.host_id) ? form.host_id : null;
-  const { data: hostAddress, isError: hostAddressError } = useMemberAddress(hostToLoad);
-
-  useEffect(() => {
-    if (!hostAddress) return;
-    setForm((prev) => applyHostAddress(prev, hostAddress));
-    if (hostAddress.sensitive_visible) {
-      toast({ title: "Endereço carregado", description: "O endereço foi preenchido com os dados do anfitrião." });
-    } else {
-      toast({
-        title: "Endereço carregado em parte",
-        description: "Rua, número e CEP do anfitrião indisponíveis.",
-      });
-    }
-  }, [hostAddress, toast]);
-
-  useEffect(() => {
-    if (hostAddressError) {
-      toast({ variant: "destructive", title: "Não foi possível carregar o endereço do anfitrião" });
-    }
-  }, [hostAddressError, toast]);
-
-  const mutation = useMutation({
-    mutationFn: async ({ payload, isActive }: { payload: CellWritePayload; isActive: boolean }): Promise<SaveResult> => {
-      if (isEditing && cell) {
-        // Sem linha de volta, a célula não existe mais ou foi excluída (DT-19).
-        const { data: saved, error } = await supabase
-          .from("cells")
-          .update({ ...payload, is_active: isActive })
-          .eq("id", cell.id)
-          .select("id");
-        if (error) throw error;
-        return saved?.length ? "saved" : "gone";
-      }
-      // A célula nova sempre começa ativa: a situação não vai no cadastro (RN-11).
-      const { error } = await supabase.from("cells").insert(payload).select("id");
-      if (error) throw error;
-      return "saved";
-    },
-    onSuccess: (result) => {
-      if (result === "gone") {
-        setDeletedWhileEditing(true);
-        // "0 linhas" também é o que um membro excluído recebe (RN-14): confere a própria sessão.
-        requestSessionCheck();
-        // A lista recarrega já: "Fechar", "Cancelar", o X e o Esc voltam para ela sem a célula.
-        queryClient.invalidateQueries({ queryKey: ["cells", "list"] });
+  const submit = form.handleSubmit(
+    async (values) => {
+      if (busy) return;
+      // O endereço do anfitrião que ainda não chegou não muda o que vai ao servidor.
+      hostAddress.cancel();
+      setTopMessage(null);
+      setFailure(null);
+      if (!cell) {
+        showResult(await save.save({ kind: "create", insert: { ...toCellInsert(values, attemptId), id: attemptId } }));
         return;
       }
-      // Células, Relatórios, Membros, Ministérios e o Dashboard sem os valores de antes (P44).
-      void refreshAfterCellWrite(queryClient);
-      toast({ title: isEditing ? "Célula atualizada" : "Célula criada" });
-      onClose();
+      const patch = changedCellFields(opening, values);
+      const outcome = saveOutcome(storedActive, patch);
+      // Sem nenhuma mudança, nada vai ao servidor (E2.05, T5).
+      if (outcome === "unchanged" || outcome === "created") {
+        toast({ title: saveOutcomeToast("unchanged") });
+        onClose();
+        return;
+      }
+      showResult(await save.save({ kind: "update", cellId: cell.id, patch, outcome }));
     },
-    onError: (error) => {
-      // As recusas ficam no formulário, com os dados (T11). O resto, também no
-      // formulário e nunca com o texto técnico (E2.06, T5 e UX-19).
-      const refusal = isRecalcFailure(error) ? null : cellRefusalFromError(error);
-      if (refusal) showRefusal(refusal);
-      else setSaveFailure(SAVE_TEXTS.recalcFailed);
-    },
-  });
-
-  const saving = mutation.isPending;
-  const slowSaving = useSlowPending(saving);
-
-  useEffect(() => {
-    onPendingChange?.(saving);
-  }, [saving, onPendingChange]);
-
-  // Depois da falha, o foco volta ao botão primário, já habilitado.
-  useEffect(() => {
-    if (saveFailure && !saving) primaryRef.current?.focus();
-  }, [saveFailure, saving]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setTopRefusal(null);
-    setFieldError(null);
-    setSaveFailure(null);
-    // Sem as três pessoas, o dia e o horário, nada é enviado (RN-02, RN-05, RN-06): o
-    // primeiro que falta vai no aviso, até o formulário novo do E2.08 (PR 5).
-    const write = buildCellWrite(form);
-    if (write.ok === false) {
-      toast({ variant: "destructive", title: "Erro", description: write.message });
-      return;
-    }
-    // Já no envio, e não só no efeito: o host para de aceitar o fechamento antes do próximo quadro.
-    onPendingChange?.(true);
-    mutation.mutate({ payload: write.payload, isActive: form.is_active });
-  };
-
-  const update = <F extends CellField>(field: F, value: CellFormValues[F]) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (fieldError?.field === field) setFieldError(null);
-  };
+    () => errors.focusNextError(),
+  );
 
   /** "Fechar" do aviso de célula excluída: volta para a lista, recarregada. */
-  const closeDeleted = () => {
-    queryClient.invalidateQueries({ queryKey: ["cells"] });
+  const closeGone = () => {
+    void queryClient.invalidateQueries({ queryKey: ["cells"] });
     onClose();
   };
 
+  const showScopeHint = peopleLimitedToMinistry(access);
+  const errorCount = Object.keys(errors.shown).length;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {deletedWhileEditing && (
-        <Alert ref={deletedAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription className="space-y-3 text-foreground">
-            <p>{CELL_DELETION_TEXTS.deletedWhileEditing}</p>
-            <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeDeleted}>
-              {DELETION_TEXTS.close}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+    <CellFormDialog
+      isEditing={isEditing}
+      storedInactive={storedActive === false}
+      onClose={onClose}
+      onCloseAutoFocus={onCloseAutoFocus}
+      actions={{
+        formId,
+        primaryLabel: isEditing ? TEXTS.buttons.save : TEXTS.buttons.create,
+        busyLabel: isEditing ? TEXTS.buttons.saving : TEXTS.buttons.creating,
+        busy,
+        disabled: gone,
+        errorCount,
+        failure,
+        primaryRef,
+        isDirty: () => isCellFormDirty(opening, form.getValues()),
+      }}
+    >
+      <FormProvider {...form}>
+        <form id={formId} noValidate onSubmit={submit} className="space-y-6">
+          {(topMessage || gone) && (
+            <Alert ref={topAlertRef} role="alert" tabIndex={-1} variant="destructive" className="focus:outline-none">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+              <AlertDescription className="space-y-3 text-foreground">
+                {gone ? (
+                  <>
+                    <p>{CELL_DELETION_TEXTS.deletedWhileEditing}</p>
+                    <Button type="button" variant="outline" className="h-11 md:h-9" onClick={closeGone}>
+                      {DELETION_TEXTS.close}
+                    </Button>
+                  </>
+                ) : (
+                  <p>{topMessage}</p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
-      {topRefusal && (
-        <Alert ref={refusalAlertRef} tabIndex={-1} variant="destructive" className="focus:outline-none">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription className="text-foreground">{topRefusal}</AlertDescription>
-        </Alert>
-      )}
+          <p className="text-sm text-muted-foreground">{TEXTS.requiredNote}</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Dica única, acima dos três campos de pessoa, e ligada a cada um (T7, P11). */}
-        {showPeopleHint && (
-          <div className="md:col-span-2">
-            <FieldHint id="cell-people-hint">{CELL_FORM_TEXTS.peopleHint}</FieldHint>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="leader_id">Líder *</Label>
-          <AsyncMemberSelect
-            inputId="leader_id"
-            focusRef={leaderSelectRef}
-            value={form.leader_id}
-            onChange={(v) => update("leader_id", v)}
-            placeholder="Buscar líder…"
-            savedLabel={cell?.leader_name}
-            noResultsLabel={searchEmptyLabel}
-            aria-describedby={describedBy(errorFor("leader_id") && "leader_id-error", showPeopleHint && "cell-people-hint")}
+          <CellPeopleFieldset
+            ui={{ errors: errors.shown }}
+            savedNames={{ leader_id: cell?.leader_name, timothy_id: cell?.timothy_name, host_id: cell?.host_name }}
+            statusOf={statusOf}
+            showScopeHint={showScopeHint}
+            noResultsLabel={memberSearchEmptyLabel(access)}
+            hostDisabled={busy}
+            onHostPicked={(hostId) => {
+              setHostOutcome(null);
+              void hostAddress.request(hostId);
+            }}
+            hostAddress={{
+              status: hostAddress.status,
+              outcome: hostOutcome,
+              onRetry: hostAddress.retry,
+              onGoToAddress: goToAddress,
+            }}
           />
-          {fieldError?.field === "leader_id" && <FieldError id="leader_id-error">{fieldError.message}</FieldError>}
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="timothy_id">Timóteo (Auxiliar)</Label>
-          <AsyncMemberSelect
-            inputId="timothy_id"
-            focusRef={timothySelectRef}
-            value={form.timothy_id || null}
-            onChange={(v) => update("timothy_id", v)}
-            placeholder="Buscar timóteo…"
-            savedLabel={cell?.timothy_name}
-            noResultsLabel={searchEmptyLabel}
-            aria-describedby={describedBy(errorFor("timothy_id") && "timothy_id-error", showPeopleHint && "cell-people-hint")}
-          />
-          {fieldError?.field === "timothy_id" && <FieldError id="timothy_id-error">{fieldError.message}</FieldError>}
-        </div>
+          <CellMeetingFieldset ui={{ errors: errors.shown }} storedActive={storedActive} onTimeBlur={errors.checkTimeOnBlur} />
 
-        <div className="space-y-2">
-          <Label htmlFor="host_id">Anfitrião</Label>
-          <AsyncMemberSelect
-            inputId="host_id"
-            focusRef={hostSelectRef}
-            value={form.host_id || null}
-            onChange={(v) => update("host_id", v)}
-            placeholder="Buscar anfitrião…"
-            savedLabel={cell?.host_name}
-            noResultsLabel={searchEmptyLabel}
-            aria-describedby={describedBy(errorFor("host_id") && "host_id-error", showPeopleHint && "cell-people-hint")}
-          />
-          {fieldError?.field === "host_id" && <FieldError id="host_id-error">{fieldError.message}</FieldError>}
-        </div>
+          <Separator />
 
-        <div className="space-y-2">
-          <Label htmlFor="type">Tipo</Label>
-          <Select value={form.type || ""} onValueChange={(v) => update("type", v)}>
-            <SelectTrigger id="type"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-            <SelectContent>
-              {CELL_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="day">Dia da Semana</Label>
-          <Select value={form.meeting_day || ""} onValueChange={(v) => update("meeting_day", v)}>
-            <SelectTrigger id="day"><SelectValue placeholder="Selecione o dia" /></SelectTrigger>
-            <SelectContent>
-              {WEEKDAYS.map(d => (
-                <SelectItem key={d} value={d}>{d}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="time">Horário</Label>
-          <Input 
-            id="time" 
-            type="time" 
-            value={form.meeting_time || ""} 
-            onChange={(e) => update("meeting_time", e.target.value)} 
-          />
-        </div>
-
-        {/* Só na edição: a célula nova sempre começa ativa (RN-11). */}
-        {isEditing && (
-          <div className="flex items-center justify-between rounded-md border p-3 md:col-span-2">
-            <Label htmlFor="is_active">Célula Ativa</Label>
-            <Switch id="is_active" checked={form.is_active} onCheckedChange={(v) => update("is_active", v)} />
-          </div>
-        )}
-      </div>
-
-      <Separator />
-
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Endereço da Célula</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="street">Rua</Label>
-            <Input id="street" value={form.street || ""} onChange={(e) => update("street", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="number">Número</Label>
-            <Input id="number" value={form.number || ""} onChange={(e) => update("number", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="complement">Complemento</Label>
-            <Input id="complement" value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="neighborhood">Bairro</Label>
-            <Input id="neighborhood" value={form.neighborhood || ""} onChange={(e) => update("neighborhood", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="city">Cidade</Label>
-            <Input id="city" value={form.city || ""} onChange={(e) => update("city", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="state">Estado</Label>
-            <Select value={form.state || ""} onValueChange={(v) => update("state", v)}>
-              <SelectTrigger id="state"><SelectValue placeholder="UF" /></SelectTrigger>
-              <SelectContent>
-                {BRAZILIAN_STATES.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      {saveFailure && (
-        <Alert role="alert" variant="destructive">
-          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-          <AlertDescription className="text-foreground">{saveFailure}</AlertDescription>
-        </Alert>
-      )}
-
-      {slowSaving && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {SAVE_TEXTS.stillSaving}
-        </p>
-      )}
-
-      <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-          Cancelar
-        </Button>
-        <Button ref={primaryRef} type="submit" disabled={saving || deletedWhileEditing}>
-          {saving ? "Salvando..." : isEditing ? "Salvar" : "Criar Célula"}
-        </Button>
-      </div>
-    </form>
+          <CellAddressFieldset ref={addressRef} busy={busy} onCepFilled={() => setHostOutcome(null)} />
+        </form>
+      </FormProvider>
+    </CellFormDialog>
   );
 };
 

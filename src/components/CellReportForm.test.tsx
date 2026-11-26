@@ -21,8 +21,13 @@ vi.mock("@/integrations/supabase/client", async () => {
 });
 
 // O acesso de quem está logado (E2.02): `null` antes da primeira leitura; os testes de escopo trocam.
-const auth = vi.hoisted(() => ({ access: null as import("@/lib/access/access").Access | null }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ access: auth.access }) }));
+const auth = vi.hoisted(() => ({
+  access: null as import("@/lib/access/access").Access | null,
+  permissions: new Set<string>(),
+}));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ access: auth.access, hasPermission: (permission: string) => auth.permissions.has(permission) }),
+}));
 
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
@@ -648,5 +653,59 @@ describe("CellReportForm: escopo (E2.02, T8)", () => {
     auth.access = { ...auth.access, sees_whole_church: true };
     render(<CellReportForm initialCell={cell} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
     expect(screen.queryByText(hint)).not.toBeInTheDocument();
+  });
+});
+
+// Célula inativada com o formulário aberto (E2.08, RN-11 c, T8, UX-23).
+describe("CellReportForm: célula inativa (E2.08, T8)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    toast.mockClear();
+    auth.access = null;
+    auth.permissions = new Set();
+  });
+
+  const inactive = () => ({ error: appError("cell_inactive", "Esta célula está inativa e não recebe relatórios.", { cell_id: "c1" }) });
+
+  it("aberto pela lista: o aviso com a orientação de reativar (com 'Editar Célula'), 'Fechar', os dados mantidos e sem toast", async () => {
+    auth.permissions = new Set(["edit_cell"]);
+    respondWith(inactive());
+    const onClose = vi.fn();
+    const invalidatedKeys = renderWatched(<CellReportForm initialCell={todayCell} onClose={onClose} />);
+    fireEvent.change(screen.getByLabelText("Tema da Palavra"), { target: { value: "Fé que move montanhas" } });
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Esta célula está inativa e não recebe relatórios. Para enviar um relatório, reative a célula.");
+    await waitFor(() => expect(alert).toHaveFocus());
+    expect(screen.getByLabelText("Tema da Palavra")).toHaveValue("Fé que move montanhas");
+    expect(invalidatedKeys()).toContainEqual(["cells"]);
+    expect(invalidatedKeys()).toContainEqual(["access"]);
+    expect(toast).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", SAVE)).toBeDisabled();
+
+    fireEvent.click(within(alert).getByRole("button", { name: "Fechar" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("aberto por Relatórios, sem 'Editar Célula': a orientação de pedir à liderança e a célula desmarcada", async () => {
+    respondWith({ data: [todayCell] }, inactive());
+    const onClose = vi.fn();
+    renderWatched(<CellReportForm onClose={onClose} />);
+    await screen.findByText("Célula de Ana Alves, em Rua A 10, Centro");
+
+    fireEvent.click(screen.getByRole("button", SAVE));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Esta célula está inativa e não recebe relatórios. Se ela voltou a se reunir, peça à sua liderança para reativá-la.",
+    );
+    expect(within(alert).queryByRole("button", { name: "Fechar" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Célula de Ana Alves, em Rua A 10, Centro")).not.toBeInTheDocument();
+    expect(toast).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

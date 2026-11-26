@@ -61,11 +61,11 @@ async function renderEdit() {
     </QueryClientProvider>,
     { wrapper: ({ children }: { children: ReactNode }) => <>{children}</> },
   );
-  await screen.findByRole("button", { name: "Salvar" });
+  await screen.findByRole("button", { name: "Salvar alterações" });
   fireEvent.change(screen.getByLabelText("Bairro"), { target: { value: "Bairro Novo" } });
   return onClose;
 }
-const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+const save = () => fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
 class NoopResizeObserver {
   observe() {}
@@ -98,8 +98,8 @@ describe("CellForm: gravação que recalcula (E2.06, RN-08)", () => {
     expect(document.body.textContent).not.toMatch(TECHNICAL);
     expect(toast).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Salvar" })).toHaveFocus());
-    expect(screen.getByRole("button", { name: "Salvar" })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Salvar alterações" })).toHaveFocus());
+    expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeEnabled();
     expect(screen.getByLabelText("Bairro")).toHaveValue("Bairro Novo");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
@@ -115,7 +115,7 @@ describe("CellForm: gravação que recalcula (E2.06, RN-08)", () => {
     save();
     await act(() => vi.advanceTimersByTimeAsync(0));
 
-    expect(screen.getByRole("button", { name: "Salvando..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Salvando…" })).toBeDisabled();
     await act(() => vi.advanceTimersByTimeAsync(2_999));
     expect(screen.queryByText(STILL_SAVING)).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(1));
@@ -137,7 +137,7 @@ describe("CellForm: gravação que recalcula (E2.06, RN-08)", () => {
       finish();
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(toast).toHaveBeenCalledWith({ title: "Célula atualizada" });
+    expect(toast).toHaveBeenCalledWith({ title: "Célula atualizada." });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
