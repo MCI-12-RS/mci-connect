@@ -19,7 +19,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(19);
+SELECT plan(22);
 
 -- Período "desde X" e "de X até Y", em hora de Brasília (-03 explícito).
 CREATE FUNCTION pg_temp.since(_from text) RETURNS tstzmultirange LANGUAGE sql IMMUTABLE AS
@@ -183,7 +183,7 @@ SELECT ok(NOT private.report_week_counts('2026-11-22', 6, '23:30', pg_temp.since
 RESET timezone;
 
 -- ---------------------------------------------------------------------------
--- 4. Pureza e propriedades — 3
+-- 4. Pureza e propriedades — 6
 -- ---------------------------------------------------------------------------
 SELECT is((SELECT array_agg(p.provolatile::text ORDER BY p.proname) FROM pg_proc p
             WHERE p.pronamespace = 'private'::regnamespace
@@ -198,6 +198,30 @@ SELECT ok(NOT EXISTS (SELECT 1 FROM pg_proc p
                          AND p.proname IN ('report_deadline', 'report_week_counts', 'report_situation_rule')
                          AND p.prosrc ~* '\m(from|join)\s+(public|private)\.'),
   'a regra pura não lê tabela nenhuma');
+-- DT-14: as cinco funções puras ficam sem SET search_path (para o inline) e, por isso, nunca
+-- podem ser security definer.
+SELECT is((SELECT array_agg(p.prosecdef::text || '/' || coalesce(p.proconfig::text, 'sem SET') ORDER BY p.oid::regprocedure::text)
+             FROM pg_proc p
+            WHERE p.oid IN (to_regprocedure('public.sp_local(timestamptz)'),
+                            to_regprocedure('public.sp_instant(timestamp)'),
+                            to_regprocedure('private.report_deadline(date, integer, time)'),
+                            to_regprocedure('private.report_week_counts(date, integer, time, tstzmultirange)'),
+                            to_regprocedure('private.report_situation_rule(timestamp, boolean, integer, time, date[], boolean, tstzmultirange)'))),
+  ARRAY['false/sem SET', 'false/sem SET', 'false/sem SET', 'false/sem SET', 'false/sem SET'],
+  'DT-14: sp_local, sp_instant, report_deadline, report_week_counts e report_situation_rule: invoker, sem SET');
+SELECT ok((SELECT prosrc ~ 'OPERATOR\(pg_catalog\.@>\)' FROM pg_proc
+            WHERE oid = to_regprocedure('private.report_week_counts(date, integer, time, tstzmultirange)')),
+  'DT-14: report_week_counts escreve OPERATOR(pg_catalog.@>)');
+-- Um @> exato para (tstzmultirange, timestamptz) em public, que sempre diz "contém", não muda a
+-- resposta nem com public no search_path (desfeito pelo ROLLBACK).
+CREATE FUNCTION public.e209_fake_contains(tstzmultirange, timestamptz) RETURNS boolean
+  LANGUAGE sql IMMUTABLE AS 'SELECT true';
+CREATE OPERATOR public.@> (LEFTARG = tstzmultirange, RIGHTARG = timestamptz,
+                           FUNCTION = public.e209_fake_contains);
+SET LOCAL search_path = public, extensions;
+SELECT ok(NOT private.report_week_counts('2026-11-22', 3, '20:00', NULL),
+  'DT-14: um @> criado em public não substitui o de pg_catalog na regra');
+RESET search_path;
 
 SELECT * FROM finish();
 ROLLBACK;

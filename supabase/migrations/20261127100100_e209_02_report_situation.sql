@@ -50,6 +50,12 @@ BEGIN
      OR pg_get_viewdef('public.cells_view'::regclass) !~ 'member_hierarchy' THEN
     RAISE EXCEPTION 'E2.09 (migration 2): falta a migration 1 deste passo, o PR 1 do E2.01, o E1.08 ou o E2.06.';
   END IF;
+  -- A cells_view abaixo parte da do E2.08 PR 1 (can_submit_report só com a
+  -- célula ativa). Sem ela, o CREATE OR REPLACE desfaria a regra do E2.08.
+  IF pg_get_viewdef('public.cells_view'::regclass)
+     !~ '\(c\.is_active AND \(\( SELECT (public\.)?viewer_has\(''edit_cell''' THEN
+    RAISE EXCEPTION 'E2.09 (migration 2): a cells_view vigente não é a do E2.08 PR 1 (can_submit_report com a célula ativa); aplique antes a migration 20261126120000_e208_01_inactive_cell_reports.';
+  END IF;
 END $$;
 
 -- ===========================================================================
@@ -57,9 +63,18 @@ END $$;
 -- ===========================================================================
 -- DT-14: as funções puras deste arquivo (sp_local, sp_instant, report_deadline,
 -- report_week_counts e report_situation_rule) não têm SET search_path. São
--- SECURITY INVOKER, IMMUTABLE e só citam objetos com o schema (os operadores
--- vêm de pg_catalog, que é sempre lido primeiro). Com o SET, cada chamada troca
--- o search_path e impede o inline: a situação de 1.350 células passava de
+-- SECURITY INVOKER (prosecdef = false, fixado no pgTAP), IMMUTABLE e só citam
+-- objetos com o schema. Os operadores e tipos de pg_catalog com argumentos
+-- exatos (date + integer, date + time, timestamp + interval, timestamp <
+-- timestamp, date = date, integer * integer, date - integer) não podem ser
+-- trocados por um homônimo em public: pg_catalog é lido antes (implícito, fora
+-- do search_path), e a mesma assinatura esconde a de depois. O único
+-- polimórfico, anymultirange @> anyelement, perderia para um
+-- "public.@>(tstzmultirange, timestamptz)" exato (de quem tem CREATE em
+-- public); por isso é escrito OPERATOR(pg_catalog.@>), e o tipo do literal,
+-- pg_catalog.tstzmultirange (continua inlinável). AT TIME ZONE já vira
+-- pg_catalog.timezone() no parser. Com o SET, cada chamada troca o
+-- search_path e impede o inline: a situação de 1.350 células passava de
 -- 145 ms só na regra; sem ele, 10 ms. A função definer (cell_report_situation)
 -- e a RPC continuam com search_path vazio.
 CREATE OR REPLACE FUNCTION public.sp_local(_at timestamptz)
@@ -138,8 +153,8 @@ LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
 AS $$
-  SELECT coalesce(_periods, '{}'::tstzmultirange)
-         @> public.sp_instant(least(private.report_deadline(_week_start, _weekday, _meeting_time),
+  SELECT coalesce(_periods, '{}'::pg_catalog.tstzmultirange)
+         OPERATOR(pg_catalog.@>) public.sp_instant(least(private.report_deadline(_week_start, _weekday, _meeting_time),
                                     (_week_start + 7)::timestamp))
 $$;
 
