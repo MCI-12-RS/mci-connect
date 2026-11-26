@@ -1,0 +1,171 @@
+-- E2.03 (PR 4, tarefa 13): custo do portão (risco 3), no volume de referência do E2.02.
+-- Spec: docs/specs/e2-03-senha.md (repositório apps-mci), "O portão (RN-09 e RN-16)" e Riscos, item 3:
+-- 20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações, medidos com um pastor e um
+-- G12 com a função Líder (que, desde a migration 5, tem "Redefinir Senha de Membros": a lista calcula a
+-- password_reset_status por linha, com viewer_covers_role).
+--
+-- Cada pessoa tem conta, a linha no cofre (sem marca) e uma sessão viva, e as claims levam o session_id:
+-- o portão faz as duas buscas de verdade (auth.sessions e o cofre).
+--
+-- Metas:
+--   - página de lista com contagem abaixo de 300 ms (membros, células e relatórios);
+--   - my_access abaixo de 50 ms;
+--   - dashboard_summary abaixo de 800 ms.
+-- No fim, as três portas são recriadas sem o portão (os corpos de antes da migration 5), dentro da mesma
+-- transação, e as mesmas medidas são repetidas, para mostrar o custo do portão.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e203_volume.psql > e203_explain.txt
+
+\set ON_ERROR_STOP on
+-- As colunas que as telas pedem (src/lib/*/fields.ts): a lista não lê search_text nem as colunas de vínculo celular.
+\set member_cols 'id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code, password_reset_status'
+\set cell_cols 'id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, timothy_name, host_name, g12_leader_name'
+\set report_cols 'id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, visitors_count, cell_leader_name, cell_street, cell_number, cell_complement, cell_neighborhood, cell_deleted'
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers (níveis e totais explícitos)
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas: 2 pastores casados (1 e 2), 12 G12 (3 a 14, casados dois a dois) e uma árvore
+-- de 12 discípulos por pessoa até 20.000 membros.
+INSERT INTO auth.users (id, email)
+SELECT ('a2030900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e203-vol-' || n || '@teste.invalid' FROM generate_series(1, 4) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2030900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2030900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2030900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2030900-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       n % 10 <> 0,
+       n > 2,
+       CASE n WHEN 1 THEN 'a2030900-0000-0000-0000-000000000001'::uuid
+              WHEN 3 THEN 'a2030900-0000-0000-0000-000000000003'::uuid
+              WHEN 100 THEN 'a2030900-0000-0000-0000-000000000004'::uuid END,
+       CASE WHEN n IN (1, 3, 100) THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')                -- E2.04: identificador real e único (RN-08, RN-09)
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células com líder, timóteo e anfitrião espalhados pela árvore.
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active)
+SELECT ('d2030900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2030900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2030900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2030900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', true
+  FROM generate_series(1, 1500) n;
+
+-- 100 mil relatórios (67 semanas passadas por célula; a semana atual fica livre para o lançamento) e 800 mil participações (8 por relatório).
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2030900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2030900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', true, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT ('e2030900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('c2030900-0000-0000-0000-' || lpad((15 + ((i::bigint * 8 + k) * 7919) % 19980)::text, 12, '0'))::uuid
+  FROM generate_series(0, 99999) i, generate_series(0, 7) k;
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();   -- E2.06: nível, cadeia e totais saem da tabela da hierarquia
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' reports=' || (SELECT count(*) FROM public.cell_reports) || ' participants=' || (SELECT count(*) FROM public.cell_report_participants) AS volume;
+
+
+-- Contas: cofre (sem marca) e uma sessão viva por pessoa.
+SELECT private.write_password(('a2030900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, NULL, 'Forte@2024x', NULL) FROM (VALUES (1), (3), (4)) v(n);
+INSERT INTO auth.sessions (id, user_id)
+SELECT ('5e530900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, ('a2030900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid FROM (VALUES (1), (3), (4)) v(n);
+
+-- Sessão como a pessoa n (1 = pastor Samuel, 3 = G12 Pedro), com o session_id nas claims.
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object(
+    'sub', 'a2030900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated',
+    'session_id', '5e530900-0000-0000-0000-' || lpad(_n::text, 12, '0'))::text, true) $$;
+-- O melhor de algumas rodadas, em ms.
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+    IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+  END LOOP;
+  RETURN round(_best, 1);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.ms(text, int) TO authenticated;
+
+SELECT format('SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols') AS q_mem_page,
+       format('SELECT %s FROM public.cells_view ORDER BY created_at DESC, id LIMIT 25', :'cell_cols') AS q_cell_page,
+       format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, time DESC, id LIMIT 25', :'report_cols') AS q_rep_page \gset
+
+-- As medidas de uma pessoa (_tag: com ou sem portão).
+CREATE FUNCTION pg_temp.measure(_who text, _tag text, _mem text, _cell text, _rep text) RETURNS TABLE (medida text, ms numeric) LANGUAGE sql AS $$
+  VALUES
+    ('META ' || _who || ' ' || _tag || ': página de membros + contagem (ms, meta 300)',
+     pg_temp.ms(_mem) + pg_temp.ms('SELECT count(*) FROM public.members_view')),
+    ('META ' || _who || ' ' || _tag || ': página de células + contagem (ms, meta 300)',
+     pg_temp.ms(_cell) + pg_temp.ms('SELECT count(*) FROM public.cells_view')),
+    ('META ' || _who || ' ' || _tag || ': página de relatórios + contagem (ms, meta 300)',
+     pg_temp.ms(_rep) + pg_temp.ms('SELECT count(*) FROM public.cell_reports_view')),
+    ('META ' || _who || ' ' || _tag || ': dashboard_summary (ms, meta 800)', pg_temp.ms('SELECT * FROM public.dashboard_summary()')),
+    ('META ' || _who || ' ' || _tag || ': my_access (ms, meta 50)', pg_temp.ms('SELECT * FROM public.my_access()', 20)),
+    ('DIAG ' || _who || ' ' || _tag || ': viewer_member_id(), 1 chamada (ms)', pg_temp.ms('SELECT public.viewer_member_id()', 50))
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.measure(text, text, text, text, text) TO authenticated;
+
+\echo
+\echo '######## COM O PORTÃO: PASTOR (Samuel, função Líder, árvore inteira) ########'
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+\echo '--- Lista de membros: página (25) com password_reset_status e contagem'
+SELECT 'EXPLAIN (ANALYZE, BUFFERS) ' || :'q_mem_page' \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.members_view;
+\echo '--- Lista de células e de relatórios: página'
+SELECT 'EXPLAIN (ANALYZE, BUFFERS) ' || :'q_cell_page' \gexec
+SELECT 'EXPLAIN (ANALYZE, BUFFERS) ' || :'q_rep_page' \gexec
+\echo '--- dashboard_summary'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary();
+\echo '--- my_access'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.my_access();
+SELECT * FROM pg_temp.measure('pastor', 'com portão', :'q_mem_page', :'q_cell_page', :'q_rep_page');
+RESET ROLE;
+
+\echo
+\echo '######## COM O PORTÃO: G12 (Pedro, função Líder, um ministério) ########'
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT 'EXPLAIN (ANALYZE, BUFFERS) ' || :'q_mem_page' \gexec
+SELECT * FROM pg_temp.measure('G12', 'com portão', :'q_mem_page', :'q_cell_page', :'q_rep_page');
+RESET ROLE;
+
+-- Comparação: as três portas sem o portão (os corpos de antes da migration 5), só dentro desta transação.
+CREATE OR REPLACE FUNCTION public.viewer_member_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT m.id FROM public.members m WHERE m.auth_user_id = auth.uid() AND m.deleted_at IS NULL $$;
+CREATE OR REPLACE FUNCTION public.viewer_has(_permission public.permission_action) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT auth.uid() IS NOT NULL AND public.user_has_permission(auth.uid(), _permission) $$;
+CREATE OR REPLACE FUNCTION public.default_role_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT r.id FROM public.roles r WHERE r.is_default LIMIT 1 $$;
+
+\echo
+\echo '######## SEM O PORTÃO (comparação) ########'
+SELECT pg_temp.as_member(1);
+SET LOCAL ROLE authenticated;
+SELECT * FROM pg_temp.measure('pastor', 'sem portão', :'q_mem_page', :'q_cell_page', :'q_rep_page');
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT * FROM pg_temp.measure('G12', 'sem portão', :'q_mem_page', :'q_cell_page', :'q_rep_page');
+RESET ROLE;
+ROLLBACK;

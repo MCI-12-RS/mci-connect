@@ -1453,7 +1453,6 @@ export type Database = {
           name: string
         }[]
       }
-      is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_placeholder_email: { Args: { _email: string }; Returns: boolean }
       is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
       is_valid_email: { Args: { _email: string }; Returns: boolean }
