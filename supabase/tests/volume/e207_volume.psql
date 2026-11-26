@@ -1,0 +1,228 @@
+-- E2.07 (PR 1): volume de referência e metas da lista de Membros com filtros.
+-- Spec: docs/specs/e2-07-filtros-membros.md (repositório apps-mci), "Metas de tempo e índices" e
+-- "Verificações obrigatórias (para o QA)", Volume: 20 mil membros (profundidade até 10), 1.500 células,
+-- 100 mil relatórios com 10 participantes cada (90% de célula realizada, 10% de "Não houve célula").
+--
+-- Metas (ms, no banco, o melhor de algumas rodadas):
+--   members_list (25) e members_list_count sem filtros, Administrador .............. 300 cada
+--   as mesmas, G12 (Líder, escopo de cerca de 2 mil) ................................ 150 cada
+--   a combinação da RN-02 (Liderança, Bairro, Situação, 2 níveis, 2 vínculos, datas) . 1000 cada
+--   só Vínculo celular, Administrador ................................................ 500 cada
+--   Liderança com um pastor (a igreja toda abaixo) e com um G12 de 2 mil abaixo ...... 500 cada
+--   dashboard_summary ................................ o tempo de antes + 50 (rodar antes e depois)
+--   members_view por id sem cell_links ............... sem os EXISTS do vínculo no plano
+--
+-- Rodar ANTES das migrations do E2.07 (só mede o dashboard_summary e a página de hoje) e DEPOIS
+-- (mede tudo). Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e207_volume.psql > e207_explain.txt
+-- A saída traz os planos (EXPLAIN ANALYZE e, dentro das RPCs, o auto_explain das consultas internas)
+-- e uma linha "META" por medida.
+
+\set ON_ERROR_STOP on
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers, como a do legado
+SET LOCAL synchronous_commit = off;
+
+INSERT INTO auth.users (id, email)
+SELECT ('a2070900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e207-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+
+CREATE FUNCTION pg_temp.mid(_n int) RETURNS uuid LANGUAGE sql IMMUTABLE AS
+$$ SELECT ('c2070900-0000-0000-0000-' || lpad(_n::text, 12, '0'))::uuid $$;
+-- A árvore do e206_volume: 2 pastores casados (1 e 2), 10 G12 (3 a 12) sob o pastor 1 e, abaixo de cada
+-- G12, um heap ternário de cerca de 2 mil pessoas, mais uma cadeia que leva a profundidade a 10.
+CREATE FUNCTION pg_temp.leader_of(_n int) RETURNS int LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE WHEN _n <= 2 THEN NULL
+              WHEN _n <= 12 THEN 1
+              WHEN _n = 19999 THEN 13 + 500 * 10
+              WHEN _n = 20000 THEN 19999
+              WHEN (_n - 13) / 10 = 0 THEN 3 + (_n - 13) % 10
+              ELSE 13 + (((_n - 13) / 10 - 1) / 3) * 10 + (_n - 13) % 10 END $$;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, is_baptized, has_leadership,
+                            auth_user_id, role_id, created_at, mobile_whatsapp, neighborhood, city)
+SELECT pg_temp.mid(n),
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       pg_temp.mid(pg_temp.leader_of(n)),
+       CASE WHEN n = 1 THEN pg_temp.mid(2) WHEN n = 2 THEN pg_temp.mid(1)
+            WHEN n BETWEEN 13 AND 1012 THEN pg_temp.mid(n + 5000)
+            WHEN n BETWEEN 5013 AND 6012 THEN pg_temp.mid(n - 5000) END,
+       n % 10 <> 0 OR n <= 12,
+       n % 7 <> 0,
+       n > 2,
+       CASE n WHEN 2 THEN 'a2070900-0000-0000-0000-000000000002'::uuid WHEN 3 THEN 'a2070900-0000-0000-0000-000000000003'::uuid END,
+       CASE WHEN n = 2 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
+            WHEN n = 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0'),
+       CASE WHEN n % 13 <> 0 THEN 'Bairro São ' || (n % 40) END,
+       'Porto Alegre'
+  FROM generate_series(1, 20000) n;
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active)
+SELECT ('d2070900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       pg_temp.mid(13 + (n * 13) % 19980), pg_temp.mid(13 + (n * 17) % 19980), pg_temp.mid(13 + (n * 19) % 19980),
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0
+  FROM generate_series(1, 1500) n;
+-- 100 mil relatórios: um por célula por semana, nas 67 semanas anteriores à atual; 10% "Não houve célula".
+INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
+SELECT ('e2070900-0000-0000-0000-' || lpad(k::text, 12, '0'))::uuid,
+       ('d2070900-0000-0000-0000-' || lpad((1 + k % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (k / 1500 + 1) + (k % 7),
+       '20:00', 'Tema ' || k, k % 10 <> 0
+  FROM generate_series(0, 99999) k;
+-- 10 participantes por relatório (1 milhão de linhas).
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT ('e2070900-0000-0000-0000-' || lpad(k::text, 12, '0'))::uuid, pg_temp.mid(13 + (k * 37 + j * 1999) % 19980)
+  FROM generate_series(0, 99999) k, generate_series(1, 10) j;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+SELECT private.backfill_cell_active_periods();
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+ANALYZE private.member_hierarchy;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members WHERE deleted_at IS NULL)
+    || ' cells=' || (SELECT count(*) FROM public.cells WHERE deleted_at IS NULL)
+    || ' reports=' || (SELECT count(*) FROM public.cell_reports WHERE deleted_at IS NULL)
+    || ' participants=' || (SELECT count(*) FROM public.cell_report_participants)
+    || ' reports_30_days=' || (SELECT count(*) FROM public.cell_reports WHERE date >= public.sp_today() - 30) AS volume;
+
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+    IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+  END LOOP;
+  RETURN round(_best, 1);
+END $$;
+CREATE FUNCTION pg_temp.plan_has(_sql text, _pat text) RETURNS boolean LANGUAGE plpgsql AS $$
+DECLARE _l text; _found boolean := false;
+BEGIN
+  FOR _l IN EXECUTE 'EXPLAIN ' || _sql LOOP
+    IF _l LIKE '%' || _pat || '%' THEN _found := true; END IF;
+  END LOOP;
+  RETURN _found;
+END $$;
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2070900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+
+SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.members_view'::regclass AND attname = 'cell_links') AS e207 \gset
+SELECT pg_temp.mid(1) AS pastor1 \gset
+SELECT h.member_id AS big_g12 FROM private.member_hierarchy h
+ WHERE h.g12_level = 1 AND h.member_id <> pg_temp.mid(3)
+ ORDER BY abs((SELECT count(*) FROM private.member_hierarchy x WHERE x.ancestor_ids @> ARRAY[h.member_id]) - 2000), h.member_id LIMIT 1 \gset
+SELECT 'ESCOLHA G12 com ' || (SELECT count(*) FROM private.member_hierarchy x WHERE x.ancestor_ids @> ARRAY[:'big_g12'::uuid]) || ' abaixo' AS escolha;
+\set member_cols 'id, name, gender, birth_date, instagram, avatar_url, notes, neighborhood, city, state, is_pastor, has_leadership, leader_id, leader_name, spouse_id, spouse_name, is_baptized, baptism_date, is_active, g12_level, g12_name, total_disciples, total_cells, auth_user_id, sensitive_visible, email, cpf, mobile_whatsapp, phone, street, number, complement, zip_code, password_reset_status'
+
+-- Os planos de dentro das RPCs (auto_explain já carregado na stack; nível LOG mandado ao cliente).
+-- Desligado nas medidas (o log_analyze instrumenta tudo); ligado só na fase dos planos.
+SET auto_explain.log_min_duration = -1;
+
+\echo
+\echo '######## ADMINISTRADOR (igreja toda) ########'
+SELECT pg_temp.as_member(2); SET LOCAL ROLE authenticated;
+\echo '--- dashboard_summary'
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary();
+SELECT 'META Administrador: dashboard_summary (ms, meta: antes + 50)', pg_temp.ms('SELECT * FROM public.dashboard_summary()') AS ms;
+SELECT 'META Administrador: página de hoje pela members_view + contagem (ms)',
+  pg_temp.ms(format('SELECT %s FROM public.members_view ORDER BY name, id LIMIT 25', :'member_cols'))
+  + pg_temp.ms('SELECT count(*) FROM public.members_view') AS ms;
+
+\if :e207
+-- Fase dos planos: uma chamada com o plano de cada consulta interna (auto_explain, mandado ao cliente).
+RESET ROLE;
+SET auto_explain.log_min_duration = 2;   -- só as consultas que custam (as internas das RPCs)
+SET auto_explain.log_analyze = on;
+SET auto_explain.log_buffers = on;
+SET auto_explain.log_nested_statements = on;
+CREATE FUNCTION pg_temp.show(_sql text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('client_min_messages', 'log', true);
+  EXECUTE _sql;
+  PERFORM set_config('client_min_messages', 'notice', true);
+END $$;
+SET LOCAL ROLE authenticated;
+\set combo '_leader_ids => ARRAY[\'':big_g12'\']::uuid[], _neighborhood => \'sao 1\', _is_active => true, _levels => \'{3,4}\', _cell_links => \'{attendee,none}\', _created_from => (public.sp_today() - 200), _created_to => public.sp_today()'
+
+\echo '--- sem filtros: plano das consultas internas'
+SELECT pg_temp.show('SELECT id, name FROM public.members_list()');
+SELECT pg_temp.show('SELECT public.members_list_count()');
+\echo '--- só Vínculo celular (Sem vínculo, Participante)'
+SELECT pg_temp.show($$SELECT id FROM public.members_list(_cell_links => '{none,attendee}')$$);
+SELECT pg_temp.show($$SELECT public.members_list_count(_cell_links => '{none,attendee}')$$);
+\echo '--- Liderança: o pastor 1 (a igreja toda abaixo)'
+SELECT format('SELECT pg_temp.show(%L)', format('SELECT public.members_list_count(_leader_ids => ARRAY[%L]::uuid[])', :'pastor1')) \gexec
+\echo '--- a combinação da RN-02'
+SELECT format('SELECT pg_temp.show(%L)', format('SELECT id FROM public.members_list(%s)', :'combo')) \gexec
+SELECT format('SELECT pg_temp.show(%L)', format('SELECT public.members_list_count(%s)', :'combo')) \gexec
+
+-- Fase das medidas, sem plano.
+RESET ROLE;
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_nested_statements = off;
+SET LOCAL ROLE authenticated;
+SELECT 'META Administrador: sem filtros (ms, meta 300 cada)' AS meta,
+  pg_temp.ms('SELECT id, name, g12_level, leader_name, g12_name, total_disciples, total_cells FROM public.members_list()') AS page_ms,
+  pg_temp.ms('SELECT public.members_list_count()') AS count_ms, (SELECT public.members_list_count()) AS total;
+SELECT 'META Administrador: só Vínculo celular = Sem vínculo (ms, meta 500 cada)' AS meta,
+  pg_temp.ms($$SELECT id FROM public.members_list(_cell_links => '{none}')$$) AS page_ms,
+  pg_temp.ms($$SELECT public.members_list_count(_cell_links => '{none}')$$) AS count_ms,
+  (SELECT public.members_list_count(_cell_links => '{none}')) AS total;
+SELECT 'META Administrador: só Vínculo celular = Participante (ms, meta 500 cada)' AS meta,
+  pg_temp.ms($$SELECT id FROM public.members_list(_cell_links => '{attendee}')$$) AS page_ms,
+  pg_temp.ms($$SELECT public.members_list_count(_cell_links => '{attendee}')$$) AS count_ms,
+  (SELECT public.members_list_count(_cell_links => '{attendee}')) AS total;
+SELECT format($q$SELECT 'META Administrador: Liderança = pastor 1 (ms, meta 500 cada)' AS meta,
+  pg_temp.ms('SELECT id FROM public.members_list(_leader_ids => ARRAY[''%1$s'']::uuid[])') AS page_ms,
+  pg_temp.ms('SELECT public.members_list_count(_leader_ids => ARRAY[''%1$s'']::uuid[])') AS count_ms,
+  (SELECT public.members_list_count(_leader_ids => ARRAY['%1$s']::uuid[])) AS total$q$, :'pastor1') \gexec
+SELECT format($q$SELECT 'META Administrador: Liderança = G12 com ~2 mil abaixo (ms, meta 500 cada)' AS meta,
+  pg_temp.ms('SELECT id FROM public.members_list(_leader_ids => ARRAY[''%1$s'']::uuid[])') AS page_ms,
+  pg_temp.ms('SELECT public.members_list_count(_leader_ids => ARRAY[''%1$s'']::uuid[])') AS count_ms,
+  (SELECT public.members_list_count(_leader_ids => ARRAY['%1$s']::uuid[])) AS total$q$, :'big_g12') \gexec
+SELECT format($q$SELECT 'META Administrador: combinação da RN-02 (ms, meta 1000 cada)' AS meta,
+  pg_temp.ms(%1$L) AS page_ms, pg_temp.ms(%2$L) AS count_ms, (SELECT public.members_list_count(%3$s)) AS total$q$,
+  format('SELECT id FROM public.members_list(%s)', :'combo'), format('SELECT public.members_list_count(%s)', :'combo'), :'combo') \gexec
+SELECT 'META Administrador: busca "volume 1" (ms)' AS meta,
+  pg_temp.ms($$SELECT id FROM public.members_list(_search => '{%volume%,%1%}')$$) AS page_ms,
+  pg_temp.ms($$SELECT public.members_list_count(_search => '{%volume%,%1%}')$$) AS count_ms,
+  (SELECT public.members_list_count(_search => '{%volume%,%1%}')) AS total;
+SELECT 'META Administrador: página 400 (offset 9975) sem filtros (ms)' AS meta,
+  pg_temp.ms('SELECT id FROM public.members_list(_offset => 9975)') AS page_ms;
+
+\echo '--- planos: members_view por id (formulário) e a etapa 2 da members_list'
+SELECT 'PLANO members_view por id, sem cell_links: tem cell_report_participants? (esperado f)' AS plano,
+  pg_temp.plan_has(format('SELECT %s FROM public.members_view WHERE id = %L', :'member_cols', :'big_g12'), 'cell_report_participants') AS sim;
+SELECT 'PLANO members_view por id, com cell_links: tem cell_report_participants? (esperado t)' AS plano,
+  pg_temp.plan_has(format('SELECT cell_links FROM public.members_view WHERE id = %L', :'big_g12'), 'cell_report_participants') AS sim;
+SELECT 'PLANO etapa 2 (id = ANY): usa members_pkey? (esperado t)' AS plano,
+  pg_temp.plan_has(format('SELECT v.* FROM public.members_view v WHERE v.id = ANY (ARRAY[%L, %L]::uuid[])', :'big_g12', :'pastor1'), 'members_pkey') AS sim;
+SELECT 'PLANO contagem sem filtro de vínculo: tem cell_report_participants? (esperado f)' AS plano,
+  pg_temp.plan_has('SELECT count(*) FROM public.members_view v WHERE v.is_active', 'cell_report_participants') AS sim;
+SELECT 'PLANO contagem com filtro de vínculo: Hash sobre os participantes? (esperado t)' AS plano,
+  pg_temp.plan_has($$SELECT count(*) FROM public.members_view v WHERE v.cell_links && '{none}'$$, 'Hash') AS sim;
+\endif
+
+\echo
+\echo '######## G12 (Líder, o próprio ministério) ########'
+RESET ROLE;
+SELECT pg_temp.as_member(3); SET LOCAL ROLE authenticated;
+SELECT 'META G12: dashboard_summary (ms, meta: antes + 50)', pg_temp.ms('SELECT * FROM public.dashboard_summary()') AS ms;
+\if :e207
+SELECT 'META G12: sem filtros (ms, meta 150 cada)' AS meta,
+  pg_temp.ms('SELECT id, name, g12_level, leader_name, g12_name, total_disciples, total_cells FROM public.members_list()') AS page_ms,
+  pg_temp.ms('SELECT public.members_list_count()') AS count_ms, (SELECT public.members_list_count()) AS total;
+SELECT 'META G12: só Vínculo celular = Sem vínculo (ms)' AS meta,
+  pg_temp.ms($$SELECT id FROM public.members_list(_cell_links => '{none}')$$) AS page_ms,
+  pg_temp.ms($$SELECT public.members_list_count(_cell_links => '{none}')$$) AS count_ms,
+  (SELECT public.members_list_count(_cell_links => '{none}')) AS total;
+\endif
+RESET ROLE;
+ROLLBACK;

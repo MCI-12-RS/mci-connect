@@ -365,18 +365,18 @@ SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.cell_reports (
 -- ===========================================================================
 -- 5. RN-08 e RN-09: vínculo celular, link direto, busca e histórico — 13
 -- ===========================================================================
-SELECT is(pg_temp.val(1, format('SELECT is_cell_leader FROM public.members_view WHERE id = %L', pg_temp.m(31))), 'false',
+SELECT is(pg_temp.val(1, format('SELECT ''leader'' = ANY (cell_links) FROM public.members_view WHERE id = %L', pg_temp.m(31))), 'false',
   'RN-08: Tiago, cuja única célula foi excluída, deixa de ter vínculo de líder');
-SELECT is(pg_temp.val(1, format('SELECT is_cell_host FROM public.members_view WHERE id = %L', pg_temp.m(31))), 'false',
+SELECT is(pg_temp.val(1, format('SELECT ''host'' = ANY (cell_links) FROM public.members_view WHERE id = %L', pg_temp.m(31))), 'false',
   'RN-08: nem de anfitrião');
-SELECT is(pg_temp.val(1, format('SELECT attended_last_30_days FROM public.members_view WHERE id = %L', pg_temp.m(35))), 'true',
+SELECT is(pg_temp.val(1, format('SELECT ''attendee'' = ANY (cell_links) FROM public.members_view WHERE id = %L', pg_temp.m(35))), 'true',
   'DA-1: a participação num relatório não excluído de célula excluída continua contando (Úrsula)');
 CREATE TEMP TABLE ubi0 AS SELECT pg_temp.dash(4, 'members_without_cell_link') AS n;
-SELECT is(pg_temp.val(1, format('SELECT attended_last_30_days FROM public.members_view WHERE id = %L', pg_temp.m(32))), 'true',
+SELECT is(pg_temp.val(1, format('SELECT ''attendee'' = ANY (cell_links) FROM public.members_view WHERE id = %L', pg_temp.m(32))), 'true',
   'RN-08 (antes): Ubiratan tem participação nos últimos 30 dias');
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_cell_report(%L)', pg_temp.r(71)))), '00000',
   'RN-08: o único relatório de Ubiratan é excluído');
-SELECT is(pg_temp.val(1, format('SELECT attended_last_30_days FROM public.members_view WHERE id = %L', pg_temp.m(32))), 'false',
+SELECT is(pg_temp.val(1, format('SELECT ''attendee'' = ANY (cell_links) FROM public.members_view WHERE id = %L', pg_temp.m(32))), 'false',
   'RN-08/RN-12: a participação num relatório excluído não conta no vínculo celular');
 SELECT is(pg_temp.dash(4, 'members_without_cell_link'), (SELECT n + 1 FROM ubi0),
   'RN-08: Ubiratan aparece em "sem vínculo celular"');

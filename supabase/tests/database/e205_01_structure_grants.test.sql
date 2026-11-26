@@ -238,8 +238,8 @@ SELECT is(
             ORDER BY t.tgname DESC LIMIT 1) = 'zz_stamp_authorship'),
   ARRAY['cell_reports', 'cells', 'members'],
   'DT-05: o carimbo é o último BEFORE de cada tabela (compara o valor final, já normalizado)');
-SELECT is((pg_temp.cols('public.members_view'))[array_length(pg_temp.cols('public.members_view'), 1) - 3 :],
-  ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: members_view com a autoria no fim');
+SELECT is((pg_temp.cols('public.members_view'))[array_length(pg_temp.cols('public.members_view'), 1) - 5 : array_length(pg_temp.cols('public.members_view'), 1) - 2],
+  ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: members_view com a autoria no fim (antes das duas colunas do E2.07)');
 SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 3 :],
   ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: cells_view com a autoria no fim');
 SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 3 :],

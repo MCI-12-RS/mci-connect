@@ -1454,11 +1454,11 @@ export type Database = {
       }
       members_view: {
         Row: {
-          attended_last_30_days: boolean | null
           auth_user_id: string | null
           avatar_url: string | null
           baptism_date: string | null
           birth_date: string | null
+          cell_links: Database["public"]["Enums"]["member_cell_link"][] | null
           city: string | null
           complement: string | null
           cpf: string | null
@@ -1476,12 +1476,12 @@ export type Database = {
           instagram: string | null
           is_active: boolean | null
           is_baptized: boolean | null
-          is_cell_host: boolean | null
-          is_cell_leader: boolean | null
-          is_cell_timothy: boolean | null
           is_pastor: boolean | null
           leader_id: string | null
           leader_name: string | null
+          leadership_status:
+            | Database["public"]["Enums"]["member_leadership_status"]
+            | null
           male_cells: number | null
           mobile_whatsapp: string | null
           name: string | null
@@ -1668,6 +1668,14 @@ export type Database = {
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
       cell_default_type: { Args: never; Returns: string }
       cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
+      cell_links_or_none: {
+        Args: {
+          _is_pastor: boolean
+          _links: Database["public"]["Enums"]["member_cell_link"][]
+          _total_cells: number
+        }
+        Returns: Database["public"]["Enums"]["member_cell_link"][]
+      }
       cell_types: { Args: never; Returns: string[] }
       cell_weekdays: { Args: never; Returns: string[] }
       cells_report_situation: {
@@ -1784,6 +1792,96 @@ export type Database = {
           id: string
           name: string
         }[]
+      }
+      members_list: {
+        Args: {
+          _cell_links?: Database["public"]["Enums"]["member_cell_link"][]
+          _city?: string
+          _created_from?: string
+          _created_to?: string
+          _is_active?: boolean
+          _is_baptized?: boolean
+          _leader_ids?: string[]
+          _leadership?: Database["public"]["Enums"]["member_leadership_status"][]
+          _levels?: number[]
+          _limit?: number
+          _neighborhood?: string
+          _offset?: number
+          _search?: string[]
+        }
+        Returns: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          baptism_date: string | null
+          birth_date: string | null
+          cell_links: Database["public"]["Enums"]["member_cell_link"][] | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
+          created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
+          email: string | null
+          female_cells: number | null
+          g12_id: string | null
+          g12_level: number | null
+          g12_name: string | null
+          gender: string | null
+          has_leadership: boolean | null
+          id: string | null
+          instagram: string | null
+          is_active: boolean | null
+          is_baptized: boolean | null
+          is_pastor: boolean | null
+          leader_id: string | null
+          leader_name: string | null
+          leadership_status:
+            | Database["public"]["Enums"]["member_leadership_status"]
+            | null
+          male_cells: number | null
+          mobile_whatsapp: string | null
+          name: string | null
+          neighborhood: string | null
+          notes: string | null
+          number: string | null
+          password_reset_status: string | null
+          phone: string | null
+          role_id: string | null
+          search_text: string | null
+          sensitive_visible: boolean | null
+          spouse_id: string | null
+          spouse_name: string | null
+          state: string | null
+          street: string | null
+          total_cells: number | null
+          total_disciples: number | null
+          updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
+          zip_code: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "members_view"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      members_list_count: {
+        Args: {
+          _cell_links?: Database["public"]["Enums"]["member_cell_link"][]
+          _city?: string
+          _created_from?: string
+          _created_to?: string
+          _is_active?: boolean
+          _is_baptized?: boolean
+          _leader_ids?: string[]
+          _leadership?: Database["public"]["Enums"]["member_leadership_status"][]
+          _levels?: number[]
+          _neighborhood?: string
+          _search?: string[]
+        }
+        Returns: number
       }
       ministry_tree_nodes: {
         Args: { _parent_ids?: string[] }
@@ -1905,6 +2003,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      sp_day_start: { Args: { _day: string }; Returns: string }
       sp_instant: { Args: { _local: string }; Returns: string }
       sp_local: { Args: { _at: string }; Returns: string }
       sp_now: { Args: never; Returns: string }
@@ -1983,6 +2082,8 @@ export type Database = {
         | "cell_report_participant"
         | "auth"
         | "role"
+      member_cell_link: "leader" | "timothy" | "host" | "attendee" | "none"
+      member_leadership_status: "with_leader" | "no_leadership" | "pastor"
       permission_action:
         | "create_member"
         | "view_members"
@@ -2169,6 +2270,8 @@ export const Constants = {
         "auth",
         "role",
       ],
+      member_cell_link: ["leader", "timothy", "host", "attendee", "none"],
+      member_leadership_status: ["with_leader", "no_leadership", "pastor"],
       permission_action: [
         "create_member",
         "view_members",

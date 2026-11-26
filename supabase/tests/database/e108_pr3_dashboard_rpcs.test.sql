@@ -259,15 +259,21 @@ SELECT private.rebuild_member_hierarchy();
 -- excluído não conta como participação nem como último relatório. A massa
 -- deste arquivo não tem excluídos, mas a base pode ter.
 -- ---------------------------------------------------------------------------
+-- Desde o E2.07 (RN-10 de lá): só célula ativa dá papel, só relatório de célula realizada dá
+-- participação, e quem tem célula ativa abaixo (o total de células do E2.06) não fica "sem vínculo".
 CREATE TEMP TABLE linked_members AS
-SELECT leader_id AS member_id FROM public.cells WHERE leader_id IS NOT NULL AND deleted_at IS NULL
-UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND deleted_at IS NULL
-UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND deleted_at IS NULL
+SELECT leader_id AS member_id FROM public.cells WHERE leader_id IS NOT NULL AND is_active AND deleted_at IS NULL
+UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND is_active AND deleted_at IS NULL
+UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND is_active AND deleted_at IS NULL
 UNION SELECT p.member_id
         FROM public.cell_report_participants p
         JOIN public.cell_reports r ON r.id = p.report_id
        WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30
-         AND r.deleted_at IS NULL;
+         AND r.deleted_at IS NULL AND r.was_held
+UNION (WITH RECURSIVE up AS (
+         SELECT c.leader_id AS id FROM public.cells c WHERE c.is_active AND c.deleted_at IS NULL
+         UNION SELECT m.leader_id FROM public.members m JOIN up ON m.id = up.id WHERE m.leader_id IS NOT NULL)
+       SELECT id FROM up);
 
 CREATE TEMP TABLE cell_last_report AS
 SELECT cell_id, max(date) AS last_date FROM public.cell_reports WHERE deleted_at IS NULL GROUP BY cell_id;
@@ -595,16 +601,16 @@ SELECT results_eq(
   'RN-08/P3: 11 membros visíveis, 10 ativos, 1 inativo; batizados 8 e não batizados 3, contando o inativo');
 SELECT is((SELECT members_without_leader FROM public.dashboard_summary()), 0::bigint,
   'RN-08/P3: todos os membros visíveis têm líder');
-SELECT is((SELECT members_without_cell_link FROM public.dashboard_summary()), 4::bigint,
-  'RN-08c/P3: sem vínculo celular = 4 (André, Ana, Pedro com participação há 31 dias, Nina)');
-SELECT is((SELECT members_without_cell_link FROM public.dashboard_summary('2020-01-01 12:00-03')), 4::bigint,
+SELECT is((SELECT members_without_cell_link FROM public.dashboard_summary()), 2::bigint,
+  'RN-08c/P3: sem vínculo celular = 2 (Pedro com participação há 31 dias, Nina); André e Ana têm célula ativa abaixo (RN-10 e do E2.07)');
+SELECT is((SELECT members_without_cell_link FROM public.dashboard_summary('2020-01-01 12:00-03')), 2::bigint,
   'RN-08c/P3: o vínculo usa hoje (sp_today), não o _at');
 SELECT set_eq(
   $$ SELECT id FROM public.members_view
       WHERE is_active AND NOT is_pastor
-        AND NOT (is_cell_leader OR is_cell_timothy OR is_cell_host OR attended_last_30_days) $$,
-  pg_temp.ms(3, 4, 10, 12),
-  'RN-08c/P3: contam como vínculo líder (Arthur, Lia), timóteo (Tito), anfitriã (Hana), participação há 30 dias (Paulo) e numa célula invisível (Iara); Igor inativo fica fora');
+        AND 'none' = ANY (cell_links) $$,   -- E2.07: o vínculo é só a coluna cell_links (RN-10 de lá)
+  pg_temp.ms(10, 12),
+  'RN-08c/P3 (com a RN-10 do E2.07): André e Ana ficam fora (célula ativa abaixo); contam como vínculo líder (Arthur, Lia), timóteo (Tito), anfitriã (Hana), participação há 30 dias (Paulo) e numa célula invisível (Iara); Igor inativo fica fora');
 SELECT is_empty(format('SELECT 1 FROM public.cell_reports WHERE id = %L', pg_temp.r(8)),
   'RN-08c/P3: o relatório em que Iara participou é invisível para P3');
 RESET ROLE;
@@ -855,15 +861,19 @@ SELECT private.backfill_cell_active_periods();
 
 -- Os conjuntos da paridade, recalculados com o volume.
 TRUNCATE pg_temp.linked_members, pg_temp.cell_last_report;
-INSERT INTO pg_temp.linked_members
-SELECT leader_id FROM public.cells WHERE leader_id IS NOT NULL AND deleted_at IS NULL
-UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND deleted_at IS NULL
-UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND deleted_at IS NULL
+INSERT INTO pg_temp.linked_members   -- a mesma regra de cima (RN-10 do E2.07)
+SELECT leader_id FROM public.cells WHERE leader_id IS NOT NULL AND is_active AND deleted_at IS NULL
+UNION SELECT timothy_id FROM public.cells WHERE timothy_id IS NOT NULL AND is_active AND deleted_at IS NULL
+UNION SELECT host_id FROM public.cells WHERE host_id IS NOT NULL AND is_active AND deleted_at IS NULL
 UNION SELECT p.member_id
         FROM public.cell_report_participants p
         JOIN public.cell_reports r ON r.id = p.report_id
        WHERE r.date >= (now() AT TIME ZONE 'America/Sao_Paulo')::date - 30
-         AND r.deleted_at IS NULL;
+         AND r.deleted_at IS NULL AND r.was_held
+UNION (WITH RECURSIVE up AS (
+         SELECT c.leader_id AS id FROM public.cells c WHERE c.is_active AND c.deleted_at IS NULL
+         UNION SELECT m.leader_id FROM public.members m JOIN up ON m.id = up.id WHERE m.leader_id IS NOT NULL)
+       SELECT id FROM up);
 INSERT INTO pg_temp.cell_last_report
 SELECT cell_id, max(date) FROM public.cell_reports WHERE deleted_at IS NULL GROUP BY cell_id;
 
