@@ -57,6 +57,7 @@ const bruno: DeletedMemberRow = {
   has_account: false,
   deleted_at: MORNING_UTC,
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
 };
 
 const paula: DeletedMemberRow = { ...bruno, id: "p1", name: "Paula Reis", deleted_at: NIGHT_UTC, deleted_by_name: null };
@@ -78,6 +79,7 @@ const rui: DeletedCellRow = {
   host_deleted: false,
   deleted_at: MORNING_UTC,
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
 };
 
 const report: DeletedCellReportRow = {
@@ -91,6 +93,7 @@ const report: DeletedCellReportRow = {
   week_taken: false,
   deleted_at: NIGHT_UTC,
   deleted_by_name: null,
+  deleted_by_kind: null,
 };
 
 const originalWidth = window.innerWidth;

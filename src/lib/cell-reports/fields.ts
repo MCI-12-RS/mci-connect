@@ -76,8 +76,9 @@ export type FormParticipant = Pick<
  * painel mostra e se a célula foi excluída (AQ-4).
  */
 export const CELL_REPORT_DETAIL_SELECT =
-  "id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, cell_leader_name, cell_deleted";
+  "id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, cell_leader_name, cell_deleted, created_at, created_by_kind, created_by_name, updated_at, updated_by_kind, updated_by_name";
 
+/** O painel "Ver relatório" já lê a autoria com o relatório (E2.05, T4, AQ-1). */
 export type CellReportDetailRow = Pick<
   CellReportViewRow,
   | "id"
@@ -91,6 +92,12 @@ export type CellReportDetailRow = Pick<
   | "reason_not_held"
   | "cell_leader_name"
   | "cell_deleted"
+  | "created_at"
+  | "created_by_kind"
+  | "created_by_name"
+  | "updated_at"
+  | "updated_by_kind"
+  | "updated_by_name"
 >;
 
 /** O relatório e todos os participantes dele, inclusive os excluídos (RN-13), na ordem do nome e do id. */

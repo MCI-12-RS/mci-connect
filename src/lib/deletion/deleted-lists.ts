@@ -6,6 +6,7 @@ import { formatMeetingTime } from "@/lib/cells/labels";
 import { CELL_ROLES, type CellRole } from "@/lib/cells/roles";
 import { formatReportDate } from "@/lib/cell-reports/labels";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
+import { authorLabel, type AuthorKind } from "@/lib/audit/authorship";
 import { DELETED_LIST_TEXTS } from "./texts";
 
 type Views = Database["public"]["Views"];
@@ -17,7 +18,7 @@ type Views = Database["public"]["Views"];
 
 /** Membros excluídos: identificação, líder, situação e o que a confirmação da restauração mostra (T5). */
 export const DELETED_MEMBER_SELECT =
-  "id, name, is_active, leader_name, leader_deleted, restore_role_name, has_account, deleted_at, deleted_by_name";
+  "id, name, is_active, leader_name, leader_deleted, restore_role_name, has_account, deleted_at, deleted_by_name, deleted_by_kind";
 
 export type DeletedMemberRow = Pick<
   Views["members_deleted_view"]["Row"],
@@ -30,6 +31,7 @@ export type DeletedMemberRow = Pick<
   | "has_account"
   | "deleted_at"
   | "deleted_by_name"
+  | "deleted_by_kind"
 >;
 
 /**
@@ -38,7 +40,7 @@ export type DeletedMemberRow = Pick<
  * próprio líder.
  */
 export const DELETED_CELL_SELECT =
-  "id, type, meeting_day, meeting_time, neighborhood, leader_id, leader_name, leader_deleted, timothy_id, timothy_name, timothy_deleted, host_id, host_name, host_deleted, deleted_at, deleted_by_name";
+  "id, type, meeting_day, meeting_time, neighborhood, leader_id, leader_name, leader_deleted, timothy_id, timothy_name, timothy_deleted, host_id, host_name, host_deleted, deleted_at, deleted_by_name, deleted_by_kind";
 
 export type DeletedCellRow = Pick<
   Views["cells_deleted_view"]["Row"],
@@ -58,11 +60,12 @@ export type DeletedCellRow = Pick<
   | "host_deleted"
   | "deleted_at"
   | "deleted_by_name"
+  | "deleted_by_kind"
 >;
 
 /** Relatórios excluídos: data, situação, tema, a célula e se a semana já tem outro relatório (RN-17). */
 export const DELETED_CELL_REPORT_SELECT =
-  "id, date, time, was_held, theme, cell_leader_name, cell_deleted, week_taken, deleted_at, deleted_by_name";
+  "id, date, time, was_held, theme, cell_leader_name, cell_deleted, week_taken, deleted_at, deleted_by_name, deleted_by_kind";
 
 export type DeletedCellReportRow = Pick<
   Views["cell_reports_deleted_view"]["Row"],
@@ -76,6 +79,7 @@ export type DeletedCellReportRow = Pick<
   | "week_taken"
   | "deleted_at"
   | "deleted_by_name"
+  | "deleted_by_kind"
 >;
 
 /** Quando e por quem o registro foi excluído, nos textos do card e da tabela. */
@@ -93,17 +97,19 @@ export interface DeletionInfo {
 interface DeletionColumns {
   deleted_at: string | null;
   deleted_by_name: string | null;
+  /** O tipo do autor (E2.05, RN-11): o nome do sistema anterior leva a marca; sem tipo, vale o nome (DT-23). */
+  deleted_by_kind?: AuthorKind | null;
 }
 
 /**
  * A data e a hora da exclusão, sempre no horário de Brasília (UX-15), e o
- * autor. Sem autor (exclusões vindas do legado), "Autor não registrado".
+ * autor (E2.05, T6): "{Nome}", "{Nome} (sistema anterior)" ou, sem autor, "Autor não registrado".
  *
  * @param deletedAt o texto da entidade: "Excluído em …" ou "Excluída em …".
  */
 export function deletionInfo(row: DeletionColumns, deletedAt: (date: string, time: string) => string): DeletionInfo {
   const when = formatDateTimeInBrasilia(row.deleted_at);
-  const author = row.deleted_by_name?.trim();
+  const author = authorLabel(row.deleted_by_kind, row.deleted_by_name);
   return {
     deletedAt: when ? deletedAt(when.date, when.time) : "",
     deletedAtShort: when ? DELETED_LIST_TEXTS.deletedAtShort(when.date, when.time) : "",

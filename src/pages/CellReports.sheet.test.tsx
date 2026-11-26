@@ -77,6 +77,12 @@ const detail = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailR
   reason_not_held: null,
   cell_leader_name: "Rui Prado",
   cell_deleted: true,
+  created_at: "2026-11-19T23:30:00Z",
+  created_by_kind: "member",
+  created_by_name: "Carla Dias",
+  updated_at: null,
+  updated_by_kind: null,
+  updated_by_name: null,
   ...overrides,
 });
 const SARA = { member_id: "m9", member_name: "Sara Reis", member_deleted: true };

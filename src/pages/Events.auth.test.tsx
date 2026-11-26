@@ -290,15 +290,20 @@ describe("UX-17: painel do evento de autenticação", () => {
     expect(document.body.textContent).not.toMatch(/\borigin\b/);
   });
 
-  it("os outros eventos ficam como estão: Metadados em JSON, Erro e Identificação", async () => {
-    const panel = await openPanel(updateMember);
+  it("os outros eventos (E2.05, RN-20 d): sem Metadados, sem JSON e sem o erro técnico; 'Registro' no lugar de 'Identificação'", async () => {
+    const panel = await openPanel({
+      ...updateMember,
+      description: "Alterou o membro Davi Lima",
+      changes: { fields: [{ field: "name", from: "Davi", to: "Davi Lima" }] },
+    });
 
-    expect(panel.getByText("Metadados")).toBeInTheDocument();
-    expect(document.querySelector("pre")).not.toBeNull();
-    expect(panel.getByText("Erro")).toBeInTheDocument();
-    expect(panel.getByText("falha qualquer")).toBeInTheDocument();
-    expect(panel.getByText("Identificação")).toBeInTheDocument();
+    expect(panel.queryByText("Metadados")).not.toBeInTheDocument();
+    expect(document.querySelector("pre")).toBeNull();
+    expect(panel.queryByText("falha qualquer")).not.toBeInTheDocument();
+    expect(panel.queryByText("Identificação")).not.toBeInTheDocument();
+    expect(panel.getByText("Registro")).toBeInTheDocument();
     expect(panel.getByText("Davi Lima")).toBeInTheDocument();
     expect(panel.getByText("Campos alterados")).toBeInTheDocument();
+    expect(panel.getByText("Davi → Davi Lima")).toBeInTheDocument();
   });
 });

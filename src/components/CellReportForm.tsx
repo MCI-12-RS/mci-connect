@@ -12,6 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useCellReportParticipants } from "@/hooks/use-cell-report-participants";
+import { RecordAuthorship } from "@/components/RecordAuthorship";
+import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
 import { useCellReportSave, type CellReportSaveResult } from "@/hooks/use-cell-report-save";
 import { CELL_OPTIONS_QUERY_KEY, useCellOptions, toCellOption } from "@/hooks/use-cell-options";
 import { useMemberOptions, toMemberOption } from "@/hooks/use-member-options";
@@ -325,6 +327,15 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
     if (result) handleSaveResult(result);
   };
 
+  /** A edição tem alguma mudança em relação ao que foi carregado ("Ver histórico" pede antes o descarte). */
+  const isDirty = () => {
+    const values = form.getValues();
+    return isCellReportChanged(
+      { report: toReportWrite(openingValues), participantIds: openingParticipantIds.current },
+      { report: toReportWrite(values), participantIds: values.was_held ? finalParticipantIds(values.participant_ids, kept ?? []) : null },
+    );
+  };
+
   /** Escolha no seletor: os marcados que saíram levam junto a mensagem do campo. */
   const handleParticipantsChange = (selected: readonly SelectOption[]) => {
     setParticipants([...selected]);
@@ -369,6 +380,11 @@ const CellReportForm = ({ report, onClose, initialCell }: CellReportFormProps) =
               )}
             </AlertDescription>
           </Alert>
+        )}
+
+        {/* Na edição, a autoria antes do campo Célula (E2.05, T4 e P30); o envio novo não muda. */}
+        {report && (
+          <RecordAuthorship entity="cell_report" recordId={report.id} recordName={formatIsoDateBr(report.date)} isDirty={isDirty} />
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

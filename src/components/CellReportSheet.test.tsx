@@ -9,6 +9,11 @@ import CellReportSheet from "./CellReportSheet";
 // O `Sheet` "Relatório" (E2.01, T7): consulta do relatório de célula excluída
 // (RN-09 b, RN-11, RN-13; "Estados"; UX-26 e UX-27).
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
@@ -26,6 +31,12 @@ const report = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailR
   reason_not_held: null,
   cell_leader_name: "Carlos Lima",
   cell_deleted: true,
+  created_at: "2026-11-19T23:30:00Z",
+  created_by_kind: "member",
+  created_by_name: "Carla Dias",
+  updated_at: null,
+  updated_by_kind: null,
+  updated_by_name: null,
   ...overrides,
 });
 
@@ -269,5 +280,23 @@ describe("CellReportSheet: relatório de célula excluída", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(fakeQueries()).toHaveLength(0);
+  });
+});
+
+describe("E2.05, UX-03: a autoria no 'Ver relatório' (T4, P30)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("depois do cabeçalho e do aviso, antes de 'Data e hora', lida junto com o relatório (sem outra consulta)", async () => {
+    respondWith({ data: report() }, { data: [ANA] });
+    renderSheet();
+    const dialog = await screen.findByRole("dialog");
+    const block = await within(dialog).findByTestId("record-authorship");
+    expect(block).toHaveAttribute("data-entity", "cell_report");
+    expect(block).toHaveAttribute("data-record-id", "r1");
+    const notice = within(dialog).getByRole("note");
+    const firstTerm = within(dialog).getByText("Data e hora", { selector: "dt" });
+    expect(notice.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(block.compareDocumentPosition(firstTerm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(fakeQueries().map((query) => query.table)).toEqual(["cell_reports_view", "cell_report_participants_view"]);
   });
 });

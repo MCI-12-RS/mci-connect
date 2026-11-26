@@ -87,6 +87,7 @@ describe("marcas e linhas dos cards", () => {
     host_deleted: true,
     deleted_at: "2026-11-12T13:05:00Z",
     deleted_by_name: null,
+    deleted_by_kind: null,
   };
 
   it("as pessoas da célula, na ordem líder, timóteo, anfitrião", () => {
@@ -119,5 +120,33 @@ describe("marcas e linhas dos cards", () => {
   it("'Relatório de 19/11/2026 · 20:00', sem a hora se ela não veio", () => {
     expect(reportTitleLine({ date: "2026-11-19", time: "20:00:00" })).toBe("Relatório de 19/11/2026 · 20:00");
     expect(reportTitleLine({ date: "2026-11-19", time: null })).toBe("Relatório de 19/11/2026");
+  });
+});
+
+describe("E2.05, UX-10 e RN-11: autor das exclusões do sistema anterior (T6)", () => {
+  const at = "2025-02-02T13:00:00Z";
+  const info = (deleted_by_kind: "member" | "legacy" | "unknown" | "system" | null, deleted_by_name: string | null) =>
+    deletionInfo({ deleted_at: at, deleted_by_kind, deleted_by_name }, DELETED_LIST_TEXTS.cellReports.deletedAt);
+
+  it("legado com nome: 'por João Pires (sistema anterior)' no card e 'João Pires (sistema anterior)' na coluna", () => {
+    expect(info("legacy", "João Pires")).toMatchObject({
+      deletedBy: "por João Pires (sistema anterior)",
+      deletedByShort: "João Pires (sistema anterior)",
+    });
+  });
+
+  it("'AdminUser' aparece como 'Administrador (sistema anterior)'", () => {
+    expect(info("legacy", "AdminUser").deletedByShort).toBe("Administrador (sistema anterior)");
+    expect(info("legacy", "Administrador").deletedByShort).toBe("Administrador (sistema anterior)");
+  });
+
+  it("sem nome: 'Autor não registrado' e 'Não registrado'", () => {
+    expect(info("legacy", null)).toMatchObject({ deletedBy: "Autor não registrado", deletedByShort: "Não registrado" });
+    expect(info("unknown", null)).toMatchObject({ deletedBy: "Autor não registrado", deletedByShort: "Não registrado" });
+  });
+
+  it("as exclusões feitas no novo continuam 'por {Nome}'; sem tipo (DT-23), vale o nome", () => {
+    expect(info("member", "Ana Souza").deletedBy).toBe("por Ana Souza");
+    expect(info(null, "Ana Souza").deletedBy).toBe("por Ana Souza");
   });
 });

@@ -72,6 +72,12 @@ abstract class FakeBuilder implements PromiseLike<FakeResult> {
   in(...args: unknown[]): this {
     return this.record("in", args);
   }
+  gte(...args: unknown[]): this {
+    return this.record("gte", args);
+  }
+  lte(...args: unknown[]): this {
+    return this.record("lte", args);
+  }
   order(...args: unknown[]): this {
     return this.record("order", args);
   }

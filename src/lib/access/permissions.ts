@@ -136,3 +136,15 @@ export const PERMISSION_CATALOG: readonly PermissionInfo[] = PERMISSION_GROUPS.f
 export function permissionLabel(permission: PermissionAction): string {
   return PERMISSION_TEXTS[permission].label;
 }
+
+/**
+ * O rótulo de uma permissão gravada como texto (os eventos de função da Auditoria, E2.05 RN-15);
+ * `null` para um valor que não é uma permissão, para a tela nunca mostrar o identificador.
+ */
+export function permissionLabelOf(value: string): string | null {
+  return isPermissionAction(value) ? PERMISSION_TEXTS[value].label : null;
+}
+
+function isPermissionAction(value: string): value is PermissionAction {
+  return Object.prototype.hasOwnProperty.call(PERMISSION_TEXTS, value);
+}

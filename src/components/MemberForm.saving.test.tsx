@@ -10,6 +10,11 @@ import MemberForm from "./MemberForm";
 // UX-14 (falha do recálculo), UX-15 (envio lento: "Ainda salvando…", o formulário não fecha) e
 // UX-19 (nenhuma mensagem técnica). O Supabase é o `fake-supabase`; o relógio é simulado.
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: { ...fakeSupabase, functions: { invoke: vi.fn() } } };

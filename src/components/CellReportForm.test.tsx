@@ -15,6 +15,11 @@ import CellReportForm from "./CellReportForm";
 // servidor, 20 por vez, e os escolhidos guardam o nome, que não depende da
 // página carregada nem do texto da busca.
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
@@ -821,5 +826,23 @@ describe("CellReportForm: célula inativa (E2.08, T8)", () => {
     expect(screen.queryByText("Célula de Ana Alves, em Rua A 10, Centro")).not.toBeInTheDocument();
     expect(toast).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("E2.05, UX-03: a autoria na edição do relatório (T4, P30)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("na edição, antes do campo Célula; no relatório novo, não aparece", async () => {
+    respondWith({ data: [] });
+    const { unmount } = render(<CellReportForm report={report} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const block = await screen.findByTestId("record-authorship");
+    expect(block).toHaveAttribute("data-entity", "cell_report");
+    expect(block).toHaveAttribute("data-record-id", "r1");
+    const cellLabel = screen.getByText("Célula *");
+    expect((block.compareDocumentPosition(cellLabel) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+    unmount();
+
+    render(<CellReportForm onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    expect(screen.queryByTestId("record-authorship")).not.toBeInTheDocument();
   });
 });

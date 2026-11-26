@@ -11,6 +11,8 @@ import { useCellSave, type CellSaveResult } from "@/hooks/use-cell-save";
 import { useCellFormErrors } from "@/hooks/use-cell-form-errors";
 import { useHostAddress } from "@/hooks/use-host-address";
 import { useMemberStatuses } from "@/hooks/use-member-statuses";
+import { RecordAuthorship } from "@/components/RecordAuthorship";
+import { AUDIT_TEXTS } from "@/lib/audit/texts";
 import { CellFormDialog } from "@/components/cells/CellFormDialog";
 import { CellPeopleFieldset } from "@/components/cells/CellPeopleFieldset";
 import { CellMeetingFieldset } from "@/components/cells/CellMeetingFieldset";
@@ -159,6 +161,7 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
   };
 
   const showScopeHint = peopleLimitedToMinistry(access);
+  const isDirty = () => isCellFormDirty(opening, form.getValues());
   const errorCount = Object.keys(errors.shown).length;
 
   return (
@@ -176,7 +179,7 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
         errorCount,
         failure,
         primaryRef,
-        isDirty: () => isCellFormDirty(opening, form.getValues()),
+        isDirty,
       }}
     >
       <FormProvider {...form}>
@@ -197,6 +200,11 @@ const CellForm = ({ cell, onClose, onCloseAutoFocus }: CellFormProps) => {
                 )}
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* A autoria depois dos avisos e antes da dica de alcance e do primeiro campo (E2.05, T3 e P30). */}
+          {cell && (
+            <RecordAuthorship entity="cell" recordId={cell.id} recordName={cell.leader_name || AUDIT_TEXTS.history.leaderNotInformed} isDirty={isDirty} />
           )}
 
           <p className="text-sm text-muted-foreground">{TEXTS.requiredNote}</p>

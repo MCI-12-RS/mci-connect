@@ -2,6 +2,8 @@
 // é sempre a string ISO "aaaa-mm-dd", sem fuso: nada aqui depende do fuso do
 // navegador.
 
+import { formatDateTimeInBrasilia, type DateTimeParts } from "@/lib/format";
+
 const SAO_PAULO_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Sao_Paulo",
   year: "numeric",
@@ -75,4 +77,17 @@ export function addOneDay(date: string): string {
 export function formatIsoDateBr(date: string): string {
   const parsed = parseIsoDate(date);
   return parsed ? `${pad(parsed.day, 2)}/${pad(parsed.month, 2)}/${pad(parsed.year, 4)}` : date;
+}
+
+/**
+ * Data e hora de um instante (`timestamptz`) no horário de Brasília (E2.05, UX-02), qualquer que seja o
+ * fuso do navegador: { date: "21/11/2026", time: "23:59" }. `null` para o que não é um instante.
+ */
+export function formatSpDateTime(instant: string | null | undefined): DateTimeParts | null {
+  return formatDateTimeInBrasilia(instant);
+}
+
+/** Só a data ("dd/mm/aaaa") de um instante, no horário de Brasília; `null` para o que não é um instante. */
+export function formatSpDate(instant: string | null | undefined): string | null {
+  return formatDateTimeInBrasilia(instant)?.date ?? null;
 }

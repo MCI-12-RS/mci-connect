@@ -11,6 +11,11 @@ import { EditCellDialog } from "./EditRecordDialogs";
 // (nenhuma mensagem técnica). Roda no diálogo de verdade (`EditCellDialog`), onde o Esc e o
 // toque fora são decididos.
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };

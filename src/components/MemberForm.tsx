@@ -12,6 +12,7 @@ import { useMemberSave } from "@/hooks/use-member-save";
 import { useMemberFormErrors } from "@/hooks/use-member-form-errors";
 import DeletedMatchesDialog, { type RestoredFromWarning } from "@/components/DeletedMatchesDialog";
 import { MemberFormDialog } from "@/components/members/MemberFormDialog";
+import { RecordAuthorship } from "@/components/RecordAuthorship";
 import { MemberPersonalSection } from "@/components/members/MemberPersonalSection";
 import { MemberMinistrySection } from "@/components/members/MemberMinistrySection";
 import { MemberAddressSection } from "@/components/members/MemberAddressSection";
@@ -332,6 +333,7 @@ const MemberForm = ({
     if (failure && !busy) primaryRef.current?.focus();
   }, [failure, busy]);
   const dialogTitle = title ?? (isEditing ? TEXTS.titles.edit : TEXTS.titles.create);
+  const isDirty = () => isMemberFormDirty(openingFields.current, form.getValues(), ministryView, writeOptions);
 
   return (
     <MemberFormDialog
@@ -351,19 +353,17 @@ const MemberForm = ({
               errorCount: shownErrorCount(errors.shown),
               failure,
               primaryRef,
-              isDirty: () => isMemberFormDirty(openingFields.current, form.getValues(), ministryView, writeOptions),
+              isDirty,
             }
       }
     >
       <FormProvider {...form}>
         <form id={formId} noValidate onSubmit={readOnly ? (event) => event.preventDefault() : submit} className="space-y-6">
-          {readOnly ? (
+          {readOnly && (
             <Alert>
               <Info className="h-4 w-4" aria-hidden="true" />
               <AlertDescription>{OWN_DATA_TEXTS.readOnlyNotice}</AlertDescription>
             </Alert>
-          ) : (
-            <p className="text-sm text-muted-foreground">{TEXTS.requiredNote}</p>
           )}
           {restoredFrom && (
             <Alert ref={restoredAlertRef} role="status" tabIndex={-1} className="focus:outline-none">
@@ -391,6 +391,17 @@ const MemberForm = ({
               </AlertDescription>
             </Alert>
           )}
+
+          {/* A autoria depois dos avisos e antes do primeiro campo (E2.05, T2 e P30). */}
+          {member && (
+            <RecordAuthorship
+              entity="member"
+              recordId={member.id}
+              recordName={member.name}
+              isDirty={readOnly ? undefined : isDirty}
+            />
+          )}
+          {!readOnly && <p className="text-sm text-muted-foreground">{TEXTS.requiredNote}</p>}
 
           <MemberPersonalSection
             ui={ui}
