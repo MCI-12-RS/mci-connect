@@ -275,16 +275,15 @@ test.describe("UX-36: a sessão de um membro excluído termina", () => {
   test("(c) um erro 5xx na releitura do cadastro não encerra a sessão", async ({ browser }) => {
     const { context, page } = await openSession(browser, JUCA);
     deleteMember(JUCA);
-    await page.route("**/rest/v1/members_view*", (route) => route.fulfill({ status: 503, body: "{}", contentType: "application/json" }));
-    // A volta do foco também relê a marca de troca (E2.03), que reconhece a sessão apagada (RN-16): o 5xx vale para as duas.
-    await page.route("**/rest/v1/rpc/my_password_status*", (route) => route.fulfill({ status: 503, body: "{}", contentType: "application/json" }));
+    // A exclusão apaga as sessões (E2.01), e desde o E2.03 (PR 4) o portão do banco responde session_ended a
+    // qualquer leitura com o token dela (RN-16): o 5xx precisa valer para toda a API, não só para a releitura.
+    await page.route("**/rest/v1/**", (route) => route.fulfill({ status: 503, body: "{}", contentType: "application/json" }));
     await returnFocus(page);
     await page.waitForTimeout(1500);
     await expect(page).toHaveURL(/\/$/);
     await expect(sessionNotice(page)).toHaveCount(0);
     // Voltando a rede, a próxima volta do foco (passados os 10 s) encerra.
-    await page.unroute("**/rest/v1/members_view*");
-    await page.unroute("**/rest/v1/rpc/my_password_status*");
+    await page.unroute("**/rest/v1/**");
     await page.waitForTimeout(10_500);
     await returnFocus(page);
     await expect(page).toHaveURL(/\/login$/);
