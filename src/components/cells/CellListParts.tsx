@@ -2,6 +2,7 @@ import LevelSuffix from "@/components/hierarchy/LevelSuffix";
 import { cellG12, cellLeaderLevel, formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
 import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
+import { CELLS_PAGE_TEXTS } from "@/lib/cells/texts";
 
 /** "André Souza (144)": o líder com o nível do P40, que quebra entre as palavras (E2.06, RN-11). */
 export const CellLeader = ({ cell, className }: { cell: CellRow; className: string }) => (
@@ -21,3 +22,16 @@ export const CellG12 = ({ cell }: { cell: CellRow }) =>
   ) : (
     <>{formatG12Label(cell)}</>
   );
+
+/**
+ * "Quarta · 20:00", com o "·" fora do leitor de tela, que ouve "Quarta, 20:00"
+ * (E2.09, Acessibilidade). Sem dia válido, "—" no lugar do dia (RN-07).
+ */
+export const CellMeeting = ({ cell }: { cell: CellRow }) => (
+  <span>
+    {cell.meeting_day || CELLS_PAGE_TEXTS.missing}
+    <span aria-hidden="true"> · </span>
+    <span className="sr-only">, </span>
+    {cell.meeting_time?.substring(0, 5) || CELLS_PAGE_TEXTS.missing}
+  </span>
+);

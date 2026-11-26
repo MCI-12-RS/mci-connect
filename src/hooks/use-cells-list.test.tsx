@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
-import { CELL_ROW_SELECT } from "@/lib/cells/fields";
+import { CELL_LIST_SELECT } from "@/lib/cells/fields";
 import { RANGE_NOT_SATISFIABLE } from "@/lib/list-query";
 import { useCellsList } from "./use-cells-list";
 
@@ -28,7 +28,7 @@ describe("useCellsList (RN-01, RN-03, RN-04)", () => {
     expect(queries).toHaveLength(1);
     expect(queries[0].table).toBe("cells_view");
     expect(queries[0].calls).toEqual([
-      ["select", CELL_ROW_SELECT, { count: "exact" }],
+      ["select", CELL_LIST_SELECT, { count: "exact" }],
       ["order", "created_at", { ascending: false }],
       ["order", "id"],
       ["range", 1100, 1199],

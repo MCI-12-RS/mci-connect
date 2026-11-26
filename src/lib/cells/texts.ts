@@ -87,6 +87,10 @@ export const CELL_FORM_TEXTS = {
 /** A lista de Células (T7). */
 export const CELLS_PAGE_TEXTS = {
   newCell: "Nova célula",
+  /** A coluna que junta o dia, o horário e o tipo (E2.09, UXD-6). */
+  columnMeeting: "Reunião",
+  /** O dia ou o horário ausente na reunião (RN-07). */
+  missing: "—",
 } as const;
 
 /** O formulário de relatório com a célula inativada no meio tempo (T8, RN-11 c, P-CEL-17). */

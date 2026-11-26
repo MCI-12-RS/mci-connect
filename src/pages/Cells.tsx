@@ -9,17 +9,18 @@ import ListPagination from "@/components/ListPagination";
 import DeletedListButton from "@/components/DeletedListButton";
 import CellCard from "@/components/cells/CellCard";
 import CellsTable from "@/components/cells/CellsTable";
+import ReportStatusLegend from "@/components/cells/ReportStatusLegend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
+import { CELLS_TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
-import type { CellRow } from "@/lib/cells/fields";
+import type { CellListRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
 import { CELLS_PAGE_TEXTS } from "@/lib/cells/texts";
@@ -28,14 +29,15 @@ import { listSubtitle } from "@/lib/access/access";
 const Cells = () => {
   const list = useListSearchParams();
   const [formOpen, setFormOpen] = useState(false);
-  const [editingCell, setEditingCell] = useState<CellRow | null>(null);
+  const [editingCell, setEditingCell] = useState<CellListRow | null>(null);
   const [reportFormOpen, setReportFormOpen] = useState(false);
-  const [selectedCellForReport, setSelectedCellForReport] = useState<CellRow | null>(null);
+  const [selectedCellForReport, setSelectedCellForReport] = useState<CellListRow | null>(null);
   const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
   const { hasPermission, access } = useAuth();
   const isMobile = useIsMobile();
-  // Cartões até 1023 px e tabela a partir de 1024 px, já no primeiro render (P45).
-  const showTable = useMinWidth(TABLE_MIN_WIDTH);
+  // Cartões até 1279 px e tabela a partir de 1280 px, já no primeiro render (E2.09, P74;
+  // a tabela com a coluna Relatório não cabe em 1024 px, UXD-5).
+  const showTable = useMinWidth(CELLS_TABLE_MIN_WIDTH);
 
   const { data, isLoading, isError, isPlaceholderData, isRefetching } = useCellsList(list.params);
   // A lista na tela recarrega (troca de página ou depois de uma gravação): as
@@ -50,13 +52,13 @@ const Cells = () => {
   const searchRef = useRef<HTMLInputElement>(null);
   const returnFocus = useReturnFocus(searchRef, data);
 
-  const handleEdit = (cell: CellRow, opener: HTMLElement) => {
+  const handleEdit = (cell: CellListRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setEditingCell(cell);
     setFormOpen(true);
   };
   const handleClose = () => { setFormOpen(false); setEditingCell(null); };
-  const handleOpenReport = (cell: CellRow, opener: HTMLElement) => {
+  const handleOpenReport = (cell: CellListRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
     setSelectedCellForReport(cell);
     setReportFormOpen(true);
@@ -65,13 +67,13 @@ const Cells = () => {
 
   // "Novo relatório" (RN-13, UX-23; E2.08, RN-11 c): a mesma regra do banco, calculada na
   // cells_view (AQ-4, AQ-7), que já é falsa para a célula inativa.
-  const canSubmitReport = (c: CellRow) => c.can_submit_report === true;
+  const canSubmitReport = (c: CellListRow) => c.can_submit_report === true;
 
   // "Editar" só com "Editar Célula": ser líder ou timóteo não basta (RN-12).
   const canEditCell = hasPermission("edit_cell");
   const canDeleteCell = hasPermission("delete_cell");
 
-  const cellHasActions = (c: CellRow) => canSubmitReport(c) || canEditCell || canDeleteCell;
+  const cellHasActions = (c: CellListRow) => canSubmitReport(c) || canEditCell || canDeleteCell;
 
   // "Excluídas": só para quem restaura (E2.01, UX-13). No celular, na linha do título.
   const deletedButton = hasPermission("manage_roles") && (
@@ -85,7 +87,7 @@ const Cells = () => {
   const canCreate = hasPermission("create_cell");
   const subtitle = listSubtitle(access, "cells");
 
-  const startDeletion = (c: CellRow, opener: HTMLElement | null) => {
+  const startDeletion = (c: CellListRow, opener: HTMLElement | null) => {
     returnFocus.setOpener(opener);
     setDeletingCell(toCellDeletionTarget(c));
   };
@@ -94,7 +96,7 @@ const Cells = () => {
   // dentro seria recriado a cada render, e o botão que abriu o diálogo perderia o foco.
 
   /** "Novo relatório" e "Editar": fora do menu "⋯" no celular, com 44×44 px (UXD-4). */
-  const renderFrequentActions = (c: CellRow, buttonClass: string) => (
+  const renderFrequentActions = (c: CellListRow, buttonClass: string) => (
     <>
       {canSubmitReport(c) && (
         <Button
@@ -123,7 +125,7 @@ const Cells = () => {
 
   // Alinhadas pelo fim (P65): "Editar" e "Excluir" ficam na mesma coluna em todas as linhas,
   // com ou sem "Novo relatório".
-  const renderDesktopActions = (c: CellRow) => (
+  const renderDesktopActions = (c: CellListRow) => (
     <div className="flex items-center justify-end gap-1">
       {renderFrequentActions(c, "h-8 w-8")}
       {canDeleteCell && (
@@ -141,12 +143,12 @@ const Cells = () => {
   );
 
   /** No celular, "Excluir célula" fica no menu "⋯" do card (T1, P8). */
-  const rowActions = (c: CellRow): RowAction[] =>
+  const rowActions = (c: CellListRow): RowAction[] =>
     canDeleteCell
       ? [{ label: CELL_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => startDeletion(c, trigger) }]
       : [];
 
-  const renderMobileActions = (c: CellRow) => (
+  const renderMobileActions = (c: CellListRow) => (
     <div className="ml-auto flex items-center gap-2 shrink-0">
       {renderFrequentActions(c, "h-11 w-11")}
       <RowActionsMenu label={CELL_DELETION_TEXTS.actionsLabel(leaderLabel(c.leader_name))} actions={rowActions(c)} />
@@ -159,11 +161,11 @@ const Cells = () => {
     if (cells.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhuma célula encontrada</p>;
 
     return (
-      <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
+      <ul className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
         {cells.map((c) => (
           <CellCard key={c.id} cell={c} actions={cellHasActions(c) ? renderMobileActions(c) : null} />
         ))}
-      </div>
+      </ul>
     );
   };
 
@@ -211,6 +213,8 @@ const Cells = () => {
                 className="pl-10"
               />
             </div>
+            {/* A legenda da situação do relatório (P73): à vista enquanto carrega e sem resultado; some no erro. */}
+            {!isError && <ReportStatusLegend />}
           </CardHeader>
 
           {!showTable ? (
