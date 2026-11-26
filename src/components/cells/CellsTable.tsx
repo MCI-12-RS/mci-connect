@@ -66,9 +66,9 @@ const CellsTable = ({ rows, isLoading, isError, refreshing, renderActions }: Cel
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <CellLeader cell={c} className="text-sm font-medium" />
-                        <div className="flex flex-col text-xs text-muted-foreground italic">
-                          {c.timothy_name && <span className="break-words">Timóteo: {c.timothy_name}</span>}
-                          {c.host_name && <span className="break-words">Anfitrião: {c.host_name}</span>}
+                        <div className="flex flex-col break-words text-xs text-muted-foreground italic">
+                          {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
+                          {c.host_name && <span>Anfitrião: {c.host_name}</span>}
                         </div>
                       </div>
                     </TableCell>
