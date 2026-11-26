@@ -268,6 +268,31 @@ test("RN-04 (d) e (e): o relatório com 8 participantes vai numa chamada e mostr
   expect(count(`SELECT count(*) FROM public.events WHERE entity_id = ${lit(reportId)}`)).toBe(2);
 });
 
+test("RN-04 e UX-08: célula sem mudança, ou só com o campo vazio reescrito, fecha com o aviso e não faz nenhuma chamada de gravação", async ({ page }) => {
+  await login(page, env.admin);
+  const writes = trackWrites(page);
+  const before = sql(env, `SELECT coalesce(updated_at::text, '<nulo>') FROM public.cells WHERE id = ${lit(CELL)}`);
+  const events = count(`SELECT count(*) FROM public.events WHERE entity_id = ${lit(CELL)}`);
+
+  const dialog = await openCellEdit(page, LEADER.name);
+  await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+  await expect(toast(page, "Nenhuma alteração para salvar.")).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await expect(toast(page, "Célula atualizada.")).toHaveCount(0);
+  expect(writes).toEqual([]);
+
+  // Digitar outro valor e voltar ao original também não conta.
+  const again = await openCellEdit(page, LEADER.name);
+  await again.getByLabel("Bairro").fill("Outro");
+  await again.getByLabel("Bairro").fill("Centro");
+  await again.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+  await expect(toast(page, "Nenhuma alteração para salvar.").last()).toBeVisible();
+  await expect(again).toBeHidden();
+  expect(writes).toEqual([]);
+  expect(sql(env, `SELECT coalesce(updated_at::text, '<nulo>') FROM public.cells WHERE id = ${lit(CELL)}`)).toBe(before);
+  expect(count(`SELECT count(*) FROM public.events WHERE entity_id = ${lit(CELL)}`)).toBe(events);
+});
+
 test("RN-14 e UX-09: com a Auditoria quebrada, membro, célula e relatório não gravam, mostram a mensagem de conexão e mantêm os dados; de volta, gravam uma vez", async ({ page }) => {
   await login(page, env.admin);
 
