@@ -103,7 +103,7 @@ CREATE TEMP TABLE seen_events (id uuid PRIMARY KEY);
 CREATE FUNCTION pg_temp.take(_action text) RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE _out jsonb;
 BEGIN
-  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' ORDER BY e.entity_label, e.id), '[]')
+  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' - 'seq' - 'tx_id' - 'changes' - 'search_text' - 'actor_kind' ORDER BY e.entity_label, e.id), '[]')
     INTO _out FROM public.events e
    WHERE e.action::text = _action AND e.id NOT IN (SELECT id FROM seen_events);
   INSERT INTO seen_events SELECT e.id FROM public.events e WHERE e.action::text = _action ON CONFLICT DO NOTHING;
@@ -253,7 +253,7 @@ SELECT is(pg_temp.api(7, format('SELECT to_jsonb(password_reset_status) FROM pub
 SELECT is(pg_temp.api(9, format('SELECT to_jsonb(password_reset_status) FROM public.members_view WHERE id = %L', pg_temp.m(9))),
   NULL, 'RN-01: Caio (sem a permissão) não vê a coluna preenchida (NULL)');
 SELECT is((SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'members_view'
-            ORDER BY ordinal_position DESC LIMIT 1), 'password_reset_status', 'AQ-2: password_reset_status é a última coluna da members_view');
+            ORDER BY ordinal_position DESC LIMIT 1 OFFSET 4), 'password_reset_status', 'AQ-2: password_reset_status é a última coluna da members_view antes das quatro da autoria do E2.05');
 
 -- Carla, com a função Apoio (Membro + change_member_password, sem edit_member), redefine Caio.
 SELECT is(pg_temp.rc(pg_temp.keep(pg_temp.rst(12, 9))), 'ok', 'RN-01: Carla (Apoio, sem edit_member) redefine Caio: aceita');

@@ -1,0 +1,301 @@
+-- E2.05 (PR 1): volume de referência e metas do risco 4 e de "Verificações obrigatórias" (volume).
+-- Spec: docs/specs/e2-05-auditoria-autor.md (repositório apps-mci): o volume do E1.08 (20 mil membros,
+-- 1.500 células, 100 mil relatórios e 800 mil participações) mais 300 mil eventos (40 mil de dados, 200 mil
+-- de login e 60 mil de falhas).
+--
+-- Metas:
+--   - Auditoria: página com total abaixo de 300 ms, sem filtro, com busca e com período; histórico de um
+--     registro abaixo de 100 ms (risco 4);
+--   - PATCH de membro no máximo 5 ms mais lento que sem os triggers do E2.05;
+--   - save_cell_report com 30 participantes abaixo de 150 ms;
+--   - o recálculo de totais (troca de líder) sem mudança de custo;
+--   - a migration 5 (conversão e autoria) abaixo de 60 s;
+--   - audit_purge de 100 mil eventos abaixo de 10 s.
+--
+-- Roda em duas transações desfeitas (nada fica no banco): a 1 mede a migration 5 sobre os eventos no
+-- formato de antes; a 2, as leituras e gravações com os eventos no formato novo. Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e205_volume.psql > e205_explain.txt
+-- A saída traz o EXPLAIN (ANALYZE, BUFFERS) das leituras e uma linha "META" por medida.
+
+\set ON_ERROR_STOP on
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+INSERT INTO auth.users (id, email)
+SELECT ('a2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e205-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n, CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END, n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2050900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2050900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       n % 10 <> 0, n > 2,
+       CASE WHEN n <= 3 THEN ('a2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE is_system)
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day', '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active, created_at)
+SELECT ('d2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0, now() - interval '500 days'
+  FROM generate_series(1, 1500) n;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering, created_at)
+SELECT ('e2050900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2050900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', true, 'Tema ' || i, 10,
+       now() - (7 * (1 + i / 1500)) * interval '1 day'
+  FROM generate_series(0, 99999) i;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme)
+VALUES ('e2050900-0000-0001-0000-000000000001', 'd2050900-0000-0000-0000-000000000001', public.sp_today(), '20:00', true, 'Semana atual');
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT r.id, ('c2050900-0000-0000-0000-' || lpad((15 + ((row_number() OVER ()) * 7919 + k) % 19980)::text, 12, '0'))::uuid
+  FROM public.cell_reports r, generate_series(0, 7) k
+ WHERE r.id::text LIKE 'e2050900-0000-0000-%';
+
+-- 300 mil eventos no formato de antes deste passo (sem actor_kind), em 2 anos: 40 mil de dados
+-- (cadastro e alteração de membros, células, relatórios e participantes), 200 mil logins e 60 mil falhas.
+ALTER TABLE public.events ALTER COLUMN actor_kind DROP NOT NULL;
+INSERT INTO public.events (occurred_at, actor_user_id, actor_label, action, entity, entity_id, entity_label, description, changed_fields, metadata)
+SELECT now() - (i * 1577) * interval '1 second',
+       CASE WHEN i % 3 = 0 THEN NULL ELSE 'a2050900-0000-0000-0000-000000000002'::uuid END,
+       CASE WHEN i % 3 = 0 THEN NULL ELSE 'Membro Volume 2' END,
+       (CASE WHEN i % 4 = 0 THEN 'create' ELSE 'update' END)::public.event_action,
+       (ARRAY['member', 'cell', 'cell_report', 'cell_report_participant'])[1 + i % 4]::public.event_entity,
+       CASE 1 + i % 4
+         WHEN 1 THEN ('c2050900-0000-0000-0000-' || lpad((1 + i % 20000)::text, 12, '0'))::uuid
+         WHEN 2 THEN ('d2050900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid
+         ELSE ('e2050900-0000-0000-0000-' || lpad((i % 100000)::text, 12, '0'))::uuid END,
+       CASE 1 + i % 4 WHEN 1 THEN 'Membro Volume ' || (1 + i % 20000) WHEN 2 THEN 'célula de Membro Volume ' || i
+            ELSE 'relatório da célula de Membro Volume ' || i || ' em 2026-01-04' END,
+       CASE 1 + i % 4
+         WHEN 1 THEN (CASE WHEN i % 4 = 0 THEN 'Criou' ELSE 'Atualizou' END) || ' o membro Membro Volume ' || (1 + i % 20000)
+         WHEN 2 THEN 'Atualizou a célula de Membro Volume ' || i
+         WHEN 3 THEN 'Atualizou o relatório da célula de Membro Volume ' || i || ' em 2026-01-04'
+         ELSE 'Adicionou Membro Volume 9 ao relatório da célula de Membro Volume ' || i || ' em 2026-01-04' END,
+       CASE 1 + i % 4 WHEN 1 THEN ARRAY['name', 'mobile_whatsapp'] WHEN 2 THEN ARRAY['meeting_time'] WHEN 3 THEN ARRAY['offering'] END,
+       CASE 1 + i % 4
+         WHEN 1 THEN '{"name": {"from": "Antes", "to": "Depois"}}'::jsonb
+         WHEN 2 THEN '{"meeting_time": {"from": "19:00:00", "to": "20:00:00"}}'::jsonb
+         WHEN 3 THEN '{"offering": {"from": "10.00", "to": "20.00"}}'::jsonb
+         ELSE jsonb_build_object('report_id', 'e2050900-0000-0000-0000-000000000001', 'member_id', 'c2050900-0000-0000-0000-000000000009') END
+  FROM generate_series(1, 40000) i;
+INSERT INTO public.events (occurred_at, actor_user_id, actor_label, action, entity, entity_id, entity_label, description, metadata, success, error_reason)
+SELECT now() - (i * 157) * interval '1 second', 'a2050900-0000-0000-0000-000000000002', 'Membro Volume 2', 'login', 'auth',
+       'c2050900-0000-0000-0000-000000000002', 'Membro Volume 2', 'Login realizado', '{"identifier_type": "cpf"}', true, NULL
+  FROM generate_series(1, 200000) i;
+INSERT INTO public.events (occurred_at, action, entity, description, metadata, success, error_reason)
+SELECT now() - (i * 130) * interval '1 second', 'login_failed', 'auth', 'Falha no login', '{"reason": "not_found"}', false, 'Identificação não encontrada'
+  FROM generate_series(1, 60000) i;
+
+-- Os registros "de antes deste passo": sem autoria (as regras da migration 5 saem só nesta transação).
+DO $$
+DECLARE _t text;
+BEGIN
+  FOREACH _t IN ARRAY ARRAY['members', 'cells', 'cell_reports'] LOOP
+    EXECUTE format('ALTER TABLE public.%I ALTER COLUMN created_by_kind DROP NOT NULL, DROP CONSTRAINT %I, DROP CONSTRAINT %I, DROP CONSTRAINT %I',
+                   _t, _t || '_created_authorship_check', _t || '_updated_authorship_check', _t || '_deleted_authorship_check');
+    EXECUTE format('UPDATE public.%I SET created_by_kind = NULL', _t);
+  END LOOP;
+END $$;
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants; ANALYZE public.events;
+
+\echo '######## migration 5: conversão dos 300 mil eventos e autoria dos registros (meta 60 s) ########'
+CREATE TEMP TABLE t_mig AS SELECT clock_timestamp() AS t0;
+SELECT 'conversão: não casaram', private.audit_convert_v1_events();
+SELECT 'conversão (s)', round(extract(epoch FROM clock_timestamp() - t0)::numeric, 1) FROM t_mig;
+SELECT private.audit_backfill_authorship();
+SELECT 'META migration 5: conversão + autoria (s, meta 60)', round(extract(epoch FROM clock_timestamp() - t0)::numeric, 1) AS s FROM t_mig;
+SELECT 'CONFERÊNCIA', (SELECT count(*) FROM public.events WHERE actor_kind IS NULL) AS sem_actor_kind,
+       (SELECT count(*) FROM public.members WHERE created_by_kind IS NULL) AS membros_sem_autoria;
+ROLLBACK;
+
+-- ===========================================================================================
+-- Parte 2: leituras e gravações, com os 300 mil eventos já no formato novo (linhas novas, sem as
+-- versões mortas da conversão da parte 1, como depois do autovacuum em produção).
+-- ===========================================================================================
+BEGIN;
+SET LOCAL session_replication_role = replica;
+SET LOCAL synchronous_commit = off;
+INSERT INTO auth.users (id, email)
+SELECT ('a2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e205-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n, CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END, n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2050900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2050900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       n % 10 <> 0, n > 2,
+       CASE WHEN n <= 3 THEN ('a2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE is_system)
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day', '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active, created_at)
+SELECT ('d2050900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2050900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       '20:00', 'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0, now() - interval '500 days'
+  FROM generate_series(1, 1500) n;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering, created_at)
+SELECT ('e2050900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2050900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', true, 'Tema ' || i, 10,
+       now() - (7 * (1 + i / 1500)) * interval '1 day'
+  FROM generate_series(0, 99999) i;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme)
+VALUES ('e2050900-0000-0001-0000-000000000001', 'd2050900-0000-0000-0000-000000000001', public.sp_today(), '20:00', true, 'Semana atual');
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT r.id, ('c2050900-0000-0000-0000-' || lpad((15 + ((row_number() OVER ()) * 7919 + k) % 19980)::text, 12, '0'))::uuid
+  FROM public.cell_reports r, generate_series(0, 7) k
+ WHERE r.id::text LIKE 'e2050900-0000-0000-%';
+
+INSERT INTO public.events (occurred_at, actor_user_id, actor_label, actor_kind, action, entity, entity_id, entity_label, description, changed_fields, changes)
+SELECT now() - (i * 1577) * interval '1 second',
+       CASE WHEN i % 3 = 0 THEN NULL ELSE 'a2050900-0000-0000-0000-000000000002'::uuid END,
+       CASE WHEN i % 3 = 0 THEN NULL ELSE 'Membro Volume 2' END,
+       (CASE WHEN i % 3 = 0 THEN 'system' ELSE 'member' END)::public.event_actor_kind,
+       (CASE WHEN i % 4 = 0 THEN 'create' ELSE 'update' END)::public.event_action,
+       (ARRAY['member', 'cell', 'cell_report', 'cell_report'])[1 + i % 4]::public.event_entity,
+       CASE 1 + i % 4
+         WHEN 1 THEN ('c2050900-0000-0000-0000-' || lpad((1 + i % 20000)::text, 12, '0'))::uuid
+         WHEN 2 THEN ('d2050900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid
+         ELSE ('e2050900-0000-0000-0000-' || lpad((i % 100000)::text, 12, '0'))::uuid END,
+       CASE 1 + i % 4 WHEN 1 THEN 'Membro Volume ' || (1 + i % 20000) WHEN 2 THEN 'Célula de Membro Volume ' || i
+            ELSE 'Relatório de 04/01/2026 da célula de Membro Volume ' || i END,
+       CASE 1 + i % 4
+         WHEN 1 THEN (CASE WHEN i % 4 = 0 THEN 'Cadastrou' ELSE 'Alterou' END) || ' o membro Membro Volume ' || (1 + i % 20000)
+         WHEN 2 THEN 'Alterou a célula de Membro Volume ' || i
+         ELSE 'Alterou o relatório de 04/01/2026 da célula de Membro Volume ' || i END,
+       CASE 1 + i % 4 WHEN 1 THEN ARRAY['name', 'mobile_whatsapp'] WHEN 2 THEN ARRAY['meeting_time'] WHEN 3 THEN ARRAY['offering'] END,
+       '{"fields": [{"field": "name", "from": "Antes", "to": "Depois"}, {"field": "mobile_whatsapp"}]}'::jsonb
+  FROM generate_series(1, 40000) i;
+INSERT INTO public.events (occurred_at, actor_user_id, actor_label, actor_kind, action, entity, entity_id, entity_label, description, metadata, success)
+SELECT now() - (i * 157) * interval '1 second', 'a2050900-0000-0000-0000-000000000002', 'Membro Volume 2', 'member', 'login', 'auth',
+       'c2050900-0000-0000-0000-000000000002', 'Membro Volume 2', 'Login realizado', '{"identifier_type": "cpf"}', true
+  FROM generate_series(1, 200000) i;
+INSERT INTO public.events (occurred_at, actor_kind, action, entity, description, metadata, success, error_reason)
+SELECT now() - (i * 130) * interval '1 second', 'none', 'login_failed', 'auth', 'Falha no login', '{"reason": "not_found"}', false, 'Identificação não encontrada'
+  FROM generate_series(1, 60000) i;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+ANALYZE public.events; ANALYZE public.members; ANALYZE private.member_hierarchy;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' reports=' || (SELECT count(*) FROM public.cell_reports) || ' participants=' || (SELECT count(*) FROM public.cell_report_participants)
+    || ' events=' || (SELECT count(*) FROM public.events) AS volume;
+
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2050900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+CREATE FUNCTION pg_temp.undo_ms(_n int, _sql text, _rounds int DEFAULT 20) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    BEGIN
+      PERFORM pg_temp.as_member(_n);
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      _t := clock_timestamp();
+      EXECUTE _sql;
+      _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+      IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+      RAISE EXCEPTION 'undo' USING ERRCODE = 'P0099';
+    EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+    END;
+  END LOOP;
+  EXECUTE 'RESET ROLE';
+  RETURN round(_best, 2);
+END $$;
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _xs numeric[] := '{}'; i int;
+BEGIN
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  EXECUTE _sql;
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _xs := _xs || (extract(epoch FROM clock_timestamp() - _t) * 1000)::numeric;
+  END LOOP;
+  EXECUTE 'RESET ROLE';
+  RETURN round((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM unnest(_xs) x)::numeric, 1);
+END $$;
+
+\echo
+\echo '######## events_view: página com total (Administrador) ########'
+\set ev_cols 'id, occurred_at, occurred_on, seq, actor_kind, actor_label, action, entity, entity_id, entity_label, description, changed_fields, changes, success'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT :ev_cols FROM public.events_view ORDER BY occurred_at DESC, seq DESC LIMIT 25 OFFSET 0;
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT count(*) FROM public.events_view;
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT :ev_cols FROM public.events_view WHERE search_text ILIKE '%volume%' AND search_text ILIKE '%1234%'
+  ORDER BY occurred_at DESC, seq DESC LIMIT 25;
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT count(*) FROM public.events_view WHERE occurred_on >= current_date - 30 AND occurred_on <= current_date;
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT :ev_cols FROM public.events_view
+  WHERE entity = 'member' AND entity_id = 'c2050900-0000-0000-0000-000000001001' AND action IN ('create', 'update', 'delete', 'restore')
+  ORDER BY occurred_at DESC, seq DESC LIMIT 25;
+RESET ROLE;
+SELECT 'META Auditoria: página + total, sem filtro (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.events_view ORDER BY occurred_at DESC, seq DESC LIMIT 25', :'ev_cols'))
+     + pg_temp.ms('SELECT count(*) FROM public.events_view') AS ms;
+SELECT 'META Auditoria: página 400 + total, sem filtro (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.events_view ORDER BY occurred_at DESC, seq DESC LIMIT 25 OFFSET 10000', :'ev_cols'))
+     + pg_temp.ms('SELECT count(*) FROM public.events_view') AS ms;
+SELECT 'META Auditoria: página + total, busca "volume 1234" (ms, meta 300)',
+       pg_temp.ms(format($q$SELECT %s FROM public.events_view WHERE search_text ILIKE '%%volume%%' AND search_text ILIKE '%%1234%%'
+                          ORDER BY occurred_at DESC, seq DESC LIMIT 25$q$, :'ev_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.events_view WHERE search_text ILIKE '%volume%' AND search_text ILIKE '%1234%'$q$) AS ms;
+SELECT 'META Auditoria: página + total, últimos 30 dias (ms, meta 300)',
+       pg_temp.ms(format($q$SELECT %s FROM public.events_view WHERE occurred_on >= current_date - 30 AND occurred_on <= current_date
+                          ORDER BY occurred_at DESC, seq DESC LIMIT 25$q$, :'ev_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.events_view WHERE occurred_on >= current_date - 30 AND occurred_on <= current_date$q$) AS ms;
+SELECT 'META Auditoria: página + total, ação "update" e entidade "member" (ms, meta 300)',
+       pg_temp.ms(format($q$SELECT %s FROM public.events_view WHERE action = 'update' AND entity = 'member'
+                          ORDER BY occurred_at DESC, seq DESC LIMIT 25$q$, :'ev_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.events_view WHERE action = 'update' AND entity = 'member'$q$) AS ms;
+SELECT 'META histórico de um registro: página + total (ms, meta 100)',
+       pg_temp.ms(format($q$SELECT %s FROM public.events_view WHERE entity = 'member' AND entity_id = 'c2050900-0000-0000-0000-000000001001'
+                          AND action IN ('create', 'update', 'delete', 'restore') ORDER BY occurred_at DESC, seq DESC LIMIT 25$q$, :'ev_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.events_view WHERE entity = 'member' AND entity_id = 'c2050900-0000-0000-0000-000000001001'
+                     AND action IN ('create', 'update', 'delete', 'restore')$q$) AS ms;
+
+\echo
+\echo '######## gravações (o melhor de 20 rodadas desfeitas, como o Administrador) ########'
+CREATE TEMP TABLE w (k text PRIMARY KEY, ms numeric);
+INSERT INTO w SELECT 'report30', pg_temp.undo_ms(2, $q$SELECT public.save_cell_report('e2050900-0000-0001-0000-000000000001', '{"theme": "Volume", "offering": 30}',
+                       ARRAY(SELECT ('c2050900-0000-0000-0000-' || lpad((1000 + k)::text, 12, '0'))::uuid FROM generate_series(1, 30) k))$q$);
+INSERT INTO w SELECT 'patch_on', pg_temp.undo_ms(2, $q$UPDATE public.members SET notes = 'volume', mobile_whatsapp = '51900001001' WHERE id = 'c2050900-0000-0000-0000-000000001001'$q$);
+INSERT INTO w SELECT 'leader_on', pg_temp.undo_ms(2, $q$UPDATE public.members SET leader_id = 'c2050900-0000-0000-0000-000000000004' WHERE id = 'c2050900-0000-0000-0000-000000000200'$q$);
+ALTER TABLE public.members DISABLE TRIGGER zz_stamp_authorship;
+ALTER TABLE public.members DISABLE TRIGGER aa_audit_record;
+INSERT INTO w SELECT 'patch_off', pg_temp.undo_ms(2, $q$UPDATE public.members SET notes = 'volume', mobile_whatsapp = '51900001001' WHERE id = 'c2050900-0000-0000-0000-000000001001'$q$);
+INSERT INTO w SELECT 'leader_off', pg_temp.undo_ms(2, $q$UPDATE public.members SET leader_id = 'c2050900-0000-0000-0000-000000000004' WHERE id = 'c2050900-0000-0000-0000-000000000200'$q$);
+ALTER TABLE public.members ENABLE TRIGGER zz_stamp_authorship;
+ALTER TABLE public.members ENABLE TRIGGER aa_audit_record;
+SELECT 'META PATCH de membro: com os triggers do E2.05 − sem (ms, meta 5)', (SELECT ms FROM w WHERE k = 'patch_on') - (SELECT ms FROM w WHERE k = 'patch_off') AS ms,
+       (SELECT ms FROM w WHERE k = 'patch_on') AS com, (SELECT ms FROM w WHERE k = 'patch_off') AS sem;
+SELECT 'META troca de líder (recálculo de 144 abaixo): com − sem (ms, sem mudança de custo)',
+       (SELECT ms FROM w WHERE k = 'leader_on') - (SELECT ms FROM w WHERE k = 'leader_off') AS ms,
+       (SELECT ms FROM w WHERE k = 'leader_on') AS com, (SELECT ms FROM w WHERE k = 'leader_off') AS sem;
+SELECT 'META save_cell_report com 30 participantes (ms, meta 150)', ms FROM w WHERE k = 'report30';
+
+\echo
+\echo '######## audit_purge de 100 mil eventos vencidos (meta 10 s) ########'
+INSERT INTO public.events (occurred_at, actor_kind, action, entity, description)
+SELECT now() - interval '3 years' - i * interval '1 second', 'system', 'update', 'member', 'vencido ' || i FROM generate_series(1, 100000) i;
+ANALYZE public.events;
+CREATE TEMP TABLE t_purge AS SELECT clock_timestamp() AS t0;
+SELECT 'purge: removidos', private.audit_purge();
+SELECT 'META audit_purge de 100 mil (s, meta 10)', round(extract(epoch FROM clock_timestamp() - t0)::numeric, 2) AS s FROM t_purge;
+
+ROLLBACK;

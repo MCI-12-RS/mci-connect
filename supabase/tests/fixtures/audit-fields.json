@@ -1,0 +1,365 @@
+{
+  "_comment": [
+    "E2.05 (DT-06): a lista única de campos de dados da Auditoria, igual a private.audit_fields",
+    "(migration e205_02_schema). Decide o que conta como alteração (RN-04), o que a Auditoria registra",
+    "(RN-13 c) e o que mostra valor (RN-20 b). O pgTAP e205_02_audit_fields é gerado daqui por",
+    "generate-audit-fields.mjs; o PR 4 confere os rótulos da tela (src/lib/audit/fields.ts) contra este arquivo.",
+    "tables: para cada tabela, a entidade e as colunas que não são dado (o teste de classificação falha se uma coluna nova não estiver em nenhuma das duas listas). Os participantes, as permissões e a troca da função padrão entram no evento por fora da lista."
+  ],
+  "entities": {
+    "member": [
+      {
+        "field": "name",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "gender",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "birth_date",
+        "show_values": false,
+        "value_type": "date"
+      },
+      {
+        "field": "cpf",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "email",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "mobile_whatsapp",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "phone",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "instagram",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "avatar_url",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "notes",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "zip_code",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "street",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "number",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "complement",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "neighborhood",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "city",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "state",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "leader_id",
+        "show_values": true,
+        "value_type": "member"
+      },
+      {
+        "field": "has_leadership",
+        "show_values": true,
+        "value_type": "boolean"
+      },
+      {
+        "field": "is_pastor",
+        "show_values": true,
+        "value_type": "boolean"
+      },
+      {
+        "field": "spouse_id",
+        "show_values": true,
+        "value_type": "member"
+      },
+      {
+        "field": "is_baptized",
+        "show_values": true,
+        "value_type": "boolean"
+      },
+      {
+        "field": "baptism_date",
+        "show_values": false,
+        "value_type": "date"
+      },
+      {
+        "field": "is_active",
+        "show_values": true,
+        "value_type": "boolean"
+      },
+      {
+        "field": "role_id",
+        "show_values": true,
+        "value_type": "role"
+      }
+    ],
+    "cell": [
+      {
+        "field": "leader_id",
+        "show_values": true,
+        "value_type": "member"
+      },
+      {
+        "field": "timothy_id",
+        "show_values": true,
+        "value_type": "member"
+      },
+      {
+        "field": "host_id",
+        "show_values": true,
+        "value_type": "member"
+      },
+      {
+        "field": "type",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "meeting_day",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "meeting_time",
+        "show_values": true,
+        "value_type": "time"
+      },
+      {
+        "field": "neighborhood",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "city",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "zip_code",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "street",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "number",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "complement",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "state",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "is_active",
+        "show_values": true,
+        "value_type": "boolean"
+      }
+    ],
+    "cell_report": [
+      {
+        "field": "cell_id",
+        "show_values": true,
+        "value_type": "cell"
+      },
+      {
+        "field": "date",
+        "show_values": true,
+        "value_type": "date"
+      },
+      {
+        "field": "time",
+        "show_values": true,
+        "value_type": "time"
+      },
+      {
+        "field": "was_held",
+        "show_values": true,
+        "value_type": "boolean"
+      },
+      {
+        "field": "theme",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "reason_not_held",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "offering",
+        "show_values": true,
+        "value_type": "number"
+      },
+      {
+        "field": "observations",
+        "show_values": false,
+        "value_type": "text"
+      },
+      {
+        "field": "visitors",
+        "show_values": false,
+        "value_type": "text_list"
+      }
+    ],
+    "role": [
+      {
+        "field": "name",
+        "show_values": true,
+        "value_type": "text"
+      },
+      {
+        "field": "description",
+        "show_values": false,
+        "value_type": "text"
+      }
+    ]
+  },
+  "tables": {
+    "members": {
+      "entity": "member",
+      "not_data": [
+        "id",
+        "auth_user_id",
+        "created_at",
+        "created_by",
+        "created_by_kind",
+        "created_by_legacy",
+        "updated_at",
+        "updated_by",
+        "updated_by_kind",
+        "updated_by_legacy",
+        "deleted_at",
+        "deleted_by",
+        "deleted_by_kind",
+        "deleted_by_legacy"
+      ]
+    },
+    "cells": {
+      "entity": "cell",
+      "not_data": [
+        "id",
+        "created_at",
+        "created_by",
+        "created_by_kind",
+        "created_by_legacy",
+        "updated_at",
+        "updated_by",
+        "updated_by_kind",
+        "updated_by_legacy",
+        "deleted_at",
+        "deleted_by",
+        "deleted_by_kind",
+        "deleted_by_legacy"
+      ]
+    },
+    "cell_reports": {
+      "entity": "cell_report",
+      "not_data": [
+        "id",
+        "created_at",
+        "created_by",
+        "created_by_kind",
+        "created_by_legacy",
+        "updated_at",
+        "updated_by",
+        "updated_by_kind",
+        "updated_by_legacy",
+        "deleted_at",
+        "deleted_by",
+        "deleted_by_kind",
+        "deleted_by_legacy"
+      ]
+    },
+    "roles": {
+      "entity": "role",
+      "not_data": [
+        "id",
+        "is_system",
+        "is_default",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "cell_report_participants": {
+      "entity": null,
+      "not_data": [
+        "report_id",
+        "member_id"
+      ]
+    },
+    "role_permissions": {
+      "entity": null,
+      "not_data": [
+        "id",
+        "role_id",
+        "permission"
+      ]
+    }
+  },
+  "authorship_columns": [
+    "created_at",
+    "created_by",
+    "created_by_kind",
+    "created_by_legacy",
+    "updated_at",
+    "updated_by",
+    "updated_by_kind",
+    "updated_by_legacy",
+    "deleted_at",
+    "deleted_by",
+    "deleted_by_kind",
+    "deleted_by_legacy"
+  ]
+}

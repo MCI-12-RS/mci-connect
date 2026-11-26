@@ -124,11 +124,11 @@ DECLARE
 BEGIN
   BEGIN
     EXECUTE 'SET LOCAL session_replication_role = replica';
-    UPDATE public.members SET deleted_at = NULL, deleted_by = NULL
+    UPDATE public.members SET deleted_at = NULL, deleted_by = NULL, deleted_by_kind = NULL, deleted_by_legacy = NULL
      WHERE deleted_at IS NOT NULL AND id::text LIKE 'c2010500%';
-    UPDATE public.cells SET deleted_at = NULL, deleted_by = NULL
+    UPDATE public.cells SET deleted_at = NULL, deleted_by = NULL, deleted_by_kind = NULL, deleted_by_legacy = NULL
      WHERE deleted_at IS NOT NULL AND id::text LIKE 'd2010500%';
-    UPDATE public.cell_reports SET deleted_at = NULL, deleted_by = NULL
+    UPDATE public.cell_reports SET deleted_at = NULL, deleted_by = NULL, deleted_by_kind = NULL, deleted_by_legacy = NULL
      WHERE deleted_at IS NOT NULL AND id::text LIKE 'e2010500%';
     EXECUTE 'SET LOCAL session_replication_role = origin';
     _out := pg_temp.ids(_n, format('SELECT id::text FROM %s WHERE id::text = ANY (%L::text[])', _view, _deleted));

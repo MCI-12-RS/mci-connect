@@ -340,9 +340,12 @@ SELECT is(pg_temp.code(pg_temp.try(8, format('SELECT public.delete_member(%L)', 
   'RN-15: Fábio (AD) exclui Sara');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(21)))), '00000',
   'RN-15: Elisa exclui Fábio');
-UPDATE public.members SET deleted_at = now() - interval '3 days' WHERE id = pg_temp.m(25);   -- "service role": sem autor
+UPDATE public.members SET deleted_at = now() WHERE id = pg_temp.m(25);   -- "service role": sem autor
+SET LOCAL session_replication_role = replica;   -- E2.05: o carimbo ignora a data enviada; a data antiga só sem triggers
+UPDATE public.members SET deleted_at = now() - interval '3 days' WHERE id = pg_temp.m(25);
 UPDATE public.members SET deleted_at = now() - interval '2 days' WHERE id = pg_temp.m(42);
 UPDATE public.members SET deleted_at = now() - interval '1 day'  WHERE id = pg_temp.m(26);
+SET LOCAL session_replication_role = origin;
 
 SELECT is(pg_temp.val(1, format('SELECT deleted_by_name FROM public.members_deleted_view WHERE id = %L', pg_temp.m(26))),
   'Elisa Esteves', 'RN-15: a lista mostra quem excluiu');
@@ -408,8 +411,8 @@ SELECT is(pg_temp.jv(1, format('SELECT to_jsonb(r) FROM public.restore_member(%L
     "role_name": "E201-03 Líder (será apagada)"}'::jsonb,
   'RN-15/RN-16: AD restaura Bruno; volta com o líder e a mesma função');
 SELECT is(
-  to_jsonb(pg_temp.mem(23)) - ARRAY['updated_at'],
-  (SELECT to_jsonb(b) - ARRAY['updated_at'] FROM bruno0 b),
+  to_jsonb(pg_temp.mem(23)) - ARRAY['updated_at', 'updated_by', 'updated_by_kind'],
+  (SELECT to_jsonb(b) - ARRAY['updated_at', 'updated_by', 'updated_by_kind'] FROM bruno0 b),
   'RN-15/RN-16 a: Bruno volta com os mesmos dados (líder, função, situação, contato, totais)');
 SELECT is((SELECT count(*)::int FROM public.cell_report_participants WHERE member_id = pg_temp.m(23)), 12,
   'RN-15: com as 12 participações');
@@ -511,7 +514,10 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', 
   'RN-18: AD exclui Olga (e-mail, sem conta)');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(25)))), 'not_found_or_deleted',
   'RN-07: Davi já estava excluído');
+SET LOCAL session_replication_role = replica;   -- E2.05: o carimbo ignora a data enviada; a data antiga só sem triggers
 UPDATE public.members SET deleted_at = now() - interval '10 minutes' WHERE id = pg_temp.m(28);
+UPDATE public.members SET deleted_at = now() WHERE id = pg_temp.m(23);
+SET LOCAL session_replication_role = origin;
 
 -- Administrador: nome, data e "Restaurar".
 SELECT is(pg_temp.matches(1, ' BRUNO@e201-03.invalid', NULL, NULL),

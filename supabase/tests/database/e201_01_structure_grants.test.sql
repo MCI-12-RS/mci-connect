@@ -148,23 +148,23 @@ SELECT is(pg_temp.cols('public.members_deleted_view'),
   ARRAY['id','name','gender','is_active','is_pastor','neighborhood','city',
         'leader_id','leader_name','leader_deleted','role_id','role_name',
         'restore_role_name','role_reset_on_restore','has_account','sensitive_visible',
-        'email','cpf','mobile_whatsapp','deleted_at','deleted_by','deleted_by_name','search_text'],
-  'members_deleted_view: colunas do contrato (AQ-3, AQ-7), na ordem');
+        'email','cpf','mobile_whatsapp','deleted_at','deleted_by','deleted_by_name','search_text','deleted_by_kind'],
+  'members_deleted_view: colunas do contrato (AQ-3, AQ-7), na ordem (deleted_by_kind do E2.05 no fim)');
 SELECT is(pg_temp.cols('public.cells_deleted_view'),
   ARRAY['id','type','meeting_day','meeting_weekday','meeting_time','street','number',
         'neighborhood','city','is_active','leader_id','leader_name','leader_deleted',
         'timothy_id','timothy_name','timothy_deleted','host_id','host_name','host_deleted',
-        'deleted_at','deleted_by','deleted_by_name','search_text'],
-  'cells_deleted_view: colunas do contrato (AQ-3), na ordem');
+        'deleted_at','deleted_by','deleted_by_name','search_text','deleted_by_kind'],
+  'cells_deleted_view: colunas do contrato (AQ-3), na ordem (deleted_by_kind do E2.05 no fim)');
 SELECT is(pg_temp.cols('public.cell_reports_deleted_view'),
   ARRAY['id','cell_id','date','time','was_held','theme','reason_not_held','week_start',
         'cell_leader_id','cell_leader_name','cell_deleted','week_taken',
-        'deleted_at','deleted_by','deleted_by_name','search_text'],
-  'cell_reports_deleted_view: colunas do contrato (AQ-3), na ordem');
+        'deleted_at','deleted_by','deleted_by_name','search_text','deleted_by_kind'],
+  'cell_reports_deleted_view: colunas do contrato (AQ-3), na ordem (deleted_by_kind do E2.05 no fim)');
 
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1)],
-  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna (AQ-4)');
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 1],
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 4],
+  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna antes das quatro da autoria do E2.05 (AQ-4)');
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 5],
   'search_text', 'cell_reports_view: as colunas do E1.08 continuam antes de cell_deleted');
 SELECT is((pg_temp.cols('public.cell_report_participants_view')),
   ARRAY['report_id','member_id','member_name','member_deleted','member_visible'],
@@ -175,11 +175,12 @@ SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.members_view')))
 SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.cells_view')))
           AND NOT ('deleted_by' = ANY(pg_temp.cols('public.cells_view'))),
   'cells_view: sem colunas de exclusão');
-SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 5],
-  'search_text', 'cells_view: nenhuma coluna de exclusão; as três do E2.02 e as duas do E2.09 vêm depois de search_text');
-SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 4 : array_length(pg_temp.cols('public.cells_view'), 1)],
-  ARRAY['can_submit_report','is_mine','leader_is_pastor','report_status','report_missing_weeks'],
-  'cells_view: can_submit_report, is_mine e leader_is_pastor (E2.02) e report_status e report_missing_weeks (E2.09) no fim');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 9],
+  'search_text', 'cells_view: nenhuma coluna de exclusão; as três do E2.02, as duas do E2.09 e as quatro do E2.05 vêm depois de search_text');
+SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 8 : array_length(pg_temp.cols('public.cells_view'), 1)],
+  ARRAY['can_submit_report','is_mine','leader_is_pastor','report_status','report_missing_weeks',
+        'created_by_kind','created_by_name','updated_by_kind','updated_by_name'],
+  'cells_view: can_submit_report, is_mine e leader_is_pastor (E2.02), report_status e report_missing_weeks (E2.09) e as quatro da autoria (E2.05) no fim');
 
 -- ===========================================================================
 -- 3. RPCs: grants e propriedades (critério de pronto 1) — 54
@@ -412,8 +413,11 @@ SET LOCAL session_replication_role = origin;
 SELECT private.rebuild_member_hierarchy();
 
 -- FK do autor (as FKs não valem com replica: conferidas depois do origin).
+-- E2.05: o carimbo devolve o deleted_by gravado; sem ele, a FK é o que recusa.
+ALTER TABLE public.cells DISABLE TRIGGER zz_stamp_authorship;
 SELECT throws_ok(format('UPDATE public.cells SET deleted_by = %L WHERE id = %L', gen_random_uuid(), pg_temp.c(2)),
   '23503', NULL, 'FK cells.deleted_by: o autor precisa ser um membro');
+ALTER TABLE public.cells ENABLE TRIGGER zz_stamp_authorship;
 
 -- Exclusão física com referência (FKs NO ACTION).
 SELECT throws_ok(format('DELETE FROM public.members WHERE id = %L', pg_temp.m(1)),

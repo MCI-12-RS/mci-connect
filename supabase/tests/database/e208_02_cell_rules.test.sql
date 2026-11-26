@@ -190,6 +190,7 @@ SELECT is((SELECT pg_get_expr(d.adbin, d.adrelid) FROM pg_attrdef d JOIN pg_attr
 SELECT results_eq(
   $$ SELECT conname::text COLLATE "default", pg_get_constraintdef(oid) FROM pg_constraint
       WHERE conrelid = 'public.cells'::regclass AND contype = 'c' AND conname LIKE 'cells\_%\_check' AND conname <> 'cells_deleted_by_check'
+        AND conname NOT LIKE '%authorship\_check' AND conname <> 'cells_legacy_names_check'
       ORDER BY conname $$,
   $$ VALUES ('cells_meeting_day_check'::text, 'CHECK ((weekday_index(meeting_day) IS NOT NULL))'::text),
             ('cells_meeting_time_check', 'CHECK (is_valid_meeting_time(meeting_time))'),
