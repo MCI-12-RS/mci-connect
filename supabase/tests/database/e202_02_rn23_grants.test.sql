@@ -320,7 +320,7 @@ SELECT is(pg_temp.val(9, format('SELECT public.viewer_sees_member(%L)::text', pg
 SELECT is(pg_temp.val(9, format('SELECT public.viewer_sees_cell(%L)::text', pg_temp.c(3))), 'false', 'RN-23: viewer_sees_cell de C3, para Caio: falso');
 SELECT is(pg_temp.val(9, format('SELECT public.can_submit_report(%L)::text', pg_temp.c(3))), 'false', 'RN-23: can_submit_report de C3, para Caio: falso');
 SELECT is(pg_temp.val(9, format('SELECT public.viewer_is_cell_person(%L)::text', pg_temp.c(3))), 'false', 'RN-23: viewer_is_cell_person de C3, para Caio: falso');
-SELECT is(pg_temp.val(9, format('SELECT public.cell_in_viewer_ministry(%L)::text', pg_temp.c(3))), 'false', 'RN-23: cell_in_viewer_ministry de C3, para Caio: falso');
+SELECT is(pg_temp.val(9, format('SELECT public.viewer_sees_report_people(%L, %L, %L)::text', pg_temp.m(13), pg_temp.m(20), pg_temp.m(21))), 'false', 'RN-23: viewer_sees_report_people das pessoas de C3, para Caio: falso (E2.11; saiu cell_in_viewer_ministry)');
 -- Sobre si mesmo, recebe a resposta (as telas dependem dela).
 SELECT is(pg_temp.val(9, format('SELECT public.viewer_scope_contains_any(ARRAY[%L]::uuid[])::text', pg_temp.m(12))), 'true', 'RN-23: Caio pergunta se vê Carla: vê (está no escopo dele)');
 SELECT is(pg_temp.val(9, format('SELECT public.viewer_sees_member(%L)::text', pg_temp.m(9))), 'true', 'RN-23: Caio vê a si mesmo');
@@ -421,7 +421,7 @@ INSERT INTO newfn VALUES
   ('public.viewer_ministry_member_ids()', true), ('public.viewer_scope_contains_any(uuid[])', true),
   ('public.viewer_tree_roots()', true), ('public.viewer_sees_member(uuid)', true),
   ('public.viewer_sees_cell_people(uuid, uuid, uuid)', true), ('public.viewer_sees_cell(uuid)', true),
-  ('public.cell_in_viewer_ministry(uuid)', true), ('public.viewer_is_cell_person(uuid)', true),
+  ('public.viewer_sees_report_people(uuid, uuid, uuid)', true), ('public.viewer_is_cell_person(uuid)', true),
   ('public.can_submit_report(uuid)', true), ('public.viewer_covers_role(uuid)', true),
   ('public.can_assign_role(uuid)', true), ('public._assert_admin_remains(uuid)', true),
   ('public.my_access()', true), ('public.role_options(uuid)', true),
@@ -444,7 +444,7 @@ SELECT is((SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.
 -- Funções definer fixam o search_path.
 SELECT is((SELECT count(*)::int FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
             AND p.proname = ANY (ARRAY['active_permissions','default_role_id','viewer_ministry_member_ids','viewer_scope_contains_any','viewer_tree_roots',
-                 'viewer_sees_member','viewer_sees_cell_people','viewer_sees_cell','cell_in_viewer_ministry','viewer_is_cell_person','can_submit_report',
+                 'viewer_sees_member','viewer_sees_cell_people','viewer_sees_cell','viewer_sees_report_people','viewer_is_cell_person','can_submit_report',
                  'viewer_covers_role','can_assign_role','_assert_admin_remains','my_access','role_options','save_role','delete_role'])
             AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')), 0,
   'toda função nova SECURITY DEFINER fixa o search_path');

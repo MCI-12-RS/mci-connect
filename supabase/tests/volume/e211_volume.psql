@@ -1,0 +1,203 @@
+-- E2.11 (PR 1): volume de referência e metas do risco 9 (leitura pelo retrato).
+-- Spec: docs/specs/e2-11-lancamento-relatorio.md (repositório apps-mci), "Riscos", item 9: o volume do E1.08
+-- (20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações).
+--
+-- Metas (PR 1):
+--   - página da cell_reports_view com contagem abaixo de 300 ms, para a Líder (ministério) e para a
+--     Administrador;
+--   - dashboard_summary abaixo de 800 ms e no máximo 150 ms a mais que antes (o "antes" é medido na mesma
+--     transação, com o WHERE antigo da cell_reports_view, pelas pessoas atuais da célula).
+-- Os relatórios entram em replica, e o ad_cell_report_snapshot (ENABLE ALWAYS) completa o retrato pela
+-- célula; depois, 5% das células trocam as três pessoas, para o retrato divergir da célula atual.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e211_volume.psql > e211_explain.txt
+-- A saída traz o EXPLAIN (ANALYZE, BUFFERS) de cada leitura e uma linha "META" por medida (mediana de 5).
+
+\set ON_ERROR_STOP on
+-- As colunas da lista (CELL_REPORT_ROW_SELECT) e as do retrato que o PR 3 acrescenta.
+\set rep_cols 'id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, visitors_count, cell_leader_name, cell_street, cell_number, cell_complement, cell_neighborhood, cell_deleted, snapshot_leader_name, snapshot_leader_g12_level, snapshot_leader_is_pastor, snapshot_g12_leader_name'
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas (a árvore do volume do E2.02/E2.08): 2 pastores casados (1 e 2), 12 G12 (3 a 14) e 12
+-- discípulos por pessoa até 20.000. 1 = pastor (Líder), 2 = Administrador, 3 = G12 (Líder).
+INSERT INTO auth.users (id, email)
+SELECT ('a2110900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e211-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2110900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2110900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2110900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2110900-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       n % 10 <> 0,
+       n > 2,
+       CASE WHEN n <= 3 THEN ('a2110900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células, 10% inativas, cadastradas há 500 dias (o backfill usa esse created_at: risco 4).
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active, created_at)
+SELECT ('d2110900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2110900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2110900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2110900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       (ARRAY['19:00', '20:00', '23:30'])[1 + n % 3]::time,
+       'Rua ' || n, 'Bairro ' || (n % 40), 'Porto Alegre', n % 10 <> 0,
+       now() - interval '500 days'
+  FROM generate_series(1, 1500) n;
+
+-- 100 mil relatórios em semanas passadas, com buracos: cada célula pula as semanas em que
+-- (i / 1500 + n) % 5 = 0, para haver semanas anteriores sem relatório; nesta semana, metade tem.
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2110900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2110900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', i % 7 <> 0, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i
+ WHERE (i / 1500 + i % 1500) % 5 <> 0;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme)
+SELECT ('e2110900-0000-0001-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('d2110900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()), '20:00', true, 'Semana atual'
+  FROM generate_series(1, 1500, 2) n;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT r.id, ('c2110900-0000-0000-0000-' || lpad((15 + ((row_number() OVER ()) * 7919 + k) % 19980)::text, 12, '0'))::uuid
+  FROM public.cell_reports r, generate_series(0, 7) k
+ WHERE r.id::text LIKE 'e2110900-0000-0000-%';
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+SELECT 'BACKFILL linhas criadas', private.backfill_cell_active_periods();
+SELECT 'CONFERÊNCIA invariante vazio', NOT EXISTS (SELECT 1 FROM private.cell_active_period_problems()) AS ok;
+ANALYZE private.member_hierarchy; ANALYZE private.cell_active_periods;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members) || ' cells=' || (SELECT count(*) FROM public.cells)
+    || ' (inativas=' || (SELECT count(*) FROM public.cells WHERE NOT is_active) || ') reports=' || (SELECT count(*) FROM public.cell_reports)
+    || ' participants=' || (SELECT count(*) FROM public.cell_report_participants) AS volume;
+
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2110900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+-- Tempo de uma gravação, em ms, como a pessoa n: o melhor de _rounds, cada rodada desfeita.
+CREATE FUNCTION pg_temp.undo_ms(_n int, _sql text, _rounds int DEFAULT 30) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _best numeric := NULL; _x numeric; i int;
+BEGIN
+  FOR i IN 1.._rounds LOOP
+    BEGIN
+      PERFORM pg_temp.as_member(_n);
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      _t := clock_timestamp();
+      EXECUTE _sql;
+      _x := extract(epoch FROM clock_timestamp() - _t) * 1000;
+      IF _best IS NULL OR _x < _best THEN _best := _x; END IF;
+      RAISE EXCEPTION 'undo' USING ERRCODE = 'P0099';
+    EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+    END;
+  END LOOP;
+  EXECUTE 'RESET ROLE';
+  RETURN round(_best, 2);
+END $$;
+-- Tempo de uma leitura, em ms: a mediana de _rounds execuções (depois de uma de aquecimento).
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _xs numeric[] := '{}'; i int;
+BEGIN
+  EXECUTE _sql;
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _xs := _xs || (extract(epoch FROM clock_timestamp() - _t) * 1000)::numeric;
+  END LOOP;
+  RETURN round((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM unnest(_xs) x)::numeric, 1);
+END $$;
+
+-- 5% das células trocam as três pessoas (o retrato dos relatórios antigos fica com as de antes).
+SET LOCAL session_replication_role = replica;
+UPDATE public.cells c SET leader_id = o.leader_id, timothy_id = o.timothy_id, host_id = o.host_id
+  FROM public.cells o
+ WHERE right(c.id::text, 12)::int % 20 = 0
+   AND o.id = ('d2110900-0000-0000-0000-' || lpad((1 + (right(c.id::text, 12)::int + 700) % 1500)::text, 12, '0'))::uuid;
+SET LOCAL session_replication_role = origin;
+ANALYZE public.cells; ANALYZE public.cell_reports;
+SELECT 'CONFERÊNCIA relatórios sem retrato (0)', count(*) FROM public.cell_reports
+ WHERE snapshot_leader_id IS NULL OR snapshot_timothy_id IS NULL OR snapshot_host_id IS NULL OR snapshot_cell_type IS NULL;
+SELECT 'CONFERÊNCIA relatórios com retrato diferente da célula', count(*) FROM public.cell_reports r JOIN public.cells c ON c.id = r.cell_id
+ WHERE (r.snapshot_leader_id, r.snapshot_timothy_id, r.snapshot_host_id) IS DISTINCT FROM (c.leader_id, c.timothy_id, c.host_id);
+
+\echo
+\echo '######## cell_reports_view: página e total (Administrador e G12 Líder) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cell_reports_view;
+SELECT 'META Administrador: página + total (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+SELECT 'INFO Administrador: busca "volume 1" + total (ms, sem meta no spec; o search_text é por linha desde o E1.08)',
+       pg_temp.ms(format($f$SELECT %s FROM public.cell_reports_view WHERE search_text LIKE '%%volume 1%%' ORDER BY date DESC, id LIMIT 25$f$, :'rep_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view WHERE search_text LIKE '%volume 1%'$q$) AS ms;
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols') \gexec
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM public.cell_reports_view;
+SELECT 'META G12 Líder: página + total (ms, meta 300)',
+       pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+SELECT 'CONFERÊNCIA G12 Líder: relatórios visíveis', count(*) FROM public.cell_reports_view;
+RESET ROLE;
+
+\echo
+\echo '######## dashboard_summary: depois (retrato) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.dashboard_summary(now());
+CREATE TEMP TABLE IF NOT EXISTS dash (who text, phase text, ms numeric);
+INSERT INTO dash SELECT 'Administrador', 'depois', pg_temp.ms($q$SELECT * FROM public.dashboard_summary(now())$q$);
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+INSERT INTO dash SELECT 'G12 Líder', 'depois', pg_temp.ms($q$SELECT * FROM public.dashboard_summary(now())$q$);
+RESET ROLE;
+
+-- "Antes": a mesma view com o WHERE antigo (pessoas atuais da célula), só nesta transação.
+DO $$
+DECLARE _def text := pg_get_viewdef('public.cell_reports_view'::regclass);
+        _pos int := length(_def) - strpos(reverse(_def), reverse('WHERE (')) - length('WHERE (') + 2;
+BEGIN
+  EXECUTE 'CREATE OR REPLACE VIEW public.cell_reports_view WITH (security_barrier = true) AS '
+       || left(_def, _pos - 1)
+       || replace(replace(replace(substr(_def, _pos), 'r.snapshot_leader_id', 'c.leader_id'),
+                                  'r.snapshot_timothy_id', 'c.timothy_id'), 'r.snapshot_host_id', 'c.host_id');
+END $$;
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+INSERT INTO dash SELECT 'Administrador', 'antes', pg_temp.ms($q$SELECT * FROM public.dashboard_summary(now())$q$);
+SELECT 'ANTES Administrador: página + total (ms)',
+       pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+RESET ROLE;
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+INSERT INTO dash SELECT 'G12 Líder', 'antes', pg_temp.ms($q$SELECT * FROM public.dashboard_summary(now())$q$);
+SELECT 'ANTES G12 Líder: página + total (ms)',
+       pg_temp.ms(format('SELECT %s FROM public.cell_reports_view ORDER BY date DESC, id LIMIT 25', :'rep_cols'))
+     + pg_temp.ms($q$SELECT count(*) FROM public.cell_reports_view$q$) AS ms;
+SELECT 'CONFERÊNCIA ANTES G12 Líder: relatórios visíveis', count(*) FROM public.cell_reports_view;
+RESET ROLE;
+SELECT 'META dashboard_summary ' || d.who || ' (ms, meta 800; diferença meta 150)', d.ms AS depois, a.ms AS antes, d.ms - a.ms AS diferenca
+  FROM dash d JOIN dash a ON a.who = d.who AND a.phase = 'antes' WHERE d.phase = 'depois' ORDER BY d.who;
+
+ROLLBACK;

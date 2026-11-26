@@ -114,12 +114,12 @@ SELECT is((SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_tr
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a
     WHERE a.attrelid = 'public.cell_reports'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-      AND a.attname::text <> ALL (ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[])),
+      AND a.attname::text <> ALL (ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type']::text[])),
   NULL,
   'classificação: toda coluna de cell_reports está na lista de campos ou na de "não é dado"');
 
 SELECT is(
-  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[]) c
+  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type']::text[]) c
     WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = 'public.cell_reports'::regclass
                        AND a.attname::text = c AND a.attnum > 0 AND NOT a.attisdropped)),
   NULL,

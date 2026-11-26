@@ -10,13 +10,14 @@
 #   2. lançamento seguro × inativação: a inativação espera; no fim o relatório
 #      existe e a célula está inativa;
 #   3. troca da célula de um relatório × inativação da célula nova, nas duas
-#      ordens (3a: inativação primeiro, recusada; 3b: troca primeiro, aceita);
+#      ordens (3a: inativação primeiro, recusada; 3b: troca primeiro, recusada
+#      desde o E2.11 com report_cell_immutable, sem segurar a inativação);
 #   4. reativação × lançamento: o lançamento espera e é aceito;
 #   5. troca do tema de um relatório × inativação, nas duas ordens: nenhuma
 #      espera, e as duas são aceitas (RN-11 d).
 # Invariante (conferido em cada cenário): nenhum relatório novo entra numa
 # célula que já estava inativa quando ele foi aceito (1 e 3a); o que foi aceito
-# antes da inativação fica (2 e 3b).
+# antes da inativação fica (2).
 #
 # Usa só dados fictícios, gravados (as duas sessões precisam enxergá-los) e
 # apagados no fim, mesmo se o script for interrompido.
@@ -186,16 +187,18 @@ check "B recebe cell_inactive" "SELECT $(is_inactive_refusal "$TMP/s3a.B")"
 check "o relatório continua em C2" "SELECT cell_id = '$C2' FROM public.cell_reports WHERE id = '$R1'"
 
 echo "== 3b. Troca da célula segura × inativação de C1"
+# Desde o E2.11 (RN-16), a célula de um relatório não pode ser trocada: a troca é recusada
+# (report_cell_immutable) e não segura nada; a inativação não espera.
 base
 q "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES ('$R1', '$C2', public.sp_today(), '23:59', true, 'R1')" >/dev/null
 pair s3b "$U_PEDRO" "BEGIN; UPDATE public.cell_reports SET cell_id = '$C1' WHERE id = '$R1'; SELECT pg_sleep($HOLD); COMMIT;" \
          "$U_PEDRO" "$INACTIVATE"
 show s3b
-check "A troca a célula do relatório" "SELECT $(is_ok "$TMP/s3b.A")"
-check "B (inativação) esperou a troca" "SELECT $(waited "$TMP/s3b.B")"
+check "A recebe report_cell_immutable (E2.11, RN-16)" "SELECT $(grep -q '"code": "report_cell_immutable"' "$TMP/s3b.A" && echo true || echo false)"
+check "B (inativação) não esperou" "SELECT $(no_wait "$TMP/s3b.B")"
 check "B inativa C1" "SELECT $(is_ok "$TMP/s3b.B")"
-check "no fim, o relatório é de C1 e C1 está inativa" \
-  "SELECT (SELECT cell_id = '$C1' FROM public.cell_reports WHERE id = '$R1') AND NOT (SELECT is_active FROM public.cells WHERE id = '$C1')"
+check "no fim, o relatório continua em C2 e C1 está inativa" \
+  "SELECT (SELECT cell_id = '$C2' FROM public.cell_reports WHERE id = '$R1') AND NOT (SELECT is_active FROM public.cells WHERE id = '$C1')"
 
 # ---------------------------------------------------------------------------
 echo "== 4. Reativação segura × lançamento de Carla"

@@ -389,12 +389,12 @@ SELECT is(pg_temp.lab(pg_temp.ids(11, 'SELECT id FROM public.members_view')), 'G
 SELECT pg_temp.give(11, NULL);
 
 -- RN-04: R2 lançado quando Caio era anfitrião; depois C2 passa a ter Rita como anfitriã:
--- até o E2.11, R2 sai do escopo de Pedro junto com C2.
+-- C2 sai do escopo de Pedro, mas R2 fica, pelo retrato (E2.11, RN-14: Caio está registrado em R2).
 INSERT INTO sb VALUES ('host', pg_temp.sandbox(
   'UPDATE public.cells SET host_id = ''' || pg_temp.m(16) || ''' WHERE id = ''' || pg_temp.c(2) || '''',
   ARRAY[$q$SELECT pg_temp.lab(pg_temp.ids(3, 'SELECT id FROM public.cell_reports_view'))$q$,
         $q$SELECT pg_temp.lab(pg_temp.ids(3, 'SELECT id FROM public.cells_view'))$q$]));
-SELECT is(v[1], 'R1', 'RN-04: com Rita anfitriã de C2, R2 sai do escopo de Pedro junto com C2') FROM sb WHERE k = 'host';
+SELECT is(v[1], 'R1,R2', 'RN-04 + RN-14 do E2.11: com Rita anfitriã de C2, R2 continua no escopo de Pedro pelo retrato') FROM sb WHERE k = 'host';
 SELECT is(v[2], 'C1', 'RN-04: e C2 também') FROM sb WHERE k = 'host';
 
 -- RN-08: Rita troca o líder de Caio para Diego; a ação seguinte já enxerga o novo escopo, sem sair e entrar.
@@ -509,8 +509,7 @@ BEGIN
   _b := pg_temp.ids(_n, 'SELECT id FROM public.cell_reports WHERE id::text LIKE ''e2020000%'' ORDER BY id');
   _c := pg_temp.ids(_n, $q$SELECT u.id FROM pg_temp.universe u JOIN public.cell_reports r ON r.id = u.id
       WHERE u.kind = 'r' AND (public.viewer_has('view_all_reports') OR public.viewer_has('view_all_church')
-         OR ((public.viewer_has('view_own_ministry') OR public.viewer_has('view_own_reports')) AND public.cell_in_viewer_ministry(r.cell_id))
-         OR public.viewer_is_cell_person(r.cell_id)) ORDER BY u.id$q$);
+         OR public.viewer_sees_report_people(r.snapshot_leader_id, r.snapshot_timothy_id, r.snapshot_host_id)) ORDER BY u.id$q$);
   IF _a IS DISTINCT FROM _b THEN _out := _out || 'relatórios: view <> tabela'; END IF;
   -- a tabela é lida sob o RLS do próprio usuário: a universe/JOIN acima também; compara com a função de linha.
   IF _a IS DISTINCT FROM _c THEN _out := _out || 'relatórios: view <> função de linha'; END IF;
