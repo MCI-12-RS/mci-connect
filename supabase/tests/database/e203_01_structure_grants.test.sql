@@ -171,8 +171,8 @@ SELECT is((SELECT count(*)::int FROM private.account_passwords p WHERE NOT EXIST
 -- ---------------------------------------------------------------------------
 -- members_view: a coluna nova no fim.
 -- ---------------------------------------------------------------------------
-SELECT is((SELECT column_name::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'members_view' ORDER BY ordinal_position DESC LIMIT 1 OFFSET 4),
-  'password_reset_status', 'members_view.password_reset_status é a última coluna antes das quatro da autoria do E2.05');
+SELECT is((SELECT column_name::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'members_view' ORDER BY ordinal_position DESC LIMIT 1 OFFSET 6),
+  'password_reset_status', 'members_view.password_reset_status é a última coluna antes das quatro da autoria do E2.05 e das duas do E2.07');
 SELECT ok(pg_get_viewdef('public.members_view'::regclass) ~ 'viewer_covers_role', 'a coluna usa viewer_covers_role (a mesma regra da RN-02)');
 SELECT is((SELECT count(*)::int FROM pg_class c WHERE c.oid = 'public.members_view'::regclass AND c.reloptions::text ~ 'security_invoker=(true|on)'), 0,
   'a members_view continua security definer (a máscara e o escopo dependem disso)');

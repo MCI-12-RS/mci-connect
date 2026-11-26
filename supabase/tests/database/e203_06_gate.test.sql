@@ -170,7 +170,8 @@ INSERT INTO exempt VALUES
   ('cell_weekdays', 'lista fixa (E2.08)'), ('cell_types', 'lista fixa (E2.08)'), ('cell_default_type', 'constante (E2.08)'),
   ('normalize_meeting_time', 'horário (E2.08)'), ('is_valid_meeting_time', 'horário (E2.08)'),
   ('sp_local', 'relógio (E2.09)'), ('sp_instant', 'relógio (E2.09)'),
-  ('legacy_author_label', 'texto: o nome do autor do legado (E2.05)');
+  ('legacy_author_label', 'texto: o nome do autor do legado (E2.05)'),
+  ('cell_links_or_none', 'o próprio argumento (E2.07)'), ('sp_day_start', 'relógio (E2.07)');
 SELECT is((SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p JOIN exempt e ON e.fn = p.proname
             WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND e.fn NOT IN ('my_password_status', 'log_auth_event')),
   NULL, 'RN-09: as utilitárias da lista fechada são todas SECURITY INVOKER');
