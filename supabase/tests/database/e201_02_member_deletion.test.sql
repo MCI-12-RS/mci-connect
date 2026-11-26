@@ -285,11 +285,13 @@ CREATE TEMP TABLE bruno0 AS SELECT * FROM pg_temp.mem_h WHERE id = pg_temp.m(23)
 
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_member(%L)', pg_temp.m(23)))), '00000',
   'RN-02: LE exclui Bruno, que ele vê e que não tem ligações');
-SELECT is((pg_temp.mem(23)).deleted_at, now(), 'RN-01: data e hora da exclusão gravadas');
+SELECT ok((pg_temp.mem(23)).deleted_at BETWEEN now() AND clock_timestamp()
+          AND (pg_temp.mem(23)).deleted_at = (pg_temp.mem(23)).updated_at,
+  'RN-01: data e hora da exclusão gravadas (o relógio do carimbo, igual à última alteração: E2.05 RN-06)');
 SELECT is((pg_temp.mem(23)).deleted_by, pg_temp.m(18), 'RN-01: autor gravado (o membro de quem excluiu, DT-01)');
 SELECT is(
-  to_jsonb(pg_temp.mem(23)) - ARRAY['deleted_at', 'deleted_by', 'updated_at'],
-  (SELECT to_jsonb(b) - ARRAY['deleted_at', 'deleted_by', 'updated_at'] FROM bruno0 b),
+  to_jsonb(pg_temp.mem(23)) - ARRAY['deleted_at', 'deleted_by', 'updated_at', 'updated_by', 'updated_by_kind', 'deleted_by_kind'],
+  (SELECT to_jsonb(b) - ARRAY['deleted_at', 'deleted_by', 'updated_at', 'updated_by', 'updated_by_kind', 'deleted_by_kind'] FROM bruno0 b),
   'RN-01: a exclusão não muda nenhum outro dado do registro');
 SELECT is(pg_temp.val(2, format('SELECT count(*) FROM public.members_view WHERE id = %L', pg_temp.m(23))), '0',
   'RN-01/RN-08: Bruno some da members_view de quem excluiu');
@@ -451,7 +453,9 @@ SELECT is(pg_temp.val(1, format($$SELECT count(*) FROM public.dashboard_g12_rank
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(25)))), '00000',
   'RN-07: AD exclui Quintino');
 -- A primeira exclusão fica um dia para trás, para conferir que ela vale.
+SET LOCAL session_replication_role = replica;   -- E2.05: o carimbo ignora a data enviada; a data antiga só sem triggers
 UPDATE public.members SET deleted_at = now() - interval '1 day' WHERE id = pg_temp.m(25);
+SET LOCAL session_replication_role = origin;
 
 SELECT is(pg_temp.try(1, format($$UPDATE public.members SET name = 'Quintino Editado' WHERE id = %L$$, pg_temp.m(25))) ->> 'rows',
   '0', 'RN-07: PATCH de AD num membro excluído volta com 0 linhas (DT-19)');
@@ -529,16 +533,16 @@ SELECT is(
                              'fields', changed_fields, 'op', metadata ->> 'op', 'success', success)
      FROM public.events WHERE entity = 'member' AND entity_id = pg_temp.m(23) AND action = 'delete'),
   jsonb_build_object('actor', pg_temp.u(2), 'label', 'Bruno Brito', 'desc', 'Excluiu o membro Bruno Brito',
-                     'fields', ARRAY['deleted_at'], 'op', 'soft_delete', 'success', true),
-  'RN-19: exclusão de Bruno na Auditoria, com quem fez e o nome');
+                     'fields', NULL::text[], 'op', 'soft_delete', 'success', true),
+  'RN-19: exclusão de Bruno na Auditoria, com quem fez e o nome (E2.05: changed_fields só com os campos de dados)');
 SELECT is((SELECT count(*)::int FROM public.events WHERE entity = 'member' AND entity_id = pg_temp.m(23) AND action = 'delete'), 1,
   'RN-19: um evento só para a exclusão');
-SELECT is((SELECT occurred_at FROM public.events WHERE entity_id = pg_temp.m(23) AND action = 'delete'), now(),
-  'RN-19: com o horário');
+SELECT is((SELECT occurred_at FROM public.events WHERE entity_id = pg_temp.m(23) AND action = 'delete'), (pg_temp.mem(23)).deleted_at,
+  'RN-19: com o horário (o mesmo da exclusão, E2.05 RN-13 b)');
 SELECT is(
   (SELECT jsonb_build_object('fields', changed_fields, 'spouse', metadata -> 'spouse_id')
      FROM public.events WHERE entity_id = pg_temp.m(14) AND action = 'delete'),
-  jsonb_build_object('fields', ARRAY['deleted_at', 'spouse_id'],
+  jsonb_build_object('fields', ARRAY['spouse_id'],
                      'spouse', jsonb_build_object('from', pg_temp.m(13), 'to', NULL)),
   'RN-19: a exclusão de Paula registra o cônjuge de/para');
 SELECT is(

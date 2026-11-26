@@ -279,8 +279,9 @@ SELECT is(
         'is_active', 'created_at', 'updated_at',
         'meeting_weekday', 'leader_name', 'leader_gender', 'leader_g12_level', 'timothy_name',
         'host_name', 'g12_leader_id', 'g12_leader_name', 'last_report_date', 'search_text',
-        'can_submit_report', 'is_mine', 'leader_is_pastor', 'report_status', 'report_missing_weeks'],
-  'cells_view: colunas na ordem do spec (E2.02 acrescenta três no fim; E2.09, duas depois delas)');
+        'can_submit_report', 'is_mine', 'leader_is_pastor', 'report_status', 'report_missing_weeks',
+        'created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'],
+  'cells_view: colunas na ordem do spec (E2.02 acrescenta três no fim; E2.09, duas depois delas; E2.05, as quatro da autoria)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum > 0 AND NOT attisdropped),
@@ -289,8 +290,9 @@ SELECT is(
         'week_start', 'visitors_count', 'participants_count', 'cell_type', 'cell_is_active',
         'cell_leader_id', 'cell_leader_name', 'cell_timothy_id', 'cell_host_id', 'cell_street',
         'cell_number', 'cell_complement', 'cell_neighborhood', 'cell_meeting_day',
-        'cell_meeting_time', 'search_text', 'cell_deleted'],
-  'cell_reports_view: colunas na ordem do spec (cell_deleted no fim, E2.01 AQ-4)');
+        'cell_meeting_time', 'search_text', 'cell_deleted',
+        'created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'],
+  'cell_reports_view: colunas na ordem do spec (cell_deleted, E2.01 AQ-4; depois, as quatro da autoria do E2.05)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_report_participants_view'::regclass AND attnum > 0 AND NOT attisdropped),

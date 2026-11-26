@@ -345,8 +345,9 @@ SELECT is(
 -- ===========================================================================
 SELECT is(
   ARRAY(SELECT c FROM unnest(pg_temp.readable_columns() || pg_temp.sensitive_columns() || pg_temp.role_columns()) c
-         WHERE coalesce((SELECT j FROM pg_temp.xenia_row) -> c, 'null'::jsonb) = 'null'::jsonb ORDER BY c),
-  '{}'::text[], 'massa: a Xênia tem as 29 colunas (20 liberadas, 8 sensíveis e a role_id) preenchidas');
+         WHERE c <> 'updated_at'   -- E2.05: nula até a primeira alteração
+           AND coalesce((SELECT j FROM pg_temp.xenia_row) -> c, 'null'::jsonb) = 'null'::jsonb ORDER BY c),
+  '{}'::text[], 'massa: a Xênia tem as 29 colunas (20 liberadas, 8 sensíveis e a role_id) preenchidas (updated_at nula sem alteração, E2.05)');
 
 -- P2, sem view_sensitive_data nem "Atribuir Função"
 SELECT pg_temp.login(2);

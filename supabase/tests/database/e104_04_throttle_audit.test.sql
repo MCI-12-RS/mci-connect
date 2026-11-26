@@ -78,7 +78,7 @@ CREATE TEMP TABLE seen_events (id uuid PRIMARY KEY);
 CREATE FUNCTION pg_temp.take() RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE _out jsonb;
 BEGIN
-  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' ORDER BY e.action, e.id), '[]')
+  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' - 'seq' - 'tx_id' - 'changes' - 'search_text' - 'actor_kind' ORDER BY e.action, e.id), '[]')
     INTO _out
     FROM public.events e
    WHERE e.entity = 'auth' AND e.id NOT IN (SELECT id FROM seen_events);

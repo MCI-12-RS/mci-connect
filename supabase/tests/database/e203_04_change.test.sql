@@ -100,7 +100,7 @@ CREATE TEMP TABLE seen_events (id uuid PRIMARY KEY);
 CREATE FUNCTION pg_temp.take(_action text) RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE _out jsonb;
 BEGIN
-  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' ORDER BY e.entity_label, e.id), '[]')
+  SELECT coalesce(jsonb_agg(to_jsonb(e) - 'id' - 'occurred_at' - 'changed_fields' - 'seq' - 'tx_id' - 'changes' - 'search_text' - 'actor_kind' ORDER BY e.entity_label, e.id), '[]')
     INTO _out FROM public.events e
    WHERE e.action::text = _action AND e.id NOT IN (SELECT id FROM seen_events);
   INSERT INTO seen_events SELECT e.id FROM public.events e WHERE e.action::text = _action ON CONFLICT DO NOTHING;

@@ -56,7 +56,7 @@ SET LOCAL session_replication_role = replica;
 DELETE FROM private.sign_in_throttle;
 DELETE FROM private.member_access_suspensions WHERE member_id::text LIKE 'f203c0de%';
 DELETE FROM private.account_passwords WHERE auth_user_id::text LIKE 'f203c0de%';
-UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL WHERE id::text LIKE 'f203c0de%';
+UPDATE public.members SET leader_id = NULL, has_leadership = false, spouse_id = NULL, deleted_by = NULL, deleted_by_kind = NULL WHERE id::text LIKE 'f203c0de%';
 DELETE FROM public.members WHERE id::text LIKE 'f203c0de%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);
 DELETE FROM public.role_permissions WHERE role_id::text LIKE 'f203c0de%';

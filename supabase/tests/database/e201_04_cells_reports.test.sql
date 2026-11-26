@@ -223,8 +223,8 @@ SELECT private.rebuild_member_hierarchy();
 -- ===========================================================================
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_cell(%L)', pg_temp.c(1)))), '00000',
   'RN-02: LE exclui a célula de Carlos (quarta, 20:00)');
-SELECT is(ARRAY[(pg_temp.cell(1)).deleted_at::text, (pg_temp.cell(1)).deleted_by::text], ARRAY[now()::text, pg_temp.m(18)::text],
-  'RN-01: a célula guarda a data e quem excluiu');
+SELECT is(ARRAY[((pg_temp.cell(1)).deleted_at BETWEEN now() AND clock_timestamp())::text, (pg_temp.cell(1)).deleted_by::text], ARRAY['true', pg_temp.m(18)::text],
+  'RN-01: a célula guarda a data (o relógio do carimbo, E2.05) e quem excluiu');
 SELECT is(pg_temp.val(2, format('SELECT count(*) FROM public.cells_view WHERE id = %L', pg_temp.c(1))), '0',
   'RN-01/RN-08: a célula some da cells_view');
 SELECT is(pg_temp.val(2, format('SELECT count(*) FROM public.cells WHERE id = %L', pg_temp.c(1))), '0',
@@ -237,8 +237,8 @@ SELECT ok((pg_temp.cell(6)).deleted_at IS NULL AND (pg_temp.rep(60)).deleted_at 
 
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_cell_report(%L)', pg_temp.r(80)))), '00000',
   'RN-01: LE exclui o relatório com 8 participantes');
-SELECT is(ARRAY[(pg_temp.rep(80)).deleted_at::text, (pg_temp.rep(80)).deleted_by::text], ARRAY[now()::text, pg_temp.m(18)::text],
-  'RN-01: o relatório guarda a data e quem excluiu');
+SELECT is(ARRAY[((pg_temp.rep(80)).deleted_at BETWEEN now() AND clock_timestamp())::text, (pg_temp.rep(80)).deleted_by::text], ARRAY['true', pg_temp.m(18)::text],
+  'RN-01: o relatório guarda a data (o relógio do carimbo, E2.05) e quem excluiu');
 SELECT is(cardinality(pg_temp.parts(80)), 8, 'RN-01: os 8 participantes continuam guardados');
 SELECT is(pg_temp.val(1, format('SELECT count(*) FROM public.cell_report_participants_view WHERE report_id = %L', pg_temp.r(80))), '0',
   'RN-12: os participantes do relatório excluído somem da view');
@@ -498,7 +498,7 @@ SELECT is(pg_temp.code(pg_temp.try(NULL, format('UPDATE public.members SET leade
 -- ===========================================================================
 SELECT is(pg_temp.val(1, format($$SELECT jsonb_build_object('leader', leader_name, 'leader_deleted', leader_deleted,
                                        'host', host_name, 'host_deleted', host_deleted, 'by', deleted_by_name,
-                                       'at', deleted_at = now())
+                                       'at', deleted_at BETWEEN now() AND clock_timestamp())
                                  FROM public.cells_deleted_view WHERE id = %L$$, pg_temp.c(2)))::jsonb,
   '{"leader": "Rui Ramos", "leader_deleted": false, "host": "Quintino Quadros", "host_deleted": true,
     "by": "Elisa Esteves", "at": true}'::jsonb,
@@ -581,12 +581,12 @@ SELECT is((SELECT array_agg(action::text || '|' || actor_user_id || '|' || descr
   ARRAY['delete|' || pg_temp.u(1) || '|Excluiu a célula de Rui Ramos', 'restore|' || pg_temp.u(1) || '|Restaurou a célula de Rui Ramos'],
   'RN-19: a Auditoria mostra a exclusão e a restauração da célula de Rui, cada uma com AD');
 SELECT is((SELECT count(*)::int FROM public.events WHERE entity = 'cell' AND entity_id = pg_temp.c(2)
-            AND action IN ('delete', 'restore') AND occurred_at = now()), 2, 'RN-19: com o horário');
+            AND action IN ('delete', 'restore') AND occurred_at BETWEEN now() AND clock_timestamp()), 2, 'RN-19: com o horário');
 SELECT is((SELECT array_agg(action::text || '|' || (metadata ->> 'op') ORDER BY action::text)
              FROM public.events WHERE entity = 'cell_report' AND entity_id = pg_temp.r(80) AND action IN ('delete', 'restore')),
   ARRAY['delete|soft_delete', 'restore|restore'], 'RN-19: exclusão e restauração do relatório, com metadata.op');
 SELECT is((SELECT entity_label FROM public.events WHERE entity = 'cell_report' AND entity_id = pg_temp.r(80) AND action = 'delete'),
-  'relatório da célula de Lia Lima em ' || pg_temp.ws(), 'RN-19: com o nome do registro');
+  'Relatório de ' || to_char(pg_temp.ws(), 'DD/MM/YYYY') || ' da célula de Lia Lima', 'RN-19: com o nome do registro (vocabulário do E2.05)');
 
 ALTER TABLE public.events ADD CONSTRAINT e201_qa_audit_fails CHECK (action <> 'delete') NOT VALID;
 SELECT is(pg_temp.try(1, format('SELECT public.delete_cell(%L)', pg_temp.c(7))) ->> 'state', '23514',

@@ -75,49 +75,73 @@ export type Database = {
       cell_reports: {
         Row: {
           cell_id: string
-          created_at: string
+          created_at: string | null
+          created_by: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy: string | null
           date: string
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy: string | null
           id: string
           observations: string | null
           offering: number | null
           reason_not_held: string | null
           theme: string | null
           time: string
-          updated_at: string
+          updated_at: string | null
+          updated_by: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy: string | null
           visitors: string[] | null
           was_held: boolean
         }
         Insert: {
           cell_id: string
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           date: string
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           id?: string
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
           theme?: string | null
           time: string
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           visitors?: string[] | null
           was_held?: boolean
         }
         Update: {
           cell_id?: string
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           date?: string
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           id?: string
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
           theme?: string | null
           time?: string
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           visitors?: string[] | null
           was_held?: boolean
         }
@@ -144,6 +168,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cell_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cell_reports_deleted_by_fkey"
             columns: ["deleted_by"]
             isOneToOne: false
@@ -164,15 +209,41 @@ export type Database = {
             referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cell_reports_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cells: {
         Row: {
           city: string | null
           complement: string | null
-          created_at: string
+          created_at: string | null
+          created_by: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy: string | null
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy: string | null
           host_id: string
           id: string
           is_active: boolean
@@ -185,15 +256,23 @@ export type Database = {
           street: string | null
           timothy_id: string
           type: string
-          updated_at: string
+          updated_at: string | null
+          updated_by: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy: string | null
           zip_code: string | null
         }
         Insert: {
           city?: string | null
           complement?: string | null
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           host_id: string
           id?: string
           is_active?: boolean
@@ -206,15 +285,23 @@ export type Database = {
           street?: string | null
           timothy_id: string
           type?: string
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           zip_code?: string | null
         }
         Update: {
           city?: string | null
           complement?: string | null
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           host_id?: string
           id?: string
           is_active?: boolean
@@ -227,11 +314,35 @@ export type Database = {
           street?: string | null
           timothy_id?: string
           type?: string
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           zip_code?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "cells_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cells_deleted_by_fkey"
             columns: ["deleted_by"]
             isOneToOne: false
@@ -311,6 +422,27 @@ export type Database = {
           {
             foreignKeyName: "cells_timothy_id_fkey"
             columns: ["timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cells_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
@@ -320,9 +452,11 @@ export type Database = {
       events: {
         Row: {
           action: Database["public"]["Enums"]["event_action"]
+          actor_kind: Database["public"]["Enums"]["event_actor_kind"]
           actor_label: string | null
           actor_user_id: string | null
           changed_fields: string[] | null
+          changes: Json | null
           description: string
           entity: Database["public"]["Enums"]["event_entity"]
           entity_id: string | null
@@ -331,13 +465,18 @@ export type Database = {
           id: string
           metadata: Json | null
           occurred_at: string
+          search_text: string | null
+          seq: number
           success: boolean
+          tx_id: unknown
         }
         Insert: {
           action: Database["public"]["Enums"]["event_action"]
+          actor_kind: Database["public"]["Enums"]["event_actor_kind"]
           actor_label?: string | null
           actor_user_id?: string | null
           changed_fields?: string[] | null
+          changes?: Json | null
           description: string
           entity: Database["public"]["Enums"]["event_entity"]
           entity_id?: string | null
@@ -346,13 +485,18 @@ export type Database = {
           id?: string
           metadata?: Json | null
           occurred_at?: string
+          search_text?: string | null
+          seq?: never
           success?: boolean
+          tx_id?: unknown
         }
         Update: {
           action?: Database["public"]["Enums"]["event_action"]
+          actor_kind?: Database["public"]["Enums"]["event_actor_kind"]
           actor_label?: string | null
           actor_user_id?: string | null
           changed_fields?: string[] | null
+          changes?: Json | null
           description?: string
           entity?: Database["public"]["Enums"]["event_entity"]
           entity_id?: string | null
@@ -361,7 +505,10 @@ export type Database = {
           id?: string
           metadata?: Json | null
           occurred_at?: string
+          search_text?: string | null
+          seq?: never
           success?: boolean
+          tx_id?: unknown
         }
         Relationships: []
       }
@@ -374,9 +521,14 @@ export type Database = {
           city: string | null
           complement: string | null
           cpf: string | null
-          created_at: string
+          created_at: string | null
+          created_by: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy: string | null
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy: string | null
           email: string | null
           gender: string
           has_leadership: boolean
@@ -396,7 +548,10 @@ export type Database = {
           spouse_id: string | null
           state: string | null
           street: string | null
-          updated_at: string
+          updated_at: string | null
+          updated_by: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy: string | null
           zip_code: string | null
         }
         Insert: {
@@ -407,9 +562,14 @@ export type Database = {
           city?: string | null
           complement?: string | null
           cpf?: string | null
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           email?: string | null
           gender: string
           has_leadership: boolean
@@ -429,7 +589,10 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           zip_code?: string | null
         }
         Update: {
@@ -440,9 +603,14 @@ export type Database = {
           city?: string | null
           complement?: string | null
           cpf?: string | null
-          created_at?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_kind?: Database["public"]["Enums"]["author_kind"]
+          created_by_legacy?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          deleted_by_legacy?: string | null
           email?: string | null
           gender?: string
           has_leadership?: boolean
@@ -462,10 +630,34 @@ export type Database = {
           spouse_id?: string | null
           state?: string | null
           street?: string | null
-          updated_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          updated_by_kind?: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_legacy?: string | null
           zip_code?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "members_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "members_deleted_by_fkey"
             columns: ["deleted_by"]
@@ -539,6 +731,27 @@ export type Database = {
           {
             foreignKeyName: "members_spouse_id_fkey"
             columns: ["spouse_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "members_updated_by_fkey"
+            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
@@ -672,6 +885,7 @@ export type Database = {
           date: string | null
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_name: string | null
           id: string | null
           reason_not_held: string | null
@@ -765,6 +979,8 @@ export type Database = {
           cell_timothy_id: string | null
           cell_type: string | null
           created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
           date: string | null
           id: string | null
           observations: string | null
@@ -775,6 +991,8 @@ export type Database = {
           theme: string | null
           time: string | null
           updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
           visitors: string[] | null
           visitors_count: number | null
           was_held: boolean | null
@@ -872,6 +1090,7 @@ export type Database = {
           city: string | null
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_name: string | null
           host_deleted: boolean | null
           host_id: string | null
@@ -986,6 +1205,8 @@ export type Database = {
           city: string | null
           complement: string | null
           created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
           g12_leader_id: string | null
           g12_leader_name: string | null
           host_id: string | null
@@ -1015,6 +1236,8 @@ export type Database = {
           timothy_name: string | null
           type: string | null
           updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
           zip_code: string | null
         }
         Relationships: [
@@ -1083,12 +1306,73 @@ export type Database = {
           },
         ]
       }
+      events_view: {
+        Row: {
+          action: Database["public"]["Enums"]["event_action"] | null
+          actor_kind: Database["public"]["Enums"]["event_actor_kind"] | null
+          actor_label: string | null
+          changed_fields: string[] | null
+          changes: Json | null
+          description: string | null
+          entity: Database["public"]["Enums"]["event_entity"] | null
+          entity_id: string | null
+          entity_label: string | null
+          error_reason: string | null
+          id: string | null
+          metadata: Json | null
+          occurred_at: string | null
+          occurred_on: string | null
+          search_text: string | null
+          seq: number | null
+          success: boolean | null
+        }
+        Insert: {
+          action?: Database["public"]["Enums"]["event_action"] | null
+          actor_kind?: Database["public"]["Enums"]["event_actor_kind"] | null
+          actor_label?: string | null
+          changed_fields?: string[] | null
+          changes?: Json | null
+          description?: string | null
+          entity?: Database["public"]["Enums"]["event_entity"] | null
+          entity_id?: string | null
+          entity_label?: string | null
+          error_reason?: string | null
+          id?: string | null
+          metadata?: Json | null
+          occurred_at?: string | null
+          occurred_on?: never
+          search_text?: string | null
+          seq?: number | null
+          success?: boolean | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["event_action"] | null
+          actor_kind?: Database["public"]["Enums"]["event_actor_kind"] | null
+          actor_label?: string | null
+          changed_fields?: string[] | null
+          changes?: Json | null
+          description?: string | null
+          entity?: Database["public"]["Enums"]["event_entity"] | null
+          entity_id?: string | null
+          entity_label?: string | null
+          error_reason?: string | null
+          id?: string | null
+          metadata?: Json | null
+          occurred_at?: string | null
+          occurred_on?: never
+          search_text?: string | null
+          seq?: number | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       members_deleted_view: {
         Row: {
           city: string | null
           cpf: string | null
           deleted_at: string | null
           deleted_by: string | null
+          deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_name: string | null
           email: string | null
           gender: string | null
@@ -1179,6 +1463,8 @@ export type Database = {
           complement: string | null
           cpf: string | null
           created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
           email: string | null
           female_cells: number | null
           g12_id: string | null
@@ -1214,6 +1500,8 @@ export type Database = {
           total_cells: number | null
           total_disciples: number | null
           updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
           zip_code: string | null
         }
         Relationships: [
@@ -1359,6 +1647,19 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["permission_action"][]
       }
+      audit_assert_access: { Args: never; Returns: boolean }
+      audit_record_label: {
+        Args: {
+          _record_id: string
+          _record_type: Database["public"]["Enums"]["event_entity"]
+        }
+        Returns: {
+          deleted: boolean
+          leader_name: string
+          name: string
+          report_date: string
+        }[]
+      }
       birth_date_problem: {
         Args: { _birth: string; _today: string }
         Returns: string
@@ -1458,6 +1759,7 @@ export type Database = {
       is_valid_email: { Args: { _email: string }; Returns: boolean }
       is_valid_meeting_time: { Args: { _t: string }; Returns: boolean }
       is_valid_person_name: { Args: { _name: string }; Returns: boolean }
+      legacy_author_label: { Args: { _name: string }; Returns: string }
       log_auth_event: {
         Args: {
           _action: Database["public"]["Enums"]["event_action"]
@@ -1551,6 +1853,13 @@ export type Database = {
         Returns: Database["public"]["Enums"]["permission_action"][]
       }
       role_options: { Args: { _member_id?: string }; Returns: Json }
+      save_cell_report: {
+        Args: { _participant_ids?: string[]; _report: Json; _report_id: string }
+        Returns: {
+          changed: boolean
+          report_id: string
+        }[]
+      }
       save_role: {
         Args: {
           _description: string
@@ -1643,6 +1952,7 @@ export type Database = {
       weekday_index: { Args: { _meeting_day: string }; Returns: number }
     }
     Enums: {
+      author_kind: "member" | "system" | "legacy" | "unknown"
       cell_report_status:
         | "sent_held"
         | "sent_not_held"
@@ -1665,12 +1975,14 @@ export type Database = {
         | "password_change_failed"
         | "password_change_blocked"
         | "password_change_required"
+      event_actor_kind: "member" | "system" | "none"
       event_entity:
         | "member"
         | "cell"
         | "cell_report"
         | "cell_report_participant"
         | "auth"
+        | "role"
       permission_action:
         | "create_member"
         | "view_members"
@@ -1823,6 +2135,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      author_kind: ["member", "system", "legacy", "unknown"],
       cell_report_status: [
         "sent_held",
         "sent_not_held",
@@ -1847,12 +2160,14 @@ export const Constants = {
         "password_change_blocked",
         "password_change_required",
       ],
+      event_actor_kind: ["member", "system", "none"],
       event_entity: [
         "member",
         "cell",
         "cell_report",
         "cell_report_participant",
         "auth",
+        "role",
       ],
       permission_action: [
         "create_member",
