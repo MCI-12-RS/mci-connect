@@ -363,8 +363,9 @@ test("RN-12 (AD): com o relatório da semana, outro é recusado; excluído o rel
   }
 
   let form = await newReportForZeca();
-  // O aviso traz só a mensagem, sem um título repetido.
-  await expect(toast(page, "Já existe um relatório dessa célula nesta semana (domingo a sábado).")).toBeVisible();
+  // E2.11 PR 2: a recusa vem da submit_cell_report (report_week_taken) e aparece no topo do formulário,
+  // com o texto do servidor, até o formulário novo do PR 4 (risco 1 do spec).
+  await expect(form.getByRole("alert").filter({ hasText: "O relatório para esta semana já foi enviado." })).toBeVisible();
   await expect(toast(page, "Erro ao salvar")).toHaveCount(0);
   await expect(form).toBeVisible();
   await form.getByRole("button", { name: "Cancelar" }).click();
