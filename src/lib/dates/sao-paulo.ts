@@ -45,6 +45,16 @@ export function parseIsoDate(value: string | null | undefined): CalendarDate | n
   return { year, month, day };
 }
 
+/**
+ * Uma data completa, como a que um filtro aplica: existe e tem o ano com 4 dígitos, de 1000 a 9999
+ * (E2.07, P54). Enquanto se digita o ano no campo nativo, ele passa por "0002", "0020" e "0202", e
+ * um 5º dígito sai do formato: nenhum desses vale.
+ */
+export function isCompleteIsoDate(value: string | null | undefined): boolean {
+  const parsed = parseIsoDate(value);
+  return parsed !== null && parsed.year >= 1000;
+}
+
 const pad = (value: number, length: number): string => String(value).padStart(length, "0");
 
 /** Escreve "aaaa-mm-dd". */

@@ -330,11 +330,21 @@ export interface LeaderLabel {
   unavailable: boolean;
 }
 
+/** A leitura das pessoas visíveis por id (`members_view`): os ids lidos e os nomes dos que voltaram. */
+export interface VisibleMemberNames {
+  /** Os ids que a leitura conferiu. Um id fora daqui ainda está carregando. */
+  checked: ReadonlySet<string>;
+  names: ReadonlyMap<string, string>;
+}
+
 export interface LeaderNameSources {
   /** Os nomes das pessoas escolhidas agora no seletor (vieram das opções visíveis). */
   picked: ReadonlyMap<string, string>;
-  /** A leitura das pessoas visíveis por id: `undefined` enquanto carrega. */
-  visible: ReadonlyMap<string, string> | undefined;
+  /**
+   * A leitura das pessoas visíveis: `undefined` enquanto carrega. Ao pôr ou tirar uma pessoa, a
+   * leitura anterior continua valendo para os ids que ela conferiu (sem voltar a "Carregando…").
+   */
+  visible: VisibleMemberNames | undefined;
   /** A leitura por id falhou. */
   failed: boolean;
 }
@@ -348,7 +358,7 @@ export function resolveLeaderLabel(id: string, { picked, visible, failed }: Lead
   const pickedName = picked.get(id);
   if (pickedName !== undefined) return { label: pickedName, unavailable: false };
   if (failed) return { label: T.nameNotLoaded, unavailable: false };
-  if (!visible) return { label: T.loadingName, unavailable: false };
-  const name = visible.get(id);
+  if (!visible || !visible.checked.has(id)) return { label: T.loadingName, unavailable: false };
+  const name = visible.names.get(id);
   return name === undefined ? { label: T.unavailableName, unavailable: true } : { label: name, unavailable: false };
 }

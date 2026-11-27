@@ -64,6 +64,16 @@ describe("\"É Pastor(a)?\" (UX-16, UX-18)", () => {
     ]);
   });
 
+  it("líder gravado sem nome: nenhum aviso com o nome em branco, só os textos de situação", () => {
+    const nameless = { ...PEDRO, name: "  " };
+    const pastor = setPastor(andre(), true);
+    expect(ministrySwitchNotices(pastor, nameless).pastor).toEqual([{ kind: "text", text: MEMBER_HINT_TEXTS.pastorHasNoLeader }]);
+    const noLeadership = setHasLeadership(andre(), false);
+    expect(ministrySwitchNotices(noLeadership, nameless).leadership).toEqual([
+      { kind: "hint", text: MEMBER_HINT_TEXTS.noLeadership },
+    ]);
+  });
+
   it("ligar de novo o que já está ligado não muda nada", () => {
     const state = andre();
     expect(setPastor(state, false)).toEqual(state);

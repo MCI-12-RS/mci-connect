@@ -180,7 +180,7 @@ describe("memberListHref (RN-17, para o E2.14)", () => {
 });
 
 describe("resolveLeaderLabel (RN-05, P53)", () => {
-  const visible = new Map([[PEDRO, "Pedro Alves"]]);
+  const visible = { checked: new Set([PEDRO, ANDRE]), names: new Map([[PEDRO, "Pedro Alves"]]) };
   it("visível pelo nome; fora da leitura, 'Pessoa indisponível', sem nome", () => {
     expect(resolveLeaderLabel(PEDRO, { picked: new Map(), visible, failed: false })).toEqual({ label: "Pedro Alves", unavailable: false });
     expect(resolveLeaderLabel(ANDRE, { picked: new Map(), visible, failed: false })).toEqual({ label: "Pessoa indisponível", unavailable: true });
@@ -190,6 +190,12 @@ describe("resolveLeaderLabel (RN-05, P53)", () => {
     expect(resolveLeaderLabel(PEDRO, { picked: new Map(), visible: undefined, failed: false }).label).toBe("Carregando…");
     expect(resolveLeaderLabel(PEDRO, { picked: new Map(), visible: undefined, failed: true }).label).toBe("nome não carregado");
     expect(resolveLeaderLabel(ANDRE, { picked: new Map([[ANDRE, "André Souza"]]), visible, failed: false }).label).toBe("André Souza");
+  });
+
+  it("leitura anterior mantida ao pôr uma pessoa: os conferidos seguem com nome, o novo carrega", () => {
+    const previous = { checked: new Set([PEDRO]), names: new Map([[PEDRO, "Pedro Alves"]]) };
+    expect(resolveLeaderLabel(PEDRO, { picked: new Map(), visible: previous, failed: false }).label).toBe("Pedro Alves");
+    expect(resolveLeaderLabel(ANDRE, { picked: new Map(), visible: previous, failed: false })).toEqual({ label: "Carregando…", unavailable: false });
   });
 });
 

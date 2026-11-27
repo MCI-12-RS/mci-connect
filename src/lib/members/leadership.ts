@@ -151,12 +151,14 @@ export interface MinistrySwitchNotices {
 /**
  * Os textos de cada interruptor, pelo estado e pela memória (P20, T4). O aviso "Ao salvar, {Nome}
  * deixa de ser o líder." fala do líder **gravado** (E2.07, RN-16, UXD-11): no cadastro novo, com o
- * líder só preenchido, não há aviso, apenas os textos de situação.
+ * líder só preenchido, não há aviso, apenas os textos de situação. Sem o nome do líder gravado (fora
+ * do escopo ou não resolvido), também não: o aviso não sai com o nome em branco.
  */
 export function ministrySwitchNotices(
   { state, memory }: MinistrySwitches,
-  savedLeader: LeaderRef | null = null,
+  storedLeader: LeaderRef | null = null,
 ): MinistrySwitchNotices {
+  const savedLeader = storedLeader?.name.trim() ? storedLeader : null;
   const pastor: SwitchNotice[] = [];
   const leadership: SwitchNotice[] = [];
   const baptism: SwitchNotice[] = [];

@@ -29,7 +29,7 @@ export const FiltersButton = forwardRef<HTMLButtonElement, FiltersButtonProps>(f
       ref={ref}
       type="button"
       variant="outline"
-      className="h-11 w-fit md:h-10"
+      className="h-11 w-fit lg:h-10"
       aria-expanded={expanded}
       aria-haspopup={mode === "sheet" ? "dialog" : undefined}
       aria-controls={mode === "panel" ? controlsId : undefined}

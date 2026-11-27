@@ -1,7 +1,7 @@
 // E2.04 (RN-15, DA-13, UX-20): o "hoje" de Brasília e a conta dos anos com o
 // calendário do Postgres, qualquer que seja o fuso do navegador.
 import { describe, expect, it, vi } from "vitest";
-import { addOneDay, formatIsoDateBr, parseIsoDate, spToday, subtractYears } from "./sao-paulo";
+import { addOneDay, formatIsoDateBr, isCompleteIsoDate, parseIsoDate, spToday, subtractYears } from "./sao-paulo";
 
 describe("spToday", () => {
   it("23/11/2026 às 23:30 de Brasília ainda é 23/11, embora já seja 24/11 em UTC", () => {
@@ -57,5 +57,18 @@ describe("addOneDay, parseIsoDate e formatIsoDateBr", () => {
   it("formatIsoDateBr escreve dd/mm/aaaa", () => {
     expect(formatIsoDateBr("2020-05-10")).toBe("10/05/2020");
     expect(formatIsoDateBr("x")).toBe("x");
+  });
+});
+
+describe("isCompleteIsoDate", () => {
+  it("só aceita data que existe com o ano de 4 dígitos", () => {
+    expect(isCompleteIsoDate("2026-11-22")).toBe(true);
+    expect(isCompleteIsoDate("1000-01-01")).toBe(true);
+    expect(isCompleteIsoDate("0202-11-22")).toBe(false);
+    expect(isCompleteIsoDate("0002-11-22")).toBe(false);
+    expect(isCompleteIsoDate("20261-11-22")).toBe(false);
+    expect(isCompleteIsoDate("2026-02-30")).toBe(false);
+    expect(isCompleteIsoDate("")).toBe(false);
+    expect(isCompleteIsoDate(null)).toBe(false);
   });
 });

@@ -56,7 +56,7 @@ export function FilterChips<K extends string>({
           data-chip={chip.key}
           className={cn(
             "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border bg-muted px-3 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            compact ? "min-h-9 py-1" : "h-11 md:h-9",
+            compact ? "min-h-9 py-1" : "h-11 lg:h-9",
           )}
           aria-label={removeLabel(chip.text)}
           onClick={() => remove(index)}
@@ -66,7 +66,7 @@ export function FilterChips<K extends string>({
         </button>
       ))}
       {onClearAll && (
-        <Button type="button" variant="ghost" className="h-11 md:h-9" onClick={onClearAll}>
+        <Button type="button" variant="ghost" className="h-11 lg:h-9" onClick={onClearAll}>
           {FILTER_TEXTS.clearAll}
         </Button>
       )}

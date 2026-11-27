@@ -40,7 +40,8 @@ const ids = (...values: (string | null | false | undefined)[]): string | undefin
 /**
  * Filtro por intervalo de datas (E2.05, P33; E2.07, P54): dois campos de data nativos num `fieldset`,
  * opcionais e com os dois dias incluídos. A conferência fica com quem usa: este componente só mostra
- * as mensagens que recebe.
+ * as mensagens que recebe. Os campos rolam com folga embaixo (`scroll-mb-24`): no celular, o erro e
+ * a dica não ficam atrás do rodapé fixo da folha.
  */
 export function DateRangeFilter({
   legend,
@@ -87,7 +88,7 @@ export function DateRangeFilter({
             onBlur={onFromBlur}
             aria-invalid={fromError ? true : undefined}
             aria-describedby={ids(fromError && fromErrorId, hint && hintId)}
-            className="h-11 md:h-10"
+            className="h-11 scroll-mb-24 lg:h-10"
           />
           {fromError && (
             <p id={fromErrorId} className="text-sm font-medium text-destructive">
@@ -109,7 +110,7 @@ export function DateRangeFilter({
             onBlur={onToBlur}
             aria-invalid={toMessage ? true : undefined}
             aria-describedby={ids(toMessage && toErrorId, hint && hintId)}
-            className="h-11 md:h-10"
+            className="h-11 scroll-mb-24 lg:h-10"
           />
           {toMessage && !inline && (
             <p id={toErrorId} className="text-sm font-medium text-destructive">

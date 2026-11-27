@@ -178,12 +178,13 @@ const MemberForm = ({
   // "Ir para o líder" (E2.07, P55): o Líder à vista, com o foco e um destaque de 2 s.
   const [leaderHighlighted, setLeaderHighlighted] = useState(false);
   const highlightTimer = useRef<number>();
+  const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
   const goToLeader = () => {
     form.setFocus("leader_id");
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-    document
-      .querySelector("[data-leader-field]")
+    formRef.current
+      ?.querySelector("[data-leader-field]")
       ?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
     setLeaderHighlighted(true);
     window.clearTimeout(highlightTimer.current);
@@ -386,7 +387,7 @@ const MemberForm = ({
       }
     >
       <FormProvider {...form}>
-        <form id={formId} noValidate onSubmit={readOnly ? (event) => event.preventDefault() : submit} className="space-y-6">
+        <form ref={formRef} id={formId} noValidate onSubmit={readOnly ? (event) => event.preventDefault() : submit} className="space-y-6">
           {readOnly && (
             <Alert>
               <Info className="h-4 w-4" aria-hidden="true" />

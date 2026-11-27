@@ -367,7 +367,7 @@ const Members = () => {
                     if (access && !access.can_create_member) setNewMemberBlocked(true);
                     else setFormOpen(true);
                   }}
-                  className="h-11 w-full sm:w-auto md:h-10"
+                  className="h-11 w-full sm:w-auto lg:h-10"
                 >
                   <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
                   {MEMBER_FORM_TEXTS.newMember}
@@ -393,7 +393,7 @@ const Members = () => {
                     value={list.searchInput}
                     onChange={(e) => list.setSearchInput(e.target.value)}
                     maxLength={100}
-                    className="h-11 pl-10 md:h-10"
+                    className="h-11 pl-10 lg:h-10"
                   />
                 </div>
               </div>
@@ -407,7 +407,7 @@ const Members = () => {
                   onClick={openFilters}
                 />
                 {hasSearchOrFilters && (
-                  <Button type="button" variant="ghost" className="h-11 md:h-10" onClick={clearAll}>
+                  <Button type="button" variant="ghost" className="h-11 lg:h-10" onClick={clearAll}>
                     {FILTER_TEXTS.clearAll}
                   </Button>
                 )}

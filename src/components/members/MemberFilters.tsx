@@ -8,6 +8,7 @@ import { SingleChoiceFilter } from "@/components/filters/SingleChoiceFilter";
 import { FILTER_LABEL_CLASS, type FilterOption } from "@/components/filters/filter-options";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { isDateRangeInverted } from "@/lib/filters/dates";
+import { isCompleteIsoDate } from "@/lib/dates/sao-paulo";
 import type { SelectOption } from "@/lib/selectors";
 import {
   FILTER_TEXT_MAX_LENGTH,
@@ -104,7 +105,7 @@ function TextFilter({
           setText(event.target.value);
           if (!debounced) onChange(normalizeFilterText(event.target.value));
         }}
-        className="h-11 md:h-10"
+        className="h-11 lg:h-10"
       />
     </div>
   );
@@ -125,17 +126,31 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
   const [toInvalid, setToInvalid] = useState(false);
   const inverted = isDateRangeInverted(value.from, value.to);
 
-  // Data que não existe ou incompleta: o campo nativo fica vazio com `badInput` (P54). Conferida ao
-  // sair do campo e ao aplicar, nunca durante a digitação.
+  // O texto de cada campo de data. No painel do computador o filtro aplica a cada alteração, mas só
+  // a data completa (ano com 4 dígitos): o ano a meio caminho ("0202") ou com 5 dígitos fica no
+  // campo, sem ir para a URL e sem o campo piscar. Na folha, tudo vai para o rascunho.
+  const [fromText, setFromText] = useState(value.from ?? "");
+  const [toText, setToText] = useState(value.to ?? "");
+
+  // A URL mudou por fora (chip, "Limpar filtros", voltar): o campo acompanha.
+  useEffect(() => setFromText(value.from ?? ""), [value.from]);
+  useEffect(() => setToText(value.to ?? ""), [value.to]);
+
+  // Data que não existe, incompleta ou fora do formato (P54): o campo nativo fica vazio com
+  // `badInput`, ou guarda um ano que não tem 4 dígitos. Conferida ao sair do campo e ao aplicar,
+  // nunca durante a digitação.
+  const isBadDate = (input: HTMLInputElement | null): boolean =>
+    !!input && (input.validity.badInput || (input.value !== "" && !isCompleteIsoDate(input.value)));
+
   const checkOnBlur = (setInvalid: (invalid: boolean) => void) => (event: FocusEvent<HTMLInputElement>) =>
-    setInvalid(event.currentTarget.validity.badInput);
+    setInvalid(isBadDate(event.currentTarget));
 
   useImperativeHandle(
     ref,
     () => ({
       validateDates: () => {
-        const badFrom = fromRef.current?.validity.badInput === true;
-        const badTo = toRef.current?.validity.badInput === true;
+        const badFrom = isBadDate(fromRef.current);
+        const badTo = isBadDate(toRef.current);
         setFromInvalid(badFrom);
         setToInvalid(badTo);
         if (badFrom) fromRef.current?.focus();
@@ -146,9 +161,15 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
     [inverted],
   );
 
-  const changeDate = (key: "from" | "to", raw: string, setInvalid: (invalid: boolean) => void) => {
+  const changeDate = (
+    key: "from" | "to",
+    raw: string,
+    setText: (text: string) => void,
+    setInvalid: (invalid: boolean) => void,
+  ) => {
+    setText(raw);
     if (raw) setInvalid(false);
-    onChange({ [key]: raw || null });
+    if (!panel || raw === "" || isCompleteIsoDate(raw)) onChange({ [key]: raw || null });
   };
 
   const leaderField = (
@@ -171,10 +192,10 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
       legendSrOnly
       fromLabel={LABELS.from}
       toLabel={LABELS.to}
-      from={value.from ?? ""}
-      to={value.to ?? ""}
-      onFromChange={(raw) => changeDate("from", raw, setFromInvalid)}
-      onToChange={(raw) => changeDate("to", raw, setToInvalid)}
+      from={fromText}
+      to={toText}
+      onFromChange={(raw) => changeDate("from", raw, setFromText, setFromInvalid)}
+      onToChange={(raw) => changeDate("to", raw, setToText, setToInvalid)}
       onFromBlur={checkOnBlur(setFromInvalid)}
       onToBlur={checkOnBlur(setToInvalid)}
       fromError={fromInvalid ? TEXTS.invalidDate : null}
