@@ -283,7 +283,8 @@ async function sessionOf(browser: Browser, w: Who, options: { viewport?: { width
 
 async function openCells(page: Page) {
   await page.goto(`/cells?q=${encodeURIComponent(NAME)}&size=50`);
-  await expect(page.getByText("Carregando...")).toHaveCount(0);
+  // O total em texto só vem com a resposta da lista (E2.10, T1).
+  await expect(page.getByRole("status").filter({ hasText: /^\d[\d.]* células?$/ }).first()).toBeVisible();
 }
 
 /** O cartão de uma célula pelo líder (o G12 pode ter o mesmo nome; o líder é o primeiro `span.break-words`). */
@@ -368,15 +369,17 @@ test("UX-02 e UX-06: tabela a partir de 1280 px (Reunião e Relatório, '—' na
   ] as const) {
     await page.setViewportSize({ width, height });
     // O primeiro render já é a forma certa: antes da lista chegar.
-    await page.route("**/rest/v1/cells_view*", async (route) => {
+    // A lista vem pelas RPCs do E2.10 (`cells_list` e `cells_list_count`).
+    await page.route("**/rest/v1/rpc/cells_list*", async (route) => {
       await new Promise((r) => setTimeout(r, 600));
       await route.continue();
     });
     await page.goto(`/cells?q=${encodeURIComponent(NAME)}&size=50`);
-    await expect(page.getByText("Carregando...").first()).toBeVisible();
+    // Primeira carga: os `Skeleton` no formato dos cartões ou das linhas (E2.10, T7).
+    await expect(page.getByTestId(/^cells-loading/).first()).toBeVisible();
     await expect(page.getByRole("table"), `${width} px`).toHaveCount(kind === "tabela" ? 1 : 0);
     await page.unrouteAll({ behavior: "wait" });
-    await expect(page.getByText("Carregando...")).toHaveCount(0);
+    await expect(page.getByTestId(/^cells-loading/)).toHaveCount(0);
 
     if (kind === "tabela") {
       const headers = (await page.getByRole("columnheader").allTextContents()).map((h) => h.trim());
@@ -465,9 +468,9 @@ test("UX-10: Carla envia o relatório de C1 pela lista; sem recarregar, o cartã
 
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => (release = resolve));
-    // Segura só a releitura da lista (a única leitura da cells_view que pede a situação).
-    await page.route("**/rest/v1/cells_view*", async (route) => {
-      if (route.request().method() === "GET" && route.request().url().includes("report_status")) await held;
+    // Segura só a releitura da página da lista (a `cells_list`, a única leitura que pede a situação).
+    await page.route("**/rest/v1/rpc/cells_list?*", async (route) => {
+      await held;
       await route.continue();
     });
     await dialog.getByRole("button", { name: "Enviar relatório" }).click();

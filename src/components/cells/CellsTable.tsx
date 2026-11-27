@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CellStatusBadge } from "@/components/StatusBadges";
 import { CellG12, CellLeader, CellMeeting } from "@/components/cells/CellListParts";
@@ -18,6 +19,8 @@ interface CellsTableProps {
   refreshing: boolean;
   /** As ações da linha; `null` quando a pessoa não tem nenhuma naquela célula. A coluna some se nenhuma linha tiver. */
   renderActions: (cell: CellListRow) => ReactNode | null;
+  /** A legenda da tabela, só para o leitor de tela (E2.10, T1: a ordem da lista). */
+  caption?: string;
 }
 
 /**
@@ -25,7 +28,7 @@ interface CellsTableProps {
  * E2.09, T2 e P74). Colunas da UXD-6: Líder, G12, Endereço, Reunião (dia,
  * horário e tipo), Relatório, Situação e Ações.
  */
-const CellsTable = ({ rows, isLoading, isError, refreshing, renderActions }: CellsTableProps) => {
+const CellsTable = ({ rows, isLoading, isError, refreshing, renderActions, caption }: CellsTableProps) => {
   const actions = rows.map(renderActions);
   const showActions = actions.some((a) => a !== null);
   const columnCount = showActions ? 7 : 6;
@@ -40,6 +43,7 @@ const CellsTable = ({ rows, isLoading, isError, refreshing, renderActions }: Cel
 
   return (
     <Table>
+      {caption && <caption className="sr-only">{caption}</caption>}
       <TableHeader>
         <TableRow>
           <TableHead scope="col">Líder</TableHead>
@@ -56,7 +60,14 @@ const CellsTable = ({ rows, isLoading, isError, refreshing, renderActions }: Cel
       </TableHeader>
       <TableBody aria-busy={refreshing}>
         {isLoading
-          ? message("Carregando...")
+          ? // Primeira carga (E2.10, T7): 5 `Skeleton` no formato das linhas, já com a tabela.
+            Array.from({ length: 5 }, (_, index) => (
+              <TableRow key={index} data-testid="cells-loading-row">
+                <TableCell colSpan={columnCount}>
+                  <Skeleton className="h-12 w-full" />
+                </TableCell>
+              </TableRow>
+            ))
           : isError
             ? message("Erro ao carregar as células", "text-destructive")
             : rows.length === 0

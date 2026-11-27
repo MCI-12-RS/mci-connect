@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { MemberViewRow } from "@/lib/members/fields";
 import { withSearch } from "@/lib/list-query";
+import { useOptionsPagination, type OptionsPagination, type SelectSearch } from "@/hooks/use-paginated-select";
 import { MEMBER_HINT_TEXTS } from "@/lib/members/texts";
 import { personLabel } from "@/lib/members/labels";
 import { toSearchPatterns } from "@/lib/search";
@@ -111,4 +112,13 @@ export function useMemberName(memberId: string | null | undefined, { enabled = t
       return data?.[0]?.name ?? null;
     },
   });
+}
+
+/**
+ * A fonte do filtro de pessoa de Membros (E2.07, P53; `PersonMultiFilter`): as pessoas visíveis,
+ * ativas e inativas (inclusive quem consulta), consultadas só com o menu aberto.
+ */
+export function useMemberPersonOptions(search: SelectSearch): OptionsPagination {
+  const query = useMemberOptions({ search: search.term, enabled: search.isMenuOpen });
+  return useOptionsPagination(query, toMemberOption);
 }

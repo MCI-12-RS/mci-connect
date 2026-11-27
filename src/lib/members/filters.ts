@@ -9,6 +9,7 @@ import { toSearchPatterns } from "@/lib/search";
 import { formatFilterDate, isDateRangeInverted, isIsoDate } from "@/lib/filters/dates";
 import { isUuid, oneOf, readListParam, setParam, writeList } from "@/lib/filters/url";
 import type { FilterChip } from "@/lib/filters/chips";
+import { resolvePersonLabel, type PersonLabel, type PersonNameSources, type VisiblePersonNames } from "@/lib/filters/person";
 import {
   MEMBER_BAPTIZED_LABELS,
   MEMBER_CELL_LINK_LABELS,
@@ -324,41 +325,15 @@ export function memberListHref(card: MemberListCard, week?: { start: string; end
 }
 
 /** Como uma pessoa escolhida na Liderança aparece (P53, UXD-7). */
-export interface LeaderLabel {
-  label: string;
-  /** Fora do que quem consulta vê, excluída ou inexistente (RN-05). */
-  unavailable: boolean;
-}
-
-/** A leitura das pessoas visíveis por id (`members_view`): os ids lidos e os nomes dos que voltaram. */
-export interface VisibleMemberNames {
-  /** Os ids que a leitura conferiu. Um id fora daqui ainda está carregando. */
-  checked: ReadonlySet<string>;
-  names: ReadonlyMap<string, string>;
-}
-
-export interface LeaderNameSources {
-  /** Os nomes das pessoas escolhidas agora no seletor (vieram das opções visíveis). */
-  picked: ReadonlyMap<string, string>;
-  /**
-   * A leitura das pessoas visíveis: `undefined` enquanto carrega. Ao pôr ou tirar uma pessoa, a
-   * leitura anterior continua valendo para os ids que ela conferiu (sem voltar a "Carregando…").
-   */
-  visible: VisibleMemberNames | undefined;
-  /** A leitura por id falhou. */
-  failed: boolean;
-}
+export type LeaderLabel = PersonLabel;
+/** A leitura das pessoas visíveis por id (`members_view`). */
+export type VisibleMemberNames = VisiblePersonNames;
+export type LeaderNameSources = PersonNameSources;
 
 /**
  * O rótulo de uma pessoa da Liderança: o nome lido entre as visíveis, "Carregando…", "nome não
  * carregado" ou "Pessoa indisponível", sem nome e sem id (RN-05, UXD-7). Nunca da `member_names`.
  */
-export function resolveLeaderLabel(id: string, { picked, visible, failed }: LeaderNameSources): LeaderLabel {
-  const T = MEMBER_FILTER_TEXTS.leaders;
-  const pickedName = picked.get(id);
-  if (pickedName !== undefined) return { label: pickedName, unavailable: false };
-  if (failed) return { label: T.nameNotLoaded, unavailable: false };
-  if (!visible || !visible.checked.has(id)) return { label: T.loadingName, unavailable: false };
-  const name = visible.names.get(id);
-  return name === undefined ? { label: T.unavailableName, unavailable: true } : { label: name, unavailable: false };
+export function resolveLeaderLabel(id: string, sources: LeaderNameSources): LeaderLabel {
+  return resolvePersonLabel(id, sources, MEMBER_FILTER_TEXTS.leaders);
 }

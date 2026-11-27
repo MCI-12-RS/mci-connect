@@ -143,6 +143,10 @@ export async function openList(page: Page, path: string, search: string, extra =
   if (path === "/members") {
     await expect(page.getByRole("status").filter({ hasText: /^\d[\d.]* membros?$/ }).first()).toBeVisible();
   }
+  // A lista de Células (E2.10) também: o total em texto, que só vem com a resposta.
+  if (path === "/cells") {
+    await expect(page.getByRole("status").filter({ hasText: /^\d[\d.]* células?$/ }).first()).toBeVisible();
+  }
 }
 
 /** O toast com esse título (o item da lista de toasts; o Radix repete o texto num anúncio escondido). */

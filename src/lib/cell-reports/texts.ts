@@ -192,3 +192,17 @@ export const REPORT_LIST_TEXTS = {
   g12: (name: string) => `G12: ${name}`,
   noLeader: "Célula sem líder",
 } as const;
+
+/** O filtro Célula em Relatórios (E2.10, T15, P84; RN-19). */
+export const CELL_REPORT_FILTER_TEXTS = {
+  chip: {
+    loading: "Célula: carregando…",
+    failed: "Célula: não carregada",
+    unavailable: "Célula indisponível",
+    unavailableHint: "Esta célula não está disponível para você.",
+  },
+  /** "Célula de André Souza · Quarta · 20:00" (o dia na forma curta). */
+  chipText: (leader: string, day: string, time: string) => [`Célula de ${leader}`, day, time].filter(Boolean).join(" · "),
+  clearAll: "Limpar filtros",
+  emptyFiltered: "Nenhum relatório encontrado com estes filtros.",
+} as const;
