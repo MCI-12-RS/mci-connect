@@ -21,7 +21,7 @@ const ListPagination = ({ page, pageSize, total, itemLabel, onPageChange, onPage
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-4 py-3">
-      <p className="text-sm text-muted-foreground">
+      <p className="whitespace-nowrap text-sm text-muted-foreground">
         {formatCount(total)} {total === 1 ? itemLabel[0] : itemLabel[1]}
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3">

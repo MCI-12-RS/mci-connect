@@ -1,14 +1,11 @@
-import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FocusEvent } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { forwardRef, useImperativeHandle } from "react";
 import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
 import { MultiChoiceFilter } from "@/components/filters/MultiChoiceFilter";
 import { PersonMultiFilter } from "@/components/filters/PersonMultiFilter";
 import { SingleChoiceFilter } from "@/components/filters/SingleChoiceFilter";
-import { FILTER_LABEL_CLASS, type FilterOption } from "@/components/filters/filter-options";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { isDateRangeInverted } from "@/lib/filters/dates";
-import { isCompleteIsoDate } from "@/lib/dates/sao-paulo";
+import { TextFilter } from "@/components/filters/TextFilter";
+import type { FilterOption } from "@/components/filters/filter-options";
+import { useFilterDates } from "@/hooks/use-filter-dates";
 import type { SelectOption } from "@/lib/selectors";
 import {
   FILTER_TEXT_MAX_LENGTH,
@@ -62,55 +59,6 @@ interface MemberFiltersProps {
   noResultsLabel: string;
 }
 
-/** Um campo de texto do filtro (Bairro, Cidade): no painel, vale 300 ms depois da última tecla. */
-function TextFilter({
-  label,
-  value,
-  onChange,
-  debounced,
-}: {
-  label: string;
-  value: string | null;
-  onChange: (value: string | null) => void;
-  debounced: boolean;
-}) {
-  const id = useId();
-  const [text, setText] = useState(value ?? "");
-  const settled = useDebouncedValue(text, 300);
-
-  // A URL mudou por fora (chip, "Limpar filtros", voltar): o campo acompanha.
-  useEffect(() => {
-    if (normalizeFilterText(text) !== value) setText(value ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  // No painel, só a digitação aplica: a URL mudando por fora não pode devolver o texto antigo.
-  useEffect(() => {
-    if (debounced && normalizeFilterText(settled) !== value) onChange(normalizeFilterText(settled));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settled]);
-
-  return (
-    <div className="min-w-0">
-      <Label htmlFor={id} className={FILTER_LABEL_CLASS}>
-        {label}
-      </Label>
-      <Input
-        id={id}
-        value={text}
-        maxLength={FILTER_TEXT_MAX_LENGTH}
-        autoComplete="off"
-        enterKeyHint="search"
-        onChange={(event) => {
-          setText(event.target.value);
-          if (!debounced) onChange(normalizeFilterText(event.target.value));
-        }}
-        className="h-11 lg:h-10"
-      />
-    </div>
-  );
-}
-
 /**
  * Os 9 filtros de Membros (E2.07, T2 e T3), na ordem do legado (UXD-3): Liderança, Bairro, Cidade,
  * Situação, Situação de liderança, Batizado, Nível, Vínculo celular e as datas de cadastro.
@@ -120,57 +68,9 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
   ref,
 ) {
   const panel = variant === "panel";
-  const fromRef = useRef<HTMLInputElement>(null);
-  const toRef = useRef<HTMLInputElement>(null);
-  const [fromInvalid, setFromInvalid] = useState(false);
-  const [toInvalid, setToInvalid] = useState(false);
-  const inverted = isDateRangeInverted(value.from, value.to);
-
-  // O texto de cada campo de data. No painel do computador o filtro aplica a cada alteração, mas só
-  // a data completa (ano com 4 dígitos): o ano a meio caminho ("0202") ou com 5 dígitos fica no
-  // campo, sem ir para a URL e sem o campo piscar. Na folha, tudo vai para o rascunho.
-  const [fromText, setFromText] = useState(value.from ?? "");
-  const [toText, setToText] = useState(value.to ?? "");
-
-  // A URL mudou por fora (chip, "Limpar filtros", voltar): o campo acompanha.
-  useEffect(() => setFromText(value.from ?? ""), [value.from]);
-  useEffect(() => setToText(value.to ?? ""), [value.to]);
-
-  // Data que não existe, incompleta ou fora do formato (P54): o campo nativo fica vazio com
-  // `badInput`, ou guarda um ano que não tem 4 dígitos. Conferida ao sair do campo e ao aplicar,
-  // nunca durante a digitação.
-  const isBadDate = (input: HTMLInputElement | null): boolean =>
-    !!input && (input.validity.badInput || (input.value !== "" && !isCompleteIsoDate(input.value)));
-
-  const checkOnBlur = (setInvalid: (invalid: boolean) => void) => (event: FocusEvent<HTMLInputElement>) =>
-    setInvalid(isBadDate(event.currentTarget));
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      validateDates: () => {
-        const badFrom = isBadDate(fromRef.current);
-        const badTo = isBadDate(toRef.current);
-        setFromInvalid(badFrom);
-        setToInvalid(badTo);
-        if (badFrom) fromRef.current?.focus();
-        else if (badTo || inverted) toRef.current?.focus();
-        return !badFrom && !badTo && !inverted;
-      },
-    }),
-    [inverted],
-  );
-
-  const changeDate = (
-    key: "from" | "to",
-    raw: string,
-    setText: (text: string) => void,
-    setInvalid: (invalid: boolean) => void,
-  ) => {
-    setText(raw);
-    if (raw) setInvalid(false);
-    if (!panel || raw === "" || isCompleteIsoDate(raw)) onChange({ [key]: raw || null });
-  };
+  const dates = useFilterDates({ from: value.from, to: value.to, panel, onChange });
+  const validateDates = dates.validate;
+  useImperativeHandle(ref, () => ({ validateDates }), [validateDates]);
 
   const leaderField = (
     <PersonMultiFilter
@@ -186,24 +86,24 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
     />
   );
 
-  const dates = (
+  const datesField = (
     <DateRangeFilter
       legend={LABELS.dates}
       legendSrOnly
       fromLabel={LABELS.from}
       toLabel={LABELS.to}
-      from={fromText}
-      to={toText}
-      onFromChange={(raw) => changeDate("from", raw, setFromText, setFromInvalid)}
-      onToChange={(raw) => changeDate("to", raw, setToText, setToInvalid)}
-      onFromBlur={checkOnBlur(setFromInvalid)}
-      onToBlur={checkOnBlur(setToInvalid)}
-      fromError={fromInvalid ? TEXTS.invalidDate : null}
-      toError={toInvalid ? TEXTS.invalidDate : null}
-      invertedMessage={inverted ? TEXTS.invertedDates : null}
+      from={dates.fromText}
+      to={dates.toText}
+      onFromChange={dates.onFromChange}
+      onToChange={dates.onToChange}
+      onFromBlur={dates.onFromBlur}
+      onToBlur={dates.onToBlur}
+      fromError={dates.fromInvalid ? TEXTS.invalidDate : null}
+      toError={dates.toInvalid ? TEXTS.invalidDate : null}
+      invertedMessage={dates.inverted ? TEXTS.invertedDates : null}
       hint={TEXTS.datesHint}
-      fromRef={fromRef}
-      toRef={toRef}
+      fromRef={dates.fromRef}
+      toRef={dates.toRef}
       inline={panel}
     />
   );
@@ -215,9 +115,20 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
         value={value.neighborhood}
         onChange={(neighborhood) => onChange({ neighborhood })}
         debounced={panel}
+        normalize={normalizeFilterText}
+        maxLength={FILTER_TEXT_MAX_LENGTH}
       />
     ),
-    city: <TextFilter label={LABELS.city} value={value.city} onChange={(city) => onChange({ city })} debounced={panel} />,
+    city: (
+      <TextFilter
+        label={LABELS.city}
+        value={value.city}
+        onChange={(city) => onChange({ city })}
+        debounced={panel}
+        normalize={normalizeFilterText}
+        maxLength={FILTER_TEXT_MAX_LENGTH}
+      />
+    ),
     status: (
       <SingleChoiceFilter
         legend={LABELS.status}
@@ -280,7 +191,7 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
         {fields.baptized}
         {fields.level}
         {fields.cellLink}
-        <div className="col-span-2 min-w-0">{dates}</div>
+        <div className="col-span-2 min-w-0">{datesField}</div>
       </>
     );
   }
@@ -295,7 +206,7 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
       {fields.baptized}
       {fields.level}
       {fields.cellLink}
-      {dates}
+      {datesField}
     </>
   );
 });

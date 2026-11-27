@@ -14,6 +14,8 @@ interface SingleChoiceFilterProps<T extends string> {
   onChange: (value: T | null) => void;
   /** Opções lado a lado no `Sheet` ou `Select` no painel do computador (P52). */
   variant: "radio" | "select";
+  /** O texto do padrão ("Todas" na Situação das células). Padrão: "Todos". */
+  allLabel?: string;
 }
 
 /** O valor de "Todos" no controle: o Radix não aceita valor vazio. */
@@ -23,11 +25,18 @@ const ALL = "__all__";
  * Filtro de escolha única com até 3 opções (E2.07, P52): `RadioGroup` com as opções lado a lado no
  * `Sheet` (1 toque) e `Select` no painel do computador. "Todos" vem primeiro e é o padrão.
  */
-export function SingleChoiceFilter<T extends string>({ legend, options, value, onChange, variant }: SingleChoiceFilterProps<T>) {
+export function SingleChoiceFilter<T extends string>({
+  legend,
+  options,
+  value,
+  onChange,
+  variant,
+  allLabel = FILTER_TEXTS.all,
+}: SingleChoiceFilterProps<T>) {
   const baseId = useId();
   const legendId = `${baseId}-legend`;
   const toValue = (raw: string): T | null => options.find((option) => option.value === raw)?.value ?? null;
-  const all: FilterOption<string> = { value: ALL, label: FILTER_TEXTS.all };
+  const all: FilterOption<string> = { value: ALL, label: allLabel };
   const choices: readonly FilterOption<string>[] = [all, ...options];
 
   if (variant === "select") {

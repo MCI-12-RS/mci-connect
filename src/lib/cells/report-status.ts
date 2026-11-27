@@ -155,3 +155,83 @@ export const REPORT_STATUS_LEGEND = {
   },
   footer: "A semana vai de domingo a sábado. A situação é a do momento em que a lista foi carregada.",
 } as const;
+
+/** Os valores do filtro Situação do relatório na URL (E2.10, PO-UX-1, AQ-1). */
+export const REPORT_STATUS_FILTER_OPTIONS = [
+  "sent",
+  "not_yet",
+  "pending",
+  "next_week",
+  "missed_1",
+  "missed_2",
+  "missed_3",
+  "missed_4plus",
+] as const;
+export type ReportStatusFilterOption = (typeof REPORT_STATUS_FILTER_OPTIONS)[number];
+
+/** As semanas sem relatório de cada opção do segundo subgrupo (RN-10; 4 = "4 ou mais"). */
+export const REPORT_STATUS_FILTER_WEEKS = {
+  missed_1: 1,
+  missed_2: 2,
+  missed_3: 3,
+  missed_4plus: 4,
+} as const satisfies Partial<Record<ReportStatusFilterOption, number>>;
+
+/**
+ * Os códigos do servidor de cada opção da semana. "Enviado" junta os dois (PO-UX-1); "sem dia da
+ * reunião" não tem opção (RN-10). Um código novo no enum quebra a compilação até ganhar o mapa.
+ */
+export const REPORT_STATUS_FILTER_CODES = {
+  sent_held: "sent",
+  sent_not_held: "sent",
+  not_yet: "not_yet",
+  pending: "pending",
+  next_week: "next_week",
+  no_meeting_day: null,
+} as const satisfies Record<CellReportStatus, ReportStatusFilterOption | null>;
+
+/** O texto inteiro de cada opção, no chip e no botão do `Popover` (P85, UXD-3): o mesmo da lista. */
+export function reportStatusFilterLabel(option: ReportStatusFilterOption): string {
+  switch (option) {
+    case "sent":
+      return BADGES.sent_held.parts[0];
+    case "not_yet":
+    case "pending":
+    case "next_week":
+      return BADGES[option].parts[0];
+    default:
+      return missingWeeksText(REPORT_STATUS_FILTER_WEEKS[option]) ?? option;
+  }
+}
+
+/** O filtro Situação do relatório (E2.10, T5, P85): rótulo, dica e os dois subgrupos com as opções curtas. */
+export const REPORT_STATUS_FILTER = {
+  legend: "Situação do relatório",
+  hint: "Células inativas não têm situação do relatório.",
+  all: "Todas",
+  groups: [
+    {
+      legend: "Nesta semana",
+      options: [
+        { value: "sent", label: reportStatusFilterLabel("sent") },
+        { value: "not_yet", label: reportStatusFilterLabel("not_yet") },
+        { value: "pending", label: reportStatusFilterLabel("pending") },
+        { value: "next_week", label: reportStatusFilterLabel("next_week") },
+      ],
+    },
+    {
+      legend: "Sem relatório nas semanas anteriores",
+      options: [
+        { value: "missed_1", label: "Na semana passada" },
+        { value: "missed_2", label: "Nas 2 semanas anteriores" },
+        { value: "missed_3", label: "Nas 3 semanas anteriores" },
+        { value: "missed_4plus", label: "Nas 4 ou mais semanas anteriores" },
+      ],
+    },
+  ],
+} as const satisfies {
+  legend: string;
+  hint: string;
+  all: string;
+  groups: readonly { legend: string; options: readonly { value: ReportStatusFilterOption; label: string }[] }[];
+};

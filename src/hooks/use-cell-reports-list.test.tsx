@@ -127,3 +127,36 @@ describe("useCellReportsList (RN-01, RN-03, RN-04)", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
+
+describe("useCellReportsList com o filtro Célula (E2.10, RN-19)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("filtra por cell_id na página e no total, e a chave muda com a célula", async () => {
+    respondWith({ data: [], count: 0 });
+    const { result } = renderHook(() => useCellReportsList({ page: 1, pageSize: 25, search: "" }, "c-1"), {
+      wrapper: createQueryWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fakeQueries()[0].calls).toContainEqual(["eq", "cell_id", "c-1"]);
+  });
+
+  it("página além do fim: o total também é da célula", async () => {
+    respondWith({ error: { code: RANGE_NOT_SATISFIABLE, message: "" } }, { count: 3 });
+    const { result } = renderHook(() => useCellReportsList({ page: 4, pageSize: 25, search: "" }, "c-1"), {
+      wrapper: createQueryWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fakeQueries()[1].calls).toEqual([
+      ["select", "id", { count: "exact", head: true }],
+      ["eq", "cell_id", "c-1"],
+    ]);
+    expect(result.current.data).toEqual({ rows: [], total: 3 });
+  });
+
+  it("sem célula, nenhum filtro por cell_id", async () => {
+    respondWith({ data: [], count: 0 });
+    const { result } = renderList({ page: 1, pageSize: 25, search: "" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fakeQueries()[0].calls.some(([method]) => method === "eq")).toBe(false);
+  });
+});

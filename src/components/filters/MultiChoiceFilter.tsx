@@ -20,16 +20,21 @@ interface MultiChoiceFilterProps<T extends string> {
   groupHint?: string;
   /** A dica do grupo antes das opções que ela explica (Vínculo celular) ou depois (Nível). */
   groupHintPosition?: "before" | "after";
+  /** No `Sheet`, as caixas em duas colunas, lidas linha a linha (Dia da semana, E2.10 T2). */
+  twoColumns?: boolean;
 }
 
-interface ChoiceListProps<T extends string> extends Omit<MultiChoiceFilterProps<T>, "variant"> {
+export interface ChoiceListProps<T extends string> extends Omit<MultiChoiceFilterProps<T>, "variant"> {
   baseId: string;
   /** Uma opção por linha (no `Popover`). */
   stacked: boolean;
   legendSrOnly: boolean;
+  /** A legenda de um subgrupo (P85): menor que a do filtro. */
+  subgroup?: boolean;
 }
 
-function ChoiceList<T extends string>({
+/** As caixas de um filtro de múltipla escolha num `fieldset` (P51); também os subgrupos do P85. */
+export function ChoiceList<T extends string>({
   baseId,
   legend,
   options,
@@ -39,6 +44,8 @@ function ChoiceList<T extends string>({
   groupHintPosition = "after",
   stacked,
   legendSrOnly,
+  subgroup = false,
+  twoColumns = false,
 }: ChoiceListProps<T>) {
   const groupHintId = `${baseId}-hint`;
   const toggle = (value: T, checked: boolean) => {
@@ -54,9 +61,11 @@ function ChoiceList<T extends string>({
   );
   return (
     <fieldset className="min-w-0 space-y-2" aria-describedby={groupHint ? groupHintId : undefined}>
-      <legend className={legendSrOnly ? "sr-only" : "text-sm font-medium"}>{legend}</legend>
+      <legend className={legendSrOnly ? "sr-only" : subgroup ? "text-sm text-muted-foreground" : "text-sm font-medium"}>{legend}</legend>
       {groupHintPosition === "before" && hint}
-      <div className={cn(stacked ? "flex flex-col gap-1" : "flex flex-wrap gap-x-4 gap-y-1")}>
+      <div
+        className={cn(stacked ? "flex flex-col gap-1" : twoColumns ? "grid grid-cols-2 gap-x-4" : "flex flex-wrap gap-x-4 gap-y-1")}
+      >
         {options.map((option) => {
           const itemId = `${baseId}-${option.value}`;
           const hintId = `${itemId}-hint`;
@@ -134,7 +143,7 @@ export function MultiChoiceFilter<T extends string>({ variant, ...props }: Multi
           align="start"
           className="max-h-[var(--radix-popover-content-available-height)] w-72 overflow-y-auto p-3 motion-reduce:animate-none"
         >
-          <ChoiceList {...props} baseId={`${baseId}-popover`} stacked legendSrOnly />
+          <ChoiceList {...props} twoColumns={false} baseId={`${baseId}-popover`} stacked legendSrOnly />
         </PopoverContent>
       </Popover>
     </fieldset>

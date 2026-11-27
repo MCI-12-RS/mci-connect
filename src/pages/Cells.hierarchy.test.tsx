@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { resetFakeSupabase, respondWith } from "@/test/fake-supabase";
+import { resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
 import type { CellRow } from "@/lib/cells/fields";
 import Cells from "./Cells";
 
@@ -61,7 +61,8 @@ const setWidth = (width: number) => Object.defineProperty(window, "innerWidth", 
 
 function renderCells(rows: CellRow[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: rows, count: rows.length });
+  respondToRpc("cells_list", { data: rows });
+  respondToRpc("cells_list_count", { data: rows.length });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>

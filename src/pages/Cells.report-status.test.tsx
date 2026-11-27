@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { resetFakeSupabase, respondWith } from "@/test/fake-supabase";
+import { resetFakeSupabase, respondToRpc, type FakeResponse } from "@/test/fake-supabase";
 import type { CellListRow } from "@/lib/cells/fields";
 import Cells from "./Cells";
 
@@ -78,9 +78,12 @@ const ALL = [C1, C9, C5, C6, C10, C3, C7];
 const originalWidth = window.innerWidth;
 const setWidth = (width: number) => Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
 
-function renderCells(...responses: Parameters<typeof respondWith>) {
+/** A página da lista (`cells_list`) e, em seguida, o total (`cells_list_count`), lidos em paralelo (E2.10). */
+function renderCells(page: FakeResponse, ...more: FakeResponse[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith(...responses);
+  const total = Array.isArray(page.data) ? page.data.length : 0;
+  respondToRpc("cells_list", { ...page, count: undefined }, ...more);
+  respondToRpc("cells_list_count", { data: total, until: page.until, error: page.error });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -337,14 +340,14 @@ describe("UX-09, P73: a legenda", () => {
   it("fica à vista na lista vazia", async () => {
     setWidth(1280);
     renderCells({ data: [], count: 0 }, { data: null, count: 0 });
-    await screen.findByText("Nenhuma célula encontrada");
+    await screen.findByText("Nenhuma célula encontrada.");
     expect(screen.getByRole("button", { name: LEGEND })).toBeInTheDocument();
   });
 
   it("some no erro ao carregar", async () => {
     setWidth(360);
     renderCells({ error: { code: "XX000", message: "boom" } });
-    await screen.findByText("Erro ao carregar as células");
+    await screen.findByText("Não foi possível carregar as células. Verifique a conexão e tente de novo.");
     expect(screen.queryByRole("button", { name: LEGEND })).toBeNull();
   });
 });

@@ -18,6 +18,10 @@ import { Plus, Search, Pencil, Trash2, ClipboardList, Eye, ChevronRight } from "
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellReportsList } from "@/hooks/use-cell-reports-list";
+import { useCellIdentity } from "@/hooks/use-cell-identity";
+import { useCellReportFilter } from "@/hooks/use-cell-report-filter";
+import { RecordFilterChip } from "@/components/filters/RecordFilterChip";
+import { cellChipState } from "@/lib/cell-reports/cell-filter";
 import { useCellReport } from "@/hooks/use-cell-report";
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { useSearchParam } from "@/hooks/use-search-param";
@@ -25,7 +29,7 @@ import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
 import { reportLeaderLines } from "@/lib/cell-reports/snapshot";
-import { CELL_BLOCK_TEXTS, REPORT_LIST_TEXTS } from "@/lib/cell-reports/texts";
+import { CELL_BLOCK_TEXTS, CELL_REPORT_FILTER_TEXTS, REPORT_LIST_TEXTS } from "@/lib/cell-reports/texts";
 import { REPORT_PARAM, reportIdToRead, reportSheetState } from "@/lib/cell-reports/report-sheet";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -47,7 +51,10 @@ const CellReports = () => {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError, isPlaceholderData } = useCellReportsList(list.params);
+  // O filtro Célula (E2.10, RN-19, T15): `?cell=<id>`, com o chip da `cell_identity`.
+  const cellFilter = useCellReportFilter();
+  const cellIdentity = useCellIdentity(cellFilter.cellId);
+  const { data, isLoading, isError, isPlaceholderData } = useCellReportsList(list.params, cellFilter.cellId);
   const reports = data?.rows ?? [];
   const total = data?.total ?? 0;
 
@@ -56,6 +63,20 @@ const CellReports = () => {
   // Ao fechar um diálogo, o foco volta a quem o abriu ou, se o relatório saiu da lista, à busca.
   const searchRef = useRef<HTMLInputElement>(null);
   const returnFocus = useReturnFocus(searchRef, data);
+
+  const hasSearch = list.searchInput.trim() !== "" || list.params.search !== "";
+  const hasFilters = cellFilter.cellId !== null || hasSearch;
+  const focusSearch = () => requestAnimationFrame(() => searchRef.current?.focus());
+  // O chip tira só a célula; "Limpar filtros" tira a célula, a busca e a página (o foco vai para a busca).
+  const removeCellFilter = () => {
+    cellFilter.removeCell();
+    focusSearch();
+  };
+  const clearFilters = () => {
+    cellFilter.clearAll();
+    list.setSearchInput("");
+    focusSearch();
+  };
 
   const handleEdit = (report: CellReportRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
@@ -313,10 +334,29 @@ const CellReports = () => {
     </div>
   );
 
+  /** Sem resultado: com o filtro Célula ou a busca, o vazio com filtros e "Limpar filtros" (T15). */
+  const renderEmpty = () =>
+    hasFilters ? (
+      <div className="space-y-3 p-6 text-center text-sm">
+        <p>{CELL_REPORT_FILTER_TEXTS.emptyFiltered}</p>
+        <Button type="button" variant="outline" className="h-11" onClick={clearFilters}>
+          {CELL_REPORT_FILTER_TEXTS.clearAll}
+        </Button>
+      </div>
+    ) : (
+      <p className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</p>
+    );
+
+  const clearFiltersButton = (
+    <Button type="button" variant="ghost" className="h-11" onClick={clearFilters}>
+      {CELL_REPORT_FILTER_TEXTS.clearAll}
+    </Button>
+  );
+
   const renderMobileCards = () => {
     if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
     if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os relatórios</p>;
-    if (reports.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</p>;
+    if (reports.length === 0) return renderEmpty();
 
     return (
       <div className={`divide-y divide-border ${isPlaceholderData ? "opacity-60" : ""}`}>
@@ -373,6 +413,16 @@ const CellReports = () => {
                 className="pl-10"
               />
             </div>
+            {cellFilter.cellId !== null ? (
+              <RecordFilterChip
+                state={cellChipState(cellIdentity)}
+                texts={CELL_REPORT_FILTER_TEXTS.chip}
+                onRemove={removeCellFilter}
+                trailing={clearFiltersButton}
+              />
+            ) : (
+              hasSearch && <div>{clearFiltersButton}</div>
+            )}
           </CardHeader>
 
           {isMobile ? (
@@ -396,7 +446,7 @@ const CellReports = () => {
                   ) : isError ? (
                     <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar os relatórios</TableCell></TableRow>
                   ) : reports.length === 0 ? (
-                    <TableRow><TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhum relatório encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={columnCount} className="p-0">{renderEmpty()}</TableCell></TableRow>
                   ) : (
                     reports.map((r) => {
                       const streetLine = formatStreetLine(cellOfReport(r));

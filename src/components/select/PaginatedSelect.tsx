@@ -103,11 +103,22 @@ function ItemOption(props: PaginatedOptionProps) {
   }, [props.isFocused, nearEnd, loadMore]);
   const reason = props.data.disabledReason;
   const description = props.data.description;
-  if (!reason && !description) return <components.Option {...props} />;
+  const suffix = props.data.suffix;
+  if (!reason && !description && !suffix) return <components.Option {...props} />;
+  // O complemento (P40): "André Souza (144)" na tela; o leitor de tela ouve "André Souza, nível 144".
+  const name = suffix ? (
+    <>
+      {props.children} <span aria-hidden="true">{suffix.text}</span>
+      <span className="sr-only">, {suffix.spoken}</span>
+    </>
+  ) : (
+    props.children
+  );
+  if (!reason && !description) return <components.Option {...props}>{name}</components.Option>;
   return (
     <components.Option {...props}>
       <span className="flex min-w-0 flex-col">
-        <span className={description ? "break-words font-medium" : "break-words"}>{props.children}</span>
+        <span className={description ? "break-words font-medium" : "break-words"}>{name}</span>
         {description && <span className="break-words text-sm text-muted-foreground">{description}</span>}
         {reason && <span className="text-sm">{reason}</span>}
       </span>

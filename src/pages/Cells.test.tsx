@@ -63,7 +63,8 @@ const carlos: CellRow = {
 
 function renderCells(rows: CellRow[] = [carlos]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: rows, count: rows.length });
+  respondToRpc("cells_list", { data: rows });
+  respondToRpc("cells_list_count", { data: rows.length });
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -110,7 +111,9 @@ describe("Células: ação Excluir", () => {
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Excluir célula" }));
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Célula excluída." }));
-    expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["delete_cell", { _cell_id: "c1" }]]);
+    // A lista é lida pelas RPCs do E2.10; a gravação é só a `delete_cell`.
+    const writes = fakeRpcs().filter((call) => !call.fn.startsWith("cells_list"));
+    expect(writes.map((call) => [call.fn, call.args])).toEqual([["delete_cell", { _cell_id: "c1" }]]);
     expect(fakeQueries().some((query) => query.methods().includes("delete"))).toBe(false);
   });
 
@@ -219,13 +222,14 @@ describe("Células: o foco volta a quem abriu o diálogo (Acessibilidade, WCAG 2
     const dialog = await screen.findByRole("alertdialog");
     respondToRpc("delete_cell", {});
     // A lista recarregada, já sem a célula.
-    respondWith({ data: [], count: 0 });
+    respondToRpc("cells_list", { data: [] });
+    respondToRpc("cells_list_count", { data: 0 });
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Excluir célula" }));
 
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "Buscar células" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Buscar" })).toHaveFocus());
     expect(trash).not.toBeInTheDocument();
-    expect(screen.getByText("Nenhuma célula encontrada")).toBeInTheDocument();
+    expect(screen.getByText("Nenhuma célula encontrada.")).toBeInTheDocument();
   });
 
   it("Desktop: 'Cancelar' no formulário aberto pelo 'Editar' devolve o foco a esse ícone", async () => {

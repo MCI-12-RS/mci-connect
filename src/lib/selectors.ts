@@ -22,6 +22,11 @@ export interface SelectOption {
   disabledReason?: string;
   /** Uma segunda linha, só no menu (a opção de célula do relatório, E2.11 T2). Entra no nome acessível. */
   description?: string;
+  /**
+   * Um complemento entre parênteses depois do nome, só no menu (o nível do líder no filtro de
+   * Células, E2.10 UXD-2): o texto visível, sem ser lido, e o que o leitor de tela ouve no lugar.
+   */
+  suffix?: { text: string; spoken: string };
 }
 
 /** As opções de uma página e o `offset` da próxima, ou `null` quando acabou. */
