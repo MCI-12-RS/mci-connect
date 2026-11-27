@@ -89,9 +89,9 @@ INSERT INTO public.roles (id, name) VALUES ('$RA', 'E205 Conc Função A'), ('$R
 INSERT INTO public.role_permissions (role_id, permission) VALUES ('$RA', 'view_dashboard'), ('$RB', 'view_dashboard');
 COMMIT;
 SELECT set_config('request.jwt.claims', '{"sub":"$U1","role":"authenticated"}', false);
--- E2.11: o lançamento de transição, com as regras novas (00:00, depois da reunião; oferta obrigatória).
--- O pastor, Otávio e Paula (líder, timóteo e anfitriã) entram como automáticos.
-SELECT public.save_cell_report(NULL, jsonb_build_object('cell_id', '$C1'::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'Fé', 'offering', 0),
+-- E2.11: o lançamento (00:00, depois da reunião; oferta obrigatória), pela submit_cell_report desde o
+-- E2.12. O pastor, Otávio e Paula (líder, timóteo e anfitriã) entram como automáticos.
+SELECT public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', '$C1'::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'Fé', 'offering', 0),
                                ARRAY['$M_O']::uuid[]);
 SQL
 }

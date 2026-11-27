@@ -234,11 +234,11 @@ SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'public' AND
             AND coalesce(qual, '') !~ 'viewer_is_cell_person'), 1,
   'política de SELECT de cell_reports pelo retrato (a de UPDATE saiu no PR 2: só as RPCs gravam)');
 SELECT is((SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
-            WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum > 33 AND NOT attisdropped),
+            WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum BETWEEN 34 AND 44 AND NOT attisdropped),
   ARRAY['snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_leader_name', 'snapshot_timothy_name',
         'snapshot_host_name', 'snapshot_cell_type', 'snapshot_leader_g12_level', 'snapshot_leader_is_pastor',
         'snapshot_g12_leader_id', 'snapshot_g12_leader_name'],
-  'cell_reports_view: as onze colunas do retrato no fim, depois das 33 antigas');
+  'cell_reports_view: as onze colunas do retrato depois das 33 antigas (as quatro do E2.12 vêm depois delas)');
 
 -- ===========================================================================
 -- 2. RN-14 e RN-16: o retrato vem da célula e não muda (9)

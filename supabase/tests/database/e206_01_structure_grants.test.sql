@@ -250,7 +250,8 @@ SELECT is((SELECT array_agg(n.nspname || '.' || p.proname ORDER BY n.nspname, p.
               AND NOT (p.proname ~ '^(_hierarchy_|hierarchy_|member_hierarchy_)'
                        OR p.proname IN ('rebuild_member_hierarchy', 'ministry_tree_nodes', 'dashboard_g12_ranking',
                                        'members_list', 'member_filter_sql' /* E2.07: leem members_view.g12_level */,
-                                       'cell_filter_names' /* E2.10: lê members_view.g12_level */))), NULL,
+                                       'cell_filter_names' /* E2.10: lê members_view.g12_level */,
+                                       'cell_report_filter_options', 'cell_report_filter_names' /* E2.12: leem private.member_hierarchy.g12_level */))), NULL,
   'nenhum corpo de função cita as colunas calculadas fora da lista conhecida');
 SELECT is((SELECT count(*)::int FROM pg_trigger WHERE tgname IN ('compute_member_g12_level', 'trg_refresh_stats_members', 'trg_refresh_stats_cells')), 0,
   'os três triggers antigos (nível e totais) saíram');
@@ -271,7 +272,8 @@ BEGIN
      AND NOT (p.proname ~ '^(_hierarchy_|hierarchy_|member_hierarchy_)'
               OR p.proname IN ('rebuild_member_hierarchy', 'ministry_tree_nodes', 'dashboard_g12_ranking',
                                        'members_list', 'member_filter_sql' /* E2.07: leem members_view.g12_level */,
-                                       'cell_filter_names' /* E2.10: lê members_view.g12_level */));
+                                       'cell_filter_names' /* E2.10: lê members_view.g12_level */,
+                                       'cell_report_filter_options', 'cell_report_filter_names' /* E2.12: leem private.member_hierarchy.g12_level */));
   IF _names IS NOT NULL THEN
     RAISE EXCEPTION 'E2.06: funções que ainda citam as colunas calculadas de members: %', _names;
   END IF;

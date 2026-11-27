@@ -385,7 +385,7 @@ SELECT is(pg_temp.rpc('16', format('SELECT public.delete_cell_report(%L)', pg_te
 SELECT is(pg_temp.sub('3', pg_temp.r(2), pg_temp.held(pg_temp.c(2))) -> 'detail',
   '{"code": "not_found_or_deleted", "entity": "cell_report"}'::jsonb, 'DA-1: repetir o envio de um relatório já excluído');
 
--- Service role e o lançamento de transição (DA-12).
+-- Service role e o fim do lançamento de transição (DA-12; saiu no E2.12, DT-10).
 SELECT is(pg_temp.sub('service_role', pg_temp.r(4), jsonb_build_object('cell_id', pg_temp.c(2), 'was_held', false, 'reason_not_held', 'Viagem')) ->> 'code',
   'ok', 'RN-01: a service role lança (a semana de C2 ficou livre com a exclusão)');
 SELECT is((SELECT created_by_kind::text FROM public.cell_reports WHERE id = pg_temp.r(4)), 'system', 'RN-15: autor "Sistema"');
@@ -395,12 +395,12 @@ SELECT is(pg_temp.sub('14', pg_temp.r(4), jsonb_build_object('cell_id', pg_temp.
   'report_id_conflict', 'leitura técnica 6: um membro com o id gravado pela service role: report_id_conflict');
 SELECT is(pg_temp.rpc('16', format('SELECT public.delete_cell_report(%L)', pg_temp.r(4))) ->> 'code', 'ok', 'Rita exclui o relatório da service role');
 SELECT is(pg_temp.save('14', NULL, jsonb_build_object('cell_id', pg_temp.c(2), 'date', pg_temp.ws(), 'time', '00:00', 'theme', 'Pelo E2.05', 'offering', 0),
-                       ARRAY[pg_temp.m(14)]) -> 'rows' -> 0 ->> 'changed',
-  'true', 'DA-12: save_cell_report(NULL, …) ainda lança, com as regras (changed = true)');
-SELECT is((SELECT count(*)::int FROM public.cell_reports WHERE cell_id = pg_temp.c(2) AND deleted_at IS NULL AND theme = 'Pelo E2.05'), 1,
-  'DA-12: um relatório só');
-SELECT is(pg_temp.save('14', NULL, jsonb_build_object('cell_id', pg_temp.c(2), 'date', pg_temp.ws(), 'time', '00:00', 'theme', 'De novo', 'offering', 0)) ->> 'code',
-  'report_week_taken', 'DA-12: com as regras do lançamento (um por semana)');
+                       ARRAY[pg_temp.m(14)]) ->> 'code',
+  'report_id_required', 'E2.12 (DT-10): save_cell_report(NULL, …) não lança mais: report_id_required');
+SELECT is((SELECT count(*)::int FROM public.cell_reports WHERE cell_id = pg_temp.c(2) AND deleted_at IS NULL AND theme = 'Pelo E2.05'), 0,
+  'E2.12: nada gravado');
+SELECT is(pg_temp.save('14', NULL, '{}'::jsonb) ->> 'code',
+  'report_id_required', 'E2.12: a recusa vem antes das regras do lançamento (corpo vazio)');
 
 -- ===========================================================================
 -- 8. Invariantes

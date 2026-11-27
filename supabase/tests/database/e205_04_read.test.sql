@@ -66,7 +66,7 @@ SELECT pg_temp.api(16, format($$UPDATE public.members SET notes = 'Telma passou 
 SELECT pg_temp.api(2, format('SELECT to_jsonb(public.delete_member(%L))', pg_temp.m(16)));
 SELECT pg_temp.api(2, format($$INSERT INTO public.cells (id, leader_id, timothy_id, host_id, meeting_day, meeting_time)
                                VALUES (%L, %L, %L, %L, 'Domingo', '00:00')$$, pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6)));
-SELECT pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.save_cell_report(NULL,
+SELECT pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.submit_cell_report(gen_random_uuid(),
                                jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'Fé', 'offering', 0),
                                ARRAY[%L, %L]::uuid[]) r$$, pg_temp.c(1), pg_temp.m(4), pg_temp.m(5)));
 CREATE TEMP TABLE rep AS SELECT id FROM public.cell_reports WHERE cell_id = pg_temp.c(1);
