@@ -85,6 +85,7 @@ export type Database = {
           deleted_by_kind: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_legacy: string | null
           id: string
+          legacy_id: number | null
           observations: string | null
           offering: number | null
           reason_not_held: string | null
@@ -113,6 +114,7 @@ export type Database = {
           deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_legacy?: string | null
           id?: string
+          legacy_id?: number | null
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
@@ -141,6 +143,7 @@ export type Database = {
           deleted_by_kind?: Database["public"]["Enums"]["author_kind"] | null
           deleted_by_legacy?: string | null
           id?: string
+          legacy_id?: number | null
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
@@ -323,6 +326,7 @@ export type Database = {
           id: string
           is_active: boolean
           leader_id: string
+          legacy_id: number | null
           meeting_day: string
           meeting_time: string
           neighborhood: string | null
@@ -352,6 +356,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           leader_id: string
+          legacy_id?: number | null
           meeting_day: string
           meeting_time: string
           neighborhood?: string | null
@@ -381,6 +386,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           leader_id?: string
+          legacy_id?: number | null
           meeting_day?: string
           meeting_time?: string
           neighborhood?: string | null
@@ -613,6 +619,7 @@ export type Database = {
           is_baptized: boolean
           is_pastor: boolean
           leader_id: string | null
+          legacy_id: number | null
           mobile_whatsapp: string | null
           name: string
           neighborhood: string | null
@@ -654,6 +661,7 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
+          legacy_id?: number | null
           mobile_whatsapp?: string | null
           name: string
           neighborhood?: string | null
@@ -695,6 +703,7 @@ export type Database = {
           is_baptized?: boolean
           is_pastor?: boolean
           leader_id?: string | null
+          legacy_id?: number | null
           mobile_whatsapp?: string | null
           name?: string
           neighborhood?: string | null

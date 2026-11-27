@@ -70,12 +70,12 @@ SELECT results_eq(
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a
     WHERE a.attrelid = 'public.members'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-      AND a.attname::text <> ALL (ARRAY['name', 'gender', 'birth_date', 'cpf', 'email', 'mobile_whatsapp', 'phone', 'instagram', 'avatar_url', 'notes', 'zip_code', 'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'leader_id', 'has_leadership', 'is_pastor', 'spouse_id', 'is_baptized', 'baptism_date', 'is_active', 'role_id', 'id', 'auth_user_id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[])),
+      AND a.attname::text <> ALL (ARRAY['name', 'gender', 'birth_date', 'cpf', 'email', 'mobile_whatsapp', 'phone', 'instagram', 'avatar_url', 'notes', 'zip_code', 'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'leader_id', 'has_leadership', 'is_pastor', 'spouse_id', 'is_baptized', 'baptism_date', 'is_active', 'role_id', 'id', 'auth_user_id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[])),
   NULL,
   'classificação: toda coluna de members está na lista de campos ou na de "não é dado"');
 
 SELECT is(
-  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['name', 'gender', 'birth_date', 'cpf', 'email', 'mobile_whatsapp', 'phone', 'instagram', 'avatar_url', 'notes', 'zip_code', 'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'leader_id', 'has_leadership', 'is_pastor', 'spouse_id', 'is_baptized', 'baptism_date', 'is_active', 'role_id', 'id', 'auth_user_id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[]) c
+  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['name', 'gender', 'birth_date', 'cpf', 'email', 'mobile_whatsapp', 'phone', 'instagram', 'avatar_url', 'notes', 'zip_code', 'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'leader_id', 'has_leadership', 'is_pastor', 'spouse_id', 'is_baptized', 'baptism_date', 'is_active', 'role_id', 'id', 'auth_user_id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[]) c
     WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = 'public.members'::regclass
                        AND a.attname::text = c AND a.attnum > 0 AND NOT a.attisdropped)),
   NULL,
@@ -92,12 +92,12 @@ SELECT is((SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_tr
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a
     WHERE a.attrelid = 'public.cells'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-      AND a.attname::text <> ALL (ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[])),
+      AND a.attname::text <> ALL (ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[])),
   NULL,
   'classificação: toda coluna de cells está na lista de campos ou na de "não é dado"');
 
 SELECT is(
-  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy']::text[]) c
+  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[]) c
     WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = 'public.cells'::regclass
                        AND a.attname::text = c AND a.attnum > 0 AND NOT a.attisdropped)),
   NULL,
@@ -114,12 +114,12 @@ SELECT is((SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_tr
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a
     WHERE a.attrelid = 'public.cell_reports'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-      AND a.attname::text <> ALL (ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type']::text[])),
+      AND a.attname::text <> ALL (ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type', 'legacy_id']::text[])),
   NULL,
   'classificação: toda coluna de cell_reports está na lista de campos ou na de "não é dado"');
 
 SELECT is(
-  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type']::text[]) c
+  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['cell_id', 'date', 'time', 'was_held', 'theme', 'reason_not_held', 'offering', 'observations', 'visitors', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_cell_type', 'legacy_id']::text[]) c
     WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = 'public.cell_reports'::regclass
                        AND a.attname::text = c AND a.attnum > 0 AND NOT a.attisdropped)),
   NULL,

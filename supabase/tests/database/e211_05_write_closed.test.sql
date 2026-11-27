@@ -217,8 +217,8 @@ SELECT ok(to_regprocedure(f) IS NULL, f || ' saiu (DT-11)')
 SELECT is((SELECT array_agg(tgname::text ORDER BY tgname) FROM pg_trigger
             WHERE tgrelid = 'public.cell_reports'::regclass AND NOT tgisinternal AND (tgtype & 2) = 2),
   ARRAY['a0_guard_cell_report_write', 'aa_enforce_cell_report_rules', 'ac_enforce_cell_report_active',
-        'ad_cell_report_snapshot', 'zz_stamp_authorship'],
-  'cell_reports: a guarda é o primeiro BEFORE; saíram o a0_check, o ab_ e os de semana');
+        'ad_cell_report_snapshot', 'zy_keep_legacy_id', 'zz_stamp_authorship'],
+  'cell_reports: a guarda é o primeiro BEFORE; saíram o a0_check, o ab_ e os de semana (zy_keep_legacy_id do E4)');
 SELECT is((SELECT array_agg(tgname::text ORDER BY tgname) FROM pg_trigger
             WHERE tgrelid = 'public.cell_report_participants'::regclass AND NOT tgisinternal AND (tgtype & 2) = 2),
   ARRAY['a0_guard_cell_report_write', 'aa_enforce_participant_rules', 'ac_keep_snapshot_participants'],

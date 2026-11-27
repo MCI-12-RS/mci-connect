@@ -191,6 +191,7 @@ SELECT results_eq(
   $$ SELECT conname::text COLLATE "default", pg_get_constraintdef(oid) FROM pg_constraint
       WHERE conrelid = 'public.cells'::regclass AND contype = 'c' AND conname LIKE 'cells\_%\_check' AND conname <> 'cells_deleted_by_check'
         AND conname NOT LIKE '%authorship\_check' AND conname <> 'cells_legacy_names_check'
+        AND conname <> 'cells_legacy_id_check' /* E4 DT-01 */
       ORDER BY conname $$,
   $$ VALUES ('cells_meeting_day_check'::text, 'CHECK ((weekday_index(meeting_day) IS NOT NULL))'::text),
             ('cells_meeting_time_check', 'CHECK (is_valid_meeting_time(meeting_time))'),
@@ -235,8 +236,9 @@ SELECT is(
   (SELECT array_agg(t.tgname::text ORDER BY t.tgname) FROM pg_trigger t
     WHERE t.tgrelid = 'public.cells'::regclass AND NOT t.tgisinternal AND (t.tgtype & 2) <> 0
       AND t.tgname <> 'zz_stamp_authorship'),
-  ARRAY['a0_check_insert_permission', 'a0_normalize_cell', 'aa_enforce_cell_links', 'ab_enforce_cell_scope', 'ad_enforce_cell_rules'],
-  'RN-14: a ordem dos BEFORE de cells: permissão < normalização < excluído < escopo < regras');
+  ARRAY['a0_check_insert_permission', 'a0_normalize_cell', 'aa_enforce_cell_links', 'ab_enforce_cell_scope', 'ad_enforce_cell_rules',
+        'zy_keep_legacy_id'],
+  'RN-14: a ordem dos BEFORE de cells: permissão < normalização < excluído < escopo < regras (< legacy_id, E4 DT-02)');
 
 -- ===========================================================================
 -- RN-01: todos os papéis; em replica valem os NOT NULL e os CHECKs
