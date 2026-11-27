@@ -67,7 +67,7 @@ function pendingLeaders(): string[] {
 
 const ALL_LEADERS = new Set([...F.CELLS.map((c) => c.leader.name), F.TIAGO.name, F.CARLA.name]);
 async function leaders(page: Page): Promise<string[]> {
-  const names = await page.getByRole("main").locator("li p > span.font-semibold").allTextContents();
+  const names = await page.getByRole("main").locator("li p a > span.font-semibold").allTextContents();
   return names.map((n) => n.replace(/\s*\(.*$/, "").replace(/,.*$/, "").trim()).filter((n) => ALL_LEADERS.has(n));
 }
 
