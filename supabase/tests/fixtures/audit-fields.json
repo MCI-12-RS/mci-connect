@@ -283,7 +283,8 @@
         "deleted_at",
         "deleted_by",
         "deleted_by_kind",
-        "deleted_by_legacy"
+        "deleted_by_legacy",
+        "legacy_id"
       ]
     },
     "cells": {
@@ -301,7 +302,8 @@
         "deleted_at",
         "deleted_by",
         "deleted_by_kind",
-        "deleted_by_legacy"
+        "deleted_by_legacy",
+        "legacy_id"
       ]
     },
     "cell_reports": {
@@ -323,7 +325,8 @@
         "snapshot_leader_id",
         "snapshot_timothy_id",
         "snapshot_host_id",
-        "snapshot_cell_type"
+        "snapshot_cell_type",
+        "legacy_id"
       ]
     },
     "roles": {

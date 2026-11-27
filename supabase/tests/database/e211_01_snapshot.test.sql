@@ -218,8 +218,8 @@ SELECT is((SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'public.cell_r
 SELECT is((SELECT array_agg(tgname::text ORDER BY tgname) FROM pg_trigger
             WHERE tgrelid = 'public.cell_reports'::regclass AND NOT tgisinternal AND (tgtype & 2) = 2),
   ARRAY['a0_guard_cell_report_write', 'aa_enforce_cell_report_rules', 'ac_enforce_cell_report_active',
-        'ad_cell_report_snapshot', 'zz_stamp_authorship'],
-  'ordem dos BEFORE (E2.11 PR 2): a0_ (guarda) < aa_ < ac_ < ad_ (retrato) < zz_ (carimbo)');
+        'ad_cell_report_snapshot', 'zy_keep_legacy_id', 'zz_stamp_authorship'],
+  'ordem dos BEFORE (E2.11 PR 2): a0_ (guarda) < aa_ < ac_ < ad_ (retrato) < zy_ (legacy_id, E4 DT-02) < zz_ (carimbo)');
 SELECT ok((SELECT prosecdef AND proconfig @> ARRAY['search_path=public'] FROM pg_proc WHERE oid = 'public.viewer_sees_report_people(uuid,uuid,uuid)'::regprocedure)
           AND has_function_privilege('authenticated', 'public.viewer_sees_report_people(uuid,uuid,uuid)', 'EXECUTE')
           AND NOT has_function_privilege('anon', 'public.viewer_sees_report_people(uuid,uuid,uuid)', 'EXECUTE'),
