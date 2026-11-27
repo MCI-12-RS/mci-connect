@@ -4,6 +4,8 @@ import { CELL_BLOCK_TEXTS } from "@/lib/cell-reports/texts";
 
 interface CellSnapshotBlockProps {
   block: CellBlock;
+  /** "single" mantém uma coluna em toda largura (o painel "Ver relatório", estreito mesmo no desktop). */
+  layout?: "responsive" | "single";
   className?: string;
 }
 
@@ -16,14 +18,14 @@ const LEFT_COLUMN = 4;
  * retrato, a frase "Líder, timóteo, anfitrião e tipo registrados no envio.".
  * O mesmo componente no formulário e no "Ver relatório".
  */
-export function CellSnapshotBlock({ block, className }: CellSnapshotBlockProps) {
+export function CellSnapshotBlock({ block, layout = "responsive", className }: CellSnapshotBlockProps) {
   const columns = [block.lines.slice(0, LEFT_COLUMN), block.lines.slice(LEFT_COLUMN)];
   return (
     <section
       aria-label={CELL_BLOCK_TEXTS.ariaLabel}
       className={cn("rounded-lg border bg-card p-3 text-card-foreground", className)}
     >
-      <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
+      <div className={cn("grid gap-x-6 gap-y-2", layout === "responsive" && "md:grid-cols-2")}>
         {columns.map((lines, column) => (
           <dl key={column} className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-3 gap-y-2">
             {lines.map((line) => (

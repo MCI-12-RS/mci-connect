@@ -32,6 +32,8 @@ export function useCellReportEdit(reportId: string | null) {
     gcTime: 0,
     refetchOnWindowFocus: false,
     retry: retryOnceOnNetworkError,
+    // Sem rede, a busca roda e falha (em vez de ficar pausada): a tela cai no caminho da falha.
+    networkMode: "always",
     queryFn: async (): Promise<CellReportEditData | null> => {
       const id = reportId ?? "";
       const [row, context] = await Promise.all([

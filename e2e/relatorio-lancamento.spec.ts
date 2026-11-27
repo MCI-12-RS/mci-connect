@@ -155,7 +155,7 @@ test("UX-18 e RN-09: 'Não houve célula' mostra a reunião prevista e o Motivo,
   const dialog = page.getByRole("dialog", { name: "Novo relatório" });
   await dialog.getByLabel("Tema *").fill("Tema que não vai");
   await dialog.getByText("Não houve célula", { exact: true }).click();
-  await expect(dialog.getByText(/^Ao enviar, o tema/)).toBeVisible();
+  await expect(dialog.getByText("Ao enviar, não será enviado: o tema.")).toBeVisible();
   await expect(dialog.getByText(/^Reunião prevista: /)).toBeVisible();
   await expect(dialog.getByLabel("Tema *")).toHaveCount(0);
   await expect(dialog.getByRole("group", { name: "Participantes" })).toHaveCount(0);

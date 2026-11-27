@@ -24,7 +24,7 @@ function items(content: HeldContent, participantItem: (n: number) => string): st
   return list;
 }
 
-/** No lançamento, "Ao enviar, {itens} não serão enviados."; `null` sem nada preenchido. */
+/** No lançamento, "Ao enviar, não serão enviados: {itens}." (com um item, "não será enviado"); `null` sem nada preenchido. */
 export function launchLeavingNotice(content: HeldContent): string | null {
   const list = items(content, LEAVING_TEXTS.items.chosen);
   return list.length > 0 ? LEAVING_TEXTS.launch(list) : null;
@@ -32,7 +32,7 @@ export function launchLeavingNotice(content: HeldContent): string | null {
 
 /**
  * Na edição: da célula realizada para "Não houve célula", "Ao salvar, saem do
- * relatório: {itens}."; no sentido contrário, o texto fixo. `null` quando a
+ * relatório: {itens}." (com um item, "sai"); no sentido contrário, o texto fixo. `null` quando a
  * situação não mudou ou nada sai.
  */
 export function editSwitchNotice(storedHeld: boolean, currentHeld: boolean, content: HeldContent): string | null {

@@ -108,8 +108,10 @@ export const MEETING_TEXTS = {
 } as const;
 
 export const LEAVING_TEXTS = {
-  launch: (items: readonly string[]) => `Ao enviar, ${formatList(items)} não serão enviados.`,
-  edit: (items: readonly string[]) => `Ao salvar, saem do relatório: ${formatList(items)}.`,
+  launch: (items: readonly string[]) =>
+    items.length === 1 ? `Ao enviar, não será enviado: ${items[0]}.` : `Ao enviar, não serão enviados: ${formatList(items)}.`,
+  edit: (items: readonly string[]) =>
+    items.length === 1 ? `Ao salvar, sai do relatório: ${items[0]}.` : `Ao salvar, saem do relatório: ${formatList(items)}.`,
   toHeld: "Ao salvar, o motivo sai do relatório, e o líder, o timóteo e o anfitrião registrados entram como participantes.",
   items: {
     theme: "o tema",

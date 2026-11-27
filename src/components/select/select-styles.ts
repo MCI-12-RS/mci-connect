@@ -78,6 +78,8 @@ export function selectStyles<Option, IsMulti extends boolean>(): StylesConfig<Op
       justifyContent: "center",
       color: "hsl(var(--foreground))",
       "&:hover": { backgroundColor: "hsl(var(--destructive))", color: "hsl(var(--destructive-foreground))" },
+      // O ✕ do chip com alvo de toque de 44 px no celular, como as opções.
+      [TOUCH_TARGET]: { minWidth: 44, minHeight: 44 },
     }),
   };
 }

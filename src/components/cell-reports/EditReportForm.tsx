@@ -246,6 +246,9 @@ function EditReportBody({ data, saved, onClose, onCloseAndRefresh }: EditReportB
         setTopMessage(refusal.message);
         return;
       case "week_taken":
+        // A edição não troca a célula nem sai da semana: o índice da semana aqui é uma falha inesperada.
+        setFailure(REPORT_FORM_TEXTS.connection.save);
+        return;
       case "gate":
         return;
       default:

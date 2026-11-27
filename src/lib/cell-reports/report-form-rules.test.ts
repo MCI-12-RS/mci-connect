@@ -224,7 +224,10 @@ describe("Chamada pelo front", () => {
 describe("P20: o que sai na troca de situação", () => {
   it("UX-18: no lançamento, o tema e os 2 participantes escolhidos", () => {
     expect(launchLeavingNotice({ theme: "Tema", participants: 2, visitors: 0, offering: null, observations: "" })).toBe(
-      "Ao enviar, o tema e 2 participantes escolhidos não serão enviados.",
+      "Ao enviar, não serão enviados: o tema e 2 participantes escolhidos.",
+    );
+    expect(launchLeavingNotice({ theme: "Tema", participants: 0, visitors: 0, offering: null, observations: "" })).toBe(
+      "Ao enviar, não será enviado: o tema.",
     );
     expect(launchLeavingNotice({ theme: "", participants: 0, visitors: 0, offering: null, observations: "" })).toBeNull();
   });
@@ -232,6 +235,9 @@ describe("P20: o que sai na troca de situação", () => {
   it("UX-33: na edição, com tudo, e o texto da volta para a realizada", () => {
     expect(editSwitchNotice(true, false, { theme: "Tema", participants: 8, visitors: 2, offering: 50, observations: "Obs" })).toBe(
       "Ao salvar, saem do relatório: o tema, 8 participantes, 2 visitantes, a oferta (R$ 50,00) e as observações.",
+    );
+    expect(editSwitchNotice(true, false, { theme: "Tema", participants: 0, visitors: 0, offering: null, observations: "" })).toBe(
+      "Ao salvar, sai do relatório: o tema.",
     );
     expect(editSwitchNotice(false, true, { theme: "", participants: 0, visitors: 0, offering: null, observations: "" })).toBe(
       "Ao salvar, o motivo sai do relatório, e o líder, o timóteo e o anfitrião registrados entram como participantes.",
@@ -309,6 +315,77 @@ describe("AQ-2, T7: as recusas do servidor", () => {
     expect(classifyReportError(appError({ code: "report_id_conflict" }, "x"))).toEqual({ kind: "connection" });
     expect(classifyReportError({ code: "", message: "TypeError: Failed to fetch" })).toEqual({ kind: "connection" });
     expect(classifyReportError({ code: "23514", message: "violates check constraint" })).toEqual({ kind: "connection" });
+  });
+
+  // A tabela "Formato dos erros" da Solução técnica, linha a linha: o `detail` que o servidor manda e o destino na tela.
+  const TABLE: ReadonlyArray<{ detail: Record<string, unknown>; expected: Record<string, unknown> }> = [
+    { detail: { code: "cell_required", field: "cell_id" }, expected: { kind: "field", field: "cell_id" } },
+    { detail: { code: "report_date_required", field: "date" }, expected: { kind: "field", field: "date" } },
+    { detail: { code: "report_date_invalid", field: "date" }, expected: { kind: "field", field: "date" } },
+    { detail: { code: "report_time_required", field: "time" }, expected: { kind: "field", field: "time" } },
+    { detail: { code: "report_time_invalid", field: "time" }, expected: { kind: "field", field: "time" } },
+    { detail: { code: "theme_required", field: "theme" }, expected: { kind: "field", field: "theme" } },
+    { detail: { code: "theme_too_long", field: "theme", max: 300 }, expected: { kind: "field", field: "theme" } },
+    { detail: { code: "reason_required", field: "reason_not_held" }, expected: { kind: "field", field: "reason_not_held" } },
+    { detail: { code: "reason_too_long", field: "reason_not_held", max: 2000 }, expected: { kind: "field", field: "reason_not_held" } },
+    {
+      detail: { code: "not_held_with_deleted_participant", field: "was_held", member_ids: ["m1"] },
+      expected: { kind: "field", field: "was_held" },
+    },
+    {
+      detail: { code: "deleted_member_chosen", field: "participant_ids", member_id: "m1" },
+      expected: { kind: "field", field: "participant_ids", memberId: "m1" },
+    },
+    {
+      detail: { code: "person_not_visible", field: "participant_ids", member_id: "m2" },
+      expected: { kind: "field", field: "participant_ids", memberId: "m2" },
+    },
+    {
+      detail: { code: "deleted_participant_removal", field: "participant_ids", member_id: "m3" },
+      expected: { kind: "field", field: "participant_ids", memberId: "m3" },
+    },
+    {
+      detail: { code: "snapshot_participant_removal", field: "participant_ids", member_id: "m4" },
+      expected: { kind: "field", field: "participant_ids", memberId: "m4" },
+    },
+    { detail: { code: "too_many_participants", field: "participant_ids", max: 1000 }, expected: { kind: "field", field: "participant_ids" } },
+    { detail: { code: "visitors_invalid", field: "visitors" }, expected: { kind: "field", field: "visitors" } },
+    { detail: { code: "too_many_visitors", field: "visitors", max: 1000 }, expected: { kind: "field", field: "visitors" } },
+    { detail: { code: "visitor_name_too_long", field: "visitors", index: 0 }, expected: { kind: "field", field: "visitors" } },
+    { detail: { code: "offering_required", field: "offering" }, expected: { kind: "field", field: "offering" } },
+    { detail: { code: "offering_negative", field: "offering" }, expected: { kind: "field", field: "offering" } },
+    { detail: { code: "offering_invalid", field: "offering" }, expected: { kind: "field", field: "offering" } },
+    { detail: { code: "offering_too_large", field: "offering", max: 999999.99 }, expected: { kind: "field", field: "offering" } },
+    { detail: { code: "observations_too_long", field: "observations", max: 4000 }, expected: { kind: "field", field: "observations" } },
+    { detail: { code: "report_cell_immutable", cell_id: "c1" }, expected: { kind: "top" } },
+    {
+      detail: { code: "report_week_locked", field: "date", week_start: "2026-11-22", week_end: "2026-11-28" },
+      expected: { kind: "field", field: "date" },
+    },
+    { detail: { code: "report_not_current_week", week_start: "2026-11-22", week_end: "2026-11-28" }, expected: { kind: "top" } },
+    { detail: { code: "report_week_taken", week_start: "2026-11-22" }, expected: { kind: "week_taken", report: null } },
+    { detail: { code: "meeting_not_yet", meeting_at: "2026-11-25T20:00" }, expected: { kind: "top" } },
+    { detail: { code: "report_in_future", field: "date_time" }, expected: { kind: "field", field: "time" } },
+    { detail: { code: "report_before_meeting", field: "date_time", meeting_at: "2026-11-25T20:00" }, expected: { kind: "field", field: "time" } },
+    { detail: { code: "report_submit_not_allowed", cell_id: "c1" }, expected: { kind: "cell", reason: "not_allowed" } },
+    { detail: { code: "not_found_or_deleted", entity: "cell" }, expected: { kind: "cell", reason: "not_found" } },
+    { detail: { code: "not_found_or_deleted", entity: "cell_report" }, expected: { kind: "report_gone" } },
+    { detail: { code: "cell_deleted", cell_id: "c1" }, expected: { kind: "cell", reason: "deleted" } },
+    { detail: { code: "report_cell_deleted", cell_id: "c1" }, expected: { kind: "report_gone" } },
+    { detail: { code: "cell_inactive", cell_id: "c1" }, expected: { kind: "cell", reason: "inactive" } },
+    { detail: { code: "report_id_required" }, expected: { kind: "connection" } },
+    { detail: { code: "report_id_conflict" }, expected: { kind: "connection" } },
+    { detail: { code: "cell_meeting_day_missing" }, expected: { kind: "connection" } },
+  ];
+
+  it.each(TABLE)("$detail.code ($detail.field) vai para o destino da tabela", ({ detail, expected }) => {
+    expect(classifyReportError(appError(detail, "Mensagem do servidor."))).toMatchObject(expected);
+  });
+
+  it("as reservas: 42501, 23505 sem código e 40P01", () => {
+    expect(classifyReportError({ code: "42501", message: "permission denied" })).toMatchObject({ kind: "permission" });
+    expect(classifyReportError({ code: "23505", message: "duplicate key" })).toEqual({ kind: "week_taken", report: null });
+    expect(classifyReportError({ code: "40P01", message: "deadlock detected" })).toEqual({ kind: "connection" });
   });
 });
 

@@ -22,6 +22,8 @@ export function useCellReportLaunchCheck(cellId: string | null) {
     staleTime: 0,
     gcTime: 0,
     retry: false,
+    // Sem rede, a busca roda e falha (em vez de ficar pausada): a tela cai no caminho da falha.
+    networkMode: "always",
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<LaunchCheckState> => {
       const { data, error } = await supabase.rpc("cell_report_launch_check", { _cell_id: cellId ?? "" });

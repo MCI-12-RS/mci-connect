@@ -121,7 +121,8 @@ export function MeetingFieldset(props: MeetingFieldsetProps) {
 
       {values.held ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* Rótulos em bloco: o "Data" só de leitura (um dia) é um `<p>`, e o `<label>` em linha ficaria ~6 px mais alto. */}
+          <div className="grid items-start gap-4 md:grid-cols-2">
             <div className="min-w-0 space-y-2">
               <DateSelect
                 id="report-date"
@@ -137,7 +138,7 @@ export function MeetingFieldset(props: MeetingFieldsetProps) {
               {errors.date && <FieldError id="report-date-error">{errors.date}</FieldError>}
             </div>
             <div className="min-w-0 space-y-2">
-              <Label htmlFor="report-time">
+              <Label htmlFor="report-time" className="block">
                 {MEETING_TEXTS.time}
                 {REPORT_FORM_TEXTS.required}
               </Label>

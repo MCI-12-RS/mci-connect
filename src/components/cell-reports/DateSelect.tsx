@@ -40,7 +40,7 @@ export const DateSelect = forwardRef<HTMLButtonElement, DateSelectProps>(
     const a11y = fieldA11yProps(id, { error });
     return (
       <div className="min-w-0 space-y-2">
-        <Label htmlFor={id}>
+        <Label htmlFor={id} className="block">
           {MEETING_TEXTS.date}
           {REPORT_FORM_TEXTS.required}
         </Label>

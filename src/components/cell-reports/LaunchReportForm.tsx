@@ -110,13 +110,16 @@ function weekTakenLines(report: ExistingReport | null, first: string): string[] 
 /**
  * O lançamento do relatório (E2.11, T1 a T8): a célula (fixa ou no seletor), a
  * conferência antes de preencher (P100), os campos e o envio idempotente pela
- * `submit_cell_report`, com o `attemptId` gerado ao abrir.
+ * `submit_cell_report`, com o `attemptId` gerado ao abrir e a cada troca de célula.
  */
 export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: LaunchReportFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { access, hasPermission } = useAuth();
-  const [attemptId] = useState(() => crypto.randomUUID());
+  // O id do envio (idempotente pela `submit_cell_report`): um por célula. Trocar de célula gera outro, a
+  // não ser depois de uma queda, quando o seletor fica travado (P107: a tentativa pode ter gravado).
+  const [attemptId, setAttemptId] = useState(() => crypto.randomUUID());
+  const [formId] = useState(() => `report-form-${attemptId}`);
   const isCellFixed = fixedCell !== null;
   const [cell, setCell] = useState<CellSummary | null>(fixedCell);
 
@@ -211,7 +214,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
   // Avisos e falhas.
   const [refusalNotice, setRefusalNotice] = useState<TopNotice | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const hadConnectionFailure = useRef(false);
+  const [hadConnectionFailure, setHadConnectionFailure] = useState(false);
   const submit = useCellReportSubmit();
   const busy = submit.isPending;
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -295,8 +298,12 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
 
   const chooseCell = (option: SelectOption | null) => {
     const found = cellOptionsQuery.data?.pages.flatMap((page) => page.items).find((c) => c.id === option?.value) ?? null;
+    if (hadConnectionFailure || found?.id === cell?.id) return;
     setClearedNotice(null);
     setRefusalNotice(null);
+    setAttemptId(crypto.randomUUID());
+    // A nova célula passa pela própria conferência: um aviso dela esconde os campos de novo (T3).
+    fieldsUnlocked.current = false;
     setCell(found);
     if (!found) update({ cellId: "" }, ["cell_id"]);
   };
@@ -309,7 +316,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
   const showRefusal = (refusal: ReportRefusal) => {
     switch (refusal.kind) {
       case "connection":
-        hadConnectionFailure.current = true;
+        setHadConnectionFailure(true);
         setFailure(REPORT_FORM_TEXTS.connection.send);
         return;
       case "field":
@@ -319,7 +326,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
         form.showServerError(refusal.field, refusal.message);
         return;
       case "week_taken":
-        if (hadConnectionFailure.current) {
+        if (hadConnectionFailure) {
           // P107: a primeira tentativa provavelmente gravou.
           setRefusalNotice({
             tone: "info",
@@ -348,6 +355,10 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
           });
           return;
         }
+        // A célula não recebe: a tentativa não gravou nada, e outra célula recebe um id novo.
+        setHadConnectionFailure(false);
+        setAttemptId(crypto.randomUUID());
+        fieldsUnlocked.current = false;
         setCell(null);
         suggestedFor.current = null;
         update({ cellId: "" }, ["cell_id"]);
@@ -433,7 +444,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
     onClose: isFinal || (topNotice?.hidesFields && !showFields) ? closeAndRefresh : onClose,
     actions: hasFormActions
       ? {
-          formId: `report-form-${attemptId}`,
+          formId,
           primaryLabel: REPORT_FORM_TEXTS.buttons.send,
           busyLabel: REPORT_FORM_TEXTS.buttons.sending,
           busy,
@@ -450,7 +461,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
   return (
     <>
       <form
-        id={`report-form-${attemptId}`}
+        id={formId}
         ref={formRef}
         noValidate
         onSubmit={(event) => {
@@ -502,7 +513,7 @@ export function LaunchReportForm({ cell: fixedCell, onEditReport, onClose }: Lau
                 onChange={chooseCell}
                 placeholder={REPORT_CELL_TEXTS.placeholder}
                 noResultsLabel={cellSearch.term ? REPORT_CELL_TEXTS.noResults : SELECT_TEXTS.noCellsToReport}
-                isDisabled={busy}
+                isDisabled={busy || hadConnectionFailure}
                 aria-required
                 aria-invalid={!!errors.cell_id}
                 aria-errormessage={errors.cell_id ? "report-cell-error" : undefined}

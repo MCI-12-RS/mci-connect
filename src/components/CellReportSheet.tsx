@@ -139,7 +139,7 @@ const ReportDetails = ({ view, report, canSeeDeletedCells }: ReportDetailsProps)
     {/* O bloco da célula com as pessoas e o tipo registrados (E2.11, T10, P105). */}
     <div className="mt-4 space-y-2">
       <p className="text-sm font-medium">{REPORT_CELL_TEXTS.label}</p>
-      <CellSnapshotBlock block={cellBlockFromReport(report)} />
+      <CellSnapshotBlock block={cellBlockFromReport(report)} layout="single" />
     </div>
 
     <dl className="mt-4 space-y-4 text-sm">
