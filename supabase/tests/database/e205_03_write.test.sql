@@ -98,7 +98,7 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_
 UPDATE public.members SET spouse_id = pg_temp.m(13) WHERE id = pg_temp.m(12);
 UPDATE public.members SET deleted_at = now() WHERE id = pg_temp.m(7);
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, meeting_day, meeting_time, neighborhood)
-VALUES (pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6), 'Domingo', '00:00', 'Centro');
+VALUES (pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6), 'Domingo', '00:05', 'Centro');
 
 -- ===========================================================================
 -- 1. RN-01 a RN-03, DA-1: quem é o autor e só o servidor define — 12
@@ -297,18 +297,20 @@ SELECT is((SELECT jsonb_build_object('by', actor_label, 'changes', changes) FROM
 -- 6. Células e relatórios (RN-01, RN-04 d, RN-13 b, RN-20) — 13
 -- ===========================================================================
 CREATE TEMP TABLE m12 AS SELECT pg_temp.mark() AS s;
-SELECT is(pg_temp.api(2, format($$UPDATE public.cells SET meeting_time = '00:05', street = 'Rua Nova', is_active = true WHERE id = %L$$, pg_temp.c(1))) ->> 'ok', 'true',
+SELECT is(pg_temp.api(2, format($$UPDATE public.cells SET meeting_time = '00:00', street = 'Rua Nova', is_active = true WHERE id = %L$$, pg_temp.c(1))) ->> 'ok', 'true',
   'Ana muda o horário e a rua da célula de Davi (e manda a situação igual)');
 SELECT is((SELECT jsonb_build_object('label', entity_label, 'desc', description, 'changes', changes) FROM pg_temp.evs('cell', pg_temp.c(1), (SELECT s FROM m12))),
   '{"label": "Célula de Davi Duarte", "desc": "Alterou a célula de Davi Duarte",
-    "changes": {"fields": [{"field": "meeting_time", "from": "00:00:00", "to": "00:05:00"}, {"field": "street"}]}}'::jsonb,
+    "changes": {"fields": [{"field": "meeting_time", "from": "00:05:00", "to": "00:00:00"}, {"field": "street"}]}}'::jsonb,
   'RN-13 c/RN-20: a rua da célula aparece (sem valor); o horário com o antes e o depois');
 SELECT ok((SELECT updated_by = pg_temp.m(2) AND created_by_kind = 'system' FROM public.cells WHERE id = pg_temp.c(1)),
   'RN-01: a célula guarda quem alterou');
 
 CREATE TEMP TABLE m13 AS SELECT pg_temp.mark() AS s;
+-- A célula se reúne no domingo às 00:00 (o começo da semana), e o horário enviado é o minuto atual: a
+-- reunião já aconteceu e o horário não é futuro a qualquer hora do dia (RN-05, RN-06; DT-08).
 SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(NULL,
-                                   jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '19:30', 'theme', 'Fé',
+                                   jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', to_char(public.sp_now(), 'HH24:MI'), 'theme', 'Fé',
                                                       'offering', 50, 'visitors', ARRAY['Visitante Um'], 'id', gen_random_uuid()),
                                    ARRAY[%L, %L, %L, %L, %L, %L, %L, %L]::uuid[]) r$$,
                                   pg_temp.c(1), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6), pg_temp.m(14), pg_temp.m(30),
