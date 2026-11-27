@@ -1819,6 +1819,44 @@ export type Database = {
       can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
       cell_default_type: { Args: never; Returns: string }
+      cell_filter_names: {
+        Args: {
+          _ids: string[]
+          _person: Database["public"]["Enums"]["cell_filter_person"]
+        }
+        Returns: {
+          g12_level: number
+          gender: string
+          id: string
+          is_pastor: boolean
+          name: string
+        }[]
+      }
+      cell_filter_options: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _person: Database["public"]["Enums"]["cell_filter_person"]
+          _search?: string[]
+        }
+        Returns: {
+          g12_level: number
+          gender: string
+          id: string
+          is_pastor: boolean
+          name: string
+        }[]
+      }
+      cell_identity: {
+        Args: { _cell_id: string }
+        Returns: {
+          cell_deleted: boolean
+          cell_id: string
+          leader_name: string
+          meeting_day: string
+          meeting_time: string
+        }[]
+      }
       cell_links_or_none: {
         Args: {
           _is_pastor: boolean
@@ -1826,6 +1864,23 @@ export type Database = {
           _total_cells: number
         }
         Returns: Database["public"]["Enums"]["member_cell_link"][]
+      }
+      cell_recent_reports: {
+        Args: { _cell_id: string; _limit?: number }
+        Returns: {
+          date: string
+          id: string
+          observations: string
+          offering: number
+          participants_count: number
+          participants_trend: number
+          reason_not_held: string
+          theme: string
+          time: string
+          visitors_count: number
+          visitors_trend: number
+          was_held: boolean
+        }[]
       }
       cell_report_edit_context: {
         Args: { _report_id: string }
@@ -1857,6 +1912,89 @@ export type Database = {
       }
       cell_types: { Args: never; Returns: string[] }
       cell_weekdays: { Args: never; Returns: string[] }
+      cells_list: {
+        Args: {
+          _city?: string
+          _created_from?: string
+          _created_to?: string
+          _g12_ids?: string[]
+          _is_active?: boolean
+          _leader_ids?: string[]
+          _limit?: number
+          _missing_weeks?: number[]
+          _neighborhood?: string
+          _offset?: number
+          _report_statuses?: Database["public"]["Enums"]["cell_report_status"][]
+          _search?: string[]
+          _street?: string
+          _types?: string[]
+          _weekdays?: number[]
+        }
+        Returns: {
+          can_submit_report: boolean | null
+          city: string | null
+          complement: string | null
+          created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
+          g12_leader_id: string | null
+          g12_leader_name: string | null
+          host_id: string | null
+          host_name: string | null
+          id: string | null
+          is_active: boolean | null
+          is_mine: boolean | null
+          last_report_date: string | null
+          leader_g12_level: number | null
+          leader_gender: string | null
+          leader_id: string | null
+          leader_is_pastor: boolean | null
+          leader_name: string | null
+          meeting_day: string | null
+          meeting_time: string | null
+          meeting_weekday: number | null
+          neighborhood: string | null
+          number: string | null
+          report_missing_weeks: number | null
+          report_status:
+            | Database["public"]["Enums"]["cell_report_status"]
+            | null
+          search_text: string | null
+          state: string | null
+          street: string | null
+          timothy_id: string | null
+          timothy_name: string | null
+          type: string | null
+          updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
+          zip_code: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cells_view"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      cells_list_count: {
+        Args: {
+          _city?: string
+          _created_from?: string
+          _created_to?: string
+          _g12_ids?: string[]
+          _is_active?: boolean
+          _leader_ids?: string[]
+          _missing_weeks?: number[]
+          _neighborhood?: string
+          _report_statuses?: Database["public"]["Enums"]["cell_report_status"][]
+          _search?: string[]
+          _street?: string
+          _types?: string[]
+          _weekdays?: number[]
+        }
+        Returns: number
+      }
       cells_report_situation: {
         Args: { _at?: string }
         Returns: {
@@ -1940,6 +2078,10 @@ export type Database = {
           member_id: string
           name: string
         }[]
+      }
+      first_distinct_ids: {
+        Args: { _ids: string[]; _max: number }
+        Returns: string[]
       }
       is_placeholder_email: { Args: { _email: string }; Returns: boolean }
       is_valid_cpf: { Args: { _digits: string }; Returns: boolean }
@@ -2231,6 +2373,7 @@ export type Database = {
     }
     Enums: {
       author_kind: "member" | "system" | "legacy" | "unknown"
+      cell_filter_person: "leader" | "g12"
       cell_report_status:
         | "sent_held"
         | "sent_not_held"
@@ -2426,6 +2569,7 @@ export const Constants = {
   public: {
     Enums: {
       author_kind: ["member", "system", "legacy", "unknown"],
+      cell_filter_person: ["leader", "g12"],
       cell_report_status: [
         "sent_held",
         "sent_not_held",
