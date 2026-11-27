@@ -7,6 +7,7 @@ import {
   missingWeeksLine,
   missingWeeksText,
   reportStatusDisplay,
+  reportStatusExplanation,
 } from "./report-status";
 
 // E2.09: P70, P72, P73; UX-04, UX-08 e UX-12 (o front só traduz o código).
@@ -104,5 +105,21 @@ describe("P73: a legenda", () => {
         .join(" ") +
       [1, 2, 3, 4].map(missingWeeksText).join(" ");
     expect(all).not.toMatch(/Status|Atrasado|Entregue|Cancelada|Sem relatório a |cobr/);
+  });
+});
+
+describe("reportStatusExplanation (E2.10, detalhe, T10)", () => {
+  it("explica Ainda não ocorreu, Pendente e Conta a partir da próxima semana", () => {
+    expect(reportStatusExplanation(reportStatusDisplay("pending", true))).toBe(
+      "A reunião desta semana já passou e o relatório não foi enviado.",
+    );
+    expect(reportStatusExplanation(reportStatusDisplay("not_yet", true))).toMatch(/^A reunião desta semana ainda não aconteceu/);
+    expect(reportStatusExplanation(reportStatusDisplay("next_week", true))).toMatch(/^A célula foi cadastrada ou reativada/);
+  });
+  it("Enviado, inativa e sem dia: sem explicação", () => {
+    expect(reportStatusExplanation(reportStatusDisplay("sent_held", true))).toBeNull();
+    expect(reportStatusExplanation(reportStatusDisplay("sent_not_held", true))).toBeNull();
+    expect(reportStatusExplanation(reportStatusDisplay(null, false))).toBeNull();
+    expect(reportStatusExplanation(reportStatusDisplay("no_meeting_day", true))).toBeNull();
   });
 });

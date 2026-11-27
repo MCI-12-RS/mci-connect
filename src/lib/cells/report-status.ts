@@ -235,3 +235,22 @@ export const REPORT_STATUS_FILTER = {
   all: string;
   groups: readonly { legend: string; options: readonly { value: ReportStatusFilterOption; label: string }[] }[];
 };
+
+/** No detalhe (E2.10, RN-15 f, T10): a frase da célula inativa, no lugar do badge. */
+export const REPORT_STATUS_DETAIL_TEXTS = {
+  inactive: "Célula inativa: sem situação do relatório.",
+} as const;
+
+/** Os valores que têm explicação embaixo do badge no detalhe (T10): "Enviado" não tem. */
+const EXPLAINED_IN_DETAIL: ReadonlySet<ReportBadgeStatus> = new Set<ReportBadgeStatus>(["not_yet", "pending", "next_week"]);
+
+/**
+ * A explicação embaixo do badge no detalhe (RN-15 f, T10): os textos da
+ * legenda do E2.09 para "Ainda não ocorreu", "Pendente" e "Conta a partir da
+ * próxima semana". Nulo para os demais.
+ */
+export function reportStatusExplanation(display: ReportStatusDisplay): string | null {
+  if (display.kind !== "badge" || !EXPLAINED_IN_DETAIL.has(display.status)) return null;
+  const entry: ReportStatusLegendEntry | undefined = REPORT_STATUS_LEGEND.statuses.find((s) => s.status === display.status);
+  return entry?.explanation ?? null;
+}

@@ -20,6 +20,7 @@ import Roles from "./pages/Roles";
 import Ministries from "./pages/Ministries";
 import Cells from "./pages/Cells";
 import CellsDeleted from "./pages/CellsDeleted";
+import CellDetail from "./pages/CellDetail";
 import CellReports from "./pages/CellReports";
 import CellReportsDeleted from "./pages/CellReportsDeleted";
 import Events from "./pages/Events";
@@ -60,6 +61,8 @@ const App = () => (
             <Route path="/ministries" element={<ProtectedRoute><RouteAccess path="/ministries" title={SCREEN_TITLES.ministries}><Ministries /></RouteAccess></ProtectedRoute>} />
             <Route path="/cells" element={<ProtectedRoute><RouteAccess path="/cells" title={SCREEN_TITLES.cells}><Cells /></RouteAccess></ProtectedRoute>} />
             <Route path="/cells/deleted" element={<ProtectedRoute><CellsDeleted /></ProtectedRoute>} />
+            {/* Depois da rota fixa de excluídas (E2.10, AQ-7): quem abre é decidido pela visibilidade da célula. */}
+            <Route path="/cells/:id" element={<ProtectedRoute><CellDetail /></ProtectedRoute>} />
             <Route path="/cell-reports" element={<ProtectedRoute><RouteAccess path="/cell-reports" title={SCREEN_TITLES.cellReports}><CellReports /></RouteAccess></ProtectedRoute>} />
             <Route path="/cell-reports/deleted" element={<ProtectedRoute><CellReportsDeleted /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><RouteAccess path="/events" title={SCREEN_TITLES.events}><Events /></RouteAccess></ProtectedRoute>} />

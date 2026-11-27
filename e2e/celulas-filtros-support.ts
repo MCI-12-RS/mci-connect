@@ -181,7 +181,7 @@ export function cleanup(env: E2EEnv) {
 export async function seed(env: E2EEnv) {
   sql(
     env,
-    `INSERT INTO public.roles (id, name) VALUES (${lit(roleId(1))}, 'Secretaria E2E210');
+    `INSERT INTO public.roles (id, name) VALUES (${lit(roleId(1))}, 'Secretaria E2E210 ${PREFIX}');
      INSERT INTO public.role_permissions (role_id, permission) VALUES (${lit(roleId(1))}, 'view_all_reports');`,
   );
   const roles = {
@@ -287,7 +287,7 @@ const LEADER_NAMES = new Set(CELLS.map((c) => c.leader.name));
 
 /** Os líderes das células da massa na lista aberta (cartões), na ordem da tela. */
 export async function listedLeaders(page: Page): Promise<string[]> {
-  const names = await page.getByRole("main").locator("li p > span.font-semibold").allTextContents();
+  const names = await page.getByRole("main").locator("li p a > span.font-semibold").allTextContents();
   return names
     .map((name) => name.replace(/\s*\(.*$/, "").replace(/,.*$/, "").trim())
     .filter((name) => LEADER_NAMES.has(name));
