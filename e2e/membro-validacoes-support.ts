@@ -108,6 +108,16 @@ export async function openNew(page: Page) {
   return dialog;
 }
 
+/**
+ * Tira o Líder que o cadastro novo já traz (quem cadastra, E2.07 RN-16): os testes do Líder vazio
+ * partem dele vazio.
+ */
+export async function clearLeader(dialog: Locator) {
+  const leader = dialog.locator("[data-leader-field]");
+  await leader.getByRole("button", { name: "Limpar seleção" }).click();
+  await expect(dialog.getByLabel("Líder *", { exact: true })).toHaveValue("");
+}
+
 /** Abre a edição de um cadastro da lista (título "Editar membro"). */
 export async function openEdit(page: Page, name: string, search = name) {
   await openList(page, "/members", search);

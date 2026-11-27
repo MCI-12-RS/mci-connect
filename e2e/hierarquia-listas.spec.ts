@@ -201,13 +201,16 @@ test.describe("UX-05: cartões e tabela por largura, sem rolagem horizontal, com
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       let release: () => void = () => {};
       const hold = new Promise<void>((resolve) => (release = resolve));
-      await page.route("**/rest/v1/members_view*", async (route) => {
+      // A lista vem da `members_list` desde o E2.07; enquanto ela não chega, os 5 `Skeleton` já têm o
+      // formato das linhas da tabela ou dos cartões (UX-16 do E2.07).
+      await page.route("**/rest/v1/rpc/members_list*", async (route) => {
         await hold;
         await route.continue();
       });
       await page.goto("/members?size=50");
-      await expect(page.getByText("Carregando...")).toBeVisible();
-      await expect(page.getByRole("table")).toHaveCount(kind === "tabela" ? 1 : 0);
+      const skeletons = page.getByTestId("members-loading").locator(":scope > *");
+      await expect(skeletons).toHaveCount(5);
+      await expect(skeletons.first()).toHaveClass(kind === "tabela" ? /h-12/ : /h-28/);
       release();
       await expect(page.getByText(H.SAMUEL.name).first()).toBeVisible();
       await expect(page.getByRole("table")).toHaveCount(kind === "tabela" ? 1 : 0);
