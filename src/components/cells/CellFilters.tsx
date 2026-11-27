@@ -59,7 +59,8 @@ export const CellFilters = forwardRef<CellFiltersHandle, CellFiltersProps>(funct
 ) {
   const panel = variant === "panel";
   const dates = useFilterDates({ from: value.from, to: value.to, panel, onChange });
-  useImperativeHandle(ref, () => ({ validateDates: dates.validate }));
+  const validateDates = dates.validate;
+  useImperativeHandle(ref, () => ({ validateDates }), [validateDates]);
 
   const personField = (field: "leaders" | "g12") => {
     const current = field === "leaders" ? leaders : g12;

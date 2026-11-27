@@ -69,7 +69,8 @@ export const MemberFilters = forwardRef<MemberFiltersHandle, MemberFiltersProps>
 ) {
   const panel = variant === "panel";
   const dates = useFilterDates({ from: value.from, to: value.to, panel, onChange });
-  useImperativeHandle(ref, () => ({ validateDates: dates.validate }));
+  const validateDates = dates.validate;
+  useImperativeHandle(ref, () => ({ validateDates }), [validateDates]);
 
   const leaderField = (
     <PersonMultiFilter

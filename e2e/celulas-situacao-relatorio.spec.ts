@@ -370,9 +370,15 @@ test("UX-02 e UX-06: tabela a partir de 1280 px (Reunião e Relatório, '—' na
     await page.setViewportSize({ width, height });
     // O primeiro render já é a forma certa: antes da lista chegar.
     // A lista vem pelas RPCs do E2.10 (`cells_list` e `cells_list_count`).
+    // O atraso pode terminar depois do `unrouteAll` ou da navegação seguinte: a rota já tratada
+    // ("Route is already handled!") não derruba o teste.
     await page.route("**/rest/v1/rpc/cells_list*", async (route) => {
       await new Promise((r) => setTimeout(r, 600));
-      await route.continue();
+      try {
+        await route.fallback();
+      } catch {
+        // A requisição já foi tratada ou a página navegou: nada a fazer.
+      }
     });
     await page.goto(`/cells?q=${encodeURIComponent(NAME)}&size=50`);
     // Primeira carga: os `Skeleton` no formato dos cartões ou das linhas (E2.10, T7).

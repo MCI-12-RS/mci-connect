@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type RefObject } from "react";
 import { isCompleteIsoDate } from "@/lib/dates/sao-paulo";
 import { isDateRangeInverted } from "@/lib/filters/dates";
 
@@ -32,6 +32,10 @@ export interface FilterDatesState {
  * meio caminho fica no campo, sem piscar; no `Sheet`, tudo vai para o rascunho. Data que não existe,
  * incompleta ou fora do formato é conferida ao sair do campo e ao aplicar, nunca durante a digitação.
  */
+// O campo nativo fica vazio com `badInput`, ou guarda um ano que não tem 4 dígitos.
+const isBadDate = (input: HTMLInputElement | null): boolean =>
+  !!input && (input.validity.badInput || (input.value !== "" && !isCompleteIsoDate(input.value)));
+
 export function useFilterDates({ from, to, panel, onChange }: FilterDatesOptions): FilterDatesState {
   const fromRef = useRef<HTMLInputElement>(null);
   const toRef = useRef<HTMLInputElement>(null);
@@ -45,10 +49,6 @@ export function useFilterDates({ from, to, panel, onChange }: FilterDatesOptions
   useEffect(() => setFromText(from ?? ""), [from]);
   useEffect(() => setToText(to ?? ""), [to]);
 
-  // O campo nativo fica vazio com `badInput`, ou guarda um ano que não tem 4 dígitos.
-  const isBadDate = (input: HTMLInputElement | null): boolean =>
-    !!input && (input.validity.badInput || (input.value !== "" && !isCompleteIsoDate(input.value)));
-
   const change =
     (key: "from" | "to", setText: (text: string) => void, setInvalid: (invalid: boolean) => void) => (raw: string) => {
       setText(raw);
@@ -59,7 +59,8 @@ export function useFilterDates({ from, to, panel, onChange }: FilterDatesOptions
   const blur = (setInvalid: (invalid: boolean) => void) => (event: FocusEvent<HTMLInputElement>) =>
     setInvalid(isBadDate(event.currentTarget));
 
-  const validate = () => {
+  // Estável entre renders (só muda com `inverted`), para o `useImperativeHandle` dos painéis.
+  const validate = useCallback(() => {
     const badFrom = isBadDate(fromRef.current);
     const badTo = isBadDate(toRef.current);
     setFromInvalid(badFrom);
@@ -67,7 +68,7 @@ export function useFilterDates({ from, to, panel, onChange }: FilterDatesOptions
     if (badFrom) fromRef.current?.focus();
     else if (badTo || inverted) toRef.current?.focus();
     return !badFrom && !badTo && !inverted;
-  };
+  }, [inverted]);
 
   return {
     fromText,

@@ -367,8 +367,15 @@ const Cells = () => {
                 <span>{FILTERS.leaders.unavailable(appliedUnavailable)}</span>
               </p>
             )}
+            {/* Com o painel aberto, o próprio seletor (Líder ou G12) mostra "Escolha até 10 pessoas." no
+                lugar da dica, porque a URL cortada deixa 10 escolhidas (`PersonMultiFilter`): sem repetir. */}
             {showChips && truncated && <p className="text-sm text-muted-foreground">{FILTERS.leaders.limit}</p>}
-            <p role="status" className="text-sm text-muted-foreground">
+            {/* Durante a troca de filtro, o total antigo fica atenuado e a região, ocupada: só o novo é anunciado. */}
+            <p
+              role="status"
+              aria-busy={refreshing}
+              className={`text-sm text-muted-foreground ${refreshing ? "opacity-60" : ""}`}
+            >
               {data ? `${formatCount(total)} ${total === 1 ? FILTERS.count[0] : FILTERS.count[1]}` : ""}
             </p>
             {/* A legenda da situação do relatório (P73), depois dos filtros: some no erro. */}
@@ -383,7 +390,6 @@ const Cells = () => {
                 <CellsTable
                   rows={cells}
                   isLoading={isPending}
-                  isError={false}
                   refreshing={refreshing}
                   caption={FILTERS.tableCaption}
                   renderActions={(c) => (cellHasActions(c) ? renderDesktopActions(c) : null)}

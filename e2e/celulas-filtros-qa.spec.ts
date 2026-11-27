@@ -261,7 +261,7 @@ test.describe("UX-04: o painel com o relógio do navegador simulado", () => {
     await expect(page).toHaveURL(/street=flor/);
     await expect(page).not.toHaveURL(/page=/);
     await expect.poll(() => listRequests).toBeGreaterThan(0);
-    const list = page.locator("[aria-busy='true']").first();
+    const list = page.locator("tbody[aria-busy='true']");
     await expect(list).toBeVisible();
     await expect(list.locator("tr").first()).toHaveClass(/opacity-60/);
     release();
