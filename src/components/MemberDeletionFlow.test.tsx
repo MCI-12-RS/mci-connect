@@ -7,6 +7,11 @@ import MemberDeletionFlow, { type MemberDeletionTarget } from "./MemberDeletionF
 // Exclusão de membro (E2.01, T2 e T3): pré-checagem, bloqueio, confirmação e
 // os estados do envio (UX-04, 06, 08, 09, 10, 11, 24 e 39).
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };

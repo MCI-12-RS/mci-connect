@@ -172,6 +172,7 @@ describe("bloqueios antecipados pela lista (T6, UX-23)", () => {
     host_deleted: true,
     deleted_at: "2026-11-12T13:05:00Z",
     deleted_by_name: "Elisa Martins",
+    deleted_by_kind: "member",
   };
 
   it("célula com o anfitrião excluído: a mensagem do Negócio e 'Ver membros excluídos' com o nome", () => {
@@ -205,6 +206,7 @@ describe("bloqueios antecipados pela lista (T6, UX-23)", () => {
     week_taken: true,
     deleted_at: "2026-11-20T11:00:00Z",
     deleted_by_name: "Gil Souza",
+    deleted_by_kind: "member",
   };
 
   it("relatório com a semana ocupada: a mensagem do Negócio e 'Ver relatórios da célula' com o líder", () => {

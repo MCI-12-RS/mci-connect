@@ -1,20 +1,11 @@
 import { useState, type ReactNode, type Ref } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import ResponsiveDialogContent from "@/components/ResponsiveDialogContent";
-import LongAlertDialogContent, { DIALOG_FOOTER_BUTTON } from "@/components/LongAlertDialogContent";
 import { cn } from "@/lib/utils";
 import { FormErrorSummary } from "@/components/form/FormErrorSummary";
+import { DiscardChangesDialog } from "@/components/form/DiscardChangesDialog";
 import { useSlowPending } from "@/hooks/use-slow-pending";
 import { SAVE_TEXTS } from "@/lib/hierarchy/texts";
 
@@ -44,14 +35,13 @@ export interface FormDialogActions {
   isDirty: () => boolean;
 }
 
-/** Os textos da casca: o "✕", os botões, o resumo e a confirmação de descartar. */
+/** Os textos da casca: o "✕", os botões e o resumo (a confirmação de descartar é a comum, `DiscardChangesDialog`). */
 export interface FormDialogTexts {
   close: string;
   /** O rodapé sem ações (só leitura e carregando). */
   readOnlyClose: string;
   errorSummary: (count: number) => string;
   buttons: { cancel: string };
-  discard: { title: string; description: string; confirm: string; keepEditing: string };
 }
 
 export interface FormDialogProps {
@@ -159,23 +149,7 @@ export function FormDialog({ title, texts: TEXTS, onClose, onOpenAutoFocus, onCl
         </ResponsiveDialogContent>
       </Dialog>
 
-      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-        <LongAlertDialogContent>
-          <AlertDialogHeader className="text-left">
-            <AlertDialogTitle>{TEXTS.discard.title}</AlertDialogTitle>
-            <AlertDialogDescription>{TEXTS.discard.description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogAction className={cn(buttonVariants({ variant: "destructive" }), DIALOG_FOOTER_BUTTON)} onClick={onClose}>
-              {TEXTS.discard.confirm}
-            </AlertDialogAction>
-            {/* O foco inicial do AlertDialog fica no "Continuar editando" (UX-26). */}
-            <AlertDialogCancel className={cn(DIALOG_FOOTER_BUTTON, "mt-0")}>
-              {TEXTS.discard.keepEditing}
-            </AlertDialogCancel>
-          </AlertDialogFooter>
-        </LongAlertDialogContent>
-      </AlertDialog>
+      <DiscardChangesDialog open={confirmDiscard} onOpenChange={setConfirmDiscard} onDiscard={onClose} />
     </>
   );
 }

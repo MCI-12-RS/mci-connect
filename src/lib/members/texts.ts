@@ -145,12 +145,6 @@ export const MEMBER_FORM_LAYOUT_TEXTS = {
   errorSummary: (count: number): string => `Confira os campos destacados (${count}).`,
   /** T7: queda de conexão ou 5xx ao salvar. */
   saveNetworkError: MEMBER_FORM_TEXTS.saveNetworkError,
-  discard: {
-    title: "Descartar as alterações?",
-    description: "O que você digitou não será salvo.",
-    confirm: "Descartar",
-    keepEditing: "Continuar editando",
-  },
 } as const;
 
 /** A marca de situação da pessoa nos seletores e nas listas (E2.08, P63; E2.01, T3). */

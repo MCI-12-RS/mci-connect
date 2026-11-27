@@ -1,313 +1,302 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AlertCircle, ArrowLeft, SlidersHorizontal } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import ListPagination from "@/components/ListPagination";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AuditEventList } from "@/components/audit/AuditEventList";
+import { AuditEventSheet } from "@/components/audit/AuditEventSheet";
+import { AuditEventTable } from "@/components/audit/AuditEventTable";
+import { AuditFilters } from "@/components/audit/AuditFilters";
+import { AuditFiltersSheet } from "@/components/audit/AuditFiltersSheet";
+import { RecordDeletedBadge } from "@/components/audit/EventBadges";
+import { FilterChips } from "@/components/audit/FilterChips";
+import { RetentionNote } from "@/components/audit/RetentionNote";
+import { SearchField } from "@/components/audit/SearchField";
+import { useAuditRecordLabel, type AuditRecordLabel } from "@/hooks/use-audit-record-label";
+import { useEventsList } from "@/hooks/use-events-list";
+import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
+import { useMinWidth } from "@/hooks/use-min-width";
+import { formatCount } from "@/lib/format";
+import { formatIsoDateBr, spToday } from "@/lib/dates/sao-paulo";
+import type { AuditEvent } from "@/lib/audit/events";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet";
-import { formatDateTimeInBrasilia } from "@/lib/format";
-import { AUTH_ACTION_LABELS, authEventDetailFields, authEventSecondLine, isAuthEvent } from "@/lib/audit/auth-events";
-import type { Enums, Tables } from "@/integrations/supabase/types";
+  EMPTY_AUDIT_FILTERS,
+  activeFilterCount,
+  filterChips,
+  readAuditUrl,
+  withoutKeys,
+  writeAuditFilters,
+  type AuditFilters as Filters,
+  type AuditRecordRef,
+} from "@/lib/audit/url-params";
+import { AUDIT_TEXTS as TEXTS } from "@/lib/audit/texts";
+import { cn } from "@/lib/utils";
 
-type EventRow = Tables<"events">;
-type EventAction = Enums<"event_action">;
-// A entidade "Participante" sai da tela (E2.05, RN-20 f): os eventos de participante de antes do passo
-// foram convertidos em eventos do relatório.
-type EventEntity = Exclude<Enums<"event_entity">, "cell_report_participant">;
+/**
+ * A partir daqui, os filtros ficam acima da lista e a lista vira tabela (T7). Abaixo de 1024 px a
+ * tabela de seis colunas quebra a descrição e esconde o Status: cartões e a folha de filtros.
+ */
+const DESKTOP_MIN_WIDTH = 1024;
 
-// A ordem é a do filtro "Ação" (UX-15).
-const ACTION_LABELS: Record<EventAction, string> = {
-  create: "Criação",
-  update: "Alteração",
-  delete: "Exclusão",
-  restore: "Restauração",
-  ...AUTH_ACTION_LABELS,
-};
-
-const ENTITY_LABELS: Record<EventEntity, string> = {
-  member: "Membro",
-  cell: "Célula",
-  cell_report: "Relatório",
-  role: "Função",
-  auth: "Autenticação",
-};
-
-function isEventAction(value: string): value is EventAction {
-  return Object.prototype.hasOwnProperty.call(ACTION_LABELS, value);
+/** O título do histórico de um registro (T9): "Histórico de {Nome}", com o badge de excluído. */
+function historyTitle(record: AuditRecordRef, label: AuditRecordLabel | null): string {
+  const H = TEXTS.history;
+  if (!label) return H.unknownTitle;
+  const leader = label.leader_name || H.leaderNotInformed;
+  if (record.type === "member") return label.name ? H.title.member(label.name) : H.unknownTitle;
+  if (record.type === "cell") return H.title.cell(leader);
+  return label.report_date ? H.title.cell_report(formatIsoDateBr(label.report_date), leader) : H.unknownTitle;
 }
 
-function isEventEntity(value: string): value is EventEntity {
-  return Object.prototype.hasOwnProperty.call(ENTITY_LABELS, value);
-}
-
-/** Um evento de participante que não foi convertido (formato desconhecido) aparece como do relatório. */
-const entityLabel = (entity: string) => (isEventEntity(entity) ? ENTITY_LABELS[entity] : ENTITY_LABELS.cell_report);
-
-/** "10/11/2026, 14:32", sempre no horário de Brasília, qualquer que seja o fuso do navegador. */
-const formatDateTime = (iso: string) => {
-  const when = formatDateTimeInBrasilia(iso);
-  return when ? `${when.date}, ${when.time}` : "—";
-};
-
-function hasMetadata(metadata: EventRow["metadata"]): boolean {
-  return typeof metadata === "object" && metadata !== null && Object.keys(metadata).length > 0;
-}
-
-/** Segunda linha da descrição dos eventos de login (UX-16 do E1.04) e de senha (UX-33 do E2.03). */
-function EventSecondLine({ event }: { event: EventRow }) {
-  const line = authEventSecondLine(event);
-  if (!line) return null;
-  return <span className="block text-sm text-muted-foreground">{line}</span>;
-}
-
-const Events = () => {
-  const { hasPermission } = useAuth();
-
-  const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState<EventAction | "all">("all");
-  const [entityFilter, setEntityFilter] = useState<EventEntity | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selected, setSelected] = useState<EventRow | null>(null);
-
-  const { data: events = [], isLoading } = useQuery({
-    queryKey: ["events", actionFilter, entityFilter, statusFilter],
-    queryFn: async () => {
-      let q = supabase
-        .from("events")
-        .select("*")
-        .order("occurred_at", { ascending: false })
-        .limit(500);
-
-      if (actionFilter !== "all") q = q.eq("action", actionFilter);
-      if (entityFilter !== "all") q = q.eq("entity", entityFilter);
-      if (statusFilter !== "all") q = q.eq("success", statusFilter === "success");
-
-      const { data, error } = await q;
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: hasPermission("view_audit_log"),
-  });
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return events;
-    const s = search.toLowerCase();
-    return events.filter((e) =>
-      [e.actor_label, e.entity_label, e.description]
-        .filter((f): f is string => !!f)
-        .some((f) => f.toLowerCase().includes(s))
+function PageHeader({ record }: { record: AuditRecordRef | null }) {
+  const label = useAuditRecordLabel(record);
+  if (!record) {
+    return (
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold md:text-3xl">{TEXTS.title}</h1>
+        <p className="text-sm text-muted-foreground">{TEXTS.subtitle}</p>
+        <RetentionNote />
+      </div>
     );
-  }, [events, search]);
+  }
+  return (
+    <div className="space-y-2">
+      <Button asChild variant="ghost" className="-ml-3 h-11 md:h-9">
+        <Link to="/events">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {TEXTS.history.back}
+        </Link>
+      </Button>
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="break-words text-2xl font-bold md:text-3xl">
+            {label.isPending ? TEXTS.history.loadingTitle : historyTitle(record, label.data ?? null)}
+          </h1>
+          {label.isPending && <Skeleton className="h-7 w-48" aria-hidden="true" />}
+          {label.data?.deleted && <RecordDeletedBadge text={TEXTS.history.deleted[record.type]} />}
+        </div>
+        <p className="text-sm text-muted-foreground">{TEXTS.history.subtitle[record.type]}</p>
+        <RetentionNote />
+      </div>
+    </div>
+  );
+}
+
+function LoadingRows({ asTable }: { asTable: boolean }) {
+  return (
+    <div className="space-y-3 p-4" aria-busy="true" data-testid="audit-loading">
+      {Array.from({ length: 5 }, (_, index) => (
+        <Skeleton key={index} className={asTable ? "h-10 w-full" : "h-24 w-full"} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Auditoria (E2.05, T7 a T10; RN-15, RN-17 a RN-20): paginada no servidor com o total, busca e filtros
+ * no servidor com o estado na URL, cards no celular e tabela no computador, o histórico de um registro
+ * e o painel legível. A rota só monta com "Visualizar Auditoria" (`RouteAccess`, P13).
+ */
+const Events = () => {
+  const list = useListSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { filters, record, invalidKeys } = useMemo(() => readAuditUrl(searchParams), [searchParams]);
+  const desktop = useMinWidth(DESKTOP_MIN_WIDTH);
+  const today = spToday();
+
+  // Um valor inválido sai da URL (UX-12).
+  useEffect(() => {
+    if (invalidKeys.length > 0) setSearchParams((prev) => withoutKeys(prev, invalidKeys), { replace: true });
+  }, [invalidKeys, setSearchParams]);
+
+  const query = useEventsList({ ...list.params, filters, record });
+  useClampPage(list, query);
+
+  const setFilters = useCallback(
+    (next: Filters) => setSearchParams((prev) => writeAuditFilters(prev, next), { replace: true }),
+    [setSearchParams],
+  );
+  const changeFilters = (changes: Partial<Filters>) => setFilters({ ...filters, ...changes });
+  const clearFilters = () => setFilters(EMPTY_AUDIT_FILTERS);
+
+  const [selected, setSelected] = useState<AuditEvent | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const openEvent = (event: AuditEvent, element: HTMLElement) => {
+    opener.current = element;
+    setSelected(event);
+  };
+  const returnFocus = (event: Event) => {
+    event.preventDefault();
+    const target = opener.current;
+    opener.current = null;
+    (target?.isConnected ? target : searchRef.current)?.focus();
+  };
+
+  const filterCount = activeFilterCount(filters);
+  const hasSearchOrFilters = filterCount > 0 || list.params.search !== "";
+  const data = query.data;
+  const total = data?.total ?? 0;
+  const countText = `${formatCount(total)} ${total === 1 ? TEXTS.count[0] : TEXTS.count[1]}`;
+
+  const searchField = (
+    <SearchField ref={searchRef} value={list.searchInput} onChange={list.setSearchInput} historyMode={!!record} />
+  );
+
+  let content;
+  if (query.isPending) {
+    content = <LoadingRows asTable={desktop} />;
+  } else if (query.isError && !data) {
+    content = (
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription className="space-y-3 text-foreground">
+            <p>{TEXTS.loadFailed}</p>
+            <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void query.refetch()}>
+              {TEXTS.tryAgain}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  } else if (data && data.rows.length === 0) {
+    content = (
+      <div className="space-y-3 p-6 text-center text-sm">
+        {record ? (
+          <>
+            <p className="font-medium">{TEXTS.history.empty[record.type]}</p>
+            <p className="text-muted-foreground">{TEXTS.history.emptyExplanation}</p>
+            <Button asChild variant="outline" className="h-11 md:h-9">
+              <Link to="/events">{TEXTS.history.back}</Link>
+            </Button>
+          </>
+        ) : hasSearchOrFilters ? (
+          <>
+            <p>{TEXTS.emptyFiltered}</p>
+            {filterCount > 0 && (
+              <Button type="button" variant="outline" className="h-11 md:h-9" onClick={clearFilters}>
+                {TEXTS.filters.clearAll}
+              </Button>
+            )}
+          </>
+        ) : (
+          <p>{TEXTS.empty}</p>
+        )}
+      </div>
+    );
+  } else if (data) {
+    content = (
+      <>
+        {query.isError && (
+          <div className="px-4 pb-4">
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+              <AlertDescription className="space-y-3 text-foreground">
+                <p>{TEXTS.refreshFailed}</p>
+                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void query.refetch()}>
+                  {TEXTS.tryAgain}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        <div
+          className={cn("transition-opacity motion-reduce:transition-none", query.isPlaceholderData && "opacity-60")}
+          aria-busy={query.isPlaceholderData || undefined}
+        >
+          {desktop ? (
+            <AuditEventTable events={data.rows} showEntity={!record} onOpen={openEvent} />
+          ) : (
+            <AuditEventList events={data.rows} showEntity={!record} onOpen={openEvent} />
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Auditoria</h1>
-          <p className="text-muted-foreground text-sm">
-            Histórico de ações do sistema
-          </p>
-        </div>
+      <div className="min-w-0 space-y-6">
+        <PageHeader record={record} />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Filtros</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Buscar</Label>
-                <Input
-                  placeholder="Autor, entidade, descrição..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Ação</Label>
-                <Select
-                  value={actionFilter}
-                  onValueChange={(v) => setActionFilter(isEventAction(v) ? v : "all")}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {Object.entries(ACTION_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Entidade</Label>
-                <Select
-                  value={entityFilter}
-                  onValueChange={(v) => setEntityFilter(isEventEntity(v) ? v : "all")}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {Object.entries(ENTITY_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Status</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="success">Sucesso</SelectItem>
-                    <SelectItem value="error">Erro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data/Hora</TableHead>
-                    <TableHead>Autor</TableHead>
-                    <TableHead>Ação</TableHead>
-                    <TableHead>Entidade</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
-                        Carregando...
-                      </TableCell>
-                    </TableRow>
-                  ) : filtered.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
-                        Nenhum evento encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : filtered.map((e) => (
-                    <TableRow
-                      key={e.id}
-                      className="cursor-pointer"
-                      onClick={() => setSelected(e)}
-                    >
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDateTime(e.occurred_at)}
-                      </TableCell>
-                      <TableCell className="text-sm">{e.actor_label || "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{ACTION_LABELS[e.action] || e.action}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{entityLabel(e.entity)}</TableCell>
-                      <TableCell className="text-sm">
-                        {e.description}
-                        <EventSecondLine event={e} />
-                      </TableCell>
-                      <TableCell>
-                        {e.success ? (
-                          <Badge variant="outline">OK</Badge>
-                        ) : (
-                          <Badge variant="destructive">Erro</Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-            {selected && (
+        <Card className="min-w-0">
+          <CardHeader className="space-y-3">
+            {desktop ? (
+              <AuditFilters
+                search={searchField}
+                filters={filters}
+                historyMode={!!record}
+                today={today}
+                onChange={changeFilters}
+                onClearAll={clearFilters}
+              />
+            ) : (
               <>
-                <SheetHeader>
-                  <SheetTitle>Detalhes do evento</SheetTitle>
-                  <SheetDescription>{formatDateTime(selected.occurred_at)}</SheetDescription>
-                </SheetHeader>
-                <div className="mt-6 space-y-4 text-sm">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Autor</Label>
-                    <p>{selected.actor_label || "—"}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Ação</Label>
-                      <p>{ACTION_LABELS[selected.action] || selected.action}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Entidade</Label>
-                      <p>{entityLabel(selected.entity)}</p>
-                    </div>
-                  </div>
-                  {!isAuthEvent(selected) && selected.entity_label && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Identificação</Label>
-                      <p>{selected.entity_label}</p>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Descrição</Label>
-                    <p>{selected.description}</p>
-                  </div>
-                  {isAuthEvent(selected) &&
-                    authEventDetailFields(selected).map((field) => (
-                      <div key={field.key}>
-                        <Label className="text-xs text-muted-foreground">{field.label}</Label>
-                        <p>{field.value}</p>
-                      </div>
-                    ))}
-                  {selected.changed_fields && selected.changed_fields.length > 0 && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Campos alterados</Label>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selected.changed_fields.map((f) => (
-                          <Badge key={f} variant="outline" className="text-xs">{f}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {!isAuthEvent(selected) && hasMetadata(selected.metadata) && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Metadados</Label>
-                      <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto">
-                        {JSON.stringify(selected.metadata, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  {!isAuthEvent(selected) && selected.error_reason && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Erro</Label>
-                      <p className="text-destructive">{selected.error_reason}</p>
-                    </div>
-                  )}
-                </div>
+                {searchField}
+                <Button
+                  ref={filtersButtonRef}
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-fit"
+                  onClick={() => setFiltersOpen(true)}
+                >
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  {filterCount > 0 ? TEXTS.filters.buttonCount(filterCount) : TEXTS.filters.button}
+                </Button>
+                <FilterChips
+                  chips={filterChips(filters)}
+                  onRemove={(key) => changeFilters({ [key]: null })}
+                  onClearAll={clearFilters}
+                  filtersButtonRef={filtersButtonRef}
+                />
               </>
             )}
-          </SheetContent>
-        </Sheet>
+            <p role="status" className="text-sm text-muted-foreground">
+              {data ? countText : ""}
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            {content}
+            {data && data.total > 0 && (
+              <ListPagination
+                page={list.params.page}
+                pageSize={list.params.pageSize}
+                total={data.total}
+                itemLabel={TEXTS.count}
+                onPageChange={list.setPage}
+                onPageSizeChange={list.setPageSize}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <AuditEventSheet event={selected} historyRecord={record} onClose={() => setSelected(null)} onCloseAutoFocus={returnFocus} />
+
+        {!desktop && (
+          <AuditFiltersSheet
+            open={filtersOpen}
+            filters={filters}
+            historyMode={!!record}
+            today={today}
+            onApply={(next) => {
+              setFilters(next);
+              setFiltersOpen(false);
+            }}
+            onClose={() => setFiltersOpen(false)}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              filtersButtonRef.current?.focus();
+            }}
+          />
+        )}
       </div>
     </AppLayout>
   );

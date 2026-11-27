@@ -13,6 +13,11 @@ import MemberForm from "./MemberForm";
 // (vê a igreja toda). O Supabase é o `fake-supabase`; a `create-user-admin` é o `invoke`.
 
 const invoke = vi.hoisted(() => vi.fn());
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: { ...fakeSupabase, functions: { invoke } } };

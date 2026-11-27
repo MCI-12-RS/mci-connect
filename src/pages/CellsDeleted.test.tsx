@@ -49,6 +49,7 @@ const rui: DeletedCellRow = {
   host_deleted: true,
   deleted_at: "2026-11-12T13:05:00Z",
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
 };
 
 const carlos: DeletedCellRow = {

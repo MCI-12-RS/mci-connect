@@ -551,7 +551,7 @@ test("RN-19 e UX-37 (AD): a Auditoria mostra a exclusão e a restauração de Ri
   const actor = sql(env, `SELECT actor_label FROM public.events WHERE entity_id = ${lit(member(14))} AND action = 'restore'`);
   expect(actor, "o autor da restauração").not.toBe("");
   await page.goto("/events");
-  await page.getByPlaceholder("Autor, entidade, descrição...").fill(rita);
+  await page.getByPlaceholder("Autor, registro ou descrição").fill(rita);
   const restoreRow = page.getByRole("row").filter({ hasText: "Restauração" }).filter({ hasText: rita });
   await expect(restoreRow).toHaveCount(1);
   await expect(restoreRow).toContainText(actor);

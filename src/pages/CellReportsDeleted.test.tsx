@@ -42,6 +42,7 @@ const taken: DeletedCellReportRow = {
   week_taken: true,
   deleted_at: "2026-11-20T11:00:00Z",
   deleted_by_name: "Gil Souza",
+  deleted_by_kind: "member",
 };
 
 const free: DeletedCellReportRow = {
@@ -67,9 +68,9 @@ const Where = () => {
 const originalWidth = window.innerWidth;
 const setWidth = (width: number) => Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
 
-function renderPage() {
+function renderPage(rows: DeletedCellReportRow[] = [taken, free]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: [taken, free], count: 2 });
+  respondWith({ data: rows, count: rows.length });
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/cell-reports/deleted"]}>
@@ -161,5 +162,22 @@ describe("Relatórios excluídos", () => {
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Relatório restaurado." }));
     expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["restore_cell_report", { _report_id: "r2" }]]);
+  });
+
+  it("E2.05, UX-10: exclusão do sistema anterior com '(sistema anterior)' no card e na coluna; 'AdminUser' como 'Administrador'", async () => {
+    const legacy: DeletedCellReportRow = { ...taken, deleted_by_kind: "legacy", deleted_by_name: "João Pires" };
+    const admin: DeletedCellReportRow = { ...free, deleted_by_kind: "legacy", deleted_by_name: "AdminUser" };
+    renderPage([legacy, admin]);
+    const card = (await screen.findByText("Célula de Carlos Lima")).closest("li");
+    expect(card).toHaveTextContent("por João Pires (sistema anterior)");
+    expect(screen.getByText("Célula de Yara Melo").closest("li")).toHaveTextContent("por Administrador (sistema anterior)");
+    expect(document.body).not.toHaveTextContent("AdminUser");
+  });
+
+  it("E2.05, UX-10: na tabela, a coluna 'Excluído por' com o nome do sistema anterior", async () => {
+    setWidth(1280);
+    renderPage([{ ...taken, deleted_by_kind: "legacy", deleted_by_name: "João Pires" }]);
+    const row = (await screen.findByText("João Pires (sistema anterior)")).closest("tr");
+    expect(row).not.toBeNull();
   });
 });

@@ -93,7 +93,7 @@ describe("UX-37 e RN-19: Auditoria da restauração", () => {
 
     await waitFor(() => expect(fakeQueries()).toHaveLength(2));
     const filtered = fakeQueries()[1];
-    expect(filtered.table).toBe("events");
+    expect(filtered.table).toBe("events_view");
     expect(filtered.calls).toContainEqual(["eq", "action", "restore"]);
     expect(fakeQueries()[0].calls).not.toContainEqual(["eq", "action", expect.anything()]);
     await waitFor(() => expect(screen.queryByText("Excluiu a célula de Rui Prado")).not.toBeInTheDocument());

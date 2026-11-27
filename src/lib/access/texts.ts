@@ -8,6 +8,7 @@
 
 import { AUDIT_SAVE_TEXTS } from "@/lib/audit/texts";
 import { DELETION_TEXTS } from "@/lib/deletion/texts";
+import { DISCARD_CHANGES_TEXTS } from "@/lib/form/texts";
 
 /** Acesso relido, tela sem acesso e falha ao ler o acesso (T12, P13, UXD-11). */
 export const ACCESS_TEXTS = {
@@ -221,9 +222,9 @@ export const ROLE_TEXTS = {
   save: "Salvar função",
   create: "Criar função",
   saving: "Salvando…",
-  discardTitle: "Descartar as alterações?",
-  discard: "Descartar",
-  keepEditing: "Continuar editando",
+  discardTitle: DISCARD_CHANGES_TEXTS.title,
+  discard: DISCARD_CHANGES_TEXTS.confirm,
+  keepEditing: DISCARD_CHANGES_TEXTS.keepEditing,
   // Exclusão
   deleteTitle: (name: string) => `Excluir a função ${name}?`,
   /** O texto da T4 ("Nenhum membro usa esta função. Depois de excluída, …") em dois tópicos, no `ConfirmDeleteContent` do E2.01. */

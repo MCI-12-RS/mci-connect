@@ -10,6 +10,11 @@ import CellForm from "./CellForm";
 // UX-25, UX-29, UX-30), com o seletor e o diálogo de verdade. O banco é o
 // cliente falso (uma fila de respostas, na ordem das consultas).
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
@@ -570,3 +575,20 @@ describe("CellForm: fechar com alterações (UX-25)", () => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+
+describe("E2.05, UX-03: a autoria na edição da célula (T3, P30)", () => {
+  const precedes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+  it("na edição, antes de 'Campos com * são obrigatórios.'; na 'Nova célula', não aparece", () => {
+    renderForm(c1);
+    const block = screen.getByTestId("record-authorship");
+    expect(block).toHaveAttribute("data-entity", "cell");
+    expect(block).toHaveAttribute("data-record-id", c1.id);
+    expect(precedes(block, within(dialog()).getByText(/Campos com \* são obrigatórios/))).toBe(true);
+  });
+
+  it("'Nova célula': sem autoria", () => {
+    renderForm(null);
+    expect(screen.queryByTestId("record-authorship")).not.toBeInTheDocument();
+  });
+});

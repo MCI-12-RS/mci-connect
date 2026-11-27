@@ -60,6 +60,7 @@ const bruno: DeletedMemberRow = {
   has_account: true,
   deleted_at: "2026-11-10T17:32:00+00:00",
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
 };
 
 const paula: DeletedMemberRow = {
@@ -72,6 +73,7 @@ const paula: DeletedMemberRow = {
   has_account: false,
   deleted_at: "2026-11-02T12:10:00+00:00",
   deleted_by_name: null,
+  deleted_by_kind: null,
 };
 
 const cell = (id: string, leader: string, people: Partial<DeletedCellRow> = {}): DeletedCellRow => ({
@@ -91,6 +93,7 @@ const cell = (id: string, leader: string, people: Partial<DeletedCellRow> = {}):
   host_deleted: false,
   deleted_at: "2026-11-12T13:05:00Z",
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
   ...people,
 });
 
@@ -105,6 +108,7 @@ const report = (id: string, date: string, people: Partial<DeletedCellReportRow> 
   week_taken: false,
   deleted_at: "2026-11-20T11:00:00Z",
   deleted_by_name: "Gil Souza",
+  deleted_by_kind: "member",
   ...people,
 });
 

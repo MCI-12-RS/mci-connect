@@ -55,6 +55,7 @@ const bruno: DeletedMemberRow = {
   has_account: true,
   deleted_at: "2026-11-10T17:32:00+00:00",
   deleted_by_name: "Elisa Martins",
+  deleted_by_kind: "member",
 };
 
 const paula: DeletedMemberRow = {
@@ -67,6 +68,7 @@ const paula: DeletedMemberRow = {
   has_account: false,
   deleted_at: "2026-11-02T12:10:00+00:00",
   deleted_by_name: null,
+  deleted_by_kind: null,
 };
 
 /** O cadastro de Bruno restaurado, como a `members_view` o devolve ao abrir "Definir líder". */

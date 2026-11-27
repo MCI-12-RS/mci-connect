@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Info, X } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { CellDeletedBadge, HeldStatusBadge } from "@/components/StatusBadges";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,10 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCellReport } from "@/hooks/use-cell-report";
 import { toReportSheetView, type ReportSheetView } from "@/lib/cell-reports/report-sheet";
+import type { CellReportDetailRow } from "@/lib/cell-reports/fields";
+import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
+import { RecordAuthorship } from "@/components/RecordAuthorship";
+import { SheetCloseButton } from "@/components/SheetCloseButton";
 import { CELL_REPORT_DELETION_TEXTS, CELL_REPORT_SHEET_TEXTS } from "@/lib/deletion/texts";
 
 // Painel de consulta de um relatório ("Ver relatório", E2.01 T7 e UXD-7). Só
@@ -21,17 +25,8 @@ const SKELETON_LINES = 6;
 
 const SKELETON = "motion-reduce:animate-none";
 
-/**
- * O "✕" do painel, no lugar do que o `SheetContent` traz: com 44×44 px (no
- * celular, o painel ocupa a tela, e só ele fecha) e o nome em pt-BR.
- */
-const CloseButton = () => (
-  <SheetClose asChild>
-    <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 h-11 w-11" aria-label={TEXTS.close}>
-      <X className="h-4 w-4" aria-hidden="true" />
-    </Button>
-  </SheetClose>
-);
+/** O "✕" do painel (44×44 px; no celular, o painel ocupa a tela, e só ele fecha). */
+const CloseButton = () => <SheetCloseButton label={TEXTS.close} />;
 
 /** Um campo do relatório: o nome e o valor. */
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -90,7 +85,13 @@ const NotFound = () => (
   </>
 );
 
-const ReportDetails = ({ view, canSeeDeletedCells }: { view: ReportSheetView; canSeeDeletedCells: boolean }) => (
+interface ReportDetailsProps {
+  view: ReportSheetView;
+  report: CellReportDetailRow;
+  canSeeDeletedCells: boolean;
+}
+
+const ReportDetails = ({ view, report, canSeeDeletedCells }: ReportDetailsProps) => (
   <>
     <SheetHeader className="space-y-1 pr-12 text-left">
       <SheetTitle>{view.title}</SheetTitle>
@@ -113,7 +114,26 @@ const ReportDetails = ({ view, canSeeDeletedCells }: { view: ReportSheetView; ca
       </Alert>
     )}
 
-    <dl className="mt-6 space-y-4 text-sm">
+    {/* A autoria depois do cabeçalho e do aviso, antes de "Data e hora" (E2.05, T4 e P30). */}
+    {report.id && (
+      <div className="mt-4">
+        <RecordAuthorship
+          entity="cell_report"
+          recordId={report.id}
+          recordName={report.date ? formatIsoDateBr(report.date) : ""}
+          authorship={{
+            created_at: report.created_at,
+            created_by_kind: report.created_by_kind,
+            created_by_name: report.created_by_name,
+            updated_at: report.updated_at,
+            updated_by_kind: report.updated_by_kind,
+            updated_by_name: report.updated_by_name,
+          }}
+        />
+      </div>
+    )}
+
+    <dl className="mt-4 space-y-4 text-sm">
       <Field label={TEXTS.fields.dateTime}>{view.dateTime}</Field>
       <Field label={TEXTS.fields.status}>
         <HeldStatusBadge held={view.status === "held"} />
@@ -185,7 +205,7 @@ const CellReportSheet = ({ reportId, open = reportId !== null, onClose, onCloseA
   // Só o relatório carregado e o "não existe" têm descrição (o Radix avisa se ela faltar).
   let hasDescription = true;
   if (query.data) {
-    body = <ReportDetails view={toReportSheetView(query.data)} canSeeDeletedCells={canSeeDeletedCells} />;
+    body = <ReportDetails view={toReportSheetView(query.data)} report={query.data.report} canSeeDeletedCells={canSeeDeletedCells} />;
   } else if (query.data === null) {
     body = <NotFound />;
   } else if (query.isError && query.error !== retriedError) {

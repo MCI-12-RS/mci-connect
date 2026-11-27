@@ -492,8 +492,9 @@ test.describe("navegador em Honolulu (UTC−10)", () => {
     expect(expected[0], "a ordem pt-BR põe Álvaro antes de Ana").toBe(ALVARO);
     await expect(field(dialog, "Participantes (5)").getByRole("listitem")).toHaveText(expected);
     // Sara, excluída, aparece só pelo nome: nenhum link para cadastro no painel.
-    await expect(dialog.getByRole("link")).toHaveCount(1);
-    await expect(dialog.getByRole("link")).toHaveText("Ver células excluídas");
+    await expect(field(dialog, "Participantes (5)").getByRole("link")).toHaveCount(0);
+    // Os links do painel: "Ver células excluídas" e, para quem audita, "Ver histórico" (E2.05, T4).
+    await expect(dialog.getByRole("link")).toHaveText(["Ver células excluídas", "Ver histórico"]);
     // O visitante em branco não conta.
     await expect(field(dialog, "Visitantes (2)")).toHaveText("João, Maria");
     expect(normalizeSpaces(await field(dialog, "Oferta").innerText())).toBe("R$ 1.234,50");

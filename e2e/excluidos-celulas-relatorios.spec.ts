@@ -463,7 +463,7 @@ test("RN-19 (AD): a Auditoria mostra dois registros da célula de Estela, a excl
   const actor = sql(env, `SELECT actor_label FROM public.events WHERE entity_id = ${lit(cell(7))} AND action = 'restore'`);
   expect(actor, "o autor da restauração").not.toBe("");
   await page.goto("/events");
-  await page.getByPlaceholder("Autor, entidade, descrição...").fill(ESTELA);
+  await page.getByPlaceholder("Autor, registro ou descrição").fill(ESTELA);
   // A célula de Estela tem a criação, a exclusão e a restauração; o cadastro dela, só a criação.
   const rows = page.getByRole("row").filter({ hasText: `célula de ${ESTELA}` });
   await expect(rows).toHaveCount(3);

@@ -79,16 +79,16 @@ describe("Auditoria: data e hora no horário de Brasília, com o navegador em T�
     expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe("Asia/Tokyo");
   });
 
-  it("Dado um evento às 02:30 UTC, então a linha e o detalhe mostram '10/11/2026, 23:30'", async () => {
+  it("Dado um evento às 02:30 UTC, então a linha mostra '10/11/2026 23:30' e o detalhe '10/11/2026 às 23:30' (UX-02)", async () => {
     respondWith({ data: [restoreCell] });
     renderPage();
 
     const row = (await screen.findByText("Restaurou a célula de Rui Prado")).closest("tr");
     expect(row).not.toBeNull();
-    expect(within(row).getByText("10/11/2026, 23:30")).toBeInTheDocument();
+    expect(within(row).getByText("10/11/2026 23:30")).toBeInTheDocument();
 
     fireEvent.click(row);
     const sheet = await screen.findByRole("dialog", { name: "Detalhes do evento" });
-    expect(within(sheet).getByText("10/11/2026, 23:30")).toBeInTheDocument();
+    expect(within(sheet).getByText("10/11/2026 às 23:30")).toBeInTheDocument();
   });
 });

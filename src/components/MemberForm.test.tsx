@@ -11,6 +11,11 @@ import MemberForm from "./MemberForm";
 // opções chegam depois de o formulário abrir; a função atual do membro não
 // pode se perder nesse meio tempo.
 
+vi.mock("@/components/RecordAuthorship", async () => {
+  const { RecordAuthorshipStub } = await import("@/test/record-authorship-stub");
+  return { RecordAuthorship: RecordAuthorshipStub };
+});
+
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
@@ -346,5 +351,39 @@ describe("MemberForm: envio (E2.04, DA-9 e P22)", () => {
     // O erro some quando o valor fica certo, sem sair do campo (UX-09).
     fireEvent.change(screen.getByLabelText("Nome *"), { target: { value: "Ana Alves" } });
     expect(await screen.findByText("Confira os campos destacados (1).")).toBeInTheDocument();
+  });
+});
+
+describe("E2.05, UX-03: a autoria no topo do cadastro (T2, P30)", () => {
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set(["edit_member"]);
+    auth.canAssignRoles = false;
+  });
+
+  /** O nó vem antes do outro no documento? */
+  const precedes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+  it("'Editar membro': o bloco do cadastro aberto, antes de 'Campos com * são obrigatórios.' e do primeiro campo", () => {
+    render(<MemberForm member={member} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const block = screen.getByTestId("record-authorship");
+    expect(block).toHaveAttribute("data-entity", "member");
+    expect(block).toHaveAttribute("data-record-id", "m1");
+    expect(precedes(block, screen.getByText("Campos com * são obrigatórios."))).toBe(true);
+    expect(precedes(block, screen.getByLabelText("Nome *"))).toBe(true);
+  });
+
+  it("'Meus dados': depois do aviso de só leitura e antes do primeiro campo", () => {
+    auth.permissions = new Set();
+    render(<MemberForm member={member} readOnly onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    const block = screen.getByTestId("record-authorship");
+    expect(precedes(screen.getByText(/Você pode consultar os seus dados/), block)).toBe(true);
+    expect(precedes(block, screen.getByLabelText("Nome *"))).toBe(true);
+  });
+
+  it("'Novo membro': sem autoria", () => {
+    auth.permissions = new Set(["create_member"]);
+    render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: createQueryWrapper() });
+    expect(screen.queryByTestId("record-authorship")).not.toBeInTheDocument();
   });
 });

@@ -70,12 +70,6 @@ export const CELL_FORM_TEXTS = {
   },
   close: "Fechar",
   connectionFailed: AUDIT_SAVE_TEXTS.connection.cell,
-  discard: {
-    title: "Descartar as alterações?",
-    description: "O que você digitou não será salvo.",
-    confirm: "Descartar",
-    keepEditing: "Continuar editando",
-  },
   toasts: {
     created: "Célula criada.",
     updated: "Célula atualizada.",
