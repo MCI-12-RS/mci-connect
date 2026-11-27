@@ -84,11 +84,23 @@ COMMIT;`)
   return { ids, auth }
 }
 
+/** E3: conta da carga (no Auth, sem senha no cofre) para um cadastro novo, com a credencial legada da senha. */
+export async function createLegacyMember(name, email, legacyPassword) {
+  const { id: authId } = await admin('POST', 'users', { email, email_confirm: true })
+  const pastor = sql(`SELECT id FROM public.members WHERE name = 'E104 Edge Pastor';`)
+  const lit = (v) => `'${v.replace(/'/g, "''")}'`
+  const memberId = sql(`INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_user_id, email)
+VALUES (gen_random_uuid(), ${lit(name)}, 'F', '${pastor}', true, '${authId}', ${lit(email)}) RETURNING id;`)
+  sql(`SELECT private.add_legacy_credential('${memberId}', md5(${lit(legacyPassword)}));`)
+  return { authId, memberId }
+}
+
 export async function cleanupMassa() {
   const users = sql(`SELECT id FROM auth.users WHERE email LIKE '%@${DOMAIN}';`).split('\n').filter(Boolean)
   sql(`BEGIN;
 SET LOCAL session_replication_role = replica;
 DELETE FROM public.events WHERE entity_label LIKE 'E104 Edge%' OR actor_label LIKE 'E104 Edge%';
+DELETE FROM private.legacy_credentials c USING public.members m WHERE m.id = c.member_id AND m.name LIKE 'E104 Edge%';  -- E3
 UPDATE public.members SET leader_id = NULL, has_leadership = false WHERE name LIKE 'E104 Edge%';  -- E2.04: CHECK de liderança
 DELETE FROM public.members WHERE name LIKE 'E104 Edge%';
 DELETE FROM private.member_hierarchy h WHERE NOT EXISTS (SELECT 1 FROM public.members m WHERE m.id = h.member_id);

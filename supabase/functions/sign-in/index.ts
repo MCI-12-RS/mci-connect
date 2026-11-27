@@ -7,14 +7,19 @@
 //    4 KB: 413.
 // 2. Origem: só o `CF-Connecting-IP` (_shared/client-ip.ts, DT-06). Hospedado sem
 //    ele: 500, sem contar (DA-1).
-// 3. RPC `sign_in_attempt` (só service_role): busca, contagem, bloqueio, um
-//    bcrypt e Auditoria das falhas, numa transação (DT-02, DT-03).
-// 4. Falha: 401 com corpo único; bloqueio: 429. Os dois esperam o piso de
+// 3. Texto que o banco não guarda (U+0000 ou *surrogate* isolado, na
+//    identificação ou na senha): 401 depois do piso, sem contar nem registrar
+//    (E3, DA-1). A senha do legado com esse texto nunca conferia.
+// 4. RPC `sign_in_attempt` (só service_role): busca, contagem, bloqueio, um
+//    bcrypt (da conta ou da credencial legada, E3) e Auditoria das falhas,
+//    numa transação (DT-02, DT-03).
+// 5. Falha: 401 com corpo único; bloqueio: 429. Os dois esperam o piso de
 //    700 ms (RN-07, DT-07).
-// 5. Sucesso: `generateLink(magiclink)` + `POST /auth/v1/verify` com a chave
+// 6. Sucesso: `generateLink(magiclink)` + `POST /auth/v1/verify` com a chave
 //    secreta e `Sb-Forwarded-For` (DT-01, DT-10). Com `otp_expired`, uma nova
 //    tentativa; se falhar, o código pendente é descartado e a resposta é 500
-//    (DA-13, DT-18). Depois, `sign_in_record_login` (erro ignorado, DA-12) e
+//    (DA-13, DT-18). Depois, `sign_in_record_login` com a credencial que
+//    conferiu (erro ignorado, DA-12; E3, DA-4) e
 //    200 só com a sessão (RN-13) e a marca de troca obrigatória
 //    (`must_change_password`, E2.03 RN-08 b e AQ-3), lida do cofre pela RPC.
 //
@@ -34,9 +39,11 @@ import { isHostedSupabaseUrl, resolveServiceKey } from '../_shared/env.ts'
 import { preflight, readJsonBody } from '../_shared/http.ts'
 import {
   type AttemptResult,
+  attemptCredential,
   isAttemptResult,
   isOtpExpired,
   isUserCreatedByLink,
+  isWellFormedText,
   lockedReply,
   pickSession,
   readCredentials,
@@ -175,6 +182,12 @@ serve(async (req) => {
       return reply(500, { result: 'server_error' })
     }
 
+    if (!isWellFormedText(credentials.identifier) || !isWellFormedText(credentials.password)) {
+      await waitForFloor(startedAt)
+      log('invalid_credentials', startedAt, 'ill_formed')
+      return reply(401, { result: 'invalid_credentials' })
+    }
+
     const admin = createClient(supabaseUrl, apiKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       global: { fetch: fetchWithTimeout },
@@ -213,6 +226,7 @@ serve(async (req) => {
           _auth_user_id: data.auth_user_id,
           _identifier_type: data.identifier_type,
           _identifier_masked: data.identifier_masked,
+          _credential: attemptCredential(data),
         })
         log('ok', startedAt, recordError ? `record_${recordError.code ?? 'error'}` : undefined)
         return reply(200, {

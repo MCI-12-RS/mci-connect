@@ -2035,6 +2035,13 @@ export type Database = {
           total: number
         }[]
       }
+      dashboard_first_access: {
+        Args: never
+        Returns: {
+          pending: number
+          total: number
+        }[]
+      }
       dashboard_g12_ranking: {
         Args: never
         Returns: {
@@ -2314,6 +2321,7 @@ export type Database = {
       sign_in_record_login: {
         Args: {
           _auth_user_id: string
+          _credential?: string
           _identifier_masked: string
           _identifier_type: string
           _member_id: string

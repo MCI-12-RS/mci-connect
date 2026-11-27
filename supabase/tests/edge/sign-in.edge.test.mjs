@@ -15,7 +15,7 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { execSync } from 'node:child_process'
 import {
-  ANON, DOMAIN, FAILURE_FLOOR_MS, PW, URL_BASE, cleanupMassa, createMassa, failuresOf, originRowCount, resetThrottle,
+  ANON, DOMAIN, FAILURE_FLOOR_MS, PW, URL_BASE, cleanupMassa, createLegacyMember, createMassa, failuresOf, originRowCount, resetThrottle,
   signIn, sql, freshOrigin,
 } from './support.mjs'
 
@@ -170,6 +170,35 @@ describe('sessão (RN-13, RN-14)', () => {
     for (const r of rs) assert.equal(r.status, 200, r.text)
     assert.equal(new Set(rs.map((r) => r.body.session.refresh_token)).size, 6, 'seis sessões diferentes')
     assert.equal(sql(`SELECT count(*) FROM auth.one_time_tokens WHERE user_id = '${massa.auth.ana}' AND token_type = 'recovery_token';`), '0')
+  })
+})
+
+describe('E3: senha do legado (DA-1, DA-4, RN-13)', () => {
+  it('DA-1: surrogate isolado ou U+0000 (na identificação ou na senha) dá 401 depois do piso, sem contar nem registrar', async () => {
+    const t0 = sql(`SELECT clock_timestamp()::text;`)
+    const casos = [[ANA_EMAIL, 'abc\ud800'], [ANA_EMAIL, 'abc\u0000'], ['ana\udc00@x.com', PW], ['ana\u0000@x.com', PW]]
+    for (const [identifier, password] of casos) {
+      const r = await signIn(identifier, password)
+      assert.equal(r.status, 401, r.text)
+      assert.deepEqual(r.body, { result: 'invalid_credentials' })
+      assert.ok(r.ms >= FAILURE_FLOOR_MS - 5, `piso: ${r.ms} ms`)
+    }
+    assert.equal(originRowCount(), 0, 'nenhuma linha de controle: não conta')
+    assert.equal(sql(`SELECT count(*) FROM public.events WHERE entity = 'auth' AND occurred_at >= '${t0}'::timestamptz;`), '0', 'nada na Auditoria')
+  })
+
+  it('RN-13 a, DA-4: a primeira entrada com a senha do legado grava "Login realizado" com a credencial legada; a seguinte, sem ela', async () => {
+    const email = `legado@${DOMAIN}`
+    const legado = await createLegacyMember('E104 Edge Legado', email, 'Legado#Edge1')
+    const r = await signIn(email, 'Legado#Edge1')
+    assert.equal(r.status, 200, r.text)
+    assert.deepEqual(Object.keys(r.body).sort(), ['must_change_password', 'result', 'session'])
+    const ev = () => JSON.parse(sql(`SELECT coalesce(jsonb_agg(metadata ORDER BY occurred_at), '[]') FROM public.events
+                                       WHERE entity = 'auth' AND action = 'login' AND entity_id = '${legado.memberId}';`))
+    assert.deepEqual(ev(), [{ identifier_type: 'email', identifier_masked: 'l***@e104edge.invalid', credential: 'legacy' }])
+    assert.equal(sql(`SELECT legacy_hash IS NULL FROM private.legacy_credentials WHERE member_id = '${legado.memberId}';`), 't')
+    assert.equal((await signIn(email, 'Legado#Edge1')).status, 200)
+    assert.deepEqual(ev()[1], { identifier_type: 'email', identifier_masked: 'l***@e104edge.invalid' })
   })
 })
 

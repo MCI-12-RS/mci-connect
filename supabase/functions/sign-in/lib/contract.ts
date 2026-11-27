@@ -1,5 +1,5 @@
 // Contrato HTTP da função `sign-in` (E1.04: Contratos, DA-3, DT-07, DT-10, DT-18;
-// E2.03: `must_change_password`).
+// E2.03: `must_change_password`; E3: `credential` e a DA-1).
 //
 // Módulo puro (sem Deno nem import remoto), testado pelo Vitest: corpos da
 // função, piso de tempo das falhas e leitura das respostas da RPC
@@ -54,7 +54,15 @@ export type AttemptResult =
       password_action: null
       // A marca da conta, lida do cofre depois da política do login (E2.03).
       must_change_password: boolean
+      // Qual senha conferiu (E3, DT-07): a da conta ou a credencial legada.
+      // Ausente (a RPC anterior ao E3) vale como 'account'.
+      credential?: Credential
     }
+
+/** A senha que conferiu no login (E3): a do cofre ou a credencial legada. */
+export type Credential = 'account' | 'legacy'
+
+const CREDENTIALS: readonly string[] = ['account', 'legacy']
 
 const IDENTIFIER_TYPES: readonly string[] = ['email', 'mobile', 'cpf', 'cpf_or_mobile']
 
@@ -80,7 +88,9 @@ export function isAttemptResult(value: unknown): value is AttemptResult {
         IDENTIFIER_TYPES.includes(value.identifier_type) &&
         isNonEmptyString(value.identifier_masked) &&
         value.password_action === null &&
-        typeof value.must_change_password === 'boolean'
+        typeof value.must_change_password === 'boolean' &&
+        (value.credential === undefined ||
+          (typeof value.credential === 'string' && CREDENTIALS.includes(value.credential)))
       )
     default:
       return false
@@ -107,6 +117,25 @@ export function readCredentials(body: unknown): { identifier: string; password: 
   if (typeof identifier !== 'string' || typeof password !== 'string') return null
   if (identifier.trim() === '' || password === '') return null
   return { identifier, password }
+}
+
+/** A credencial do sucesso, com o padrão da RPC anterior ao E3 ('account'). */
+export function attemptCredential(attempt: { credential?: Credential }): Credential {
+  return attempt.credential ?? 'account'
+}
+
+// Caracteres que o Postgres não guarda num texto: U+0000 e as metades de par
+// UTF-16 (*surrogates*) isoladas, que não têm UTF-8.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+
+/**
+ * O texto chega ao banco como veio (E3, DA-1)? Falso com U+0000 ou com um
+ * *surrogate* isolado: o legado não calculava o MD5 dessa senha, e o banco não
+ * aceita o texto. A função responde como senha errada, sem contar nem
+ * registrar.
+ */
+export function isWellFormedText(value: string): boolean {
+  return !value.includes('\u0000') && !LONE_SURROGATE.test(value)
 }
 
 /** Quanto falta para o piso das falhas (DT-07). */
