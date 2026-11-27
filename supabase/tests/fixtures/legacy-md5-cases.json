@@ -1,0 +1,161 @@
+{
+  "generator": "supabase/tests/fixtures/generate-legacy-md5-cases.mjs",
+  "md5_package": "2.3.0",
+  "cases": [
+    {
+      "id": "ascii",
+      "description": "ASCII simples",
+      "password": "Senha123",
+      "bytes": 8,
+      "md5": "10a9c136d796bab18d3e144092a4f20a",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "senha123",
+        "Senha123 "
+      ]
+    },
+    {
+      "id": "cedilha_composto",
+      "description": "\"\u00e7\" composto (U+00E7), a forma comum do teclado",
+      "password": "Gra\u00e7a2024!",
+      "bytes": 11,
+      "md5": "2915f1e67e59d86d1346886617953647",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "Graca2024!",
+        "Grac\u0327a2024!"
+      ]
+    },
+    {
+      "id": "cedilha_decomposto",
+      "description": "\"c\" + cedilha combinante (U+0327): outro MD5, sem normalizar",
+      "password": "Grac\u0327a2024!",
+      "bytes": 12,
+      "md5": "3e6d9e6454cfa8e10a6ed58afc3b8ec4",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "Gra\u00e7a2024!"
+      ]
+    },
+    {
+      "id": "espacos_pontas",
+      "description": "espa\u00e7os nas pontas: a senha como veio, sem tirar espa\u00e7os",
+      "password": " mesa azul ",
+      "bytes": 11,
+      "md5": "b448787fd66c1ad0bd363b294096e395",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "mesa azul",
+        " mesa azul"
+      ]
+    },
+    {
+      "id": "maiusculas",
+      "description": "mai\u00fasculas diferenciam",
+      "password": "MesaAzul",
+      "bytes": 8,
+      "md5": "744efdb23162dbab13e88e5b3d3ec843",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "mesaazul",
+        "MESAAZUL"
+      ]
+    },
+    {
+      "id": "emoji",
+      "description": "emoji (fora do BMP, par UTF-16, 4 bytes em UTF-8)",
+      "password": "f\u00e9 \ud83d\ude4f 2024",
+      "bytes": 13,
+      "md5": "5c98c6e4ef9b1c2be412664f0622f79a",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "f\u00e9  2024"
+      ]
+    },
+    {
+      "id": "d11_123456",
+      "description": "a senha inicial 123456",
+      "password": "123456",
+      "bytes": 6,
+      "md5": "e10adc3949ba59abbe56e057f20f883e",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "1234567"
+      ]
+    },
+    {
+      "id": "letras_72",
+      "description": "72 letras (72 bytes, o limite do bcrypt)",
+      "password": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bytes": 72,
+      "md5": "96b39b8b95e016c79d104d83395b8133",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "letras_80",
+      "description": "80 letras sem acento (acima de 72 bytes, RN-05)",
+      "password": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "bytes": 80,
+      "md5": "491077e8636d39b017a545f6ad68d299",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ]
+    },
+    {
+      "id": "cedilha_40",
+      "description": "40 \"\u00e7\" = 80 bytes",
+      "password": "\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7",
+      "bytes": 80,
+      "md5": "5fe95cfac9801f08fc35678c9f53561a",
+      "db": true,
+      "unusable": false,
+      "wrong": [
+        "\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7\u00e7"
+      ]
+    },
+    {
+      "id": "vazio",
+      "description": "texto vazio: o MD5 que a carga recusa (RN-01 c)",
+      "password": "",
+      "bytes": 0,
+      "md5": "d41d8cd98f00b204e9800998ecf8427e",
+      "db": true,
+      "unusable": true,
+      "wrong": []
+    },
+    {
+      "id": "surrogate_isolado",
+      "description": "surrogate isolado: o pacote n\u00e3o calcula; nunca confere (RN-02, DA-1)",
+      "password": "abc\ud800",
+      "bytes": null,
+      "md5": null,
+      "db": false,
+      "unusable": false,
+      "wrong": []
+    },
+    {
+      "id": "nul",
+      "description": "U+0000: o banco n\u00e3o guarda; nunca confere (DA-1)",
+      "password": "abc\u0000",
+      "bytes": 4,
+      "md5": "147a664a2ca9410911e61986d3f0d52a",
+      "db": false,
+      "unusable": false,
+      "wrong": []
+    }
+  ]
+}

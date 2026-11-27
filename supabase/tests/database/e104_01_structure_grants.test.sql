@@ -76,11 +76,11 @@ SELECT is(has_function_privilege('anon', 'public.sign_in_attempt(text, text, tex
   'Grants: anon não executa sign_in_attempt');
 SELECT is(has_function_privilege('authenticated', 'public.sign_in_attempt(text, text, text)', 'EXECUTE'), false,
   'Grants: authenticated não executa sign_in_attempt');
-SELECT is(has_function_privilege('service_role', 'public.sign_in_record_login(uuid, uuid, text, text)', 'EXECUTE'), true,
+SELECT is(has_function_privilege('service_role', 'public.sign_in_record_login(uuid, uuid, text, text, text)', 'EXECUTE'), true,
   'Grants: service_role executa sign_in_record_login');
-SELECT is(has_function_privilege('anon', 'public.sign_in_record_login(uuid, uuid, text, text)', 'EXECUTE'), false,
+SELECT is(has_function_privilege('anon', 'public.sign_in_record_login(uuid, uuid, text, text, text)', 'EXECUTE'), false,
   'Grants: anon não executa sign_in_record_login');
-SELECT is(has_function_privilege('authenticated', 'public.sign_in_record_login(uuid, uuid, text, text)', 'EXECUTE'), false,
+SELECT is(has_function_privilege('authenticated', 'public.sign_in_record_login(uuid, uuid, text, text, text)', 'EXECUTE'), false,
   'Grants: authenticated não executa sign_in_record_login');
 SELECT is(has_function_privilege('service_role', 'public.sign_in_discard_link(uuid)', 'EXECUTE'), true,
   'Grants: service_role executa sign_in_discard_link');
@@ -107,8 +107,8 @@ SELECT ok((SELECT bool_or(c LIKE 'lock_timeout=%3s') FROM pg_proc p, unnest(p.pr
 
 -- Funções de private: sem EXECUTE para a API.
 SELECT cmp_ok((SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-                WHERE n.nspname = 'private' AND (p.proname LIKE 'sign\_in\_%' OR p.proname = 'parse_login_identifier')), '>=', 6,
-  'Estrutura: private tem parse_login_identifier, sign_in_key, sign_in_origin_key, sign_in_lookup, sign_in_check_legacy e sign_in_purge');
+                WHERE n.nspname = 'private' AND (p.proname LIKE 'sign\_in\_%' OR p.proname = 'parse_login_identifier')), '>=', 5,
+  'Estrutura: private tem parse_login_identifier, sign_in_key, sign_in_origin_key, sign_in_lookup e sign_in_purge (E3: sign_in_check_legacy saiu, DT-08)');
 SELECT is((SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace, unnest(ARRAY['anon', 'authenticated', 'service_role']) r
             WHERE n.nspname = 'private' AND (p.proname LIKE 'sign\_in\_%' OR p.proname = 'parse_login_identifier')
               AND has_function_privilege(r, p.oid, 'EXECUTE')), 0,
@@ -116,8 +116,8 @@ SELECT is((SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid = p.
 SELECT is((SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
             WHERE n.nspname = 'private' AND p.proname IN ('parse_login_identifier', 'sign_in_key', 'sign_in_origin_key',
                   'sign_in_lookup', 'sign_in_check_legacy', 'sign_in_purge')),
-  ARRAY['parse_login_identifier', 'sign_in_check_legacy', 'sign_in_key', 'sign_in_lookup', 'sign_in_origin_key', 'sign_in_purge']::text[],
-  'Estrutura: as seis funções internas do spec existem');
+  ARRAY['parse_login_identifier', 'sign_in_key', 'sign_in_lookup', 'sign_in_origin_key', 'sign_in_purge']::text[],
+  'Estrutura: as cinco funções internas do spec existem; o ponto vazio sign_in_check_legacy saiu no E3 (DT-08)');
 
 -- Funções de normalização: authenticated e service_role, sem anon, IMMUTABLE (aparecem em índices).
 SELECT is((SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

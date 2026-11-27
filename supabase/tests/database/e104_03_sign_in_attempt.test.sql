@@ -9,7 +9,7 @@
 --   - RN-06: Nina, Samuel, Lia, Quintino, Rita e Rosa (excluídas e restaurada), conta sem cadastro, contas indisponíveis;
 --   - RN-07: a mesma resposta {"result":"invalid"} nos casos (a) a (g), sem dado do cadastro;
 --   - RN-08: campos vazios não contam nem registram; RN-09: senha como digitada, DA-5 (72 bytes);
---   - RN-13 (falha só com "result"), RN-17 (123456 entra; ponto do E3.02 devolve NULL);
+--   - RN-13 (falha só com "result"), RN-17 (123456 entra; o ponto do E3.02 saiu no E3, DT-08);
 --   - o motivo (metadata.reason) de cada falha, pela Auditoria.
 --
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK. Cada tentativa usa uma
@@ -245,19 +245,19 @@ SELECT ok((SELECT deleted_at IS NOT NULL FROM public.members WHERE id = pg_temp.
 SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.att('ana.souza@exemplo.com', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'email', 'identifier_masked', 'a***@exemplo.com', 'password_action', NULL, 'must_change_password', true),
+                     'identifier_type', 'email', 'identifier_masked', 'a***@exemplo.com', 'password_action', NULL, 'must_change_password', true, 'credential', 'account'),
   'RN-01: Ana entra com o e-mail (resposta completa do contrato, password_action nulo, must_change_password pela política)');
 SELECT is(pg_temp.att('(51) 98888-7777', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'mobile', 'identifier_masked', '***7777', 'password_action', NULL, 'must_change_password', true),
+                     'identifier_type', 'mobile', 'identifier_masked', '***7777', 'password_action', NULL, 'must_change_password', true, 'credential', 'account'),
   'RN-01, RN-15: Ana entra com o celular, tipo Celular, máscara ***7777');
 SELECT is(pg_temp.att('529.982.247-25', 'Senha#1'),
   jsonb_build_object('result', 'ok', 'member_id', pg_temp.m(1), 'auth_user_id', pg_temp.u(1), 'auth_email', 'ana.souza@exemplo.com',
-                     'identifier_type', 'cpf', 'identifier_masked', '***4725', 'password_action', NULL, 'must_change_password', true),
+                     'identifier_type', 'cpf', 'identifier_masked', '***4725', 'password_action', NULL, 'must_change_password', true, 'credential', 'account'),
   'RN-01, RN-15: Ana entra com o CPF; só o CPF dela encontra, então o tipo é CPF');
 SELECT is((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(pg_temp.att('ana.souza@exemplo.com', 'Senha#1')) k),
-  ARRAY['auth_email', 'auth_user_id', 'identifier_masked', 'identifier_type', 'member_id', 'must_change_password', 'password_action', 'result']::text[],
-  'Contrato (E2.03): a resposta de sucesso tem exatamente estas oito chaves, com must_change_password (Senha#1 tem 7 caracteres: a marca nasce na primeira entrada, RN-08 b)');
+  ARRAY['auth_email', 'auth_user_id', 'credential', 'identifier_masked', 'identifier_type', 'member_id', 'must_change_password', 'password_action', 'result']::text[],
+  'Contrato (E2.03, E3): a resposta de sucesso tem exatamente estas nove chaves, com must_change_password (Senha#1 tem 7 caracteres: a marca nasce na primeira entrada, RN-08 b) e credential (DT-07 do E3)');
 
 SELECT is(pg_temp.fr('bruno_k3j9x2@mci12fakemail.com', 'Senha#2'), 'invalid|not_found',
   'RN-01: o e-mail fictício de Bruno, com a senha certa, é "não encontrada"');
@@ -379,8 +379,8 @@ SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.fr('e104-22@exemplo.com', 'Senha#22'), 'invalid|account_unavailable', 'RN-07 f: e-mail não confirmado');
 SELECT is(pg_temp.fr('e104-23@exemplo.com', 'Senha#23'), 'invalid|account_unavailable', 'RN-07 f: conta banida');
 SELECT is(pg_temp.fr('e104-24@exemplo.com', 'Senha#24'), 'invalid|account_unavailable', 'RN-07 f: conta apagada no Auth (deleted_at)');
-SELECT is(pg_temp.fr('e104-25@exemplo.com', 'Senha#25'), 'invalid|account_unavailable', 'DA-9: conta sem senha');
-SELECT is(pg_temp.fr('e104-26@exemplo.com', 'password'), 'invalid|account_unavailable', 'DA-9: hash que não é bcrypt (MD5 em hexadecimal)');
+SELECT is(pg_temp.fr('e104-25@exemplo.com', 'Senha#25'), 'invalid|no_password', 'DA-9, E3 DT-06: conta sem senha no cofre é "Sem senha definida"');
+SELECT is(pg_temp.fr('e104-26@exemplo.com', 'password'), 'invalid|no_password', 'DA-9, E3 DT-06: hash que não é bcrypt não vai para o cofre: sem senha');
 SELECT is(pg_temp.fr('e104-27@exemplo.com', 'Senha#27'), 'invalid|account_unavailable', 'RN-06 b: conta de SSO');
 SELECT is(pg_temp.att('e104-22@exemplo.com', 'Senha#22'), '{"result": "invalid"}'::jsonb, 'RN-07 f: resposta única da conta indisponível');
 
@@ -431,9 +431,9 @@ SELECT is(pg_temp.fr('e104-28@exemplo.com', repeat('x', 72) || 'qualquer-sufixo'
 -- ===========================================================================
 SELECT pg_temp.reset_throttle();
 SELECT is(pg_temp.res('e104-21@exemplo.com', '123456'), 'ok', 'RN-17: Tiago entra com a senha inicial 123456 (D11), sem regra de força');
-SELECT is(private.sign_in_check_legacy(pg_temp.m(21), '123456'), NULL, 'RN-17 b: o ponto do E3.02 existe e não faz nada (NULL)');
-SELECT is(private.sign_in_check_legacy(pg_temp.m(1), 'qualquer'), NULL, 'RN-17 b: nem para outro membro');
-SELECT is(pg_temp.att('e104-21@exemplo.com', '123456') -> 'password_action', 'null'::jsonb, 'RN-17 d: password_action é null neste passo');
+SELECT is(to_regprocedure('private.sign_in_check_legacy(uuid, text)'), NULL, 'RN-17 b, E3 DT-08: o ponto vazio do E3.02 saiu (virou a conferência da credencial)');
+SELECT is(pg_temp.att('e104-21@exemplo.com', '123456') ->> 'credential', 'account', 'E3 DT-07: sem credencial legada, quem confere é a conta');
+SELECT is(pg_temp.att('e104-21@exemplo.com', '123456') -> 'password_action', 'null'::jsonb, 'RN-17 d, E3 DT-07: password_action continua null');
 
 -- ===========================================================================
 -- RN-13: a função só devolve dados de quem entrou; nada foi gravado em auth.users

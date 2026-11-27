@@ -1,10 +1,13 @@
-// Vitest. E1.04: Contratos, RN-07 (corpo e piso), RN-08, RN-13, DT-18; E2.03: must_change_password.
+// Vitest. E1.04: Contratos, RN-07 (corpo e piso), RN-08, RN-13, DT-18; E2.03: must_change_password;
+// E3: credential (DT-07) e o texto que o banco não guarda (DA-1).
 import { describe, expect, it, vi } from 'vitest'
 import {
   FAILURE_FLOOR_MS,
+  attemptCredential,
   isAttemptResult,
   isOtpExpired,
   isUserCreatedByLink,
+  isWellFormedText,
   lockedReply,
   pickSession,
   readCredentials,
@@ -190,5 +193,43 @@ describe('respostas do Auth (DT-18)', () => {
     expect(isUserCreatedByLink({ ...fresh, last_sign_in_at: '2026-11-24T12:00:31Z' }, since)).toBe(false)
     expect(isUserCreatedByLink({ ...fresh, created_at: 'nao-e-data' }, since)).toBe(false)
     expect(isUserCreatedByLink(null, since)).toBe(false)
+  })
+})
+
+describe('E3: credential no sucesso (DT-07)', () => {
+  it('ausente (RPC anterior ao E3) é aceita e vale como account', () => {
+    expect(isAttemptResult(okAttempt)).toBe(true)
+    expect(attemptCredential(okAttempt)).toBe('account')
+  })
+  it('account e legacy são aceitas e passam adiante', () => {
+    expect(isAttemptResult({ ...okAttempt, credential: 'account' })).toBe(true)
+    expect(isAttemptResult({ ...okAttempt, credential: 'legacy' })).toBe(true)
+    expect(attemptCredential({ credential: 'legacy' })).toBe('legacy')
+  })
+  it('qualquer outro valor é fora do contrato (500)', () => {
+    for (const credential of ['', 'LEGACY', 'md5', null, 1, true, {}]) {
+      expect(isAttemptResult({ ...okAttempt, credential })).toBe(false)
+    }
+  })
+})
+
+describe('E3: isWellFormedText (DA-1)', () => {
+  it('aceita texto comum, acentos compostos e decompostos, emoji e espaços', () => {
+    for (const text of ['Graça2024!', 'Grac\u0327a2024!', ' mesa azul ', '🙏 fé', 'x'.repeat(80), '123456']) {
+      expect(isWellFormedText(text)).toBe(true)
+    }
+  })
+  it('recusa U+0000 em qualquer posição', () => {
+    for (const text of ['\u0000', 'abc\u0000', '\u0000abc', 'a\u0000b']) {
+      expect(isWellFormedText(text)).toBe(false)
+    }
+  })
+  it('recusa surrogate isolado (alto ou baixo), no começo, no meio ou no fim', () => {
+    for (const text of ['\uD83D', '\uDE4F', 'abc\uD83D', '\uDE4Fabc', 'a\uD83Db', 'a\uDE4F\uD83Db', '\uD83D\uD83D\uDE4F']) {
+      expect(isWellFormedText(text)).toBe(false)
+    }
+  })
+  it('o par completo (emoji) é bem formado', () => {
+    expect(isWellFormedText('\uD83D\uDE4F')).toBe(true)
   })
 })

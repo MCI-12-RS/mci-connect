@@ -5,7 +5,8 @@
 //
 // Mede, contra a stack local, 20 tentativas de cada caso:
 //   a identificação inválida, b não encontrada, c ambígua, d excluída, e sem conta, f conta indisponível,
-//   g senha errada (a referência) e h bloqueada (429).
+//   g senha errada (a referência) e h bloqueada (429); E3: i senha errada conferida pela credencial
+//   legada e j conta sem senha (no_password, o bcrypt fictício).
 // Duas medidas:
 //   - banco: o tempo da RPC sign_in_attempt, medido pelo \timing do psql dentro do contêiner (sem rede).
 //     É o que o piso precisa absorver: o p99 de cada caso fica abaixo de 700 ms.
@@ -16,7 +17,7 @@
 // Imprime uma tabela em Markdown (para anexar ao PR) e sai com código 1 se algum critério falhar.
 import { execSync } from 'node:child_process'
 import {
-  DOMAIN, FAILURE_FLOOR_MS, PSQL, PW, cleanupMassa, createMassa, median, percentile, resetThrottle, signIn, sql, freshOrigin,
+  DOMAIN, FAILURE_FLOOR_MS, PSQL, PW, cleanupMassa, createLegacyMember, createMassa, median, percentile, resetThrottle, signIn, sql, freshOrigin,
 } from './support.mjs'
 
 const args = process.argv.slice(2)
@@ -35,6 +36,8 @@ const casos = [
   { id: 'f', nome: 'conta indisponível', ident: () => `banida@${DOMAIN}`, pw: PW },
   { id: 'g', nome: 'senha errada (referência)', ident: () => ANA, pw: 'errada' },
   { id: 'h', nome: 'bloqueada (429)', ident: () => ANA, pw: PW, blocked: true },
+  { id: 'i', nome: 'senha errada, credencial legada (E3)', ident: () => `legado@${DOMAIN}`, pw: 'errada' },
+  { id: 'j', nome: 'sem senha definida (E3)', ident: () => `semsenha@${DOMAIN}`, pw: PW },
 ]
 const esc = (s) => s.replace(/'/g, "''")
 const blockSql = `INSERT INTO private.sign_in_throttle (kind, key_hash, failures, blocked_until, expires_at)
@@ -87,6 +90,9 @@ function relatorio(titulo, resultados, limiteP99) {
 }
 
 await createMassa()
+await createLegacyMember('E104 Edge Legado', `legado@${DOMAIN}`, 'Legado#Edge1')
+const semSenha = await createLegacyMember('E104 Edge Sem Senha', `semsenha@${DOMAIN}`, 'qualquer')
+sql(`UPDATE private.legacy_credentials SET legacy_hash = NULL, discarded_at = now() WHERE member_id = '${semSenha.memberId}';`)
 let tudoOk = true
 try {
   if (doDb) {

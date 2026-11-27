@@ -1,0 +1,100 @@
+-- E3.03 (tarefa 6): volume do card "Primeiro acesso" e vazão da carga das credenciais.
+-- Spec: docs/specs/e3-login-legado.md (repositório apps-mci), DT-09 e Riscos, item 1.
+--   - 20 mil membros, todos com credencial legada (metade pendente, um quarto usado ou
+--     descartado, 500 excluídos): dashboard_first_access abaixo de 50 ms;
+--   - vazão da private.add_legacy_credential (um bcrypt de custo 10 por chamada), numa conexão,
+--     anotada para o E4.08 (lotes paralelos).
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e3_volume.psql > e3_volume.txt
+
+\set ON_ERROR_STOP on
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+INSERT INTO auth.users (id, email, email_confirmed_at)
+SELECT ('a3090000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e3-vol-' || n || '@teste.invalid', now()
+  FROM generate_series(1, 20000) n;
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, is_active, has_leadership, auth_user_id, role_id, mobile_whatsapp, deleted_at)
+SELECT ('c3090000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n, CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n = 1,
+       CASE WHEN n = 1 THEN NULL ELSE 'c3090000-0000-0000-0000-000000000001'::uuid END,
+       true, n > 1,
+       ('a3090000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       CASE WHEN n = 1 THEN (SELECT id FROM public.roles WHERE is_system) END,
+       '519' || lpad((n + 30000000)::text, 8, '0'),
+       CASE WHEN n % 40 = 0 THEN now() END                         -- 500 excluídos
+  FROM generate_series(1, 20000) n;
+
+-- Um bcrypt de custo 10 para todas (a medida é do card, não do bcrypt).
+CREATE TEMP TABLE vol_hash AS SELECT extensions.crypt(md5('Volume#1'), extensions.gen_salt('bf', 10)) AS h;
+INSERT INTO private.legacy_credentials (member_id, legacy_hash, used_at, discarded_at)
+SELECT ('c3090000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       CASE WHEN n % 4 = 3 THEN NULL ELSE (SELECT h FROM vol_hash) END,
+       CASE WHEN n % 4 IN (2, 3) THEN now() END,
+       CASE WHEN n % 4 = 3 THEN now() END
+  FROM generate_series(2, 20000) n;
+ANALYZE private.legacy_credentials;
+ANALYZE public.members;
+SET LOCAL session_replication_role = origin;
+
+SELECT count(*) AS credenciais, count(*) FILTER (WHERE legacy_hash IS NOT NULL AND used_at IS NULL) AS pendentes
+  FROM private.legacy_credentials WHERE member_id::text LIKE 'c3090000%';
+
+-- O card, como o Administrador (sem session_id nas claims: o portão confere só a marca).
+SELECT set_config('request.jwt.claims', '{"sub":"a3090000-0000-0000-0000-000000000001","role":"authenticated"}', true) \g /dev/null
+SET LOCAL ROLE authenticated;
+SELECT * FROM public.dashboard_first_access();
+\echo '== dashboard_first_access: média de 20 chamadas (meta < 50 ms)'
+DO $$
+DECLARE _t0 timestamptz; _ms numeric; _r record;
+BEGIN
+  PERFORM * FROM public.dashboard_first_access();                 -- aquece
+  _t0 := clock_timestamp();
+  FOR i IN 1..20 LOOP
+    SELECT * INTO _r FROM public.dashboard_first_access();
+  END LOOP;
+  _ms := extract(epoch FROM clock_timestamp() - _t0) * 1000 / 20;
+  RAISE NOTICE 'dashboard_first_access: % ms por chamada (pending %, total %)', round(_ms, 2), _r.pending, _r.total;
+  IF _ms >= 50 THEN RAISE EXCEPTION 'dashboard_first_access acima de 50 ms (% ms)', round(_ms, 2); END IF;
+END $$;
+RESET ROLE;
+
+\echo '== o plano da contagem (como o dono da função)'
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF)
+SELECT (count(*) FILTER (WHERE c.legacy_hash IS NOT NULL AND c.used_at IS NULL))::integer, count(*)::integer
+  FROM private.legacy_credentials c JOIN public.members m ON m.id = c.member_id
+ WHERE m.deleted_at IS NULL;
+
+-- Vazão da carga: 200 membros novos com conta e sem senha, uma conexão.
+SET LOCAL session_replication_role = replica;
+INSERT INTO auth.users (id, email, email_confirmed_at)
+SELECT ('a3090000-0000-0000-0001-' || lpad(n::text, 12, '0'))::uuid, 'e3-vol-c' || n || '@teste.invalid', now()
+  FROM generate_series(1, 200) n;
+INSERT INTO public.members (id, name, gender, leader_id, is_active, has_leadership, auth_user_id, mobile_whatsapp)
+SELECT ('c3090000-0000-0000-0001-' || lpad(n::text, 12, '0'))::uuid, 'Carga Volume ' || n, 'F',
+       'c3090000-0000-0000-0000-000000000001'::uuid, true, true,
+       ('a3090000-0000-0000-0001-' || lpad(n::text, 12, '0'))::uuid, '518' || lpad((n + 40000000)::text, 8, '0')
+  FROM generate_series(1, 200) n;
+SET LOCAL session_replication_role = origin;
+\echo '== add_legacy_credential: 200 chamadas numa conexão (para o E4.08)'
+DO $$
+DECLARE _t0 timestamptz; _ms numeric; _created int := 0;
+BEGIN
+  _t0 := clock_timestamp();
+  FOR n IN 1..200 LOOP
+    IF private.add_legacy_credential(('c3090000-0000-0000-0001-' || lpad(n::text, 12, '0'))::uuid, md5('Carga#' || n)) = 'created' THEN
+      _created := _created + 1;
+    END IF;
+  END LOOP;
+  _ms := extract(epoch FROM clock_timestamp() - _t0) * 1000;
+  RAISE NOTICE 'add_legacy_credential: % criadas em % ms (% ms por credencial; % por minuto numa conexão)',
+    _created, round(_ms), round(_ms / 200, 1), round(60000 / (_ms / 200));
+  IF _created <> 200 THEN RAISE EXCEPTION 'esperava 200 created, veio %', _created; END IF;
+END $$;
+
+ROLLBACK;
