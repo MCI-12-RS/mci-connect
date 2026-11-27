@@ -295,7 +295,7 @@ test.describe("conteúdo", () => {
     await F.signIn(page, F.PEDRO);
     await openDetail(page, C1);
     const evolution = region(page, "Evolução");
-    const figure = evolution.getByRole("img");
+    const figure = evolution.locator("figure[role=img]");
     await expect(figure).toHaveAttribute(
       "aria-label",
       `Gráfico de linhas com participantes e visitantes de 4 relatórios, de ${dayOf(-32)} a ${dayOf(-4)}. Os números estão na aba Tabela.`,

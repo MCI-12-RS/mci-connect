@@ -181,7 +181,7 @@ export function cleanup(env: E2EEnv) {
 export async function seed(env: E2EEnv) {
   sql(
     env,
-    `INSERT INTO public.roles (id, name) VALUES (${lit(roleId(1))}, 'Secretaria E2E210');
+    `INSERT INTO public.roles (id, name) VALUES (${lit(roleId(1))}, 'Secretaria E2E210 ${PREFIX}');
      INSERT INTO public.role_permissions (role_id, permission) VALUES (${lit(roleId(1))}, 'view_all_reports');`,
   );
   const roles = {
