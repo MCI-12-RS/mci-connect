@@ -31,6 +31,7 @@ import { usePanelOpen } from "@/hooks/use-panel-open";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useCellsList } from "@/hooks/use-cells-list";
 import { useReturnFocus } from "@/hooks/use-return-focus";
+import { useListReturnFocus } from "@/hooks/use-list-return-focus";
 import type { CellListRow } from "@/lib/cells/fields";
 import { leaderLabel, toCellDeletionTarget, type CellDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -82,6 +83,11 @@ const Cells = () => {
   const total = data?.total ?? 0;
 
   useClampPage(list, { data, isPlaceholderData });
+
+  // Na volta do detalhe, a lista rola até a célula aberta e põe o foco no link dela; se ela não
+  // está na página (ou foi excluída), no título (E2.10, UXD-10, AQ-8; T14).
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useListReturnFocus(!!data && !isPlaceholderData, headingRef);
 
   // Ao fechar um diálogo, o foco volta a quem o abriu ou, se a célula saiu da lista, à busca.
   const searchRef = useRef<HTMLInputElement>(null);
@@ -284,7 +290,9 @@ const Cells = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold break-words">Células</h1>
+              <h1 ref={headingRef} tabIndex={-1} className="text-2xl md:text-3xl font-bold break-words outline-none">
+                Células
+              </h1>
               {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
             </div>
             {isMobile && deletedButton}

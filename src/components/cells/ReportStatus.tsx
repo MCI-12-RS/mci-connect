@@ -1,8 +1,10 @@
 import { CalendarClock, CalendarX2, CheckCircle2, Clock, TriangleAlert, type LucideIcon } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import {
+  REPORT_STATUS_DETAIL_TEXTS,
   REPORT_STATUS_TEXTS,
   missingWeeksLine,
+  reportStatusExplanation,
   reportStatusDisplay,
   type ReportStatusDisplay,
   type ReportStatusIcon,
@@ -44,8 +46,17 @@ export const ReportStatusBadge = ({ display }: { display: Extract<ReportStatusDi
 );
 
 /** P72: as semanas anteriores sem relatório, em texto com o ícone, e não em badge (UXD-3). */
-export const MissingWeeksLine = ({ text, afterBadge = true }: { text: string; afterBadge?: boolean }) => (
-  <span className="inline-flex items-start gap-1 text-xs font-medium text-foreground">
+export const MissingWeeksLine = ({
+  text,
+  afterBadge = true,
+  className = "text-xs",
+}: {
+  text: string;
+  afterBadge?: boolean;
+  /** O tamanho do texto: `text-xs` na lista, `text-sm` no detalhe (T10). */
+  className?: string;
+}) => (
+  <span className={`inline-flex items-start gap-1 font-medium text-foreground ${className}`}>
     <CalendarX2 className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
     {/* Para o leitor de tela: "Pendente, Sem relatório nas 2 semanas anteriores" (UX-14). */}
     {afterBadge && <span className="sr-only">{REPORT_STATUS_TEXTS.separatorSpoken}</span>}
@@ -65,8 +76,11 @@ interface ReportStatusProps {
   status: unknown;
   missingWeeks: number | null | undefined;
   isActive: boolean | null | undefined;
-  /** `card`: com o rótulo "Relatório:" e tudo numa linha que quebra; `table`: sem o rótulo, um embaixo do outro (P71). */
-  variant: "card" | "table";
+  /**
+   * `card`: com o rótulo "Relatório:" e tudo numa linha que quebra; `table`: sem o rótulo, um embaixo
+   * do outro (P71); `detail`: o badge, a explicação e as semanas, ou a frase da célula inativa (E2.10, T10).
+   */
+  variant: "card" | "table" | "detail";
 }
 
 /**
@@ -88,6 +102,22 @@ const ReportStatus = ({ status, missingWeeks, isActive, variant }: ReportStatusP
         {display.kind === "text" && <span className="text-foreground">{display.label}</span>}
         {display.kind === "unknown" && <NoStatus spoken={REPORT_STATUS_TEXTS.unknownSpoken} />}
         {weeks && <MissingWeeksLine text={weeks} />}
+      </div>
+    );
+  }
+
+  if (variant === "detail") {
+    if (display.kind === "inactive") {
+      return <p className="text-sm text-muted-foreground">{REPORT_STATUS_DETAIL_TEXTS.inactive}</p>;
+    }
+    if (display.kind === "unknown") return <NoStatus spoken={REPORT_STATUS_TEXTS.unknownSpoken} />;
+    if (display.kind === "text") return <p className="text-sm text-foreground">{display.label}</p>;
+    const explanation = reportStatusExplanation(display);
+    return (
+      <div className="flex flex-col items-start gap-1.5">
+        <ReportStatusBadge display={display} />
+        {explanation && <p className="text-sm text-muted-foreground">{explanation}</p>}
+        {weeks && <MissingWeeksLine text={weeks} className="text-sm" />}
       </div>
     );
   }

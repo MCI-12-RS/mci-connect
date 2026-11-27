@@ -14,8 +14,8 @@ const LevelSuffix = ({ className, ...input }: LevelSuffixProps) => {
   const { label, spoken } = levelInfo(input);
   return (
     <span className={cn("font-normal text-muted-foreground", className)}>
-      {" "}
-      <span aria-hidden="true">({label})</span>
+      {/* O espaço fica com os parênteses, fora do leitor de tela: o nome acessível é "André Souza, nível 144". */}
+      <span aria-hidden="true"> ({label})</span>
       <span className="sr-only">, {spoken}</span>
     </span>
   );

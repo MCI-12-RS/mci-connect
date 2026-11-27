@@ -61,6 +61,19 @@ export const CELL_LIST_SELECT =
 export type CellListRow = CellRow & Pick<CellViewRow, "report_status" | "report_missing_weeks">;
 
 /**
+ * A célula no detalhe (E2.10, T8 a T13): as colunas da lista (o formulário, o
+ * bloqueio do E2.01 e o "Novo relatório" continuam funcionando com ela), a
+ * situação do relatório (RN-15 f) e a autoria (RN-15 g; E2.05), lida junto,
+ * numa consulta só.
+ */
+// Uma string literal só (não concatenada): o supabase-js deriva o tipo do resultado dela.
+export const CELL_DETAIL_SELECT =
+  "id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, number, complement, neighborhood, city, state, zip_code, is_active, leader_name, leader_g12_level, leader_is_pastor, leader_gender, timothy_name, host_name, g12_leader_name, can_submit_report, updated_at, report_status, report_missing_weeks, created_at, created_by_kind, created_by_name, updated_by_kind, updated_by_name";
+
+export type CellDetailRow = CellListRow &
+  Pick<CellViewRow, "created_at" | "created_by_kind" | "created_by_name" | "updated_by_kind" | "updated_by_name">;
+
+/**
  * As colunas que o formulário de célula grava, lidas de volta na conferência
  * da nova tentativa de cadastro (DT-09): a célula achada só vale como a mesma
  * se elas forem iguais ao que está sendo enviado.

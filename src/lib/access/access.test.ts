@@ -181,6 +181,19 @@ describe("canSeeRoute (T12, UX-11)", () => {
     expect(canSeeRoute(persona({ permissions: ["manage_roles", "view_own_reports"] }), "/cell-reports/deleted")).toBe(true);
   });
 
+  it("o detalhe da célula passa para quem está logado, mesmo sem a lista (E2.10, AQ-7, UX-16)", () => {
+    const id = "/cells/0b8f2a4e-1d3c-4e5f-9a7b-123456789abc";
+    expect(canSeeRoute(hugo, "/cells")).toBe(false);
+    expect(canSeeRoute(hugo, id)).toBe(true);
+    expect(canSeeRoute(rita, id)).toBe(true);
+    expect(canSeeRoute(rita, "/cells/xyz")).toBe(true);
+    expect(canSeeRoute(null, id)).toBe(false);
+    // A rota fixa de excluídas continua com a regra dela.
+    expect(canSeeRoute(hugo, "/cells/deleted")).toBe(false);
+    expect(canSeeRoute(pedro, "/cells/deleted")).toBe(false);
+    expect(canSeeRoute(rita, "/cells/deleted")).toBe(true);
+  });
+
   it("rota que o menu não governa: não", () => {
     expect(canSeeRoute(rita, "/qualquer")).toBe(false);
     expect(canSeeRoute(rita, "/roles/deleted")).toBe(false);

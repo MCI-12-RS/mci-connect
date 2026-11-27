@@ -96,13 +96,17 @@ export function menuItems(access: Access | null | undefined): MenuItem[] {
 /** Sufixo das listas de excluídos do E2.01 (`/members/deleted`…). */
 const DELETED_SUFFIX = "/deleted";
 
+/** O detalhe da célula, `/cells/:id` (a lista de excluídas, `/cells/deleted`, já saiu acima). */
+const CELL_DETAIL_PREFIX = "/cells/";
+
 /** Listas que têm a sub-rota de excluídos. */
 const LISTS_WITH_DELETED: readonly string[] = ["/members", "/cells", "/cell-reports"];
 
 /**
  * A pessoa pode abrir a rota (T12)? As rotas do menu seguem o item; as listas
  * de excluídos seguem o item da lista e ainda exigem "Gerenciar Funções"
- * (E2.01). Uma rota que o menu não governa (desconhecida) devolve `false`.
+ * (E2.01). O detalhe da célula passa para quem está logado (E2.10). Uma rota
+ * que o menu não governa (desconhecida) devolve `false`.
  * Aceita o endereço com busca ou barra no fim.
  */
 export function canSeeRoute(access: Access | null | undefined, path: string): boolean {
@@ -111,6 +115,9 @@ export function canSeeRoute(access: Access | null | undefined, path: string): bo
     const listPath = pathname.slice(0, -DELETED_SUFFIX.length);
     return LISTS_WITH_DELETED.includes(listPath) && canSeeRoute(access, listPath) && hasPermission(access, "manage_roles");
   }
+  // O detalhe da célula (E2.10, AQ-7): quem abre é decidido pela visibilidade da célula na
+  // `cells_view` (RN-14), e não pela lista; "Célula não encontrada." para quem não a vê.
+  if (pathname.startsWith(CELL_DETAIL_PREFIX)) return !!access;
   const rule = MENU_RULES.find((item) => item.path === pathname);
   return !!rule && hasPermission(access, ...rule.anyOf);
 }

@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CellStatusBadge } from "@/components/StatusBadges";
-import { CellG12, CellLeader, CellMeeting } from "@/components/cells/CellListParts";
+import { CellDetailLink, CellG12, CellMeeting } from "@/components/cells/CellListParts";
+import { cellDetailPath } from "@/lib/cells/detail";
 import ReportStatus from "@/components/cells/ReportStatus";
 import type { CellListRow } from "@/lib/cells/fields";
 import { REPORT_STATUS_TEXTS } from "@/lib/cells/report-status";
@@ -27,8 +29,18 @@ interface CellsTableProps {
  * A lista de Células em tabela, a partir de 1280 px (E2.06, T2; E2.08, T7;
  * E2.09, T2 e P74). Colunas da UXD-6: Líder, G12, Endereço, Reunião (dia,
  * horário e tipo), Relatório, Situação e Ações.
+ *
+ * O nome do líder é o link para o detalhe (E2.10, P81); o clique na linha é
+ * um atalho do mouse, que ignora os botões e os links. Pelo teclado, só o
+ * link recebe o foco.
  */
 const CellsTable = ({ rows, isLoading, refreshing, renderActions, caption }: CellsTableProps) => {
+  const navigate = useNavigate();
+  const openRow = (cellId: string) => (event: MouseEvent<HTMLTableRowElement>) => {
+    if (event.target instanceof Element && event.target.closest("a, button, [role='menuitem']")) return;
+    if (window.getSelection()?.toString()) return;
+    navigate(cellDetailPath(cellId), { state: { fromList: true } });
+  };
   const actions = rows.map(renderActions);
   const showActions = actions.some((a) => a !== null);
   const columnCount = showActions ? 7 : 6;
@@ -66,10 +78,14 @@ const CellsTable = ({ rows, isLoading, refreshing, renderActions, caption }: Cel
               </TableRow>
             ))
           : rows.map((c, i) => (
-              <TableRow key={c.id} className={refreshing ? "opacity-60" : undefined}>
+              <TableRow
+                key={c.id}
+                className={`cursor-pointer ${refreshing ? "opacity-60" : ""}`}
+                onClick={openRow(c.id)}
+              >
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    <CellLeader cell={c} className="text-sm font-medium" />
+                    <CellDetailLink cell={c} className="text-sm font-medium" />
                     <div className="flex flex-col break-words text-xs text-muted-foreground">
                       {c.timothy_name && <span>Timóteo: {c.timothy_name}</span>}
                       {c.host_name && <span>Anfitrião: {c.host_name}</span>}

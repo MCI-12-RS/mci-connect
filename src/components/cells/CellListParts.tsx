@@ -1,4 +1,8 @@
+import type { MouseEvent, ReactNode } from "react";
+import { Link } from "react-router-dom";
 import LevelSuffix from "@/components/hierarchy/LevelSuffix";
+import { cellDetailPath, type CellDetailLocationState } from "@/lib/cells/detail";
+import { CELL_DETAIL_TEXTS } from "@/lib/cells/detail-texts";
 import { cellG12, cellLeaderLevel, formatG12Label } from "@/lib/cells/labels";
 import type { CellRow } from "@/lib/cells/fields";
 import { CELLS_LIST_TEXTS } from "@/lib/hierarchy/texts";
@@ -35,3 +39,44 @@ export const CellMeeting = ({ cell }: { cell: CellRow }) => (
     {cell.meeting_time?.substring(0, 5) || CELLS_PAGE_TEXTS.missing}
   </span>
 );
+
+const FROM_LIST: CellDetailLocationState = { fromList: true };
+
+/**
+ * O link do item da lista para o detalhe (P81): o nome do líder com o nível,
+ * com "Célula de " em `sr-only` ("Célula de André Souza, nível 144"). Leva
+ * `state.fromList`, para o "Voltar para Células" usar o histórico (AQ-8), e o
+ * atributo que a volta procura para devolver o foco (`useListReturnFocus`).
+ * `stretched`: no cartão, o link cobre o cartão inteiro (`after:absolute`),
+ * com o anel de foco nele; as ações ficam por cima (`relative z-10`).
+ */
+export const CellDetailLink = ({
+  cell,
+  stretched = false,
+  className,
+  onClick,
+}: {
+  cell: CellRow;
+  stretched?: boolean;
+  className: string;
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+}) => (
+  <Link
+    to={cellDetailPath(cell.id)}
+    state={FROM_LIST}
+    // O atributo é o `CELL_LINK_ATTRIBUTE`, que a volta procura.
+    data-cell-link={cell.id}
+    onClick={onClick}
+    className={
+      stretched
+        ? "rounded-sm outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background hover:underline"
+        : "rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    }
+  >
+    <span className="sr-only">{CELL_DETAIL_TEXTS.listLinkPrefix}</span>
+    <CellLeader cell={cell} className={className} />
+  </Link>
+);
+
+/** Conteúdo por cima do link esticado do cartão (P81): as ações continuam clicáveis. */
+export const AboveCardLink = ({ children }: { children: ReactNode }) => <div className="relative z-10">{children}</div>;

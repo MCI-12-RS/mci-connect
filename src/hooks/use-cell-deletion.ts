@@ -19,8 +19,12 @@ export function useRefreshCellData() {
  * Exclusão lógica pela RPC `delete_cell` (E2.01, RN-01 e RN-11): os relatórios
  * da célula ficam. Não lança: resolve com o resultado classificado. Fica
  * pendente até a lista recarregar.
+ *
+ * `onDeleted` (o detalhe da célula, E2.10, AQ-10): na exclusão feita, quem
+ * chama cuida da ordem (descarta a lista, volta para ela e só então
+ * recarrega), para a lista nunca mostrar a célula excluída vinda do cache.
  */
-export function useDeleteCell() {
+export function useDeleteCell({ onDeleted }: { onDeleted?: () => void } = {}) {
   const refresh = useRefreshCellData();
   return useMutation({
     mutationFn: async (cellId: string): Promise<WriteResult> => {
@@ -28,7 +32,8 @@ export function useDeleteCell() {
       return error ? classifyWriteError(error) : { kind: "done" };
     },
     onSuccess: async (result) => {
-      if (refreshesList(result)) await refresh();
+      if (result.kind === "done" && onDeleted) onDeleted();
+      else if (refreshesList(result)) await refresh();
     },
   });
 }

@@ -12,6 +12,8 @@ interface CellDeletionFlowProps {
   onClose: () => void;
   /** Ao fechar, leva o foco a quem abriu o fluxo (`useReturnFocus`). */
   onCloseAutoFocus?: (event: Event) => void;
+  /** Exclusão feita, no lugar da recarga comum: o detalhe volta para a lista (E2.10, AQ-10). */
+  onDeleted?: () => void;
 }
 
 /**
@@ -19,9 +21,9 @@ interface CellDeletionFlowProps {
  * endereço, o atalho "Marcar como inativa" para a célula ativa e a exclusão
  * pela RPC. Monte com `key` da célula: cada abertura começa do zero.
  */
-const CellDeletionFlow = ({ cell, onClose, onCloseAutoFocus }: CellDeletionFlowProps) => {
+const CellDeletionFlow = ({ cell, onClose, onCloseAutoFocus, onDeleted }: CellDeletionFlowProps) => {
   const { hasPermission } = useAuth();
-  const deletion = useDeleteCell();
+  const deletion = useDeleteCell({ onDeleted });
   const inactivation = useMarkCellInactive();
   const write = useDialogWrite(onClose);
 
