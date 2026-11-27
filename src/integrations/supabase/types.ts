@@ -1827,6 +1827,34 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["member_cell_link"][]
       }
+      cell_report_edit_context: {
+        Args: { _report_id: string }
+        Returns: {
+          allowed_dates: string[]
+          server_now: string
+          today: string
+          week_end: string
+          week_start: string
+        }[]
+      }
+      cell_report_launch_check: {
+        Args: { _cell_id: string }
+        Returns: {
+          allowed_dates: string[]
+          existing_can_edit: boolean
+          existing_date: string
+          existing_report_id: string
+          existing_time: string
+          existing_was_held: boolean
+          meeting_date: string
+          meeting_time: string
+          server_now: string
+          status: Database["public"]["Enums"]["report_launch_status"]
+          today: string
+          week_end: string
+          week_start: string
+        }[]
+      }
       cell_types: { Args: never; Returns: string[] }
       cell_weekdays: { Args: never; Returns: string[] }
       cells_report_situation: {
@@ -2121,10 +2149,6 @@ export type Database = {
         Returns: string
       }
       search_normalize: { Args: { _value: string }; Returns: string }
-      set_cell_report_participants: {
-        Args: { _member_ids: string[]; _report_id: string }
-        Returns: undefined
-      }
       set_initial_password: {
         Args: {
           _auth_user_id: string
@@ -2159,6 +2183,14 @@ export type Database = {
       sp_local: { Args: { _at: string }; Returns: string }
       sp_now: { Args: never; Returns: string }
       sp_today: { Args: never; Returns: string }
+      submit_cell_report: {
+        Args: { _participant_ids?: string[]; _report: Json; _report_id: string }
+        Returns: {
+          outcome: Database["public"]["Enums"]["report_submit_outcome"]
+          report_id: string
+          same_content: boolean
+        }[]
+      }
       user_has_permission: {
         Args: {
           _permission: Database["public"]["Enums"]["permission_action"]
@@ -2167,14 +2199,6 @@ export type Database = {
         Returns: boolean
       }
       viewer_can_insert_cell: { Args: never; Returns: boolean }
-      viewer_can_insert_cell_report: {
-        Args: { _cell_id: string }
-        Returns: boolean
-      }
-      viewer_can_insert_cell_report_participant: {
-        Args: { _report_id: string }
-        Returns: boolean
-      }
       viewer_covers_role: { Args: { _role_id: string }; Returns: boolean }
       viewer_has: {
         Args: { _permission: Database["public"]["Enums"]["permission_action"] }
@@ -2264,6 +2288,16 @@ export type Database = {
         | "edit_cell_report"
         | "delete_cell_report"
         | "view_audit_log"
+      report_launch_status:
+        | "can_submit"
+        | "already_sent"
+        | "not_yet"
+        | "cell_inactive"
+        | "cell_deleted"
+        | "not_found"
+        | "not_allowed"
+        | "no_permission"
+      report_submit_outcome: "created" | "replayed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2453,6 +2487,17 @@ export const Constants = {
         "delete_cell_report",
         "view_audit_log",
       ],
+      report_launch_status: [
+        "can_submit",
+        "already_sent",
+        "not_yet",
+        "cell_inactive",
+        "cell_deleted",
+        "not_found",
+        "not_allowed",
+        "no_permission",
+      ],
+      report_submit_outcome: ["created", "replayed"],
     },
   },
 } as const

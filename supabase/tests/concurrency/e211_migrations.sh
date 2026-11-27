@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E2.11 (PR 1), critério de pronto 1 e 2 e "Verificações obrigatórias" (migration roda de novo; a guarda
+# E2.11 (PRs 1 e 2), critério de pronto 1 e 2 e "Verificações obrigatórias" (migrations rodam de novo; a guarda
 # falha com os ids, sem mudar nada; RN-21: o preenchimento dos relatórios que já existem, inclusive os
 # excluídos e os de célula excluída, sem evento e sem mudar updated_at). Toda rodada é desfeita
 # (ROLLBACK), então o banco fica como estava. Use SÓ no banco local do Supabase.
@@ -10,6 +10,11 @@ set -uo pipefail
 PSQL=${PSQL:-"docker exec -i supabase_db_mci-connect psql -U postgres"}
 DIR=$(cd "$(dirname "$0")/../../migrations" && pwd)
 M1=$(ls "$DIR"/*_e211_01_*.sql)
+# Desde o PR 2, a segunda rodada é a das três migrations do passo, na ordem (a 1 sozinha recriaria o que a 3
+# tira: a política de UPDATE e a função de participantes da escrita direta).
+CHAIN=$(ls "$DIR"/*_e211_0[123]_*.sql)
+# A guarda da oferta (migration 3), só se ela existir.
+M3=$(ls "$DIR"/*_e211_03_*.sql 2>/dev/null || true)
 FAILS=0
 pass() { echo "  PASS  $1"; }
 fail() { echo "  FAIL  $1"; FAILS=$((FAILS + 1)); }
@@ -28,17 +33,43 @@ STATE="SELECT md5(
   || pg_get_viewdef('public.cell_report_participants_view'::regclass)
   || (SELECT string_agg(policyname || coalesce(qual, '') || coalesce(with_check, ''), ',' ORDER BY policyname) FROM pg_policies
     WHERE tablename IN ('cell_reports', 'cell_report_participants'))
+  || (SELECT string_agg(tgname::text || tgenabled::text || pg_get_triggerdef(oid), ',' ORDER BY tgname) FROM pg_trigger
+    WHERE tgrelid = 'public.cell_report_participants'::regclass AND NOT tgisinternal)
+  || coalesce((SELECT string_agg(column_name || coalesce(column_default, '-'), ',' ORDER BY column_name)
+       FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cell_reports'), '')
+  || coalesce((SELECT string_agg(grantee || privilege_type, ',' ORDER BY grantee, privilege_type)
+       FROM information_schema.role_table_grants WHERE table_name IN ('cell_reports', 'cell_report_participants')), '')
   || (SELECT string_agg(p.oid::regprocedure::text || pg_get_functiondef(p.oid) || coalesce(array_to_string(p.proacl, ' '), ''), ','
         ORDER BY p.oid::regprocedure::text)
       FROM pg_proc p WHERE p.proname IN ('cell_report_snapshot', 'viewer_sees_report_people',
-        'viewer_can_insert_cell_report_participant', 'cell_in_viewer_ministry'))
+        'viewer_can_insert_cell_report_participant', 'cell_in_viewer_ministry', 'submit_cell_report', 'save_cell_report',
+        'cell_report_launch_check', 'cell_report_edit_context', 'guard_cell_report_write', 'keep_snapshot_participants',
+        'enforce_insert_permission', 'set_cell_report_participants')
+         OR (p.pronamespace = 'private'::regnamespace AND p.proname LIKE 'report\_%'))
   || (SELECT count(*) FROM public.cell_reports)::text || (SELECT count(*) FROM public.events)::text);"
-OUT=$({ echo 'BEGIN;'; echo "$STATE"; cat "$M1"; echo; echo "$STATE"; echo 'ROLLBACK;'; } \
+OUT=$({ echo 'BEGIN;'; echo "$STATE"; for f in $CHAIN; do cat "$f"; echo; done; echo "$STATE"; echo 'ROLLBACK;'; } \
       | $PSQL -X -q -At -v ON_ERROR_STOP=1 2>&1 | grep -v NOTICE)
 RC=$?
 if [ $RC -eq 0 ] && ! echo "$OUT" | grep -q 'ERROR' && [ "$(echo "$OUT" | sort -u | wc -l)" -eq 1 ]; then
-  pass "roda de novo sem erro e sem mudar nada: $(basename "$M1")"
-else fail "$(basename "$M1") na segunda rodada: $(echo "$OUT" | head -3)"; fi
+  pass "rodam de novo sem erro e sem mudar nada: $(for f in $CHAIN; do basename "$f"; done | tr '\n' ' ')"
+else fail "segunda rodada de $(for f in $CHAIN; do basename "$f"; done | tr '\n' ' '): $(echo "$OUT" | head -3)"; fi
+
+# 1b. (PR 2) A guarda da oferta: com um relatório fora de 0 a 999.999,99, a migration 3 falha com o id e não
+#     muda nada (o CHECK é tirado na transação só para montar o caso).
+if [ -n "$M3" ]; then
+  OUT=$({ echo 'BEGIN;'
+          echo "ALTER TABLE public.cell_reports DROP CONSTRAINT cell_reports_offering_check;"
+          echo "SET LOCAL session_replication_role = replica;"
+          echo "INSERT INTO public.members (id, name, gender, is_pastor, has_leadership, mobile_whatsapp) VALUES ('e2110f00-0000-0000-0000-000000000011', 'Oferta Guarda', 'M', true, false, '51992110911');"
+          echo "INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES ('e2110f00-0000-0000-0000-0000000000c9', 'e2110f00-0000-0000-0000-000000000011', 'e2110f00-0000-0000-0000-000000000011', 'e2110f00-0000-0000-0000-000000000011', 'Evangelística', 'Quarta', '20:00');"
+          echo "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering) VALUES ('e2110f00-0000-0000-0000-0000000000a9', 'e2110f00-0000-0000-0000-0000000000c9', '2026-01-07', '20:00', true, 'x', -1) RETURNING 'id=' || id;"
+          echo "SET LOCAL session_replication_role = origin;"
+          cat "$M3"; echo; echo 'ROLLBACK;'; } | $PSQL -X -q -At -v ON_ERROR_STOP=1 2>&1 | grep -v NOTICE)
+  ID=$(echo "$OUT" | sed -n 's/^id=//p')
+  if [ -z "$ID" ]; then pass "guarda da oferta: sem relatório na base para montar o caso (pulado)"
+  elif echo "$OUT" | grep -q "oferta fora de 0 a 999999.99 (RN-13): {$ID}"; then pass "guarda da oferta: falha com o id do relatório"
+  else fail "guarda da oferta: $(echo "$OUT" | tail -2)"; fi
+fi
 
 # Volta ao estado de antes da migration para os relatórios da massa: sem o NOT NULL e sem o trigger (o
 # que existia antes do E2.11). Os relatórios da massa entram com o retrato nulo.

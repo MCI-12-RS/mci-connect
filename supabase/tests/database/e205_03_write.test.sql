@@ -4,6 +4,10 @@
 -- Cada SELECT do arquivo é um comando: um evento por gravação (comando) e registro (DT-24).
 -- Rodar com: supabase test db
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT plan(81);
 
@@ -94,7 +98,7 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_
 UPDATE public.members SET spouse_id = pg_temp.m(13) WHERE id = pg_temp.m(12);
 UPDATE public.members SET deleted_at = now() WHERE id = pg_temp.m(7);
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, meeting_day, meeting_time, neighborhood)
-VALUES (pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6), 'Domingo', '00:00', 'Centro');
+VALUES (pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6), 'Domingo', '00:05', 'Centro');
 
 -- ===========================================================================
 -- 1. RN-01 a RN-03, DA-1: quem é o autor e só o servidor define — 12
@@ -293,18 +297,20 @@ SELECT is((SELECT jsonb_build_object('by', actor_label, 'changes', changes) FROM
 -- 6. Células e relatórios (RN-01, RN-04 d, RN-13 b, RN-20) — 13
 -- ===========================================================================
 CREATE TEMP TABLE m12 AS SELECT pg_temp.mark() AS s;
-SELECT is(pg_temp.api(2, format($$UPDATE public.cells SET meeting_time = '00:05', street = 'Rua Nova', is_active = true WHERE id = %L$$, pg_temp.c(1))) ->> 'ok', 'true',
+SELECT is(pg_temp.api(2, format($$UPDATE public.cells SET meeting_time = '00:00', street = 'Rua Nova', is_active = true WHERE id = %L$$, pg_temp.c(1))) ->> 'ok', 'true',
   'Ana muda o horário e a rua da célula de Davi (e manda a situação igual)');
 SELECT is((SELECT jsonb_build_object('label', entity_label, 'desc', description, 'changes', changes) FROM pg_temp.evs('cell', pg_temp.c(1), (SELECT s FROM m12))),
   '{"label": "Célula de Davi Duarte", "desc": "Alterou a célula de Davi Duarte",
-    "changes": {"fields": [{"field": "meeting_time", "from": "00:00:00", "to": "00:05:00"}, {"field": "street"}]}}'::jsonb,
+    "changes": {"fields": [{"field": "meeting_time", "from": "00:05:00", "to": "00:00:00"}, {"field": "street"}]}}'::jsonb,
   'RN-13 c/RN-20: a rua da célula aparece (sem valor); o horário com o antes e o depois');
 SELECT ok((SELECT updated_by = pg_temp.m(2) AND created_by_kind = 'system' FROM public.cells WHERE id = pg_temp.c(1)),
   'RN-01: a célula guarda quem alterou');
 
 CREATE TEMP TABLE m13 AS SELECT pg_temp.mark() AS s;
+-- A célula se reúne no domingo às 00:00 (o começo da semana), e o horário enviado é o minuto atual: a
+-- reunião já aconteceu e o horário não é futuro a qualquer hora do dia (RN-05, RN-06; DT-08).
 SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(NULL,
-                                   jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '19:30', 'theme', 'Fé',
+                                   jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', to_char(public.sp_now(), 'HH24:MI'), 'theme', 'Fé',
                                                       'offering', 50, 'visitors', ARRAY['Visitante Um'], 'id', gen_random_uuid()),
                                    ARRAY[%L, %L, %L, %L, %L, %L, %L, %L]::uuid[]) r$$,
                                   pg_temp.c(1), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6), pg_temp.m(14), pg_temp.m(30),
@@ -322,8 +328,12 @@ SELECT ok((SELECT updated_at IS NULL AND updated_by_kind IS NULL AND created_by 
   'RN-04 d: logo depois de enviar, o relatório mostra só "Enviado por"');
 
 CREATE TEMP TABLE m14 AS SELECT pg_temp.mark() AS s;
-SELECT is(pg_temp.api(3, format($$INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (%L, %L)$$,
-                                  (SELECT id FROM rep), pg_temp.m(12))) ->> 'ok', 'true',
+-- E2.11 PR 2: incluir depois do envio é edição, pela save_cell_report (o conjunto final).
+SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(%L, '{}',
+                                   ARRAY[%L, %L, %L, %L, %L, %L, %L, %L, %L]::uuid[]) r$$,
+                                  (SELECT id FROM rep), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6), pg_temp.m(14),
+                                  pg_temp.m(30), pg_temp.m(31), pg_temp.m(15), pg_temp.m(12))),
+  '{"changed": true}'::jsonb,
   'Davi inclui Rita depois, pela API');
 SELECT is((SELECT jsonb_build_object('action', action, 'participants', changes -> 'participants', 'n', count(*) OVER ())
              FROM pg_temp.evs('cell_report', (SELECT id FROM rep), (SELECT s FROM m14))),
@@ -335,17 +345,18 @@ SELECT ok((SELECT updated_by = pg_temp.m(3) AND updated_at = (SELECT occurred_at
   'RN-04 d: e carimba o relatório (o momento do evento)');
 
 CREATE TEMP TABLE m15 AS SELECT pg_temp.mark() AS s;
+-- E2.11: o líder, o timóteo e o anfitrião registrados (Davi, Otávio e Paula) não saem (RN-11).
 SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(%L, '{"offering": 80, "theme": "Fé"}',
-                                   ARRAY[%L, %L]::uuid[]) r$$, (SELECT id FROM rep), pg_temp.m(3), pg_temp.m(4))),
-  '{"changed": true}'::jsonb, 'Davi altera a oferta e deixa só 2 participantes');
+                                   ARRAY[%L, %L, %L, %L]::uuid[]) r$$, (SELECT id FROM rep), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6))),
+  '{"changed": true}'::jsonb, 'Davi altera a oferta e deixa só 4 participantes (os registrados e Caio)');
 SELECT is((SELECT jsonb_build_object('n', count(*) OVER (), 'fields', changes -> 'fields',
                                      'added', jsonb_array_length(changes #> '{participants,added}'),
                                      'removed', jsonb_array_length(changes #> '{participants,removed}'))
              FROM pg_temp.evs('cell_report', (SELECT id FROM rep), (SELECT s FROM m15))),
-  '{"n": 1, "fields": [{"field": "offering", "from": 50.00, "to": 80}], "added": 0, "removed": 7}'::jsonb,
-  'RN-13 b/RN-20: um evento com a oferta (número) e os 7 retirados');
-SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(%L, '{"offering": 80.00}', ARRAY[%L, %L]::uuid[]) r$$,
-                                  (SELECT id FROM rep), pg_temp.m(4), pg_temp.m(3))),
+  '{"n": 1, "fields": [{"field": "offering", "from": 50.00, "to": 80}], "added": 0, "removed": 5}'::jsonb,
+  'RN-13 b/RN-20: um evento com a oferta (número) e os 5 retirados');
+SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(%L, '{"offering": 80.00}', ARRAY[%L, %L, %L, %L]::uuid[]) r$$,
+                                  (SELECT id FROM rep), pg_temp.m(6), pg_temp.m(4), pg_temp.m(3), pg_temp.m(5))),
   '{"changed": false}'::jsonb, 'AQ-7/RN-04 b: salvar o relatório sem mudança devolve changed = false');
 
 -- ===========================================================================
@@ -416,7 +427,8 @@ INSERT INTO rn14 VALUES
   ('PATCH de membro', format($$UPDATE public.members SET notes = 'quebrado' WHERE id = %L$$, pg_temp.m(5)), 2),
   ('cadastro de membro', format($$INSERT INTO public.members (name, gender, leader_id, has_leadership, mobile_whatsapp) VALUES ('Quebra Teste', 'F', %L, true, %L)$$, pg_temp.m(3), pg_temp.mob(40)), 2),
   ('célula', format($$UPDATE public.cells SET neighborhood = 'Quebrado' WHERE id = %L$$, pg_temp.c(1)), 2),
-  ('save_cell_report', format($$SELECT to_jsonb(r) FROM public.save_cell_report(%L, '{"theme": "Quebrado"}', ARRAY[%L]::uuid[]) r$$, (SELECT id FROM rep), pg_temp.m(14)), 3),
+  ('save_cell_report', format($$SELECT to_jsonb(r) FROM public.save_cell_report(%L, '{"theme": "Quebrado"}', ARRAY[%L, %L, %L, %L, %L]::uuid[]) r$$,
+                              (SELECT id FROM rep), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6), pg_temp.m(14)), 3),
   ('save_role', $$SELECT to_jsonb(public.save_role(NULL, 'Quebrada E205', NULL, '{view_dashboard}', false, NULL))$$, 2),
   ('delete_role', format('SELECT to_jsonb(public.delete_role(%L))', pg_temp.role('Vazia E205')), 2),
   ('delete_member', format('SELECT to_jsonb(public.delete_member(%L))', pg_temp.m(31)), 2),
@@ -441,7 +453,7 @@ SELECT is((SELECT count(*)::int FROM public.events WHERE entity <> 'auth' AND (d
 SELECT is(pg_temp.api(3, $$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, '{}') r$$),
   '{"error": "22023", "code": "cell_required"}'::jsonb, 'save_cell_report sem a célula: app_error cell_required');
 SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, jsonb_build_object('cell_id', %L::uuid, 'date', 'não é data')) r$$, pg_temp.c(1))),
-  '{"error": "22023", "code": "invalid_input"}'::jsonb, 'save_cell_report com data inválida: app_error invalid_input');
+  '{"error": "22023", "code": "report_date_invalid"}'::jsonb, 'save_cell_report com data inválida: app_error report_date_invalid (E2.11)');
 
 SELECT * FROM finish();
 ROLLBACK;

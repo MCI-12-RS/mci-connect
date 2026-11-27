@@ -26,6 +26,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
@@ -204,6 +208,10 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
  (pg_temp.c(1), pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), 'Evangelística', 'Quarta', '20:00'),
  (pg_temp.c(2), pg_temp.m(14), pg_temp.m(15), pg_temp.m(9), 'Evangelística', 'Quinta', '20:00'),
  (pg_temp.c(3), pg_temp.m(13), pg_temp.m(20), pg_temp.m(21), 'Evangelística', 'Terça', '19:30');
+-- E2.11: C2 se reúne hoje às 00:00, para o lançamento de Hugo ser aceito a qualquer hora (RN-06).
+UPDATE public.cells SET meeting_day = (public.cell_weekdays())[EXTRACT(dow FROM public.sp_today())::int + 1],
+                        meeting_time = '00:00'
+ WHERE id = pg_temp.c(2);
 -- Casos extras, isolados da árvore principal (só Rita e eles mesmos os veem).
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, auth_user_id, role_id, is_active, has_leadership) VALUES
@@ -268,8 +276,9 @@ $$ SELECT format($p$SELECT pg_temp.lab(pg_temp.ids(%s, 'SELECT id FROM public.me
 
 
 -- Texto do INSERT de relatório da semana atual (para sondas).
+-- E2.11 PR 2: o lançamento é só pela submit_cell_report; C2 se reúne hoje às 00:00 (ajustada na massa).
 CREATE FUNCTION pg_temp.ins_report_text(_cell uuid) RETURNS text LANGUAGE sql IMMUTABLE AS
-$$ SELECT format($i$INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme) VALUES (%L, public.sp_today(), '23:59', true, 'tema')$i$, _cell) $$;
+$$ SELECT format($i$SELECT * FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'tema', 'offering', 0))$i$, _cell) $$;
 
 -- Universo de ids, legível por quem consulta (as funções de linha são testadas
 -- id a id contra as views e as tabelas).

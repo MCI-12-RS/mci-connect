@@ -23,6 +23,10 @@
 -- Autocontido: cria a própria massa (dados fictícios) e termina com ROLLBACK.
 -- Rodar com: supabase test db
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT plan(67);
 
@@ -154,7 +158,7 @@ UPDATE public.members SET spouse_id = pg_temp.m(4) WHERE id = pg_temp.m(3);
 UPDATE public.members SET spouse_id = pg_temp.m(6) WHERE id = pg_temp.m(5);
 
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
- (pg_temp.c(1), pg_temp.m(5),  pg_temp.m(7),  pg_temp.m(8),  'Evangelística', 'Domingo', '08:00'),
+ (pg_temp.c(1), pg_temp.m(5),  pg_temp.m(7),  pg_temp.m(8),  'Evangelística', 'Domingo', '00:00'),
  (pg_temp.c(2), pg_temp.m(13), pg_temp.m(14), pg_temp.m(11), 'Discipulado',   'Domingo', '08:00'),
  (pg_temp.c(3), pg_temp.m(9),  pg_temp.m(13), pg_temp.m(14), 'Evangelística', 'Domingo', '08:00'),
  (pg_temp.c(4), pg_temp.m(1),  pg_temp.m(2),  pg_temp.m(3),  'Macrocélula',   'Domingo', '08:00'),
@@ -176,6 +180,8 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme,
   pg_temp.m(9), pg_temp.m(13), pg_temp.m(14), 'Macrocélula');
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
  (pg_temp.r(1), pg_temp.m(5)), (pg_temp.r(1), pg_temp.m(7)), (pg_temp.r(1), pg_temp.m(9));
+-- E2.11 PR 2: a oferta não tem mais padrão e é obrigatória na edição da célula realizada (RN-13).
+UPDATE public.cell_reports SET offering = 0 WHERE id::text LIKE 'e2110000%';
 SET LOCAL session_replication_role = origin;
 SELECT private.rebuild_member_hierarchy();
 
@@ -211,10 +217,9 @@ SELECT is((SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'public.cell_r
   'A', 'DT-02: ad_cell_report_snapshot é ENABLE ALWAYS (dispara também em replica, só para completar)');
 SELECT is((SELECT array_agg(tgname::text ORDER BY tgname) FROM pg_trigger
             WHERE tgrelid = 'public.cell_reports'::regclass AND NOT tgisinternal AND (tgtype & 2) = 2),
-  ARRAY['a0_check_insert_permission', 'aa_enforce_cell_report_rules', 'ab_enforce_cell_report_scope',
-        'ac_enforce_cell_report_active', 'ad_cell_report_snapshot', 'enforce_cell_report_current_week_trigger',
-        'enforce_unique_weekly_cell_report_trigger', 'zz_stamp_authorship'],
-  'ordem dos BEFORE: aa_ < ab_ < ac_ < ad_ (retrato) < semana < zz_ (carimbo)');
+  ARRAY['a0_guard_cell_report_write', 'aa_enforce_cell_report_rules', 'ac_enforce_cell_report_active',
+        'ad_cell_report_snapshot', 'zz_stamp_authorship'],
+  'ordem dos BEFORE (E2.11 PR 2): a0_ (guarda) < aa_ < ac_ < ad_ (retrato) < zz_ (carimbo)');
 SELECT ok((SELECT prosecdef AND proconfig @> ARRAY['search_path=public'] FROM pg_proc WHERE oid = 'public.viewer_sees_report_people(uuid,uuid,uuid)'::regprocedure)
           AND has_function_privilege('authenticated', 'public.viewer_sees_report_people(uuid,uuid,uuid)', 'EXECUTE')
           AND NOT has_function_privilege('anon', 'public.viewer_sees_report_people(uuid,uuid,uuid)', 'EXECUTE'),
@@ -226,8 +231,8 @@ SELECT ok(to_regprocedure('public.viewer_is_cell_person(uuid)') IS NOT NULL
 SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'public' AND tablename = 'cell_reports'
             AND policyname IN ('Cell reports view policy', 'Cell reports update policy')
             AND coalesce(qual, '') ~ 'viewer_sees_report_people\(snapshot_leader_id, snapshot_timothy_id, snapshot_host_id\)'
-            AND coalesce(qual, '') !~ 'viewer_is_cell_person'), 2,
-  'políticas de SELECT e UPDATE de cell_reports pelo retrato');
+            AND coalesce(qual, '') !~ 'viewer_is_cell_person'), 1,
+  'política de SELECT de cell_reports pelo retrato (a de UPDATE saiu no PR 2: só as RPCs gravam)');
 SELECT is((SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
             WHERE attrelid = 'public.cell_reports_view'::regclass AND attnum > 33 AND NOT attisdropped),
   ARRAY['snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_leader_name', 'snapshot_timothy_name',
@@ -247,10 +252,12 @@ SELECT is((SELECT ARRAY[snapshot_leader_id, snapshot_timothy_id, snapshot_host_i
   ARRAY[pg_temp.m(5), pg_temp.m(7), pg_temp.m(8)]::text || 'Evangelística',
   'RN-21 (carga em replica sem retrato): completado com as pessoas e o tipo atuais da célula');
 
--- INSERT pela API (André, Líder, lança C1 nesta semana) mandando outro retrato: ignorado.
-SELECT is(pg_temp.code(5, format($q$INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme,
-    snapshot_leader_id, snapshot_timothy_id, snapshot_host_id, snapshot_cell_type)
-  VALUES (%L, %L, public.week_start(public.sp_today()), '08:00', true, 'Nesta semana', %L, %L, %L, 'Macrocélula')$q$,
+-- Lançamento pela API (André, Líder, lança C1 nesta semana, pela submit_cell_report do PR 2) mandando
+-- outro retrato: ignorado.
+SELECT is(pg_temp.code(5, format($q$SELECT * FROM public.submit_cell_report(%L, jsonb_build_object(
+    'cell_id', %L::uuid, 'date', public.week_start(public.sp_today()), 'time', '00:00', 'theme', 'Nesta semana',
+    'offering', 0, 'snapshot_leader_id', %L::uuid, 'snapshot_timothy_id', %L::uuid, 'snapshot_host_id', %L::uuid,
+    'snapshot_cell_type', 'Macrocélula'))$q$,
   pg_temp.r(8), pg_temp.c(1), pg_temp.m(9), pg_temp.m(9), pg_temp.m(9))), '00000', 'RN-14: André lança C1 pela API');
 SELECT is((SELECT ARRAY[snapshot_leader_id, snapshot_timothy_id, snapshot_host_id]::text || snapshot_cell_type
              FROM public.cell_reports WHERE id = pg_temp.r(8)),
@@ -258,14 +265,15 @@ SELECT is((SELECT ARRAY[snapshot_leader_id, snapshot_timothy_id, snapshot_host_i
   'RN-14: o INSERT ignora o retrato enviado (Lucas e Macrocélula) e grava André, Caio, Carla e Evangelística');
 -- UPDATE do retrato (Rita, Administradora, e postgres): nada muda.
 SELECT is(pg_temp.rows(15, format($q$UPDATE public.cell_reports SET snapshot_leader_id = %L, snapshot_cell_type = 'Discipulado'
-  WHERE id = %L$q$, pg_temp.m(9), pg_temp.r(1))), '1', 'RN-14: o UPDATE do retrato pela API passa…');
+  WHERE id = %L$q$, pg_temp.m(9), pg_temp.r(1))), '42501', 'RN-14: o UPDATE direto do retrato pela API é recusado (42501, PR 2)…');
 UPDATE public.cell_reports SET snapshot_host_id = pg_temp.m(14) WHERE id = pg_temp.r(1);
 SELECT is((SELECT ARRAY[snapshot_leader_id, snapshot_timothy_id, snapshot_host_id]::text || snapshot_cell_type
              FROM public.cell_reports WHERE id = pg_temp.r(1)),
   ARRAY[pg_temp.m(5), pg_temp.m(7), pg_temp.m(8)]::text || 'Evangelística',
   'RN-14: …mas o retrato não muda (nem pela API, nem como postgres)');
-SELECT is(pg_temp.code(15, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(5), pg_temp.r(1))),
-  'report_cell_immutable', 'RN-16: a troca de célula pela API dá report_cell_immutable');
+SELECT is(pg_temp.code(15, format($q$SELECT * FROM public.save_cell_report(%L, jsonb_build_object('cell_id', %L::uuid))$q$,
+                                   pg_temp.r(1), pg_temp.c(5))),
+  'report_cell_immutable', 'RN-16: a troca de célula pela API (save_cell_report) dá report_cell_immutable');
 SELECT is(pg_temp.code(NULL, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(5), pg_temp.r(1))),
   'report_cell_immutable', 'RN-16: e também como postgres');
 -- Em replica, a carga pode corrigir o retrato.
@@ -318,12 +326,12 @@ SELECT is(pg_temp.lab(pg_temp.ids(11, 'SELECT id FROM public.cell_reports_view')
   'RN-14: Fábio continua vendo R2 depois da troca de anfitriã');
 SELECT is(pg_temp.lab(pg_temp.ids(8, 'SELECT id FROM public.cell_reports_view')), 'R1,R8',
   'RN-14: Carla continua vendo R1 e R8');
-SELECT is(pg_temp.rows(3, format($q$UPDATE public.cell_reports SET theme = 'Pedro edita' WHERE id = %L$q$, pg_temp.r(1))), '1',
-  'política de UPDATE pelo retrato: Pedro (Editar Relatórios) edita R1 depois da troca');
-SELECT is(pg_temp.val(3, format('SELECT public.viewer_can_insert_cell_report_participant(%L)::text', pg_temp.r(1))), 'true',
-  'viewer_can_insert_cell_report_participant pelo retrato: Pedro em R1, sim');
-SELECT is(pg_temp.val(9, format('SELECT public.viewer_can_insert_cell_report_participant(%L)::text', pg_temp.r(1))), 'false',
-  'viewer_can_insert_cell_report_participant pelo retrato: Lucas em R1, não');
+SELECT is(pg_temp.rows(3, format($q$SELECT * FROM public.save_cell_report(%L, '{"theme": "Pedro edita"}')$q$, pg_temp.r(1))), '1',
+  'edição pelo retrato (save_cell_report, PR 2): Pedro (Editar Relatórios) edita R1 depois da troca');
+SELECT is(pg_temp.val(3, format('SELECT count(*)::text FROM public.cell_report_edit_context(%L)', pg_temp.r(1))), '1',
+  'cell_report_edit_context pelo retrato (PR 2): Pedro em R1, sim');
+SELECT is(pg_temp.val(9, format('SELECT count(*)::text FROM public.cell_report_edit_context(%L)', pg_temp.r(1))), '0',
+  'cell_report_edit_context pelo retrato (PR 2): Lucas em R1, não');
 
 -- ===========================================================================
 -- 5. Paridade view × tabela (RLS) × viewer_sees_report_people, por persona (11)

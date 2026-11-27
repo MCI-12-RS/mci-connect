@@ -6,6 +6,10 @@
 -- produção antes deste passo. O ROLLBACK do fim devolve tudo.
 -- Rodar com: supabase test db
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT plan(31);
 
@@ -266,7 +270,10 @@ SELECT set_config('request.jwt.claims', json_build_object('sub', pg_temp.u(2), '
 UPDATE public.members SET notes = 'nova' WHERE id = pg_temp.m(6);
 SELECT public.restore_member(pg_temp.m(8));
 UPDATE public.cells SET neighborhood = 'Centro' WHERE id = pg_temp.c(1);
-SELECT public.set_cell_report_participants(pg_temp.r(2), ARRAY[pg_temp.m(5), pg_temp.m(6)]);
+-- Participantes novos pela gravação de manutenção (a marca do E2.11 está ligada; a set_cell_report_participants saiu).
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT pg_temp.r(2), x FROM unnest(ARRAY[pg_temp.m(5), pg_temp.m(6)]) x
+ WHERE NOT EXISTS (SELECT 1 FROM public.cell_report_participants p WHERE p.report_id = pg_temp.r(2) AND p.member_id = x);
 SELECT set_config('request.jwt.claims', '', true);
 SELECT is(ARRAY(SELECT pg_temp.mismatch()), '{}'::text[], 'RN-13 b: depois de alterações, restauração e participantes novos, continua igual');
 CREATE TEMP TABLE au0 AS SELECT pg_temp.au('members', pg_temp.m(5)) AS a;

@@ -22,6 +22,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
@@ -272,7 +276,7 @@ SELECT pg_temp.run('r09',
     /* 4 */ format('SELECT leader_id::text FROM public.members WHERE id = %L', pg_temp.m(9)),
     /* 5 */ pg_temp.pc(3, format('UPDATE public.members SET spouse_id = %L WHERE id = %L', pg_temp.m(8), pg_temp.m(9))),
     /* 6 */ format('SELECT coalesce(spouse_id::text, ''-'') FROM public.members WHERE id = %L', pg_temp.m(9)),
-    /* 7 */ pg_temp.pr(3, format('UPDATE public.cell_reports SET theme = ''R2b'' WHERE id = %L', pg_temp.r(2))),
+    /* 7 */ pg_temp.pr(3, format('SELECT * FROM public.save_cell_report(%L, %L::jsonb)', pg_temp.r(2), '{"theme": "R2b", "offering": 0}')),
     /* 8 */ format('SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = %L', pg_temp.r(2)),
     /* 9 */ pg_temp.pc(3, format('UPDATE public.cells SET host_id = NULL WHERE id = %L', pg_temp.c(2))),
     /* 10 */ pg_temp.pm(3, format('UPDATE public.cells SET host_id = NULL WHERE id = %L', pg_temp.c(2))),

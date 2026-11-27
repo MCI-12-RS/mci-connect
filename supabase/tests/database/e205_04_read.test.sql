@@ -3,6 +3,10 @@
 -- RN-11, RN-18, RN-19; AQ-1 a AQ-3; DA-4, DA-6, DA-11; DT-12, DT-15, DT-17).
 -- Rodar com: supabase test db
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT plan(35);
 
@@ -63,7 +67,7 @@ SELECT pg_temp.api(2, format('SELECT to_jsonb(public.delete_member(%L))', pg_tem
 SELECT pg_temp.api(2, format($$INSERT INTO public.cells (id, leader_id, timothy_id, host_id, meeting_day, meeting_time)
                                VALUES (%L, %L, %L, %L, 'Domingo', '00:00')$$, pg_temp.c(1), pg_temp.m(3), pg_temp.m(5), pg_temp.m(6)));
 SELECT pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.save_cell_report(NULL,
-                               jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '19:30', 'theme', 'Fé'),
+                               jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'Fé', 'offering', 0),
                                ARRAY[%L, %L]::uuid[]) r$$, pg_temp.c(1), pg_temp.m(4), pg_temp.m(5)));
 CREATE TEMP TABLE rep AS SELECT id FROM public.cell_reports WHERE cell_id = pg_temp.c(1);
 

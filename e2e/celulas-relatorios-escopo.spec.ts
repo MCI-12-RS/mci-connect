@@ -8,12 +8,13 @@ import { E2E_BASE_URL } from "./base-url";
 // PR 5, tarefa 17): UX-13, UX-14, UX-23, UX-24, UX-26, UX-27, UX-28, UX-31 e
 // RN-03, 04, 12, 13 e 14 com a massa do spec. Login de verdade pela `sign-in`
 // (stack local). A massa é fictícia ("QA Celula …", ids e2e202c5-…) e some no
-// fim. As três células se reúnem no dia de hoje (Brasília) às 20:00: o
-// trigger do banco só aceita a semana atual, e a data sugerida pelo
+// fim. As três células se reúnem no dia de hoje (Brasília) às 00:00 (E2.11: o
+// lançamento só é aceito depois da reunião desta semana, e a data sugerida pelo
 // `calculateCellDate` cai na semana passada quando a célula ainda não se
-// reuniu (problema conhecido, fora deste PR). Os relatórios R1 a R3 ficam na
-// semana passada, como no spec; os testes que editam um deles o trazem para
-// esta semana. Rodar com `--workers=1`: a `sign_in_throttle` é por origem.
+// reuniu). Os relatórios R1 a R3 ficam na semana passada, como no spec. Desde o
+// E2.11 PR 2, o lançamento pela API é a `submit_cell_report` e a edição a
+// `save_cell_report` (a escrita direta acabou). Rodar com `--workers=1`: a
+// `sign_in_throttle` é por origem.
 
 // Sem `mode: "serial"`: cada teste refaz a massa de células e relatórios, e uma falha não deve
 // impedir os demais (o Playwright reinicia o worker e roda `beforeAll` de novo).
@@ -165,7 +166,7 @@ function resetWorld() {
      DELETE FROM public.cells WHERE leader_id::text LIKE '${PREFIX}%' OR id::text LIKE '${PREFIX}%';
      ${CELLS.map(
        (c) => `INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, is_active)
-       VALUES (${lit(cellId(c.n))}, ${lit(memberId(c.leader))}, ${lit(memberId(c.timothy))}, ${lit(memberId(c.host))}, 'Evangelística', ${WEEKDAY_SQL}, '20:00', true);`,
+       VALUES (${lit(cellId(c.n))}, ${lit(memberId(c.leader))}, ${lit(memberId(c.timothy))}, ${lit(memberId(c.host))}, 'Evangelística', ${WEEKDAY_SQL}, '00:00', true);`,
      ).join("\n     ")}
      ${CELLS.map(
        (c) => `INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
@@ -311,7 +312,12 @@ const rpc = (page: Page, fn: string, args: object) => api(page, "POST", `rpc/${f
 /** Hoje em Brasília, "AAAA-MM-DD". */
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
-const reportPayload = (n: number) => ({ cell_id: cellId(n), date: today(), time: "20:00", was_held: true, theme: "Tema novo", visitors: [], offering: 0 });
+const reportPayload = (n: number) => ({ cell_id: cellId(n), date: today(), time: "00:00", was_held: true, theme: "Tema novo", visitors: [], offering: 0 });
+/** O lançamento pela API (E2.11 PR 2): a `submit_cell_report`, com um id novo e os escolhidos. */
+const submitReport = (page: Page, n: number, participantIds: string[] = []) =>
+  rpc(page, "submit_cell_report", { _report_id: crypto.randomUUID(), _report: reportPayload(n), _participant_ids: participantIds });
+/** A edição pela API (E2.11 PR 2): a `save_cell_report`, só com o que muda. */
+const saveReport = (page: Page, n: number, patch: object) => rpc(page, "save_cell_report", { _report_id: reportId(n), _report: patch });
 
 /** Os nomes (líder) que a lista mostra: a linha traz o nome do líder da célula ou do relatório. */
 async function listedLeaders(page: Page): Promise<string[]> {
@@ -466,7 +472,7 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     try {
       const r = await api(caio.page, "PATCH", `cells?id=eq.${cellId(1)}&select=id`, { meeting_time: "07:00:00" });
       expect(r.rows, `Caio: ${r.status} ${r.message}`).toHaveLength(0);
-      expect(cellValue(1, "meeting_time")).toBe("20:00:00");
+      expect(cellValue(1, "meeting_time")).toBe("00:00:00");
     } finally {
       await caio.close();
     }
@@ -474,7 +480,7 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     try {
       const r = await api(pedro.page, "PATCH", `cells?id=eq.${cellId(3)}&select=id`, { meeting_time: "07:00:00" });
       expect(r.rows, `Pedro: ${r.status} ${r.message}`).toHaveLength(0);
-      expect(cellValue(3, "meeting_time")).toBe("20:00:00");
+      expect(cellValue(3, "meeting_time")).toBe("00:00:00");
     } finally {
       await pedro.close();
     }
@@ -534,7 +540,7 @@ test.describe("Células (RN-03, RN-12, UX-23, UX-24)", () => {
     // RN-09 (c) no topo, que só o servidor dá, fica no teste de componente do CellForm.
     await expect(dialog.getByText(CAIO.name)).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Limpar seleção" })).toHaveCount(0);
-    await expect(dialog.getByLabel("Horário *")).toHaveValue("20:00");
+    await expect(dialog.getByLabel("Horário *")).toHaveValue("00:00");
     expect(cellValue(2, "host_id")).toBe(memberId(CAIO));
 
     // Pela API, a recusa de escopo do E2.02 vem antes da regra do E2.08 (RN-14).
@@ -610,7 +616,7 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(ANDRE.name)).toBeVisible();
     await expect(dialog.getByLabel("Data *")).not.toHaveValue("");
-    await expect(dialog.getByLabel("Horário *")).toHaveValue("20:00");
+    await expect(dialog.getByLabel("Horário *")).toHaveValue("00:00");
   });
 
   test("UX-26: Gabriel, com 'Enviar Relatório de Qualquer Célula Visível', escolhe entre C1 e C2, não C3", async ({ page }) => {
@@ -632,8 +638,8 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
   test("RN-13: Carla (anfitriã de C1) e Caio (timóteo de C1, anfitrião de C2) lançam; Fábio, Hugo e Caio sem permissão de enviar são recusados", async ({ browser }) => {
     const carla = await sessionOf(browser, CARLA);
     try {
-      const r = await api(carla.page, "POST", "cell_reports?select=id", reportPayload(1));
-      expect(r.status, r.message).toBe(201);
+      const r = await submitReport(carla.page, 1);
+      expect(r.status, r.message).toBe(200);
     } finally {
       await carla.close();
     }
@@ -641,8 +647,8 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     const caio = await sessionOf(browser, CAIO);
     try {
       for (const n of [1, 2]) {
-        const r = await api(caio.page, "POST", "cell_reports?select=id", reportPayload(n));
-        expect(r.status, `Caio em C${n}: ${r.message}`).toBe(201);
+        const r = await submitReport(caio.page, n);
+        expect(r.status, `Caio em C${n}: ${r.message}`).toBe(200);
       }
     } finally {
       await caio.close();
@@ -650,7 +656,7 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     resetWorld();
     const fabio = await sessionOf(browser, FABIO);
     try {
-      const r = await api(fabio.page, "POST", "cell_reports?select=id", reportPayload(1));
+      const r = await submitReport(fabio.page, 1);
       expect(r.status).toBeGreaterThanOrEqual(400);
       expect(r.message).toBe(MSG.cannotSend);
       expect(reportsOfCell(1)).toBe(0);
@@ -659,7 +665,7 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     }
     const hugo = await sessionOf(browser, HUGO);
     try {
-      const r = await api(hugo.page, "POST", "cell_reports?select=id", reportPayload(2));
+      const r = await submitReport(hugo.page, 2);
       expect(r.status).toBeGreaterThanOrEqual(400);
       expect(reportsOfCell(2)).toBe(0);
     } finally {
@@ -668,7 +674,7 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     setRoleOf(CAIO, ROLE_OWN_DATA_ONLY);
     const caioNoSend = await sessionOf(browser, CAIO);
     try {
-      const r = await api(caioNoSend.page, "POST", "cell_reports?select=id", reportPayload(1));
+      const r = await submitReport(caioNoSend.page, 1);
       expect(r.status).toBeGreaterThanOrEqual(400);
       expect(reportsOfCell(1)).toBe(0);
     } finally {
@@ -678,9 +684,9 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
 
   test("RN-13: Pedro (com 'Editar Célula') lança C2 e, em C3 (fora do escopo), recebe 'Esta célula não existe ou já foi excluída.'", async ({ page }) => {
     await signIn(page, PEDRO);
-    const ok = await api(page, "POST", "cell_reports?select=id", reportPayload(2));
-    expect(ok.status, ok.message).toBe(201);
-    const refused = await api(page, "POST", "cell_reports?select=id", reportPayload(3));
+    const ok = await submitReport(page, 2);
+    expect(ok.status, ok.message).toBe(200);
+    const refused = await submitReport(page, 3);
     expect(refused.status).toBeGreaterThanOrEqual(400);
     expect(refused.message).toBe(MSG.cellGone);
     expect(reportsOfCell(3)).toBe(0);
@@ -690,34 +696,31 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     setRoleOf(GABRIEL, ROLE_SEND_ANY_VISIBLE);
     await signIn(page, GABRIEL);
     for (const n of [1, 2]) {
-      const r = await api(page, "POST", "cell_reports?select=id", reportPayload(n));
-      expect(r.status, `C${n}: ${r.message}`).toBe(201);
+      const r = await submitReport(page, n);
+      expect(r.status, `C${n}: ${r.message}`).toBe(200);
     }
-    const c3 = await api(page, "POST", "cell_reports?select=id", reportPayload(3));
+    const c3 = await submitReport(page, 3);
     expect(c3.status).toBeGreaterThanOrEqual(400);
     expect(reportsOfCell(3)).toBe(0);
   });
 
   test("RN-13: Pedro e André lançam C1 com Débora como participante: o de Pedro é recusado, o de André é aceito", async ({ browser }) => {
+    // E2.11 PR 2: os participantes vão no próprio lançamento; a recusa desfaz tudo (RN-15).
     const pedro = await sessionOf(browser, PEDRO);
     try {
-      const created = await api(pedro.page, "POST", "cell_reports?select=id", reportPayload(1));
-      expect(created.status, created.message).toBe(201);
-      const newId = (created.rows[0] as { id: string }).id;
-      const r = await rpc(pedro.page, "set_cell_report_participants", { _report_id: newId, _member_ids: [memberId(DEBORA)] });
+      const r = await submitReport(pedro.page, 1, [memberId(DEBORA)]);
       expect(r.status).toBeGreaterThanOrEqual(400);
       expect(r.message).toBe(MSG.cannotChoose);
+      expect(reportsOfCell(1)).toBe(0);
     } finally {
       await pedro.close();
     }
     resetWorld();
     const andre = await sessionOf(browser, ANDRE);
     try {
-      const created = await api(andre.page, "POST", "cell_reports?select=id", reportPayload(1));
-      expect(created.status, created.message).toBe(201);
-      const newId = (created.rows[0] as { id: string }).id;
-      const r = await rpc(andre.page, "set_cell_report_participants", { _report_id: newId, _member_ids: [memberId(DEBORA)] });
-      expect(r.status, r.message).toBeLessThan(300);
+      const r = await submitReport(andre.page, 1, [memberId(DEBORA)]);
+      expect(r.status, r.message).toBe(200);
+      expect(reportsOfCell(1)).toBe(1);
     } finally {
       await andre.close();
     }
@@ -727,11 +730,12 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     moveReportToThisWeek(2);
     moveReportToThisWeek(3);
     await signIn(page, PEDRO);
-    const ok = await api(page, "PATCH", `cell_reports?id=eq.${reportId(2)}&select=id`, { theme: "Editado por Pedro" });
-    expect(ok.rows).toHaveLength(1);
+    const ok = await saveReport(page, 2, { theme: "Editado por Pedro" });
+    expect(ok.status, ok.message).toBe(200);
     expect(reportValue(2, "theme")).toBe("Editado por Pedro");
-    const out = await api(page, "PATCH", `cell_reports?id=eq.${reportId(3)}&select=id`, { theme: "Editado por Pedro" });
-    expect(out.rows).toHaveLength(0);
+    const out = await saveReport(page, 3, { theme: "Editado por Pedro" });
+    expect(out.status).toBeGreaterThanOrEqual(400);
+    expect(out.message).toBe(MSG.reportGone);
     expect(reportValue(3, "theme")).toBe("Tema 3");
   });
 
@@ -742,8 +746,8 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     await expect(page.getByText(ANDRE.name).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /^Editar o relatório/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Excluir o relatório/ })).toHaveCount(0);
-    const patch = await api(page, "PATCH", `cell_reports?id=eq.${reportId(1)}&select=id`, { theme: "Editado por Caio" });
-    expect(patch.rows).toHaveLength(0);
+    const patch = await saveReport(page, 1, { theme: "Editado por Caio" });
+    expect(patch.status).toBeGreaterThanOrEqual(400);
     expect(reportValue(1, "theme")).toBe("Tema 1");
     const del = await rpc(page, "delete_cell_report", { _report_id: reportId(1) });
     expect(del.status).toBeGreaterThanOrEqual(400);

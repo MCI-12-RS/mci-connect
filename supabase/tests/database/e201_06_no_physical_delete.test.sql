@@ -7,7 +7,8 @@
 --   - privilégios: members, cells e cell_reports sem DELETE e sem TRUNCATE
 --     para authenticated, anon e PUBLIC; cell_report_participants com DELETE
 --     para authenticated (RN-13) e sem TRUNCATE; a service_role mantém DELETE e
---     TRUNCATE nas quatro (só privilégio);
+--     TRUNCATE em members e cells, só DELETE em cell_reports e nenhum dos dois em
+--     participantes (E2.11 PR 2);
 --   - políticas: nenhuma de DELETE (ou ALL) em members, cells e cell_reports; a
 --     de participantes continua;
 --   - comportamento: DELETE e TRUNCATE nas três tabelas dão 42501 para o
@@ -21,6 +22,10 @@
 -- Rodar com: supabase test db
 
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
@@ -130,16 +135,20 @@ SELECT is_empty($$
      AND a.privilege_type IN ('DELETE', 'TRUNCATE') $$,
   'PUBLIC: sem DELETE e sem TRUNCATE nas quatro tabelas');
 
-SELECT ok(has_table_privilege('authenticated', 'public.cell_report_participants', 'DELETE'),
-  'authenticated: DELETE em cell_report_participants mantido (retirada de participante, RN-13)');
+SELECT ok(NOT has_table_privilege('authenticated', 'public.cell_report_participants', 'DELETE'),
+  'authenticated: sem DELETE em cell_report_participants (E2.11: a retirada é pela save_cell_report)');
 SELECT ok(NOT has_table_privilege(g, 'public.cell_report_participants', 'TRUNCATE'),
           g || ': sem TRUNCATE em cell_report_participants')
   FROM unnest(ARRAY['authenticated', 'anon']) g;
 
-SELECT ok(has_table_privilege('service_role', t, 'DELETE') AND has_table_privilege('service_role', t, 'TRUNCATE'),
-          'service_role: DELETE e TRUNCATE mantidos em ' || t)
-  FROM unnest(ARRAY['public.members', 'public.cells', 'public.cell_reports',
-                    'public.cell_report_participants']) t;
+-- E2.11 PR 2: TRUNCATE revogado em cell_reports e participantes (não passa pela guarda de linha).
+SELECT ok(has_table_privilege('service_role', t, 'DELETE')
+          AND has_table_privilege('service_role', t, 'TRUNCATE') = (t <> 'public.cell_reports'),
+          'service_role: DELETE mantido em ' || t || CASE WHEN t = 'public.cell_reports' THEN ', sem TRUNCATE (E2.11)' ELSE ' e TRUNCATE' END)
+  FROM unnest(ARRAY['public.members', 'public.cells', 'public.cell_reports']) t;
+SELECT ok(NOT has_table_privilege('service_role', 'public.cell_report_participants', 'DELETE')
+          AND NOT has_table_privilege('service_role', 'public.cell_report_participants', 'TRUNCATE'),
+  'service_role: sem DELETE e sem TRUNCATE em public.cell_report_participants (E2.11: só as RPCs gravam)');
 
 SELECT is_empty($$
   SELECT tablename, policyname FROM pg_policies
@@ -150,8 +159,8 @@ SELECT is_empty($$
 SELECT is(
   ARRAY(SELECT policyname::text FROM pg_policies
          WHERE schemaname = 'public' AND tablename = 'cell_report_participants' AND cmd = 'DELETE'),
-  ARRAY['Participants delete policy'],
-  'cell_report_participants: a política de DELETE continua (RN-13)');
+  '{}'::text[],
+  'cell_report_participants: sem política de DELETE (E2.11: a retirada é pela save_cell_report)');
 
 -- ===========================================================================
 -- 2. Administrador (todas as permissões): DELETE e TRUNCATE recusados — 8 verificações
@@ -193,21 +202,20 @@ SELECT is(pg_temp.counts(), (SELECT v FROM before_counts),
 -- ===========================================================================
 -- 4. O que continua funcionando — 8 verificações
 -- ===========================================================================
--- Retirada de participante não excluído pela política de DELETE (RN-13).
+-- E2.11 PR 2: o DELETE direto de participante acabou (a retirada é pela save_cell_report).
 SELECT is(pg_temp.try('authenticated', 2, format(
             'DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
-            pg_temp.r(1), pg_temp.m(6))),
-  '{"state": "00000", "rows": 1}'::jsonb,
-  'edit_cell: DELETE de participante não excluído continua funcionando (RN-13)');
-SELECT is_empty(format('SELECT 1 FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
-                       pg_temp.r(1), pg_temp.m(6)),
-  'o participante não excluído saiu do relatório');
--- Retirada de participante excluído continua recusada pelo trigger.
+            pg_temp.r(1), pg_temp.m(6))) ->> 'state',
+  '42501',
+  'edit_cell: DELETE direto de participante não excluído → 42501 de privilégio (E2.11)');
+SELECT isnt_empty(format('SELECT 1 FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
+                         pg_temp.r(1), pg_temp.m(6)),
+  'o participante continua no relatório');
 SELECT is(pg_temp.try('authenticated', 2, format(
             'DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
-            pg_temp.r(1), pg_temp.m(7))) ->> 'code',
-  'deleted_participant_removal',
-  'edit_cell: DELETE de participante excluído continua recusado (RN-13)');
+            pg_temp.r(1), pg_temp.m(7))) ->> 'state',
+  '42501',
+  'edit_cell: DELETE direto de participante excluído → 42501 de privilégio (E2.11)');
 
 -- Exclusão lógica pelas RPCs.
 SELECT is(pg_temp.try('authenticated', 1, format('SELECT public.delete_cell_report(%L)', pg_temp.r(2))) ->> 'state',

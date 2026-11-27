@@ -9,7 +9,7 @@
 --     só SELECT para authenticated, nada para anon e PUBLIC, colunas na ordem
 --     do contrato; views do E1.08 com cell_deleted/member_deleted no fim;
 --   - as 9 RPCs: EXECUTE só para authenticated (nada para anon e PUBLIC),
---     SECURITY DEFINER (exceto set_cell_report_participants, INVOKER),
+--     SECURITY DEFINER (a set_cell_report_participants saiu no E2.11: a save_cell_report a absorveu),
 --     search_path fixo; funções públicas novas sem anon; _del_* e funções de
 --     trigger sem EXECUTE para authenticated;
 --   - private.member_access_suspensions sem privilégio para anon,
@@ -30,6 +30,10 @@
 -- Rodar com: supabase test db
 
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
@@ -189,14 +193,14 @@ SELECT ok(has_function_privilege('authenticated', f, 'EXECUTE'), f || ': EXECUTE
   FROM unnest(ARRAY[
     'public.check_member_deletion(uuid)', 'public.delete_member(uuid)', 'public.restore_member(uuid)',
     'public.delete_cell(uuid)', 'public.restore_cell(uuid)', 'public.delete_cell_report(uuid)',
-    'public.restore_cell_report(uuid)', 'public.set_cell_report_participants(uuid, uuid[])',
+    'public.restore_cell_report(uuid)', 'public.save_cell_report(uuid, jsonb, uuid[])',
     'public.find_deleted_member_matches(text, text, text)']) f;
 
 SELECT ok(NOT has_function_privilege('anon', f, 'EXECUTE'), f || ': sem EXECUTE para anon')
   FROM unnest(ARRAY[
     'public.check_member_deletion(uuid)', 'public.delete_member(uuid)', 'public.restore_member(uuid)',
     'public.delete_cell(uuid)', 'public.restore_cell(uuid)', 'public.delete_cell_report(uuid)',
-    'public.restore_cell_report(uuid)', 'public.set_cell_report_participants(uuid, uuid[])',
+    'public.restore_cell_report(uuid)', 'public.save_cell_report(uuid, jsonb, uuid[])',
     'public.find_deleted_member_matches(text, text, text)']) f;
 
 SELECT ok(NOT EXISTS (
@@ -206,18 +210,16 @@ SELECT ok(NOT EXISTS (
   FROM unnest(ARRAY[
     'public.check_member_deletion(uuid)', 'public.delete_member(uuid)', 'public.restore_member(uuid)',
     'public.delete_cell(uuid)', 'public.restore_cell(uuid)', 'public.delete_cell_report(uuid)',
-    'public.restore_cell_report(uuid)', 'public.set_cell_report_participants(uuid, uuid[])',
+    'public.restore_cell_report(uuid)', 'public.save_cell_report(uuid, jsonb, uuid[])',
     'public.find_deleted_member_matches(text, text, text)']) f;
 
 SELECT is((SELECT prosecdef FROM pg_proc WHERE oid = f::regprocedure),
-          f <> 'public.set_cell_report_participants(uuid, uuid[])',
-          f || CASE WHEN f = 'public.set_cell_report_participants(uuid, uuid[])'
-                    THEN ': SECURITY INVOKER (o RLS de participantes vale, DT-15)'
-                    ELSE ': SECURITY DEFINER (DT-02)' END)
+          true,
+          f || ': SECURITY DEFINER (DT-02; a save_cell_report absorveu a set_cell_report_participants no E2.11)')
   FROM unnest(ARRAY[
     'public.check_member_deletion(uuid)', 'public.delete_member(uuid)', 'public.restore_member(uuid)',
     'public.delete_cell(uuid)', 'public.restore_cell(uuid)', 'public.delete_cell_report(uuid)',
-    'public.restore_cell_report(uuid)', 'public.set_cell_report_participants(uuid, uuid[])',
+    'public.restore_cell_report(uuid)', 'public.save_cell_report(uuid, jsonb, uuid[])',
     'public.find_deleted_member_matches(text, text, text)']) f;
 
 SELECT ok((SELECT 'search_path=public' = ANY(proconfig) FROM pg_proc WHERE oid = f::regprocedure),
@@ -225,7 +227,7 @@ SELECT ok((SELECT 'search_path=public' = ANY(proconfig) FROM pg_proc WHERE oid =
   FROM unnest(ARRAY[
     'public.check_member_deletion(uuid)', 'public.delete_member(uuid)', 'public.restore_member(uuid)',
     'public.delete_cell(uuid)', 'public.restore_cell(uuid)', 'public.delete_cell_report(uuid)',
-    'public.restore_cell_report(uuid)', 'public.set_cell_report_participants(uuid, uuid[])',
+    'public.restore_cell_report(uuid)', 'public.save_cell_report(uuid, jsonb, uuid[])',
     'public.find_deleted_member_matches(text, text, text)']) f;
 
 SELECT is((SELECT pg_get_function_result(f::regprocedure)), res, f || ': tipo de retorno do contrato')
@@ -238,7 +240,7 @@ SELECT is((SELECT pg_get_function_result(f::regprocedure)), res, f || ': tipo de
     ('public.restore_cell(uuid)', 'void'),
     ('public.delete_cell_report(uuid)', 'void'),
     ('public.restore_cell_report(uuid)', 'void'),
-    ('public.set_cell_report_participants(uuid, uuid[])', 'void'),
+    ('public.save_cell_report(uuid, jsonb, uuid[])', 'TABLE(report_id uuid, changed boolean)'),
     ('public.find_deleted_member_matches(text, text, text)',
      'TABLE(member_id uuid, name text, deleted_at timestamp with time zone, matched_fields text[], is_account_email boolean)')
   ) AS t(f, res);

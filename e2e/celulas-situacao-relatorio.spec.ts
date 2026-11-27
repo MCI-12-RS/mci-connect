@@ -208,6 +208,7 @@ class SituationWorld {
     sql(
       this.env,
       `BEGIN;
+       SET LOCAL mci.cell_report_write = 'on';  -- E2.11 (DA-11): a massa grava relatórios direto, com a marca
        ${tier([null])}
        ${tier([1])}
        ${tier([2, 5])}

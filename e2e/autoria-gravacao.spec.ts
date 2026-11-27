@@ -87,7 +87,7 @@ function seed() {
 }
 
 /** As RPCs que gravam relatório ou participantes; as outras RPCs (POST) são leituras. */
-const WRITE_RPCS = new Set(["save_cell_report", "set_cell_report_participants"]);
+const WRITE_RPCS = new Set(["save_cell_report", "submit_cell_report", "set_cell_report_participants"]);
 
 /** As chamadas de gravação da página, a partir de agora (método e caminho). */
 function trackWrites(page: Page) {
@@ -227,17 +227,18 @@ test("RN-04 (d) e (e): o relatório com 8 participantes vai numa chamada e mostr
   expect(writes).toEqual(["POST /rest/v1/rpc/save_cell_report"]);
   const reportId = reportOf(CELL);
   expect(reportId).not.toBe("");
-  expect(count(`SELECT count(*) FROM public.cell_report_participants WHERE report_id = ${lit(reportId)}`)).toBe(8);
+  // E2.11 (RN-11): o líder (também timóteo e anfitrião) entra como automático: 8 escolhidos + 1.
+  expect(count(`SELECT count(*) FROM public.cell_report_participants WHERE report_id = ${lit(reportId)}`)).toBe(9);
   expect(await reportAuthorship(page, reportId)).toEqual({
     created_by_kind: "member",
     created_by_name: admin,
     updated_at: null,
     updated_by_name: null,
   });
-  // Um evento só, o envio, com os 8 participantes dentro dele.
+  // Um evento só, o envio, com os 9 participantes dentro dele.
   expect(
     sql(env, `SELECT action || '|' || jsonb_array_length(changes -> 'participants' -> 'sent') FROM public.events WHERE entity_id = ${lit(reportId)}`),
-  ).toBe("create|8");
+  ).toBe("create|9");
 
   // Incluir um participante depois.
   writes.length = 0;

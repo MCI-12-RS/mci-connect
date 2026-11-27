@@ -30,6 +30,10 @@
 
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT plan(123);
@@ -265,9 +269,9 @@ SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.%s(%L)', f, arg))), 
                ('restore_cell_report', pg_temp.r(1)::text)) AS t(f, arg);
 SELECT is(pg_temp.code(pg_temp.try(3, $$SELECT * FROM public.find_deleted_member_matches('x@teste.invalid', NULL, NULL)$$)),
   '42501', 'RN-02: MB sem create_member → find_deleted_member_matches dá 42501');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])',
-                                            pg_temp.r(1), pg_temp.m(23)))),
-  '42501', 'RN-02: MB sem política de INSERT de participantes → set_cell_report_participants dá 42501');
+SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT * FROM public.save_cell_report(%L, %L::jsonb, ARRAY[%L]::uuid[])',
+                                            pg_temp.r(1), '{}', pg_temp.m(23)))),
+  '42501', 'RN-02: MB sem Editar Relatórios de Células → save_cell_report (participantes) dá 42501 (E2.11)');
 SELECT is(pg_temp.try(3, format('SELECT public.delete_member(%L)', pg_temp.m(23))) ->> 'message',
   'Você não tem permissão para esta ação.', 'RN-02: texto do 42501 (Formato dos erros)');
 SELECT is(pg_temp.try_anon(format('SELECT public.delete_member(%L)', pg_temp.m(23))) ->> 'state', '42501',
