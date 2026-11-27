@@ -18,6 +18,7 @@ import {
   expectMinHeight,
   free,
   id,
+  clearLeader,
   openNew,
   removeCreatedAccounts,
   seed,
@@ -264,6 +265,7 @@ test.describe("UX-08, UX-11 e RN-19: erros ao salvar, todos de uma vez", () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await login(page, env.admin);
     const dialog = await openNew(page);
+    await clearLeader(dialog);
     const calls = trackApi(page);
     const before = calls.length;
     await createButton(dialog).click();
@@ -287,6 +289,7 @@ test.describe("UX-08, UX-11 e RN-19: erros ao salvar, todos de uma vez", () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await login(page, env.admin);
     const dialog = await openNew(page);
+    await clearLeader(dialog);
     await dialog.getByLabel("Nome *").fill("Igor Teixeira");
     await dialog.getByRole("radio", { name: "Masculino" }).click();
     await dialog.getByLabel("Celular / WhatsApp").fill(free(1));
@@ -506,7 +509,8 @@ test.describe("UX-15, UX-16 e RN-11/RN-12: liderança no cadastro", () => {
     await login(page, env.admin);
     const dialog = await openNew(page);
     await expect(dialog.getByRole("switch", { name: "Tem Liderança?" })).toBeChecked();
-    await expect(dialog.getByLabel("Líder *", { exact: true })).toHaveValue("");
+    // Desde o E2.07 (RN-16), o Líder vem com quem cadastra; o teste parte dele vazio.
+    await clearLeader(dialog);
     await fillBasics(dialog, who("Sem Líder Escolhido"), free(7), { leadership: true });
     const calls = trackApi(page);
     await createButton(dialog).click();

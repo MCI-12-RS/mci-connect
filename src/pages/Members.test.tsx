@@ -77,7 +77,9 @@ const rows = [
 
 function renderMembers() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: rows, count: rows.length });
+  // A página pela `members_list` e o total pela `members_list_count` (E2.07, DT-01).
+  respondToRpc("members_list", { data: rows });
+  respondToRpc("members_list_count", { data: rows.length });
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -128,7 +130,7 @@ describe("Membros: ação Excluir", () => {
 
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByRole("heading", { name: "Excluir Bruno Almeida?" })).toBeInTheDocument();
-    expect(fakeRpcs().map((call) => call.fn)).toEqual(["check_member_deletion"]);
+    expect(fakeRpcs().map((call) => call.fn).filter((fn) => !fn.startsWith("members_list"))).toEqual(["check_member_deletion"]);
     // A tela não apaga direto na tabela.
     expect(fakeQueries().some((query) => query.methods().includes("delete"))).toBe(false);
   });

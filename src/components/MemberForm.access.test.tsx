@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { MemberRow } from "@/lib/members/fields";
@@ -34,13 +34,14 @@ interface FakeAccess {
 
 const auth = vi.hoisted(() => ({
   access: null as unknown as FakeAccess,
+  member: null as { id: string; name: string } | null,
   permissions: new Set<string>(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     access: auth.access,
-    member: null,
+    member: auth.member,
     hasPermission: (...permissions: string[]) => permissions.some((p) => auth.permissions.has(p)),
   }),
 }));
@@ -52,6 +53,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 function actAs(who: "rita" | "pedro" | "assigner", permissions: string[]) {
   const base = { permissions: [], role_id: "role-x" };
   auth.permissions = new Set(permissions);
+  auth.member = { rita: { id: "rita", name: "Rita Gomes" }, pedro: { id: "pedro", name: "Pedro Alves" } }[who as "rita"] ?? null;
   auth.access =
     who === "rita"
       ? { ...base, member_id: "rita", role_name: "Administrador", sees_whole_church: true, can_assign_roles: true }
@@ -173,14 +175,78 @@ describe("UX-18: Rita (vê a igreja toda) vê os dados ministeriais como hoje", 
     expect(screen.queryByText(/O líder é obrigatório/)).not.toBeInTheDocument();
   });
 
-  it("Dado Rita cadastrando, então 'Tem Liderança?' vem ligado e o 'Líder *' vem vazio (E2.04, RN-12, UX-15)", async () => {
+  it("Dado Rita cadastrando, então 'Tem Liderança?' vem ligado e o Líder já vem com ela, com o aviso do P55 (E2.07, RN-16, UX-22)", async () => {
     actAs("rita", ["create_member", "assign_role", "view_all_church"]);
     respondToRpc("role_options", { data: options({ current: null }) });
     render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
 
     expect(screen.getByRole("switch", { name: "Tem Liderança?" })).toBeChecked();
-    expect(screen.getByLabelText("Líder *")).toHaveValue("");
-    expect(screen.queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
+    // No primeiro render, sem passar por vazio (UX-23).
+    const leader = screen.getByLabelText("Líder *").closest("[data-leader-field]") as HTMLElement;
+    expect(within(leader).getByText("Rita Gomes")).toBeInTheDocument();
+    const notice = screen.getByTestId("prefilled-leader-notice");
+    expect(notice).toHaveTextContent("O líder já vem preenchido com você.");
+    expect(notice).not.toHaveAttribute("role");
+    expect(within(notice).getByRole("button", { name: "Ir para o líder" })).toHaveClass("h-11");
+    // O aviso vem antes de "Dados pessoais".
+    const personal = screen.getByRole("heading", { name: "Dados pessoais" });
+    expect(notice.compareDocumentPosition(personal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("E2.07 UX-22: o aviso some ao desligar 'Tem Liderança?' (sem o aviso do P20) e volta ao religar", async () => {
+    actAs("rita", ["create_member", "assign_role", "view_all_church"]);
+    respondToRpc("role_options", { data: options({ current: null }) });
+    render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
+
+    fireEvent.click(screen.getByRole("switch", { name: "Tem Liderança?" }));
+    expect(screen.queryByTestId("prefilled-leader-notice")).not.toBeInTheDocument();
+    expect(screen.getByText("A pessoa fica sem liderança.")).toBeInTheDocument();
+    expect(screen.queryByText(/deixa de ser o líder/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Tem Liderança?" }));
+    expect(screen.getByTestId("prefilled-leader-notice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("switch", { name: "É Pastor(a)?" }));
+    expect(screen.queryByTestId("prefilled-leader-notice")).not.toBeInTheDocument();
+    expect(screen.queryByText(/deixa de ser o líder/)).not.toBeInTheDocument();
+  });
+
+  it("E2.07 UX-22: 'Ir para o líder' põe o foco no Líder e o destaca por 2 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      actAs("rita", ["create_member", "assign_role", "view_all_church"]);
+      respondToRpc("role_options", { data: options({ current: null }) });
+      render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
+      const scroll = vi.fn();
+      const leaderBlock = screen.getByLabelText("Líder *").closest("[data-leader-field]") as HTMLElement;
+      leaderBlock.scrollIntoView = scroll;
+
+      fireEvent.click(screen.getByRole("button", { name: "Ir para o líder" }));
+      expect(screen.getByLabelText("Líder *")).toHaveFocus();
+      expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: "center" }));
+      expect(leaderBlock.querySelector("[data-highlighted]")).toHaveClass("ring-2");
+      act(() => void vi.advanceTimersByTime(2000));
+      expect(leaderBlock.querySelector("[data-highlighted]")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("E2.07 UX-23: Pedro cadastrando: o Líder vem com ele, sem o aviso", () => {
+    actAs("pedro", ["create_member"]);
+    respondToRpc("role_options", { data: options({ current: null, editable: false, reason: "no_permission" }) });
+    render(<MemberForm member={null} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
+    const leader = screen.getByLabelText("Líder *").closest("[data-leader-field]") as HTMLElement;
+    expect(within(leader).getByText("Pedro Alves")).toBeInTheDocument();
+    expect(screen.queryByTestId("prefilled-leader-notice")).not.toBeInTheDocument();
+  });
+
+  it("E2.07 UX-23: Rita editando Caio: o Líder continua André, sem aviso", async () => {
+    actAs("rita", ["edit_member", "assign_role", "view_all_church"]);
+    respondToRpc("role_options", { data: options({}) });
+    render(<MemberForm member={CAIO} onClose={vi.fn()} />, { wrapper: wrapperWith(newClient()) });
+    const leader = screen.getByLabelText("Líder *").closest("[data-leader-field]") as HTMLElement;
+    expect(within(leader).getByText("André Souza")).toBeInTheDocument();
+    expect(screen.queryByTestId("prefilled-leader-notice")).not.toBeInTheDocument();
   });
 });
 

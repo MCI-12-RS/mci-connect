@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { activeFilterCount, isPeriodInverted, type AuditFilters as Filters } from "@/lib/audit/url-params";
 import { AUDIT_TEXTS } from "@/lib/audit/texts";
 import { FilterSelects } from "./FilterSelects";
-import { PeriodFieldset } from "./PeriodFieldset";
+import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
 
 interface AuditFiltersProps {
   /** O campo de busca, na primeira linha, ao lado do período. */
@@ -39,11 +39,15 @@ export function AuditFilters({ search, filters, historyMode, today, onChange, on
       {/* Os rótulos "Buscar" e "Período" alinhados pelo topo, mesmo com o erro do período abaixo. */}
       <div className="grid grid-cols-2 items-start gap-3">
         {search}
-        <PeriodFieldset
+        <DateRangeFilter
+          legend={AUDIT_TEXTS.filters.period}
+          fromLabel={AUDIT_TEXTS.filters.from}
+          toLabel={AUDIT_TEXTS.filters.to}
+          smallLabels
           from={from}
           to={to}
-          today={today}
-          invalid={invalid}
+          max={today}
+          invertedMessage={invalid ? AUDIT_TEXTS.filters.periodInvalid : null}
           inline
           onFromChange={(value) => changePeriod(value, to)}
           onToChange={(value) => changePeriod(from, value)}

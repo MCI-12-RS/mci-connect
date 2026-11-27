@@ -201,13 +201,38 @@ export function ministryFieldsView({ seesWholeChurch, isNew, saved }: MinistryFi
   return { pastor: "hidden", leadership: "hidden", leader: "required", leaderHint: MEMBER_FORM_TEXTS.leaderHint, spouseHint };
 }
 
+/** Quem cadastra, para o líder já preenchido (E2.07, RN-16). */
+export interface PrefillViewer {
+  /** `my_access().member_id`: sem cadastro de membro (a conta X do E2.02), nada é preenchido. */
+  memberId: string | null;
+  /** O nome do próprio cadastro (`AuthContext`). */
+  memberName: string | null;
+  /** `my_access().sees_whole_church`. */
+  seesWholeChurch: boolean;
+}
+
 /**
- * O líder com que o cadastro novo abre: quem cadastra, para quem não vê a
- * igreja toda (UXD-3, P-PER-22). Para os demais, nenhum (a MEM-15 para todos
- * fica com o E2.07).
+ * O líder com que o cadastro novo abre: quem cadastra, para todos que têm cadastro de membro (E2.07,
+ * RN-16; MEM-15), inclusive quem vê a igreja toda. Só um valor inicial na tela: pela API, nada é
+ * preenchido (DT-13). Na edição, o líder é o gravado.
  */
-export function initialLeaderId(view: MinistryFieldsView, isNew: boolean, viewerMemberId: string | null): string | null {
-  return isNew && view.leader === "required" ? viewerMemberId : null;
+export function initialLeader(viewer: PrefillViewer, isNew: boolean): { id: string; name: string } | null {
+  if (!isNew || !viewer.memberId) return null;
+  return { id: viewer.memberId, name: viewer.memberName ?? "" };
+}
+
+/**
+ * O aviso "O líder já vem preenchido com você." (E2.07, P55, UXD-11): só no cadastro novo de quem vê
+ * a igreja toda, enquanto o Líder é a própria pessoa e está à vista ("Tem Liderança?" ligado e
+ * "É Pastor(a)?" desligado). Volta se o Líder voltar a ser ela.
+ */
+export function showPrefilledLeaderNotice(
+  viewer: PrefillViewer,
+  isNew: boolean,
+  form: { is_pastor: boolean; has_leadership: boolean; leader_id: string | null },
+): boolean {
+  if (!isNew || !viewer.seesWholeChurch || !viewer.memberId) return false;
+  return !form.is_pastor && form.has_leadership && form.leader_id === viewer.memberId;
 }
 
 /**

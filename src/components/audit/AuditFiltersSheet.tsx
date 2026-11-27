@@ -6,7 +6,7 @@ import { AUDIT_TEXTS } from "@/lib/audit/texts";
 import { SHEET_HIDE_DEFAULT_CLOSE, SheetCloseButton } from "@/components/SheetCloseButton";
 import { cn } from "@/lib/utils";
 import { FilterSelects } from "./FilterSelects";
-import { PeriodFieldset } from "./PeriodFieldset";
+import { DateRangeFilter } from "@/components/filters/DateRangeFilter";
 
 interface AuditFiltersSheetProps {
   open: boolean;
@@ -68,11 +68,15 @@ export function AuditFiltersSheet({ open, filters, historyMode, today, onApply, 
         </SheetHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
           <FilterSelects filters={draft} historyMode={historyMode} onChange={change} />
-          <PeriodFieldset
+          <DateRangeFilter
+            legend={FILTERS.period}
+            fromLabel={FILTERS.from}
+            toLabel={FILTERS.to}
+            smallLabels
             from={draft.from ?? ""}
             to={draft.to ?? ""}
-            today={today}
-            invalid={periodInvalid}
+            max={today}
+            invertedMessage={periodInvalid ? FILTERS.periodInvalid : null}
             onFromChange={(value) => change({ from: value || null })}
             onToChange={(value) => change({ to: value || null })}
             toRef={toRef}

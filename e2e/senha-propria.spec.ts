@@ -187,7 +187,8 @@ test.describe("E2.03 PR 2: troca obrigatória (T2)", () => {
     await signIn(page, VERA.email, VERA.password);
     await expect(page).toHaveURL(/\/$/);
     // O portão do banco é do PR 4: a resposta recusada é simulada com o código da AQ-3.
-    await page.route("**/rest/v1/members_view*", (route) =>
+    // A lista de Membros lê a `members_list` desde o E2.07; o próprio cadastro, a `members_view`.
+    await page.route(/\/rest\/v1\/(members_view|rpc\/members_list)/, (route) =>
       route.fulfill({
         status: 403,
         contentType: "application/json",

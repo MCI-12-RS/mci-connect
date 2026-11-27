@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  initialLeaderId,
+  initialLeader,
+  showPrefilledLeaderNotice,
   leadershipValues,
   memberRefusalFromCreate,
   memberRefusalFromError,
@@ -43,6 +44,10 @@ const input = (overrides: Partial<RoleFieldInput>): RoleFieldInput => ({
   ownRoleName: null,
   ...overrides,
 });
+
+
+const pedroViewer = { memberId: "pedro", memberName: "Pedro Alves", seesWholeChurch: false };
+const ritaViewer = { memberId: "rita", memberName: "Rita Gomes", seesWholeChurch: true };
 
 describe("parseRoleOptions", () => {
   it("lê o JSON de role_options e descarta opções fora do formato", () => {
@@ -182,18 +187,21 @@ describe("dados ministeriais (T6, RN-10)", () => {
       leaderHint: "O líder é obrigatório e é escolhido entre as pessoas do seu ministério.",
       spouseHint: "Escolha entre as pessoas do seu ministério. Se o cônjuge é de outro ministério, peça a um administrador.",
     });
-    expect(initialLeaderId(view, true, "pedro")).toBe("pedro");
+    expect(initialLeader(pedroViewer, true)).toEqual({ id: "pedro", name: "Pedro Alves" });
   });
 
-  it("Rita cadastrando: o Líder não vem preenchido (a MEM-15 para todos é do E2.07)", () => {
-    const view = ministryFieldsView({ seesWholeChurch: true, isNew: true });
-    expect(initialLeaderId(view, true, "rita")).toBeNull();
+  it("E2.07 RN-16: Rita (igreja toda) cadastrando: o Líder também vem com ela", () => {
+    expect(initialLeader(ritaViewer, true)).toEqual({ id: "rita", name: "Rita Gomes" });
+  });
+
+  it("E2.07 RN-16: sem cadastro de membro (a conta X), o Líder abre vazio", () => {
+    expect(initialLeader({ memberId: null, memberName: null, seesWholeChurch: true }, true)).toBeNull();
   });
 
   it("Pedro editando Caio: Líder obrigatório, sem preencher de novo", () => {
     const view = ministryFieldsView({ seesWholeChurch: false, isNew: false, saved: { is_pastor: false, leader_id: "pedro" } });
     expect(view.leader).toBe("required");
-    expect(initialLeaderId(view, false, "pedro")).toBeNull();
+    expect(initialLeader(pedroViewer, false)).toBeNull();
   });
 
   it("UX-19: Samuel editando Magda (pastora): 'Pastor(a)' como texto, sem interruptor e sem o Líder", () => {
@@ -354,5 +362,26 @@ describe("E2.03 (AQ-8, UX-31): a senha inicial recusada pela create-user-admin",
     expect(fromCreate({ message: "x", code: "password_too_short", field: "password" })?.fields).toEqual({
       password: "A senha precisa ter pelo menos 8 caracteres.",
     });
+  });
+});
+
+describe("showPrefilledLeaderNotice (E2.07, P55, UX-22 e UX-23)", () => {
+  const withRita = { is_pastor: false, has_leadership: true, leader_id: "rita" };
+
+  it("Rita, cadastro novo, com o Líder sendo ela: o aviso aparece", () => {
+    expect(showPrefilledLeaderNotice(ritaViewer, true, withRita)).toBe(true);
+  });
+
+  it("some quando o Líder é outra pessoa, fica vazio, 'Tem Liderança?' desliga ou 'É Pastor(a)?' liga", () => {
+    expect(showPrefilledLeaderNotice(ritaViewer, true, { ...withRita, leader_id: "andre" })).toBe(false);
+    expect(showPrefilledLeaderNotice(ritaViewer, true, { ...withRita, leader_id: null })).toBe(false);
+    expect(showPrefilledLeaderNotice(ritaViewer, true, { ...withRita, has_leadership: false })).toBe(false);
+    expect(showPrefilledLeaderNotice(ritaViewer, true, { ...withRita, is_pastor: true })).toBe(false);
+  });
+
+  it("Pedro (só o ministério), a edição e a conta sem cadastro: sem aviso", () => {
+    expect(showPrefilledLeaderNotice(pedroViewer, true, { ...withRita, leader_id: "pedro" })).toBe(false);
+    expect(showPrefilledLeaderNotice(ritaViewer, false, withRita)).toBe(false);
+    expect(showPrefilledLeaderNotice({ memberId: null, memberName: null, seesWholeChurch: true }, true, withRita)).toBe(false);
   });
 });

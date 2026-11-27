@@ -302,6 +302,11 @@ export interface PaginatedSelectProps<IsMulti extends boolean> {
   "aria-required"?: boolean;
   /** O nome do "×" de cada escolhido (padrão: "Remover {nome}"). */
   removeLabel?: (label: string) => string;
+  /**
+   * Limite de escolhas no múltiplo (E2.07, P53): com ele atingido, as outras opções ficam
+   * desabilitadas. A mensagem do limite fica com quem usa, ligada por `aria-describedby`.
+   */
+  maxSelected?: number;
 }
 
 export function PaginatedSelect<IsMulti extends boolean = false>({
@@ -321,6 +326,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   "aria-describedby": descriptionId,
   "aria-required": ariaRequired = false,
   removeLabel = DEFAULT_REMOVE_LABEL,
+  maxSelected,
 }: PaginatedSelectProps<IsMulti>) {
   const selectRef = useRef<SelectInstance<SelectOption, IsMulti, GroupBase<SelectOption>>>(null);
   const focusedAction = useRef<SelectOption | null>(null);
@@ -329,6 +335,13 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   const { options, isLoading, isError, hasNextPage, isFetchingNextPage, loadMore, retry } = pagination;
 
   useImperativeHandle(focusRef, () => ({ focus: () => selectRef.current?.focus() }), []);
+
+  const selectedCount = Array.isArray(value) ? value.length : 0;
+  const limitReached = !!isMulti && maxSelected !== undefined && selectedCount >= maxSelected;
+  const optionDisabled = useCallback(
+    (option: SelectOption) => isOptionDisabled(option) || limitReached,
+    [limitReached],
+  );
 
   // Com erro, o item de tentar de novo; havendo mais páginas, o de carregar
   // mais (que vira "Carregando…" e mantém o foco enquanto a página chega).
@@ -452,7 +465,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
           menuShouldScrollIntoView
           maxMenuHeight={isMobile ? MOBILE_MENU_MAX_HEIGHT : MENU_MAX_HEIGHT}
           filterOption={null}
-          isOptionDisabled={isOptionDisabled}
+          isOptionDisabled={optionDisabled}
           closeMenuOnSelect={!isMulti}
           // No toque, o padrão tira o foco a cada escolha (fecha o teclado). Na
           // escolha única continua assim; na múltipla, o foco fica.

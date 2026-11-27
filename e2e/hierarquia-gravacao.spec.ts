@@ -8,6 +8,9 @@ import { pickMember } from "./membro-validacoes-support";
 // Fábio (inativo, discípulo de André) e salva; Membros, Células, Ministérios e o Dashboard têm de
 // mostrar o carregando e depois o valor novo, nunca o antigo guardado.
 
+
+/** As leituras de Membros: a `members_view` e a lista pela `members_list` (E2.07). */
+const MEMBER_READS = /\/rest\/v1\/(members_view|rpc\/members_list)/;
 let env: E2EEnv;
 
 test.beforeAll(async () => {
@@ -48,7 +51,7 @@ test("UX-13: Rita define Tiago como líder de Fábio e as outras telas mostram o
 
   // 2. Em Membros, abre Fábio e troca o líder. A lista demora a recarregar para dar tempo de ver o estado.
   await menu(page, "Membros").click();
-  await page.getByLabel("Buscar membros").fill("Fábio");
+  await page.getByLabel("Buscar", { exact: true }).fill("Fábio");
   await expect(H.memberRow(page, H.FABIO.name, true)).toBeVisible();
   await page.getByRole("button", { name: `Editar ${H.FABIO.name}`, exact: true }).first().click();
   const dialog = page.getByRole("dialog", { name: "Editar membro" });
@@ -75,8 +78,10 @@ test("UX-13: Rita define Tiago como líder de Fábio e as outras telas mostram o
       });
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
   });
-  await page.route("**/rest/v1/members_view*", async (route) => {
-    if (route.request().method() === "GET") await new Promise((resolve) => setTimeout(resolve, 1200));
+  // A lista de Membros vem da `members_list` (POST) desde o E2.07.
+  await page.route(MEMBER_READS, async (route) => {
+    const read = route.request().method() === "GET" || route.request().url().includes("/rpc/members_list");
+    if (read) await new Promise((resolve) => setTimeout(resolve, 1200));
     await route.continue();
   });
   await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
@@ -87,11 +92,11 @@ test("UX-13: Rita define Tiago como líder de Fábio e as outras telas mostram o
   await expect(page.locator('tbody[aria-busy="true"]')).toBeVisible();
   await expect(page.locator("tbody tr.opacity-60").first()).toBeVisible();
   await expect(page.locator('tbody[aria-busy="true"]')).toHaveCount(0, { timeout: 10_000 });
-  await page.unroute("**/rest/v1/members_view*");
+  await page.unroute(MEMBER_READS);
   const fabio = H.memberRow(page, H.FABIO.name, true);
   await expect(fabio.locator("td:nth-child(4)")).toContainText("144");
   await expect(fabio.locator("td:nth-child(5)")).toContainText("Tiago Rocha");
-  await page.getByLabel("Buscar membros").fill("");
+  await page.getByLabel("Buscar", { exact: true }).fill("");
   await expect(H.memberRow(page, H.GABRIEL.name, true).locator("td:nth-child(5) [aria-hidden='true']")).toHaveText("Tiago Rocha / Fábio Lima");
   await expect(H.memberRow(page, H.ANDRE.name, true).locator("td:nth-child(6) [aria-hidden='true']").first()).toHaveText("1 discípulo");
 
@@ -128,14 +133,16 @@ test("UX-13: a lista aberta recarrega com as linhas esmaecidas e 'aria-busy', ta
   const dialog = page.getByRole("dialog", { name: "Editar membro" });
   await expect(dialog).toBeVisible();
   await pickMember(page, dialog, "Líder *", H.TIAGO.name);
-  await page.route("**/rest/v1/members_view*", async (route) => {
-    if (route.request().method() === "GET") await new Promise((resolve) => setTimeout(resolve, 1200));
+  // A lista de Membros vem da `members_list` (POST) desde o E2.07.
+  await page.route(MEMBER_READS, async (route) => {
+    const read = route.request().method() === "GET" || route.request().url().includes("/rpc/members_list");
+    if (read) await new Promise((resolve) => setTimeout(resolve, 1200));
     await route.continue();
   });
   await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('div[aria-busy="true"].opacity-60')).toBeVisible();
   await expect(page.locator('div[aria-busy="true"]')).toHaveCount(0, { timeout: 10_000 });
-  await page.unroute("**/rest/v1/members_view*");
+  await page.unroute(MEMBER_READS);
   await expect(H.memberCard(page, H.FABIO.name).getByText("Tiago Rocha").first()).toBeVisible();
 });

@@ -408,7 +408,7 @@ test("UX-07 (AD): excluir o único cadastro da última página leva à página a
   const last = `${NAME} Pag 11`;
   await expect(page.getByRole("row", { name: new RegExp(last) })).toBeVisible();
   await expect(page.getByRole("row")).toHaveCount(2); // cabeçalho + 1 linha
-  await expect(page.getByText("11 membros")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "11 membros" })).toBeVisible();
 
   await page.getByRole("button", { name: `Excluir ${last}`, exact: true }).click();
   const dialog = page.getByRole("alertdialog");
@@ -418,7 +418,7 @@ test("UX-07 (AD): excluir o único cadastro da última página leva à página a
   await expect(page.getByRole("button", { name: "Desfazer" })).toHaveCount(0);
   await expect(page).not.toHaveURL(/page=2/);
   await expect(page.getByRole("row")).toHaveCount(11); // cabeçalho + 10 linhas
-  await expect(page.getByText("10 membros")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "10 membros" })).toBeVisible();
   await expect(page.getByText(last)).toHaveCount(0);
   expect(deletedAt(member(31))).not.toBe("");
 
