@@ -1,5 +1,5 @@
 {
-  "_comment": "E2.11 (DT-17): tabela única de casos das regras do relatório. Gera o pgTAP supabase/tests/database/e211_02_cases.test.sql (node supabase/tests/fixtures/generate-report-rules-cases.mjs) e alimenta o Vitest do formulário (PR 4). 'now' é o momento do envio (ISO com fuso); as datas e os horários do relatório são de Brasília; device_tz só vale para a tela. O horário do relatório usa os casos de horário do cell-rules-cases.json (E2.08).",
+  "_comment": "E2.11 (DT-17): tabela única de casos das regras do relatório. Gera o pgTAP supabase/tests/database/e211_02_cases.test.sql (node supabase/tests/fixtures/generate-report-rules-cases.mjs) e alimenta o Vitest do formulário (PR 4). 'now' é o momento do envio (ISO com fuso); as datas e os horários do relatório são de Brasília; device_tz só vale para a tela. O horário do relatório usa os casos de horário do cell-rules-cases.json (E2.08). 'api_input' são as formas de data e horário aceitas pela API (só AAAA-MM-DD e HH:MM, HH:MM:SS ou com fração de segundo).",
   "limits": {
     "theme": 300,
     "reason": 2000,
@@ -903,6 +903,120 @@
         "count": 1000
       },
       "stored": "1000 nomes",
+      "code": null
+    }
+  ],
+  "api_input": [
+    {
+      "id": "I01",
+      "field": "date",
+      "input": "2026-11-25",
+      "stored": "2026-11-25",
+      "code": null
+    },
+    {
+      "id": "I02",
+      "field": "date",
+      "input": " 2026-11-25 ",
+      "stored": "2026-11-25",
+      "code": null
+    },
+    {
+      "id": "I03",
+      "field": "date",
+      "input": "2026-02-30",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I04",
+      "field": "date",
+      "input": "today",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I05",
+      "field": "date",
+      "input": "yesterday",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I06",
+      "field": "date",
+      "input": "25/11/2026",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I07",
+      "field": "date",
+      "input": "11/25/2026",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I08",
+      "field": "date",
+      "input": "2026-11-25T10:00:00",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I09",
+      "field": "date",
+      "input": "20261125",
+      "stored": null,
+      "code": "report_date_invalid"
+    },
+    {
+      "id": "I10",
+      "field": "date",
+      "input": "",
+      "stored": null,
+      "code": "report_date_required"
+    },
+    {
+      "id": "I11",
+      "field": "time",
+      "input": "now",
+      "stored": null,
+      "code": "report_time_invalid"
+    },
+    {
+      "id": "I12",
+      "field": "time",
+      "input": "allballs",
+      "stored": null,
+      "code": "report_time_invalid"
+    },
+    {
+      "id": "I13",
+      "field": "time",
+      "input": "7:30 PM",
+      "stored": null,
+      "code": "report_time_invalid"
+    },
+    {
+      "id": "I14",
+      "field": "time",
+      "input": "19:30:00+03",
+      "stored": null,
+      "code": "report_time_invalid"
+    },
+    {
+      "id": "I15",
+      "field": "time",
+      "input": "9:30",
+      "stored": null,
+      "code": "report_time_invalid"
+    },
+    {
+      "id": "I16",
+      "field": "time",
+      "input": "19:30:00.5",
+      "stored": "19:30:00",
       "code": null
     }
   ]

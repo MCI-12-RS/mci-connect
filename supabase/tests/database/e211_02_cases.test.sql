@@ -14,7 +14,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(126);
+SELECT plan(142);
 
 -- Lançamento: semana|fim|reunião|situação|datas aceitas|código|data e horário finais.
 CREATE FUNCTION pg_temp.launch(_now timestamptz, _day text, _mt time, _held boolean, _date date, _time time,
@@ -72,6 +72,19 @@ CREATE FUNCTION pg_temp.report_time(_v jsonb) RETURNS text LANGUAGE sql AS $$
               WHEN i."time" IS NULL THEN 'code:report_time_required'
               ELSE 'stored:' || i."time"::text END
     FROM private.report_input(jsonb_build_object('time', _v)) i
+$$;
+
+-- Forma da data e do horário pela API (RN-08): só AAAA-MM-DD e HH:MM[:SS]; o resto é inválido.
+CREATE FUNCTION pg_temp.report_input_value(_field text, _v jsonb) RETURNS text LANGUAGE sql AS $$
+  SELECT CASE _field
+           WHEN 'date' THEN CASE WHEN NOT i.date_ok THEN 'code:report_date_invalid'
+                                 WHEN i.date IS NULL THEN 'code:report_date_required'
+                                 ELSE 'stored:' || to_char(i.date, 'YYYY-MM-DD') END
+           ELSE CASE WHEN NOT i.time_ok THEN 'code:report_time_invalid'
+                     WHEN i."time" IS NULL THEN 'code:report_time_required'
+                     ELSE 'stored:' || i."time"::text END
+         END
+    FROM private.report_input(jsonb_build_object(_field, _v)) i
 $$;
 
 -- DA-4, DA-5: os limites do banco são os do JSON.
@@ -407,6 +420,24 @@ SELECT is(pg_temp.report_time('"23:59"'::jsonb), 'stored:23:59:00', 'RN-08 T16: 
 SELECT is(pg_temp.report_time('"23:59:59.999"'::jsonb), 'stored:23:59:00', 'RN-08 T17: "23:59:59.999"');
 SELECT is(pg_temp.report_time('""'::jsonb), 'code:report_time_required', 'RN-08 T18: ""');
 SELECT is(pg_temp.report_time('null'::jsonb), 'code:report_time_required', 'RN-08 T19: null');
+
+-- RN-08: forma da data e do horário pela API (independe do DateStyle da sessão).
+SELECT is(pg_temp.report_input_value('date', '"2026-11-25"'::jsonb), 'stored:2026-11-25', 'RN-08 I01: date "2026-11-25"');
+SELECT is(pg_temp.report_input_value('date', '" 2026-11-25 "'::jsonb), 'stored:2026-11-25', 'RN-08 I02: date " 2026-11-25 "');
+SELECT is(pg_temp.report_input_value('date', '"2026-02-30"'::jsonb), 'code:report_date_invalid', 'RN-08 I03: date "2026-02-30"');
+SELECT is(pg_temp.report_input_value('date', '"today"'::jsonb), 'code:report_date_invalid', 'RN-08 I04: date "today"');
+SELECT is(pg_temp.report_input_value('date', '"yesterday"'::jsonb), 'code:report_date_invalid', 'RN-08 I05: date "yesterday"');
+SELECT is(pg_temp.report_input_value('date', '"25/11/2026"'::jsonb), 'code:report_date_invalid', 'RN-08 I06: date "25/11/2026"');
+SELECT is(pg_temp.report_input_value('date', '"11/25/2026"'::jsonb), 'code:report_date_invalid', 'RN-08 I07: date "11/25/2026"');
+SELECT is(pg_temp.report_input_value('date', '"2026-11-25T10:00:00"'::jsonb), 'code:report_date_invalid', 'RN-08 I08: date "2026-11-25T10:00:00"');
+SELECT is(pg_temp.report_input_value('date', '"20261125"'::jsonb), 'code:report_date_invalid', 'RN-08 I09: date "20261125"');
+SELECT is(pg_temp.report_input_value('date', '""'::jsonb), 'code:report_date_required', 'RN-08 I10: date ""');
+SELECT is(pg_temp.report_input_value('time', '"now"'::jsonb), 'code:report_time_invalid', 'RN-08 I11: time "now"');
+SELECT is(pg_temp.report_input_value('time', '"allballs"'::jsonb), 'code:report_time_invalid', 'RN-08 I12: time "allballs"');
+SELECT is(pg_temp.report_input_value('time', '"7:30 PM"'::jsonb), 'code:report_time_invalid', 'RN-08 I13: time "7:30 PM"');
+SELECT is(pg_temp.report_input_value('time', '"19:30:00+03"'::jsonb), 'code:report_time_invalid', 'RN-08 I14: time "19:30:00+03"');
+SELECT is(pg_temp.report_input_value('time', '"9:30"'::jsonb), 'code:report_time_invalid', 'RN-08 I15: time "9:30"');
+SELECT is(pg_temp.report_input_value('time', '"19:30:00.5"'::jsonb), 'stored:19:30:00', 'RN-08 I16: time "19:30:00.5"');
 
 SELECT * FROM finish();
 

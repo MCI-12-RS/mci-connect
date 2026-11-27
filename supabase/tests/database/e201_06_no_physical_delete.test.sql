@@ -7,7 +7,8 @@
 --   - privilégios: members, cells e cell_reports sem DELETE e sem TRUNCATE
 --     para authenticated, anon e PUBLIC; cell_report_participants com DELETE
 --     para authenticated (RN-13) e sem TRUNCATE; a service_role mantém DELETE e
---     TRUNCATE nas quatro (só privilégio);
+--     TRUNCATE em members e cells, só DELETE em cell_reports e nenhum dos dois em
+--     participantes (E2.11 PR 2);
 --   - políticas: nenhuma de DELETE (ou ALL) em members, cells e cell_reports; a
 --     de participantes continua;
 --   - comportamento: DELETE e TRUNCATE nas três tabelas dão 42501 para o
@@ -140,12 +141,14 @@ SELECT ok(NOT has_table_privilege(g, 'public.cell_report_participants', 'TRUNCAT
           g || ': sem TRUNCATE em cell_report_participants')
   FROM unnest(ARRAY['authenticated', 'anon']) g;
 
-SELECT ok(has_table_privilege('service_role', t, 'DELETE') AND has_table_privilege('service_role', t, 'TRUNCATE'),
-          'service_role: DELETE e TRUNCATE mantidos em ' || t)
+-- E2.11 PR 2: TRUNCATE revogado em cell_reports e participantes (não passa pela guarda de linha).
+SELECT ok(has_table_privilege('service_role', t, 'DELETE')
+          AND has_table_privilege('service_role', t, 'TRUNCATE') = (t <> 'public.cell_reports'),
+          'service_role: DELETE mantido em ' || t || CASE WHEN t = 'public.cell_reports' THEN ', sem TRUNCATE (E2.11)' ELSE ' e TRUNCATE' END)
   FROM unnest(ARRAY['public.members', 'public.cells', 'public.cell_reports']) t;
 SELECT ok(NOT has_table_privilege('service_role', 'public.cell_report_participants', 'DELETE')
-          AND has_table_privilege('service_role', 'public.cell_report_participants', 'TRUNCATE'),
-  'service_role: sem DELETE em public.cell_report_participants (E2.11: só as RPCs gravam), TRUNCATE mantido');
+          AND NOT has_table_privilege('service_role', 'public.cell_report_participants', 'TRUNCATE'),
+  'service_role: sem DELETE e sem TRUNCATE em public.cell_report_participants (E2.11: só as RPCs gravam)');
 
 SELECT is_empty($$
   SELECT tablename, policyname FROM pg_policies

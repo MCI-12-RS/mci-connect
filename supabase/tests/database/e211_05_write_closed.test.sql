@@ -135,7 +135,7 @@ UPDATE public.cells SET is_active = false WHERE id = pg_temp.c(4);
 UPDATE public.cells SET deleted_at = now() WHERE id = pg_temp.c(5);
 UPDATE public.members SET deleted_at = now() WHERE id = pg_temp.m(18);
 
-SELECT plan(71);
+SELECT plan(77);
 
 -- Um relatório desta semana em C1, lançado por Pedro, e um da semana passada em C2 (manutenção).
 SELECT is(pg_temp.sub('3', pg_temp.r(1), pg_temp.held(pg_temp.c(1))) ->> 'code', 'ok', 'preparação: Pedro lança C1');
@@ -150,9 +150,9 @@ SET LOCAL mci.cell_report_write = '';
 -- 1. RN-01: privilégios e políticas
 -- ===========================================================================
 SELECT ok(NOT has_table_privilege(g, 'public.cell_reports', p), g || ': sem ' || p || ' em cell_reports')
-  FROM unnest(ARRAY['authenticated', 'service_role', 'anon']) g, unnest(ARRAY['INSERT', 'UPDATE']) p;
+  FROM unnest(ARRAY['authenticated', 'service_role', 'anon']) g, unnest(ARRAY['INSERT', 'UPDATE', 'TRUNCATE']) p;
 SELECT ok(NOT has_table_privilege(g, 'public.cell_report_participants', p), g || ': sem ' || p || ' em cell_report_participants')
-  FROM unnest(ARRAY['authenticated', 'service_role', 'anon']) g, unnest(ARRAY['INSERT', 'UPDATE', 'DELETE']) p;
+  FROM unnest(ARRAY['authenticated', 'service_role', 'anon']) g, unnest(ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) p;
 SELECT ok(has_table_privilege('authenticated', t, 'SELECT'), 'authenticated continua lendo ' || t)
   FROM unnest(ARRAY['public.cell_reports', 'public.cell_report_participants']) t;
 SELECT is_empty($$SELECT policyname FROM pg_policies WHERE schemaname = 'public'

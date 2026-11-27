@@ -31,6 +31,7 @@ interface Cases {
   edit: { id: string }[];
   offering: { id: string }[];
   visitors: { id: string }[];
+  api_input: { id: string }[];
 }
 const cases: Cases = JSON.parse(readFileSync(resolve(root, "supabase/tests/fixtures/report-rules-cases.json"), "utf8"));
 
@@ -48,7 +49,7 @@ describe("E2.11 DT-17: tabela única de casos das regras do relatório", () => {
   });
 
   it("ids únicos e os exemplos do spec (RN-05, RN-06, RN-07)", () => {
-    for (const section of ["launch", "edit", "offering", "visitors"] as const) {
+    for (const section of ["launch", "edit", "offering", "visitors", "api_input"] as const) {
       const ids = cases[section].map((x) => x.id);
       expect(new Set(ids).size, section).toBe(ids.length);
     }

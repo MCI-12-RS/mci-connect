@@ -780,8 +780,9 @@ DROP FUNCTION IF EXISTS public.set_cell_report_participants(uuid, uuid[]);
 -- ===========================================================================
 -- 6. Privilégios (RN-01, DT-10)
 -- ===========================================================================
-REVOKE INSERT, UPDATE ON public.cell_reports FROM authenticated, service_role, anon;
-REVOKE INSERT, UPDATE, DELETE ON public.cell_report_participants FROM authenticated, service_role, anon;
+-- TRUNCATE também: ele não passa pelo RLS nem pelos triggers de linha (a guarda).
+REVOKE INSERT, UPDATE, TRUNCATE ON public.cell_reports FROM authenticated, service_role, anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.cell_report_participants FROM authenticated, service_role, anon;
 
 -- ===========================================================================
 -- 7. Pós-condições
@@ -798,6 +799,9 @@ BEGIN
      OR has_table_privilege('authenticated', 'public.cell_report_participants', 'DELETE')
      OR has_table_privilege('service_role', 'public.cell_report_participants', 'INSERT')
      OR has_table_privilege('service_role', 'public.cell_report_participants', 'DELETE')
+     OR EXISTS (SELECT 1 FROM unnest(ARRAY['authenticated', 'service_role', 'anon']) r (role),
+                              unnest(ARRAY['public.cell_reports', 'public.cell_report_participants']) t (tab)
+                 WHERE has_table_privilege(r.role, t.tab, 'TRUNCATE'))
      OR to_regprocedure('public.set_cell_report_participants(uuid,uuid[])') IS NOT NULL
      OR EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid IN ('public.cell_reports'::regclass,
                                                           'public.cell_report_participants'::regclass)

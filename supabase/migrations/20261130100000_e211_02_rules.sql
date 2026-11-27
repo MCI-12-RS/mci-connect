@@ -215,7 +215,10 @@ BEGIN
   _r.has_date := _j ? 'date';
   _r.date_ok := true;
   _raw := private.report_text(_j, 'date');
-  IF _raw IS NOT NULL THEN
+  -- Só a forma ISO (AAAA-MM-DD): o cast de texto livre depende do DateStyle e aceita 'today'.
+  IF _raw IS NOT NULL AND _raw !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN
+    _r.date_ok := false;
+  ELSIF _raw IS NOT NULL THEN
     BEGIN
       _r.date := _raw::date;
     EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow OR invalid_text_representation THEN
@@ -227,7 +230,10 @@ BEGIN
   _r.has_time := _j ? 'time';
   _r.time_ok := true;
   _raw := private.report_text(_j, 'time');
-  IF _raw IS NOT NULL THEN
+  -- Só HH:MM, HH:MM:SS ou com fração: o cast de texto livre aceita 'now' e outras formas.
+  IF _raw IS NOT NULL AND _raw !~ '^[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]+)?)?$' THEN
+    _r.time_ok := false;
+  ELSIF _raw IS NOT NULL THEN
     BEGIN
       _t := public.normalize_meeting_time(_raw::time);
       IF public.is_valid_meeting_time(_t) THEN

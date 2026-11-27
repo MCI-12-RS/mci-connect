@@ -54,7 +54,7 @@ const timeExpected = (t) => {
 export function generate(c, cell) {
   const times = cell.meeting_time.filter((t) => t.db !== null)
   const z = SESSION_ZONES.length
-  const n = 1 + z * (c.launch.length + c.edit.length) + c.offering.length + c.visitors.length + times.length
+  const n = 1 + z * (c.launch.length + c.edit.length) + c.offering.length + c.visitors.length + times.length + c.api_input.length
   const l = c.limits
   const perZone = SESSION_ZONES.map((zone) => `-- Sessão em ${zone}.
 SET LOCAL TIME ZONE ${lit(zone)};
@@ -151,6 +151,19 @@ CREATE FUNCTION pg_temp.report_time(_v jsonb) RETURNS text LANGUAGE sql AS $$
     FROM private.report_input(jsonb_build_object('time', _v)) i
 $$;
 
+-- Forma da data e do horário pela API (RN-08): só AAAA-MM-DD e HH:MM[:SS]; o resto é inválido.
+CREATE FUNCTION pg_temp.report_input_value(_field text, _v jsonb) RETURNS text LANGUAGE sql AS $$
+  SELECT CASE _field
+           WHEN 'date' THEN CASE WHEN NOT i.date_ok THEN 'code:report_date_invalid'
+                                 WHEN i.date IS NULL THEN 'code:report_date_required'
+                                 ELSE 'stored:' || to_char(i.date, 'YYYY-MM-DD') END
+           ELSE CASE WHEN NOT i.time_ok THEN 'code:report_time_invalid'
+                     WHEN i."time" IS NULL THEN 'code:report_time_required'
+                     ELSE 'stored:' || i."time"::text END
+         END
+    FROM private.report_input(jsonb_build_object(_field, _v)) i
+$$;
+
 -- DA-4, DA-5: os limites do banco são os do JSON.
 SELECT is(row(l.theme, l.reason, l.observations, l.visitor_name, l.visitors, l.participants, l.offering_max)::text,
   ${lit(`(${l.theme},${l.reason},${l.observations},${l.visitor_name},${l.visitors},${l.participants},${l.offering_max})`)},
@@ -177,6 +190,14 @@ ${c.visitors
 -- RN-08: horário do relatório (casos do E2.08 que chegam ao banco).
 ${times
   .map((t) => `SELECT is(pg_temp.report_time(${jlit(t.input)}), ${lit(timeExpected(t))}, ${lit(`RN-08 ${t.id}: ${JSON.stringify(t.input)}`)});`)
+  .join('\n')}
+
+-- RN-08: forma da data e do horário pela API (independe do DateStyle da sessão).
+${c.api_input
+  .map(
+    (x) =>
+      `SELECT is(pg_temp.report_input_value(${lit(x.field)}, ${jlit(x.input)}), ${lit(x.code ? `code:${x.code}` : `stored:${x.stored}`)}, ${lit(`RN-08 ${x.id}: ${x.field} ${JSON.stringify(x.input)}`)});`,
+  )
   .join('\n')}
 
 SELECT * FROM finish();
