@@ -45,7 +45,7 @@ describe("toCellDeletionTarget", () => {
 
 describe("toCellReportDeletionTarget", () => {
   it("a data em dd/MM/aaaa e o líder da célula", () => {
-    expect(toCellReportDeletionTarget({ id: "r1", date: "2026-11-19", cell_leader_name: "Carlos Lima" })).toEqual({
+    expect(toCellReportDeletionTarget({ id: "r1", date: "2026-11-19", snapshot_leader_name: "Carlos Lima" })).toEqual({
       id: "r1",
       date: "19/11/2026",
       leaderName: "Carlos Lima",

@@ -178,6 +178,14 @@ export class CellsWorld {
     );
   }
 
+  /**
+   * A reunião desta semana já aconteceu (E2.11, RN-06): a célula passa a se reunir hoje à 00:00, para o
+   * lançamento não depender da hora em que o teste roda.
+   */
+  meetingAlreadyHappened(...ns: number[]) {
+    sql(this.env, `UPDATE public.cells SET meeting_day = ${WEEKDAY_SQL}, meeting_time = '00:00' WHERE id IN (${ns.map((n) => lit(cellId(n))).join(", ")});`);
+  }
+
   /** Inativa ou reativa uma célula direto no banco (outra pessoa no meio tempo). */
   setCellActive(n: number, active: boolean) {
     sql(this.env, `UPDATE public.cells SET is_active = ${active} WHERE id = ${lit(cellId(n))};`);

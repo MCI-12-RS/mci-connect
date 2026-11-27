@@ -49,12 +49,13 @@ export interface CellReportDeletionTarget {
   leaderName: string;
 }
 
-export type CellReportDeletionSource = Pick<CellReportRow, "id" | "date" | "cell_leader_name">;
+/** O líder é o registrado no relatório (E2.11, RN-14 d). */
+export type CellReportDeletionSource = Pick<CellReportRow, "id" | "date" | "snapshot_leader_name">;
 
 export function toCellReportDeletionTarget(report: CellReportDeletionSource): CellReportDeletionTarget {
   return {
     id: report.id,
     date: formatReportDate(report.date),
-    leaderName: leaderLabel(report.cell_leader_name),
+    leaderName: leaderLabel(report.snapshot_leader_name),
   };
 }

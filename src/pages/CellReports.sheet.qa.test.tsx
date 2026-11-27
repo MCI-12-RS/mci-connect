@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, resetFakeSupabase, respondWith, type FakeResponse } from "@/test/fake-supabase";
 import type { CellReportDetailRow, CellReportPageRow } from "@/lib/cell-reports/fields";
 import CellReports from "./CellReports";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 // QA do E2.01 PR 4 ("Ver relatório", T7): o que os testes do desenvolvedor
 // (CellReports.sheet.test.tsx) não cobrem. A persona MB sem nenhuma permissão
@@ -49,7 +50,8 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   was_held: true,
   reason_not_held: null,
   visitors_count: 0,
-  cell_leader_name: "Carlos Lima",
+  ...reportRowLeaderColumns,
+  snapshot_leader_name: "Carlos Lima",
   cell_street: "Rua das Flores",
   cell_number: "120",
   cell_complement: null,
@@ -60,7 +62,7 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
 
 // R1: célula de Carlos (não excluída); R2: célula de Rui (excluída).
 const CARLOS_ROW = row({});
-const RUI_ROW = row({ id: R2, date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true });
+const RUI_ROW = row({ id: R2, date: "2026-11-12", snapshot_leader_name: "Rui Prado", cell_deleted: true });
 const list = (...rows: CellReportPageRow[]): FakeResponse[] => [
   { data: rows, count: rows.length },
   { data: rows.map((r) => ({ id: r.id, participants_count: 3 })) },
@@ -84,6 +86,7 @@ const detail = (): CellReportDetailRow => ({
   updated_at: null,
   updated_by_kind: null,
   updated_by_name: null,
+  ...reportSnapshotColumns("Rui Prado"),
 });
 const SARA = { member_id: "m9", member_name: "Sara Reis", member_deleted: true };
 

@@ -19,6 +19,15 @@ const cells = (count: number, start = 0) =>
     street: "Rua A",
     number: "10",
     neighborhood: "Centro",
+    leader_id: `l${start + i}`,
+    timothy_id: `t${start + i}`,
+    timothy_name: `Timóteo ${start + i}`,
+    host_id: `h${start + i}`,
+    host_name: `Anfitrião ${start + i}`,
+    type: "Evangelística",
+    g12_leader_name: "Pedro Alves",
+    leader_g12_level: 2,
+    leader_is_pastor: false,
   }));
 
 function renderOptions(params: CellOptionsParams) {
@@ -97,7 +106,11 @@ describe("useCellOptions (RN-05, RN-07)", () => {
     expect(fakeQueries()).toHaveLength(0);
   });
 
-  it("A opção usa o id da célula e o rótulo de célula das telas", () => {
-    expect(toCellOption(cells(1)[0])).toEqual({ value: "c0", label: "Célula de Líder 0, em Rua A 10, Centro" });
+  it("E2.11 RN-17: a opção tem duas linhas: líder, dia e horário; G12 e endereço", () => {
+    expect(toCellOption(cells(1)[0])).toEqual({
+      value: "c0",
+      label: "Líder 0 · Quarta, 20:00",
+      description: "G12: Pedro Alves · Rua A, 10 · Centro",
+    });
   });
 });

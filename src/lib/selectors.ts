@@ -20,6 +20,8 @@ export interface SelectOption {
    * desabilitada, com o motivo escrito embaixo do nome.
    */
   disabledReason?: string;
+  /** Uma segunda linha, só no menu (a opção de célula do relatório, E2.11 T2). Entra no nome acessível. */
+  description?: string;
 }
 
 /** As opções de uma página e o `offset` da próxima, ou `null` quando acabou. */

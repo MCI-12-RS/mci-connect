@@ -150,7 +150,6 @@ export const CELL_FORM_TEXTS = {
 /** Formulário de relatório (T8). */
 export const REPORT_FORM_TEXTS = {
   /** O título do diálogo de relatório novo (o de Células e Relatórios), usado pelo atalho do Dashboard (T9). */
-  newReportTitle: "Novo Relatório de Célula",
   participantsHint: "Aparecem só as pessoas do seu ministério.",
   hiddenParticipants: "Alguns participantes não são do seu ministério: se você retirá-los, não poderá incluí-los de novo.",
 } as const;

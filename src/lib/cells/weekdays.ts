@@ -1,6 +1,6 @@
 // Dias da semana das células (`cells.meeting_day`), exatamente como gravados
 // no banco. Lista única do front: o CellForm oferece estes valores e o
-// CellReportForm sugere a data a partir deles.
+// formulário de relatório calcula a reunião da semana a partir deles.
 
 export const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"] as const;
 

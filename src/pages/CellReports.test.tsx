@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { CellReportPageRow } from "@/lib/cell-reports/fields";
 import CellReports from "./CellReports";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 // Ação "Excluir" e relatório de célula excluída na lista de Relatórios
 // (E2.01, T1, T2, T7, UX-01 a UX-04, UX-25 e a parte do UX-26 deste PR).
@@ -48,7 +49,8 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   was_held: true,
   reason_not_held: null,
   visitors_count: 0,
-  cell_leader_name: "Carlos Lima",
+  ...reportRowLeaderColumns,
+  snapshot_leader_name: "Carlos Lima",
   cell_street: "Rua das Flores",
   cell_number: "120",
   cell_complement: null,
@@ -57,7 +59,7 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   ...overrides,
 });
 
-const rows = [row({}), row({ id: "r2", date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true })];
+const rows = [row({}), row({ id: "r2", date: "2026-11-12", snapshot_leader_name: "Rui Prado", cell_deleted: true })];
 
 function renderReports() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -195,13 +197,17 @@ describe("Relatórios: o foco volta a quem abriu o diálogo (Acessibilidade, WCA
   it("Desktop: 'Cancelar' no formulário aberto pelo 'Editar' devolve o foco a esse ícone, que traz a data e o líder", async () => {
     renderReports();
     const edit = await screen.findByRole("button", { name: "Editar o relatório de 19/11/2026 da célula de Carlos Lima" });
-    // Os participantes salvos do relatório.
-    respondWith({ data: [] });
+    // A linha do relatório, as datas da semana dele e os participantes salvos (E2.11, AQ-10).
+    respondToRpc("cell_report_edit_context", {
+      data: [{ server_now: "2026-11-20T13:00:00Z", today: "2026-11-20", week_start: "2026-11-15", week_end: "2026-11-21", allowed_dates: ["2026-11-19", "2026-11-20"] }],
+    });
+    respondWith({ data: { ...row({}), ...reportSnapshotColumns("Carlos Lima") } }, { data: [] });
     act(() => edit.focus());
     fireEvent.click(edit);
-    const form = await screen.findByRole("dialog", { name: "Editar Relatório" });
+    await screen.findByRole("dialog", { name: "Editar relatório" });
 
-    fireEvent.click(within(form).getByRole("button", { name: "Cancelar" }));
+    // Os campos aparecem depois da leitura do relatório (AQ-10).
+    fireEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => expect(edit).toHaveFocus());
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -240,13 +246,13 @@ describe("Relatórios: quem lança e o alcance (E2.02)", () => {
     auth.access = base;
     renderReports();
     expect(await screen.findByText("Relatórios das células do seu ministério")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Novo Relatório" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo relatório" })).not.toBeInTheDocument();
   });
 
   it("Com algum relatório para lançar, então o botão aparece; com os relatórios da igreja toda, o subtítulo diz isso", async () => {
     auth.access = { ...base, can_submit_some_report: true, sees_whole_church_reports: true };
     renderReports();
-    expect(await screen.findByRole("button", { name: "Novo Relatório" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Novo relatório" })).toBeInTheDocument();
     expect(screen.getByText("Relatórios das células de toda a igreja")).toBeInTheDocument();
   });
 
@@ -254,7 +260,7 @@ describe("Relatórios: quem lança e o alcance (E2.02)", () => {
     auth.access = null;
     auth.permissionsLoaded = false;
     renderReports();
-    expect(screen.queryByRole("button", { name: "Novo Relatório" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Novo relatório" })).not.toBeInTheDocument();
     expect(document.querySelector('[aria-hidden="true"].h-11')).not.toBeNull();
   });
 });

@@ -157,7 +157,8 @@ export function reportDateTime(report: Pick<CellReportDetailRow, "date" | "time"
 
 /** O que o painel mostra de um relatório (T7). */
 export function toReportSheetView({ report, participants }: CellReportDetail): ReportSheetView {
-  const leader = leaderLabel(report.cell_leader_name);
+  // "Célula de {líder registrado}" (E2.11, T10); a busca das células excluídas é pelo líder de hoje.
+  const leader = leaderLabel(report.snapshot_leader_name);
   const common: ReportSheetCommon = {
     title: report.date ? TEXTS.reportOf(formatReportDate(report.date)) : TEXTS.title,
     cellLine: TEXTS.cellOf(leader),

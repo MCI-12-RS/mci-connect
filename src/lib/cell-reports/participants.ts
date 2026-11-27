@@ -83,3 +83,92 @@ export function hiddenParticipantIds(saved: readonly FormParticipant[]): string[
 export function hasHiddenParticipants(chosenIds: readonly string[], hiddenIds: readonly string[]): boolean {
   return chosenIds.some((id) => hiddenIds.includes(id));
 }
+
+/** Uma pessoa fixa entre os participantes (P103): o líder, o timóteo e o anfitrião, ou os registrados. */
+export interface FixedParticipant {
+  id: string;
+  name: string;
+}
+
+export interface CellPeople {
+  leader_id?: string | null;
+  leader_name?: string | null;
+  timothy_id?: string | null;
+  timothy_name?: string | null;
+  host_id?: string | null;
+  host_name?: string | null;
+}
+
+/**
+ * Os participantes automáticos do lançamento (RN-11): líder, timóteo e
+ * anfitrião, nessa ordem, sem repetir a mesma pessoa (Samuel, líder e timóteo
+ * de C4, aparece uma vez).
+ */
+export function automaticParticipants(cell: CellPeople): FixedParticipant[] {
+  const people = [
+    [cell.leader_id, cell.leader_name],
+    [cell.timothy_id, cell.timothy_name],
+    [cell.host_id, cell.host_name],
+  ] as const;
+  const seen = new Set<string>();
+  const result: FixedParticipant[] = [];
+  for (const [id, name] of people) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    result.push({ id, name: name || UNNAMED_MEMBER_LABEL });
+  }
+  return result;
+}
+
+/**
+ * "Participantes: {N}" (RN-11, AQ-5): a união, sem repetir, dos fixos, dos
+ * escolhidos e dos de cadastro excluído. É o mesmo número que o servidor grava.
+ */
+export function participantsTotal(...groups: ReadonlyArray<readonly string[]>): number {
+  return new Set(groups.flat()).size;
+}
+
+/** Um participante salvo, com o que a edição precisa (E2.11, AQ-5). */
+export interface EditParticipantSource extends FormParticipant {
+  is_snapshot_person?: boolean | null;
+  member_is_active?: boolean | null;
+  member_gender?: string | null;
+}
+
+export interface EditParticipants {
+  /** As pessoas registradas que são participantes: fixas, como texto, inclusive as excluídas (T9). */
+  fixed: FixedParticipant[];
+  /** Os demais não excluídos: chips com ✕ no seletor. */
+  editable: SelectOption[];
+  /** Os de cadastro excluído que não são registrados: a linha do E2.01, sem ✕. */
+  kept: KeptParticipant[];
+}
+
+/**
+ * Separa os participantes salvos na edição (T9): os registrados ficam na
+ * lista fixa (o excluído só pelo nome e sem repetir na linha dos excluídos), os
+ * excluídos na linha do E2.01 e o resto como chips, com a marca de inativo
+ * para quem quem edita vê (P63).
+ */
+export function splitEditParticipants(
+  saved: readonly EditParticipantSource[],
+  label: (p: EditParticipantSource) => string,
+): EditParticipants {
+  const fixed: FixedParticipant[] = [];
+  const editable: SelectOption[] = [];
+  const kept: KeptParticipant[] = [];
+  for (const p of saved) {
+    const name = p.member_name || UNNAMED_MEMBER_LABEL;
+    if (p.is_snapshot_person === true) fixed.push({ id: p.member_id, name: p.member_deleted === true ? name : label(p) });
+    else if (p.member_deleted === true) kept.push({ id: p.member_id, name });
+    else editable.push({ value: p.member_id, label: label(p) });
+  }
+  return { fixed, editable, kept };
+}
+
+/** As opções do seletor: os fixos aparecem desabilitados, com o motivo (P103, P5). */
+export function withFixedDisabled(options: readonly SelectOption[], fixedIds: readonly string[], reason: string): SelectOption[] {
+  if (fixedIds.length === 0) return [...options];
+  const fixed = new Set(fixedIds);
+  return options.map((option) => (fixed.has(option.value) ? { ...option, disabledReason: reason } : option));
+}

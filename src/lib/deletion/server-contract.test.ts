@@ -3,7 +3,7 @@ import { parseAppError } from "@/lib/errors";
 import { buildBlockerGroups, memberLinksFromRefusal } from "./blockers";
 import { isDeletionErrorCode } from "./codes";
 import { classifyWriteError, parseDeletionCheck } from "./outcome";
-import { CELL_REPORT_FORM_TEXTS, classifyReportSaveError } from "@/lib/cell-reports/report-form";
+import { classifyReportError } from "@/lib/cell-reports/codes";
 import { DELETION_TEXTS } from "./texts";
 
 // Contrato entre o banco e a tela (E2.01, "Formato dos erros", AQ-1, AQ-2).
@@ -168,11 +168,7 @@ describe("Contrato com o banco: corrida e permissão nas três entidades (UX-24,
 
   it("RN-02 e UX-39: o 42501 real das RPCs de exclusão é falta de permissão, sem mensagem técnica", () => {
     expect(classifyWriteError(PERMISSION_DENIED)).toEqual({ kind: "forbidden" });
-    expect(classifyReportSaveError(PERMISSION_DENIED)).toEqual({
-      kind: "refused",
-      message: DELETION_TEXTS.permissionDenied,
-      clearCell: false,
-    });
+    expect(classifyReportError(PERMISSION_DENIED)).toEqual({ kind: "permission", message: DELETION_TEXTS.permissionDenied });
   });
 
   it("Todos os códigos reais estão na lista de códigos da tela", () => {
@@ -183,38 +179,48 @@ describe("Contrato com o banco: corrida e permissão nas três entidades (UX-24,
   });
 });
 
-describe("Contrato com o banco: formulário de relatório (RN-06, RN-11, RN-12, RN-13)", () => {
-  it("RN-06 e UX-30: participante novo excluído vai para o campo, com o membro que o banco apontou", () => {
-    expect(classifyReportSaveError(DELETED_MEMBER_CHOSEN)).toEqual({
-      kind: "participants",
+describe("Contrato com o banco: formulário de relatório (E2.11, Formato dos erros, AQ-2)", () => {
+  // Desde o E2.11 PR 2, as RPCs mandam `field` nas recusas de participante.
+  const E211_DELETED_MEMBER_CHOSEN = appError(
+    '{"code": "deleted_member_chosen", "field": "participant_ids", "member_id": "m-30"}',
+    "Este membro foi excluído e não pode ser escolhido.",
+  );
+  const E211_PARTICIPANT_REMOVAL = appError(
+    '{"code": "deleted_participant_removal", "field": "participant_ids", "member_id": "m-21"}',
+    "Não é possível retirar um participante cujo cadastro foi excluído.",
+  );
+
+  it("RN-10 e UX-22: participante novo excluído vai para o campo, com o membro que o banco apontou", () => {
+    expect(classifyReportError(E211_DELETED_MEMBER_CHOSEN)).toEqual({
+      kind: "field",
+      field: "participant_ids",
+      code: "deleted_member_chosen",
       message: "Este membro foi excluído e não pode ser escolhido.",
       memberId: "m-30",
     });
+    expect(classifyReportError(E211_PARTICIPANT_REMOVAL)).toMatchObject({ kind: "field", field: "participant_ids", memberId: "m-21" });
   });
 
-  it("RN-13: a retirada de um participante excluído é recusada com a mensagem do Negócio, no topo", () => {
-    expect(classifyReportSaveError(PARTICIPANT_REMOVAL)).toEqual({
-      kind: "blocked",
-      message: "Não é possível retirar um participante cujo cadastro foi excluído.",
-      cellDeleted: false,
-    });
+  it("o payload antigo, sem campo, de uma regra que a tela não conhece vira a mensagem de conexão; o texto do Negócio sem código vai ao topo", () => {
+    expect(classifyReportError(PARTICIPANT_REMOVAL)).toEqual({ kind: "connection" });
+    expect(classifyReportError(DELETED_MEMBER_CHOSEN)).toEqual({ kind: "connection" });
   });
 
-  it("RN-06 e RN-11: relatório para célula excluída e edição de relatório de célula excluída ficam no aviso do topo (UX-28, UX-30)", () => {
-    expect(classifyReportSaveError(CELL_DELETED)).toEqual({
-      kind: "blocked",
+  it("RN-02 e RN-03: célula excluída no lançamento e célula do relatório excluída na edição", () => {
+    expect(classifyReportError(CELL_DELETED)).toEqual({
+      kind: "cell",
+      reason: "deleted",
       message: "Esta célula foi excluída e não recebe relatórios.",
-      cellDeleted: true,
     });
-    expect(classifyReportSaveError(REPORT_CELL_DELETED)).toEqual({
-      kind: "blocked",
+    expect(classifyReportError(REPORT_CELL_DELETED)).toEqual({
+      kind: "report_gone",
       message: "A célula deste relatório foi excluída. Restaure a célula para editar o relatório.",
-      cellDeleted: true,
     });
   });
 
-  it("RN-12: as recusas reais de semana ocupada (23505) e de fora da semana atual (23514) viram os textos de sempre", () => {
-    expect(classifyReportSaveError(WEEK_TAKEN)).toEqual({ kind: "error", message: CELL_REPORT_FORM_TEXTS.weekTaken });
-    expect(classifyReportSaveError(OUTSIDE_WEEK)).toEqual({ kind: "error", message: CELL_REPORT_FORM_TEXTS.outsideCurrentWeek });
+  it("AQ-2: o 23505 sem código (corrida que escapou da trava) vira o um por semana sem identificação; o 23514 é desconhecido", () => {
+    expect(classifyReportError(WEEK_TAKEN)).toEqual({ kind: "week_taken", report: null });
+    expect(classifyReportError(OUTSIDE_WEEK)).toEqual({ kind: "connection" });
   });
 });
+

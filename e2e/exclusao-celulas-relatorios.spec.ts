@@ -228,18 +228,25 @@ test("RN-06 (AD): os seletores de líder, timóteo, anfitrião, cônjuge, líder
 
   // Relatório novo: célula e participantes.
   await openList(page, "/cell-reports", NAME);
-  await page.getByRole("button", { name: "Novo Relatório" }).click();
-  const reportForm = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+  await page.getByRole("button", { name: "Novo relatório" }).click();
+  const reportForm = page.getByRole("dialog", { name: "Novo relatório" });
   const cellField = reportForm.getByLabel("Célula *");
   expect(await optionsFor(page, cellField, RUI)).toEqual([]);
-  expect(await optionsFor(page, cellField, ZECA)).toEqual([expect.stringContaining(`Célula de ${ZECA}`)]);
-  const participantsField = reportForm.getByLabel("Participantes (Membros)");
+  expect(await optionsFor(page, cellField, ZECA)).toEqual([expect.stringContaining(ZECA)]);
+  await reportForm.getByRole("button", { name: "Cancelar" }).click();
+  await expect(reportForm).toBeHidden();
+
+  // Participantes (E2.11: o seletor só aparece com a célula conferida): o da edição do relatório de Zeca.
+  await openList(page, "/cell-reports", ZECA);
+  await page.getByRole("button", { name: `Editar o relatório de ${shown(weekStart)} da célula de ${ZECA}` }).click();
+  const editForm = page.getByRole("dialog", { name: "Editar relatório" });
+  const participantsField = editForm.getByLabel("Outros participantes");
   const participantNames = await optionsFor(page, participantsField, NAME);
   expect(participantNames).toContain(ANA);
   expect(participantNames).toContain(QUIRINO);
   expect(participantNames).not.toContain(SARA);
   expect(participantNames).not.toContain(QUINTINO);
-  await reportForm.getByRole("button", { name: "Cancelar" }).click();
+  await editForm.getByRole("button", { name: "Cancelar" }).click();
 });
 
 test("RN-11 (MB): o relatório da célula excluída aparece com 'Célula excluída', sem 'Editar' e sem 'Excluir'", async ({ page }) => {
@@ -352,31 +359,37 @@ test("RN-12 (AD): com o relatório da semana, outro é recusado; excluído o rel
 }) => {
   await login(page, env.admin);
 
-  async function newReportForZeca() {
+  async function openNewReportForZeca() {
     await openList(page, "/cells", ZECA);
     await page.getByRole("button", { name: `Novo relatório da célula de ${ZECA}` }).click();
-    const form = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
-    await expect(form.getByLabel("Data *")).toHaveValue(weekStart);
-    await form.getByLabel("Tema da Palavra").fill(`${NAME} tema novo`);
-    await form.getByRole("button", { name: "Salvar" }).click();
-    return form;
+    return page.getByRole("dialog", { name: "Novo relatório" });
   }
 
-  let form = await newReportForZeca();
-  // E2.11 PR 2: a recusa vem da submit_cell_report (report_week_taken) e aparece no topo do formulário,
-  // com o texto do servidor, até o formulário novo do PR 4 (risco 1 do spec).
-  await expect(form.getByRole("alert").filter({ hasText: "O relatório para esta semana já foi enviado." })).toBeVisible();
-  await expect(toast(page, "Erro ao salvar")).toHaveCount(0);
-  await expect(form).toBeVisible();
-  await form.getByRole("button", { name: "Cancelar" }).click();
+  // E2.11 (RN-19, T3): o aviso de "já foi enviado" antes de preencher, sem os campos, com "Editar relatório"
+  // para quem edita e o rodapé só com "Fechar".
+  let form = await openNewReportForZeca();
+  const notice = form.getByRole("status").filter({ hasText: "O relatório para esta semana já foi enviado." });
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText(`Reunião de domingo, ${shown(weekStart)}, às 00:00 · Célula realizada.`);
+  await expect(notice.getByRole("button", { name: "Editar relatório" })).toBeVisible();
+  await expect(form.getByLabel("Tema *")).toHaveCount(0);
+  await expect(form.getByRole("button", { name: "Enviar relatório" })).toHaveCount(0);
+  await form.getByRole("button", { name: "Fechar" }).last().click();
+  await expect(form).toBeHidden();
 
   await openList(page, "/cell-reports", ZECA);
   await page.getByRole("button", { name: `Excluir o relatório de ${shown(weekStart)} da célula de ${ZECA}` }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Excluir relatório" }).click();
   await expect(toast(page, "Relatório excluído.")).toBeVisible();
 
-  form = await newReportForZeca();
-  await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+  form = await openNewReportForZeca();
+  // A data e o horário vêm da reunião da semana (RN-18): domingo, 00:00.
+  await expect(form.locator("#report-date")).toContainText(`Domingo, ${shown(weekStart)}`);
+  await expect(form.getByLabel("Horário *")).toHaveValue("00:00");
+  await form.getByLabel("Tema *").fill(`${NAME} tema novo`);
+  await form.getByLabel("Oferta *").fill("0");
+  await form.getByRole("button", { name: "Enviar relatório" }).click();
+  await expect(toast(page, "Relatório enviado.")).toBeVisible();
   await expect(form).toBeHidden();
   expect(
     sql(
@@ -393,20 +406,20 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   await login(page, env.admin);
   await openList(page, "/cell-reports", TEO);
   await page.getByRole("button", { name: `Editar o relatório de ${shown(weekStart)} da célula de ${TEO}` }).click();
-  const form = page.getByRole("dialog", { name: "Editar Relatório" });
+  const form = page.getByRole("dialog", { name: "Editar relatório" });
 
   const keptLine = `Continuam no relatório (cadastros excluídos): ${SARA}.`;
   await expect(form.getByText(keptLine)).toBeVisible();
-  await expect(form.getByRole("button", { name: `Remover ${ANA}` })).toBeVisible();
-  await expect(form.getByRole("button", { name: `Remover ${SARA}` })).toHaveCount(0);
+  await expect(form.getByRole("button", { name: `Retirar ${ANA}` })).toBeVisible();
+  await expect(form.getByRole("button", { name: `Retirar ${SARA}` })).toHaveCount(0);
 
-  const participantsField = form.getByLabel("Participantes (Membros)");
+  const participantsField = form.getByLabel("Outros participantes");
   expect(await optionsFor(page, participantsField, `${NAME} Sa`)).toEqual([]);
   await participantsField.click();
   await participantsField.pressSequentially(BIA);
   await page.getByRole("option", { name: BIA }).click();
   await participantsField.press("Escape");
-  await form.getByLabel("Tema da Palavra").fill(`${NAME} tema Teo editado`);
+  await form.getByLabel("Tema *").fill(`${NAME} tema Teo editado`);
   // Critério de pronto 6 (E2.01) e 5 (E2.05): uma chamada só, a `save_cell_report`, com o relatório e os
   // participantes, e nenhum DELETE.
   const writes: string[] = [];
@@ -414,8 +427,8 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
     const path = new URL(request.url()).pathname;
     if (path.startsWith("/rest/v1/") && request.method() !== "GET") writes.push(`${request.method()} ${path}`);
   });
-  await form.getByRole("button", { name: "Salvar" }).click();
-  await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+  await form.getByRole("button", { name: "Salvar alterações" }).click();
+  await expect(toast(page, "Relatório atualizado.")).toBeVisible();
   await expect(form).toBeHidden();
   expect(writes).toEqual(["POST /rest/v1/rpc/save_cell_report"]);
   expect(writes.filter((write) => write.startsWith("DELETE"))).toEqual([]);
@@ -424,10 +437,10 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   expect(sql(env, `SELECT theme FROM public.cell_reports WHERE id = ${lit(report(3))}`)).toBe(`${NAME} tema Teo editado`);
 
   await page.getByRole("button", { name: `Editar o relatório de ${shown(weekStart)} da célula de ${TEO}` }).click();
-  const reopened = page.getByRole("dialog", { name: "Editar Relatório" });
+  const reopened = page.getByRole("dialog", { name: "Editar relatório" });
   await expect(reopened.getByText(keptLine)).toBeVisible();
-  await expect(reopened.getByRole("button", { name: `Remover ${BIA}` })).toBeVisible();
-  await expect(reopened.getByRole("button", { name: `Remover ${SARA}` })).toHaveCount(0);
+  await expect(reopened.getByRole("button", { name: `Retirar ${BIA}` })).toBeVisible();
+  await expect(reopened.getByRole("button", { name: `Retirar ${SARA}` })).toHaveCount(0);
   await reopened.getByRole("button", { name: "Cancelar" }).click();
 });
 
