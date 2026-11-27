@@ -271,7 +271,7 @@ const Members = () => {
             <AlertCircle className="h-4 w-4" aria-hidden="true" />
             <AlertDescription className="space-y-3 text-foreground">
               <p>{FILTERS.loadFailed}</p>
-              <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void listQuery.refetch()}>
+              <Button type="button" variant="outline" className="h-11 lg:h-9" onClick={() => void listQuery.refetch()}>
                 {FILTERS.tryAgain}
               </Button>
             </AlertDescription>

@@ -12,7 +12,7 @@ export function PrefilledLeaderNotice({ onGoToLeader }: { onGoToLeader: () => vo
       <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 space-y-1">
         <p>{TEXTS.notice}</p>
-        <Button type="button" variant="link" className="h-11 px-0 md:h-9" onClick={onGoToLeader}>
+        <Button type="button" variant="link" className="h-11 px-0 lg:h-9" onClick={onGoToLeader}>
           {TEXTS.goToLeader}
         </Button>
       </div>

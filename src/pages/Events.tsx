@@ -65,7 +65,7 @@ function PageHeader({ record }: { record: AuditRecordRef | null }) {
   }
   return (
     <div className="space-y-2">
-      <Button asChild variant="ghost" className="-ml-3 h-11 md:h-9">
+      <Button asChild variant="ghost" className="-ml-3 h-11 lg:h-9">
         <Link to="/events">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {TEXTS.history.back}
@@ -160,7 +160,7 @@ const Events = () => {
           <AlertCircle className="h-4 w-4" aria-hidden="true" />
           <AlertDescription className="space-y-3 text-foreground">
             <p>{TEXTS.loadFailed}</p>
-            <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void query.refetch()}>
+            <Button type="button" variant="outline" className="h-11 lg:h-9" onClick={() => void query.refetch()}>
               {TEXTS.tryAgain}
             </Button>
           </AlertDescription>
@@ -174,7 +174,7 @@ const Events = () => {
           <>
             <p className="font-medium">{TEXTS.history.empty[record.type]}</p>
             <p className="text-muted-foreground">{TEXTS.history.emptyExplanation}</p>
-            <Button asChild variant="outline" className="h-11 md:h-9">
+            <Button asChild variant="outline" className="h-11 lg:h-9">
               <Link to="/events">{TEXTS.history.back}</Link>
             </Button>
           </>
@@ -182,7 +182,7 @@ const Events = () => {
           <>
             <p>{TEXTS.emptyFiltered}</p>
             {filterCount > 0 && (
-              <Button type="button" variant="outline" className="h-11 md:h-9" onClick={clearFilters}>
+              <Button type="button" variant="outline" className="h-11 lg:h-9" onClick={clearFilters}>
                 {TEXTS.filters.clearAll}
               </Button>
             )}
@@ -201,7 +201,7 @@ const Events = () => {
               <AlertCircle className="h-4 w-4" aria-hidden="true" />
               <AlertDescription className="space-y-3 text-foreground">
                 <p>{TEXTS.refreshFailed}</p>
-                <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void query.refetch()}>
+                <Button type="button" variant="outline" className="h-11 lg:h-9" onClick={() => void query.refetch()}>
                   {TEXTS.tryAgain}
                 </Button>
               </AlertDescription>
