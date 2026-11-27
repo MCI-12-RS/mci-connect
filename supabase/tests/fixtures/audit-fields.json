@@ -319,7 +319,11 @@
         "deleted_at",
         "deleted_by",
         "deleted_by_kind",
-        "deleted_by_legacy"
+        "deleted_by_legacy",
+        "snapshot_leader_id",
+        "snapshot_timothy_id",
+        "snapshot_host_id",
+        "snapshot_cell_type"
       ]
     },
     "roles": {

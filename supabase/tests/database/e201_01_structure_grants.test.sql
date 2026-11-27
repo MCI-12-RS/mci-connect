@@ -162,13 +162,13 @@ SELECT is(pg_temp.cols('public.cell_reports_deleted_view'),
         'deleted_at','deleted_by','deleted_by_name','search_text','deleted_by_kind'],
   'cell_reports_deleted_view: colunas do contrato (AQ-3), na ordem (deleted_by_kind do E2.05 no fim)');
 
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 4],
-  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna antes das quatro da autoria do E2.05 (AQ-4)');
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 5],
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 15],
+  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna antes das quatro da autoria do E2.05 e das onze do retrato do E2.11 (AQ-4)');
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 16],
   'search_text', 'cell_reports_view: as colunas do E1.08 continuam antes de cell_deleted');
 SELECT is((pg_temp.cols('public.cell_report_participants_view')),
-  ARRAY['report_id','member_id','member_name','member_deleted','member_visible'],
-  'cell_report_participants_view: member_deleted e, depois, member_visible do E2.02 no fim (AQ-5)');
+  ARRAY['report_id','member_id','member_name','member_deleted','member_visible','is_snapshot_person','member_is_active','member_gender'],
+  'cell_report_participants_view: member_deleted, member_visible do E2.02 e, no fim, as três do E2.11 (AQ-5)');
 SELECT ok(NOT ('deleted_at' = ANY(pg_temp.cols('public.members_view')))
           AND NOT ('deleted_by' = ANY(pg_temp.cols('public.members_view'))),
   'members_view: sem colunas de exclusão (já filtra os excluídos)');
@@ -249,7 +249,7 @@ SELECT is((SELECT pg_get_function_result(f::regprocedure)), res, f || ': tipo de
 SELECT ok(has_function_privilege('authenticated', f, 'EXECUTE')
           AND NOT has_function_privilege('anon', f, 'EXECUTE'),
           f || ': EXECUTE para authenticated, sem anon')
-  FROM unnest(ARRAY['public.viewer_covers_role(uuid)', 'public.cell_in_viewer_ministry(uuid)',
+  FROM unnest(ARRAY['public.viewer_covers_role(uuid)', 'public.viewer_sees_report_people(uuid,uuid,uuid)',
                     'public.normalize_email(text)', 'public.normalize_digits(text)']) f;
 
 SELECT ok(has_function_privilege('service_role', f, 'EXECUTE'),
@@ -277,7 +277,7 @@ SELECT ok(NOT has_function_privilege('authenticated', f, 'EXECUTE')
                     'public.enforce_cell_report_rules()', 'public.enforce_participant_rules()']) f;
 
 SELECT ok(NOT has_function_privilege('anon', 'public.viewer_covers_role(uuid)', 'EXECUTE')
-          AND NOT has_function_privilege('anon', 'public.cell_in_viewer_ministry(uuid)', 'EXECUTE'),
+          AND NOT has_function_privilege('anon', 'public.viewer_sees_report_people(uuid,uuid,uuid)', 'EXECUTE'),
   'helpers de escopo novos: nenhum EXECUTE para anon (critério de pronto 1)');
 
 -- ===========================================================================

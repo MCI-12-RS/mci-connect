@@ -242,8 +242,8 @@ SELECT is((pg_temp.cols('public.members_view'))[array_length(pg_temp.cols('publi
   ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: members_view com a autoria no fim (antes das duas colunas do E2.07)');
 SELECT is((pg_temp.cols('public.cells_view'))[array_length(pg_temp.cols('public.cells_view'), 1) - 3 :],
   ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: cells_view com a autoria no fim');
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 3 :],
-  ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: cell_reports_view com a autoria no fim');
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 14 : array_length(pg_temp.cols('public.cell_reports_view'), 1) - 11],
+  ARRAY['created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name'], 'AQ-1: cell_reports_view com a autoria no fim (antes das onze colunas do retrato do E2.11)');
 SELECT is(
   (SELECT array_agg(v ORDER BY v) FROM unnest(ARRAY['public.members_deleted_view', 'public.cells_deleted_view', 'public.cell_reports_deleted_view']) v
     WHERE (pg_temp.cols(v))[array_length(pg_temp.cols(v), 1)] <> 'deleted_by_kind'),

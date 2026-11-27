@@ -88,6 +88,10 @@ export type Database = {
           observations: string | null
           offering: number | null
           reason_not_held: string | null
+          snapshot_cell_type: string
+          snapshot_host_id: string
+          snapshot_leader_id: string
+          snapshot_timothy_id: string
           theme: string | null
           time: string
           updated_at: string | null
@@ -112,6 +116,10 @@ export type Database = {
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
+          snapshot_cell_type: string
+          snapshot_host_id: string
+          snapshot_leader_id: string
+          snapshot_timothy_id: string
           theme?: string | null
           time: string
           updated_at?: string | null
@@ -136,6 +144,10 @@ export type Database = {
           observations?: string | null
           offering?: number | null
           reason_not_held?: string | null
+          snapshot_cell_type?: string
+          snapshot_host_id?: string
+          snapshot_leader_id?: string
+          snapshot_timothy_id?: string
           theme?: string | null
           time?: string
           updated_at?: string | null
@@ -205,6 +217,69 @@ export type Database = {
           {
             foreignKeyName: "cell_reports_deleted_by_fkey"
             columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
             isOneToOne: false
             referencedRelation: "members_view"
             referencedColumns: ["id"]
@@ -825,8 +900,11 @@ export type Database = {
     Views: {
       cell_report_participants_view: {
         Row: {
+          is_snapshot_person: boolean | null
           member_deleted: boolean | null
+          member_gender: string | null
           member_id: string | null
+          member_is_active: boolean | null
           member_name: string | null
           member_visible: boolean | null
           report_id: string | null
@@ -988,6 +1066,17 @@ export type Database = {
           participants_count: number | null
           reason_not_held: string | null
           search_text: string | null
+          snapshot_cell_type: string | null
+          snapshot_g12_leader_id: string | null
+          snapshot_g12_leader_name: string | null
+          snapshot_host_id: string | null
+          snapshot_host_name: string | null
+          snapshot_leader_g12_level: number | null
+          snapshot_leader_id: string | null
+          snapshot_leader_is_pastor: boolean | null
+          snapshot_leader_name: string | null
+          snapshot_timothy_id: string | null
+          snapshot_timothy_name: string | null
           theme: string | null
           time: string | null
           updated_at: string | null
@@ -1018,6 +1107,69 @@ export type Database = {
             columns: ["cell_id"]
             isOneToOne: false
             referencedRelation: "cells_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_host_id_fkey"
+            columns: ["snapshot_host_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_leader_id_fkey"
+            columns: ["snapshot_leader_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_deleted_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cell_reports_snapshot_timothy_id_fkey"
+            columns: ["snapshot_timothy_id"]
+            isOneToOne: false
+            referencedRelation: "members_view"
             referencedColumns: ["id"]
           },
           {
@@ -1667,7 +1819,6 @@ export type Database = {
       can_assign_role: { Args: { _role_id: string }; Returns: boolean }
       can_submit_report: { Args: { _cell_id: string }; Returns: boolean }
       cell_default_type: { Args: never; Returns: string }
-      cell_in_viewer_ministry: { Args: { _cell_id: string }; Returns: boolean }
       cell_links_or_none: {
         Args: {
           _is_pastor: boolean
@@ -2046,6 +2197,10 @@ export type Database = {
         Returns: boolean
       }
       viewer_sees_member: { Args: { _member_id: string }; Returns: boolean }
+      viewer_sees_report_people: {
+        Args: { _host: string; _leader: string; _timothy: string }
+        Returns: boolean
+      }
       viewer_tree_roots: { Args: never; Returns: string[] }
       week_start: { Args: { _day: string }; Returns: string }
       weekday_index: { Args: { _meeting_day: string }; Returns: number }
