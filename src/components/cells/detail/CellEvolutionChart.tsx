@@ -46,6 +46,8 @@ const CellEvolutionChart = ({ points, animate }: CellEvolutionChartProps) => {
           dataKey="id"
           tickFormatter={(id: string) => dateById.get(id)?.shortDate ?? ""}
           interval="preserveStartEnd"
+          // Os marcadores das pontas não são cortados pela borda.
+          padding={{ left: 12, right: 12 }}
           minTickGap={16}
           tickLine={false}
           axisLine={false}

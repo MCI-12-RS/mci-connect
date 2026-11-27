@@ -70,7 +70,7 @@ export const CellDetailHeader = forwardRef<HTMLHeadingElement, CellDetailHeaderP
           ) : (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {meeting && meeting.length > 0 && (
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground" data-testid="cell-detail-meeting">
                   <span className="sr-only">{TEXTS.meetingSpoken}</span>
                   {meeting.map((part, index) => (
                     <span key={`${index}-${part}`}>
