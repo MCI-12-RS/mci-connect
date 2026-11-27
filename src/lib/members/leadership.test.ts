@@ -30,7 +30,7 @@ describe("\"É Pastor(a)?\" (UX-16, UX-18)", () => {
   it("ligar esconde o líder, avisa e não apaga nada antes de salvar", () => {
     const on = setPastor(andre(), true);
     expect(ministrySwitchValues(on)).toMatchObject({ is_pastor: true, has_leadership: false, leader_id: null });
-    expect(ministrySwitchNotices(on).pastor).toEqual([
+    expect(ministrySwitchNotices(on, PEDRO).pastor).toEqual([
       { kind: "text", text: MEMBER_HINT_TEXTS.pastorHasNoLeader },
       { kind: "warning", text: "Ao salvar, Pedro Alves deixa de ser o líder." },
     ]);
@@ -56,10 +56,10 @@ describe("\"É Pastor(a)?\" (UX-16, UX-18)", () => {
   it("\"Tem Liderança?\" desligado com Pedro escondido: ligar e desligar pastor mantém o aviso do líder", () => {
     const noLeadership = setHasLeadership(andre(), false);
     const pastor = setPastor(noLeadership, true);
-    expect(ministrySwitchNotices(pastor).pastor[1]).toEqual({ kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemoved("Pedro Alves") });
+    expect(ministrySwitchNotices(pastor, PEDRO).pastor[1]).toEqual({ kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemoved("Pedro Alves") });
     const back = setPastor(pastor, false);
     expect(back.state).toMatchObject({ has_leadership: false, leader: null });
-    expect(ministrySwitchNotices(back).leadership).toEqual([
+    expect(ministrySwitchNotices(back, PEDRO).leadership).toEqual([
       { kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemovedNoLeadership("Pedro Alves") },
     ]);
   });
@@ -74,7 +74,7 @@ describe("\"Tem Liderança?\" (UX-17)", () => {
   it("desligar com líder avisa com o nome; religar devolve o líder", () => {
     const off = setHasLeadership(andre(), false);
     expect(ministrySwitchValues(off)).toMatchObject({ has_leadership: false, leader_id: null });
-    expect(ministrySwitchNotices(off).leadership).toEqual([
+    expect(ministrySwitchNotices(off, PEDRO).leadership).toEqual([
       { kind: "warning", text: "Ao salvar, Pedro Alves deixa de ser o líder. A pessoa fica sem liderança." },
     ]);
     const on = setHasLeadership(off, true);
@@ -108,5 +108,30 @@ describe("\"Batizado(a)?\" (RN-16, UX-17)", () => {
   it("sem data, desligar não avisa", () => {
     const off = setBaptized(setBaptismDate(andre(), null), false);
     expect(ministrySwitchNotices(off).baptism).toEqual([]);
+  });
+});
+
+describe("E2.07 (RN-16, UXD-11): o aviso do P20 fala só do líder gravado", () => {
+  const prefilled = () => setLeader(initialMinistrySwitches(null), { id: "rita", name: "Rita Gomes" });
+
+  it("cadastro novo com o líder preenchido: ligar \"É Pastor(a)?\" mostra só o texto de situação", () => {
+    const on = setPastor(prefilled(), true);
+    expect(ministrySwitchNotices(on).pastor).toEqual([{ kind: "text", text: MEMBER_HINT_TEXTS.pastorHasNoLeader }]);
+    // Desfazer devolve o líder que estava no campo.
+    expect(setPastor(on, false).state.leader).toEqual({ id: "rita", name: "Rita Gomes" });
+  });
+
+  it("cadastro novo: desligar \"Tem Liderança?\" mostra só \"A pessoa fica sem liderança.\"", () => {
+    const off = setHasLeadership(prefilled(), false);
+    expect(ministrySwitchNotices(off).leadership).toEqual([{ kind: "hint", text: MEMBER_HINT_TEXTS.noLeadership }]);
+    expect(setHasLeadership(off, true).state.leader).toEqual({ id: "rita", name: "Rita Gomes" });
+  });
+
+  it("edição: trocar o líder e ligar \"É Pastor(a)?\" avisa sobre o gravado", () => {
+    const changed = setPastor(setLeader(andre(), { id: "paula", name: "Paula Alves" }), true);
+    expect(ministrySwitchNotices(changed, PEDRO).pastor[1]).toEqual({
+      kind: "warning",
+      text: MEMBER_HINT_TEXTS.leaderRemoved("Pedro Alves"),
+    });
   });
 });

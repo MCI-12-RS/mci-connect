@@ -13,7 +13,7 @@ import { AuditEventTable } from "@/components/audit/AuditEventTable";
 import { AuditFilters } from "@/components/audit/AuditFilters";
 import { AuditFiltersSheet } from "@/components/audit/AuditFiltersSheet";
 import { RecordDeletedBadge } from "@/components/audit/EventBadges";
-import { FilterChips } from "@/components/audit/FilterChips";
+import { FilterChips } from "@/components/filters/FilterChips";
 import { RetentionNote } from "@/components/audit/RetentionNote";
 import { SearchField } from "@/components/audit/SearchField";
 import { useAuditRecordLabel, type AuditRecordLabel } from "@/hooks/use-audit-record-label";
@@ -256,6 +256,7 @@ const Events = () => {
                   onRemove={(key) => changeFilters({ [key]: null })}
                   onClearAll={clearFilters}
                   filtersButtonRef={filtersButtonRef}
+                  removeLabel={TEXTS.chips.remove}
                 />
               </>
             )}

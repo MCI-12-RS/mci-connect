@@ -112,6 +112,12 @@ async function renderNew() {
   return onClose;
 }
 
+/** O Líder já vem com quem cadastra (E2.07, RN-16): os testes do Líder vazio o tiram antes. */
+function clearLeader() {
+  const leader = field("Líder *").closest("[data-leader-field]") as HTMLElement;
+  fireEvent.click(within(leader).getByRole("button", { name: "Limpar seleção" }));
+}
+
 async function renderEdit(row: MemberRow = CAIO, props: { title?: string; readOnly?: boolean } = {}) {
   auth.permissions = new Set(["edit_member", "assign_role", "view_all_church"]);
   respondToRpc("role_options", { data: roleOptions({ id: "role-membro", name: "Membro" }) });
@@ -305,6 +311,7 @@ describe("UX-07: CPF (tabela da T3)", () => {
 describe("UX-08: erros ao salvar, todos de uma vez, sem requisição", () => {
   it("Dado o cadastro novo vazio, quando 'Criar membro', então Nome, Sexo, Identificação e Líder têm erro, o foco vai ao Nome e nada é enviado", async () => {
     await renderNew();
+    clearLeader();
     const requestsBefore = fakeQueries().length + fakeRpcs().length;
     clickCreate();
 
@@ -373,6 +380,7 @@ describe("UX-09: conferência fora do salvar", () => {
 describe("UX-10: resumo no rodapé", () => {
   it("Dado o salvar com 4 erros, então o resumo (role=status) mostra 4, diminui a cada correção e some sem erros", async () => {
     await renderNew();
+    clearLeader();
     clickCreate();
     const note = await screen.findByText("Confira os campos destacados (4).");
     expect(note.closest("[role='status']")).not.toBeNull();
@@ -813,6 +821,7 @@ describe("UX-27: mensagens em text-foreground, com ícone, sem text-destructive"
 
   it("Dado os erros de campo (Nome, Sexo, Identificação, Líder), então o texto usa text-foreground, tem ícone e o campo tem aria-invalid", async () => {
     await renderNew();
+    clearLeader();
     clickCreate();
     await screen.findByText("Informe o nome e o sobrenome.");
     for (const id of ["name", "gender", "identification", "leader"]) {

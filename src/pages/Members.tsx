@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { AlertCircle, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
@@ -20,10 +21,17 @@ import { MemberStatusBadge } from "@/components/StatusBadges";
 import LevelBadge from "@/components/hierarchy/LevelBadge";
 import LeadershipText from "@/components/hierarchy/LeadershipText";
 import TotalsText from "@/components/hierarchy/TotalsText";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FilterChips } from "@/components/filters/FilterChips";
+import { FiltersButton } from "@/components/filters/FiltersButton";
+import { FiltersPanel } from "@/components/filters/FiltersPanel";
+import { FiltersSheet } from "@/components/filters/FiltersSheet";
+import { MemberFilters, type MemberFiltersHandle } from "@/components/members/MemberFilters";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { KeyRound, Plus, Search, Pencil, Trash2, User } from "lucide-react";
@@ -31,6 +39,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { TABLE_MIN_WIDTH, WIDE_TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
 import { useMembersList } from "@/hooks/use-members-list";
+import { useMemberFilters } from "@/hooks/use-member-filters";
+import { usePanelOpen } from "@/hooks/use-panel-open";
+import { useVisibleMemberNames } from "@/hooks/use-visible-member-names";
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { refreshAccess } from "@/hooks/use-access";
 import { PASSWORD_ROW_TEXTS } from "@/lib/auth/password-texts";
@@ -38,7 +49,18 @@ import { nextStepForRefusal } from "@/lib/auth/temporary-password";
 import { canResetFromList } from "@/lib/members/password-row";
 import { UNNAMED_MEMBER_LABEL, type MemberRow } from "@/lib/members/fields";
 import { DELETED_LIST_TEXTS, MEMBER_DELETION_TEXTS } from "@/lib/deletion/texts";
-import { listSubtitle } from "@/lib/access/access";
+import { listSubtitle, memberSearchEmptyLabel } from "@/lib/access/access";
+import { formatCount } from "@/lib/format";
+import { FILTER_TEXTS } from "@/lib/filters/texts";
+import {
+  EMPTY_MEMBER_FILTERS,
+  countActiveFilters,
+  memberFilterChips,
+  resolveLeaderLabel,
+  type MemberFilters as Filters,
+} from "@/lib/members/filters";
+import { MEMBER_FILTER_TEXTS as FILTERS } from "@/lib/members/filter-texts";
+import type { SelectOption } from "@/lib/selectors";
 import { MEMBER_FORM_TEXTS, RULE_TEXTS } from "@/lib/access/texts";
 import { memberLevel } from "@/lib/hierarchy/level";
 import { memberLeadership, showsLeadershipOnCard } from "@/lib/hierarchy/leadership";
@@ -54,8 +76,24 @@ const formatPhone = (value?: string | null): string => {
   return value;
 };
 
+/** O id do painel de filtros do computador (`aria-controls` do botão "Filtros"). */
+const FILTERS_PANEL_ID = "members-filters-panel";
+
+/** Primeira carga (T6, UX-16): 5 `Skeleton` no formato dos cartões ou das linhas da tabela. */
+function LoadingRows({ asTable }: { asTable: boolean }) {
+  return (
+    <div className="space-y-3 p-4" aria-busy="true" data-testid="members-loading">
+      {Array.from({ length: 5 }, (_, index) => (
+        <Skeleton key={index} className={asTable ? "h-12 w-full" : "h-28 w-full"} />
+      ))}
+    </div>
+  );
+}
+
 const Members = () => {
   const list = useListSearchParams();
+  const memberFilters = useMemberFilters();
+  const { filters } = memberFilters;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -73,7 +111,8 @@ const Members = () => {
   const showTable = useMinWidth(TABLE_MIN_WIDTH);
   const showWideColumns = useMinWidth(WIDE_TABLE_MIN_WIDTH);
 
-  const { data, isLoading, isError, isPlaceholderData, isRefetching } = useMembersList(list.params);
+  const listQuery = useMembersList(list.params, filters);
+  const { data, isPending, isError, isPlaceholderData, isRefetching } = listQuery;
   // A lista na tela recarrega (troca de página ou depois de uma gravação): as
   // linhas ficam em `opacity-60` e com `aria-busy` até a resposta (E1.08; E2.06, P44).
   const refreshing = isPlaceholderData || isRefetching;
@@ -85,6 +124,57 @@ const Members = () => {
   // Ao fechar um diálogo, o foco volta a quem o abriu ou, se o membro saiu da lista, à busca.
   const searchRef = useRef<HTMLInputElement>(null);
   const returnFocus = useReturnFocus(searchRef, data);
+
+  // Filtros (E2.07, P50): `Sheet` abaixo de 1024 px, painel recolhível a partir daí.
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  const filtersFormRef = useRef<MemberFiltersHandle>(null);
+  const [panelOpen, setPanelOpen] = usePanelOpen("members");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [draft, setDraft] = useState<Filters>(filters);
+  // Muda a cada abertura e a cada "Limpar" do `Sheet`: os campos recomeçam, sem erro antigo.
+  const [sheetKey, setSheetKey] = useState(0);
+  // Os nomes das pessoas escolhidas agora no seletor; as da URL vêm só das pessoas visíveis (P53).
+  const [pickedNames, setPickedNames] = useState<ReadonlyMap<string, string>>(new Map());
+  const visibleNames = useVisibleMemberNames(filters.leaders);
+  const nameSources = {
+    picked: pickedNames,
+    visible: visibleNames.data,
+    failed: visibleNames.isError && !visibleNames.data,
+  };
+  const leaderOptions = (ids: readonly string[]): SelectOption[] =>
+    ids.map((id) => ({ value: id, label: resolveLeaderLabel(id, nameSources).label }));
+  const unavailableCount = (ids: readonly string[]) => ids.filter((id) => resolveLeaderLabel(id, nameSources).unavailable).length;
+  const pickLeaders = (options: readonly SelectOption[]) => {
+    if (options.length === 0) return;
+    setPickedNames((current) => new Map([...current, ...options.map((option): [string, string] => [option.value, option.label])]));
+  };
+
+  const filterCount = countActiveFilters(filters);
+  const hasSearch = list.searchInput.trim() !== "" || list.params.search !== "";
+  const hasSearchOrFilters = filterCount > 0 || hasSearch;
+  const chips = memberFilterChips(filters, (index) => resolveLeaderLabel(filters.leaders[index], nameSources).label);
+  const showChips = !showTable || !panelOpen;
+  const appliedUnavailable = unavailableCount(filters.leaders);
+
+  const clearAll = () => {
+    memberFilters.clearAll();
+    list.setSearchInput("");
+    requestAnimationFrame(() => filtersButtonRef.current?.focus());
+  };
+  const openFilters = () => {
+    if (showTable) {
+      setPanelOpen(!panelOpen);
+      return;
+    }
+    setDraft(filters);
+    setSheetKey((key) => key + 1);
+    setSheetOpen(true);
+  };
+  const applyDraft = () => {
+    if (filtersFormRef.current && !filtersFormRef.current.validateDates()) return;
+    memberFilters.apply(draft);
+    setSheetOpen(false);
+  };
 
   // A view já devolve os dados sensíveis mascarados para quem não pode vê-los.
   const canSeeSensitive = (m: Member) => m.sensitive_visible === true;
@@ -172,10 +262,39 @@ const Members = () => {
     );
   };
 
+  /** Carregando, erro e vazio (T6), no lugar da lista. `null` quando há linhas para mostrar. */
+  const renderListState = () => {
+    if (isError) {
+      return (
+        <div className="p-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <AlertDescription className="space-y-3 text-foreground">
+              <p>{FILTERS.loadFailed}</p>
+              <Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => void listQuery.refetch()}>
+                {FILTERS.tryAgain}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
+    if (isPending) return <LoadingRows asTable={showTable} />;
+    if (members.length > 0) return null;
+    if (!hasSearchOrFilters) return <p className="py-8 text-center text-sm text-muted-foreground">{FILTERS.empty}</p>;
+    return (
+      <div className="space-y-3 p-6 text-center text-sm">
+        <p>{FILTERS.emptyFiltered}</p>
+        <Button type="button" variant="outline" className="h-11" onClick={clearAll}>
+          {FILTER_TEXTS.clearAll}
+        </Button>
+      </div>
+    );
+  };
+
   const renderMobileCards = () => {
-    if (isLoading) return <p className="text-center py-8 text-muted-foreground">Carregando...</p>;
-    if (isError) return <p className="text-center py-8 text-destructive">Erro ao carregar os membros</p>;
-    if (members.length === 0) return <p className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</p>;
+    const state = renderListState();
+    if (state) return state;
 
     return (
       <div className={`divide-y divide-border ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
@@ -258,28 +377,77 @@ const Members = () => {
           )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  ref={searchRef}
-                  placeholder="Buscar por nome, e-mail ou CPF..."
-                  aria-label="Buscar membros"
-                  value={list.searchInput}
-                  onChange={(e) => list.setSearchInput(e.target.value)}
-                  maxLength={100}
-                  className="pl-10"
-                />
+        <Card className="min-w-0">
+          <CardHeader className="space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="min-w-0 space-y-1 lg:w-full lg:max-w-sm">
+                <Label htmlFor="members-search">{FILTERS.search.label}</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    id="members-search"
+                    ref={searchRef}
+                    type="search"
+                    enterKeyHint="search"
+                    placeholder={FILTERS.search.placeholder}
+                    value={list.searchInput}
+                    onChange={(e) => list.setSearchInput(e.target.value)}
+                    maxLength={100}
+                    className="h-11 pl-10 md:h-10"
+                  />
+                </div>
               </div>
-              <Badge variant="secondary">{total.toLocaleString("pt-BR")}</Badge>
+              <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                <FiltersButton
+                  ref={filtersButtonRef}
+                  count={filterCount}
+                  mode={showTable ? "panel" : "sheet"}
+                  expanded={showTable ? panelOpen : sheetOpen}
+                  controlsId={FILTERS_PANEL_ID}
+                  onClick={openFilters}
+                />
+                {hasSearchOrFilters && (
+                  <Button type="button" variant="ghost" className="h-11 md:h-10" onClick={clearAll}>
+                    {FILTER_TEXTS.clearAll}
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {showTable && (
+              <FiltersPanel id={FILTERS_PANEL_ID} open={panelOpen}>
+                <MemberFilters
+                  variant="panel"
+                  value={filters}
+                  onChange={(changes) => memberFilters.apply({ ...filters, ...changes })}
+                  leaders={leaderOptions(filters.leaders)}
+                  onLeadersPicked={pickLeaders}
+                  unavailableCount={appliedUnavailable}
+                  noResultsLabel={memberSearchEmptyLabel(access)}
+                />
+              </FiltersPanel>
+            )}
+
+            {showChips && (
+              <FilterChips chips={chips} onRemove={memberFilters.removeChip} filtersButtonRef={filtersButtonRef} compact />
+            )}
+            {showChips && appliedUnavailable > 0 && (
+              <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{FILTERS.leaders.unavailable(appliedUnavailable)}</span>
+              </p>
+            )}
+            {showChips && memberFilters.leadersTruncated && (
+              <p className="text-sm text-muted-foreground">{FILTERS.leaders.limit}</p>
+            )}
+            <p role="status" className="text-sm text-muted-foreground">
+              {data ? `${formatCount(total)} ${total === 1 ? FILTERS.count[0] : FILTERS.count[1]}` : ""}
+            </p>
           </CardHeader>
 
           {!showTable ? (
             renderMobileCards()
-          ) : (
+          ) : renderListState() ?? (
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -287,7 +455,7 @@ const Members = () => {
                     {showWideColumns && <TableHead className="w-12"></TableHead>}
                     <TableHead>{MEMBERS_LIST_TEXTS.columnName}</TableHead>
                     {showWideColumns && <TableHead>{MEMBERS_LIST_TEXTS.columnMobile}</TableHead>}
-                    <TableHead>{MEMBERS_LIST_TEXTS.columnLevel}</TableHead>
+                    <TableHead aria-sort="ascending">{MEMBERS_LIST_TEXTS.columnLevel}</TableHead>
                     <TableHead>{MEMBERS_LIST_TEXTS.columnLeadership}</TableHead>
                     <TableHead>{MEMBERS_LIST_TEXTS.columnMinistry}</TableHead>
                     <TableHead>{MEMBERS_LIST_TEXTS.columnStatus}</TableHead>
@@ -295,20 +463,7 @@ const Members = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody aria-busy={refreshing}>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
-                    </TableRow>
-                  ) : isError ? (
-                    <TableRow>
-                      <TableCell colSpan={columnCount} className="text-center py-8 text-destructive">Erro ao carregar os membros</TableCell>
-                    </TableRow>
-                  ) : members.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={columnCount} className="text-center py-8 text-muted-foreground">Nenhum membro encontrado</TableCell>
-                    </TableRow>
-                  ) : (
-                    members.map((m) => (
+                  {members.map((m) => (
                       <TableRow key={m.id} className={refreshing ? "opacity-60" : undefined}>
                         {showWideColumns && (
                           <TableCell>
@@ -386,24 +541,51 @@ const Members = () => {
                           </ActionsCell>
                         )}
                       </TableRow>
-                    ))
-                  )}
+                    ))}
                 </TableBody>
               </Table>
             </CardContent>
           )}
 
-          {!isLoading && !isError && (
+          {data && !isError && (
             <ListPagination
               page={list.params.page}
               pageSize={list.params.pageSize}
               total={total}
-              itemLabel={["membro", "membros"]}
+              itemLabel={FILTERS.count}
               onPageChange={list.setPage}
               onPageSizeChange={list.setPageSize}
             />
           )}
         </Card>
+
+        {!showTable && (
+          <FiltersSheet
+            open={sheetOpen}
+            onClose={() => setSheetOpen(false)}
+            onApply={applyDraft}
+            onClear={() => {
+              setDraft(EMPTY_MEMBER_FILTERS);
+              setSheetKey((key) => key + 1);
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              filtersButtonRef.current?.focus();
+            }}
+          >
+            <MemberFilters
+              key={sheetKey}
+              ref={filtersFormRef}
+              variant="sheet"
+              value={draft}
+              onChange={(changes) => setDraft((current) => ({ ...current, ...changes }))}
+              leaders={leaderOptions(draft.leaders)}
+              onLeadersPicked={pickLeaders}
+              unavailableCount={unavailableCount(draft.leaders)}
+              noResultsLabel={memberSearchEmptyLabel(access)}
+            />
+          </FiltersSheet>
+        )}
 
         {/* O formulário traz o próprio diálogo (E2.04, T1 e T7: rodapé com o resumo e o descartar). */}
         {formOpen &&

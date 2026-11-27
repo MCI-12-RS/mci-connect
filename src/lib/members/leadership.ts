@@ -148,18 +148,25 @@ export interface MinistrySwitchNotices {
   baptism: SwitchNotice[];
 }
 
-/** Os textos de cada interruptor, pelo estado e pela memória (P20, T4). */
-export function ministrySwitchNotices({ state, memory }: MinistrySwitches): MinistrySwitchNotices {
+/**
+ * Os textos de cada interruptor, pelo estado e pela memória (P20, T4). O aviso "Ao salvar, {Nome}
+ * deixa de ser o líder." fala do líder **gravado** (E2.07, RN-16, UXD-11): no cadastro novo, com o
+ * líder só preenchido, não há aviso, apenas os textos de situação.
+ */
+export function ministrySwitchNotices(
+  { state, memory }: MinistrySwitches,
+  savedLeader: LeaderRef | null = null,
+): MinistrySwitchNotices {
   const pastor: SwitchNotice[] = [];
   const leadership: SwitchNotice[] = [];
   const baptism: SwitchNotice[] = [];
   if (state.is_pastor) {
     pastor.push({ kind: "text", text: MEMBER_HINT_TEXTS.pastorHasNoLeader });
-    if (memory.leader) pastor.push({ kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemoved(memory.leader.name) });
+    if (memory.leader && savedLeader) pastor.push({ kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemoved(savedLeader.name) });
   } else if (!state.has_leadership) {
     leadership.push(
-      memory.leader
-        ? { kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemovedNoLeadership(memory.leader.name) }
+      memory.leader && savedLeader
+        ? { kind: "warning", text: MEMBER_HINT_TEXTS.leaderRemovedNoLeadership(savedLeader.name) }
         : { kind: "hint", text: MEMBER_HINT_TEXTS.noLeadership },
     );
   }

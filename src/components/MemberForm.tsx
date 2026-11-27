@@ -15,6 +15,7 @@ import { MemberFormDialog } from "@/components/members/MemberFormDialog";
 import { RecordAuthorship } from "@/components/RecordAuthorship";
 import { MemberPersonalSection } from "@/components/members/MemberPersonalSection";
 import { MemberMinistrySection } from "@/components/members/MemberMinistrySection";
+import { PrefilledLeaderNotice } from "@/components/members/PrefilledLeaderNotice";
 import { MemberAddressSection } from "@/components/members/MemberAddressSection";
 import { MemberAccessSection, type MemberPasswordRowProps } from "@/components/members/MemberAccessSection";
 import type { ResetPasswordOutcome } from "@/components/members/ResetPasswordDialog";
@@ -24,7 +25,8 @@ import { passwordRowView } from "@/lib/members/password-row";
 import { memberSearchEmptyLabel } from "@/lib/access/access";
 import { MEMBER_FORM_TEXTS, OWN_DATA_TEXTS } from "@/lib/access/texts";
 import {
-  initialLeaderId,
+  initialLeader,
+  showPrefilledLeaderNotice,
   memberSaveFailureMessage,
   ministryFieldsView,
   needsRoleOptions,
@@ -121,11 +123,14 @@ const MemberForm = ({
   const ministryView = ministryFieldsView({ seesWholeChurch, isNew: !isEditing, saved: member });
   const [today] = useState(() => spToday());
 
-  // Os dados entram na montagem (o diálogo monta o formulário a cada abertura).
-  const prefillLeaderId = !isEditing && canEditMinistry ? initialLeaderId(ministryView, true, access?.member_id ?? null) : null;
+  // Os dados entram na montagem (o diálogo monta o formulário a cada abertura). O Líder já vem com
+  // quem cadastra, para todos com cadastro de membro (E2.07, RN-16).
+  const prefillViewer = { memberId: access?.member_id ?? null, memberName: ownMember?.name ?? null, seesWholeChurch };
+  const prefilledLeader = !isEditing && canEditMinistry ? initialLeader(prefillViewer, true) : null;
+  const prefillLeaderId = prefilledLeader?.id ?? null;
   const [initialFields] = useState(() =>
     initialMemberFormFields(member, {
-      prefilledLeader: prefillLeaderId ? { id: prefillLeaderId, name: ownMember?.name ?? "" } : null,
+      prefilledLeader,
       defineLeader: focusLeader,
     }),
   );
@@ -169,6 +174,29 @@ const MemberForm = ({
     form.setValue("has_leadership", prefilled.has_leadership);
     openingFields.current = { ...openingFields.current, ...prefilled };
   }, [prefillLeaderId, ownMember?.name, form]);
+
+  // "Ir para o líder" (E2.07, P55): o Líder à vista, com o foco e um destaque de 2 s.
+  const [leaderHighlighted, setLeaderHighlighted] = useState(false);
+  const highlightTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+  const goToLeader = () => {
+    form.setFocus("leader_id");
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    document
+      .querySelector("[data-leader-field]")
+      ?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    setLeaderHighlighted(true);
+    window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setLeaderHighlighted(false), 2000);
+  };
+  const showLeaderNotice =
+    !readOnly &&
+    canEditMinistry &&
+    showPrefilledLeaderNotice(prefillViewer, !isEditing, {
+      is_pastor: values.is_pastor,
+      has_leadership: values.has_leadership,
+      leader_id: values.leader_id,
+    });
 
   // "Definir líder": o foco vai para o Líder; restaurado pelo aviso, para o `Alert` (E2.01, UX-22 e UX-32).
   const restoredAlertRef = useRef<HTMLDivElement>(null);
@@ -402,6 +430,7 @@ const MemberForm = ({
             />
           )}
           {!readOnly && <p className="text-sm text-muted-foreground">{TEXTS.requiredNote}</p>}
+          {showLeaderNotice && <PrefilledLeaderNotice onGoToLeader={goToLeader} />}
 
           <MemberPersonalSection
             ui={ui}
@@ -422,7 +451,14 @@ const MemberForm = ({
           {canEditMinistry && (
             <>
               <Separator />
-              <MemberMinistrySection ui={ui} view={ministryView} memberId={member?.id} noResultsLabel={memberSearchEmptyLabel(access)} />
+              <MemberMinistrySection
+                ui={ui}
+                view={ministryView}
+                memberId={member?.id}
+                noResultsLabel={memberSearchEmptyLabel(access)}
+                savedLeader={member?.leader_id ? { id: member.leader_id, name: member.leader_name ?? "" } : null}
+                highlightLeader={leaderHighlighted}
+              />
             </>
           )}
 
