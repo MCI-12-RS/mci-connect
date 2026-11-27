@@ -139,6 +139,10 @@ export async function callRpc(page: Page, env: E2EEnv, fn: string, args: object)
 export async function openList(page: Page, path: string, search: string, extra = "") {
   await page.goto(`${path}?q=${encodeURIComponent(search)}${extra}`);
   await expect(page.getByText("Carregando...")).toHaveCount(0);
+  // A lista de Membros (E2.07) não tem mais o texto "Carregando...": espera o total em texto, que só vem com a resposta.
+  if (path === "/members") {
+    await expect(page.getByRole("status").filter({ hasText: /^\d[\d.]* membros?$/ }).first()).toBeVisible();
+  }
 }
 
 /** O toast com esse título (o item da lista de toasts; o Radix repete o texto num anúncio escondido). */
