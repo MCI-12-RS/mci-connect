@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { CellIdentity } from "@/lib/cell-reports/cell-filter";
+import type { CellIdentity } from "@/lib/cell-reports/filters";
 
 /**
  * A identificação de uma célula para o chip do filtro Célula em Relatórios (E2.10, RN-19, DA-10):

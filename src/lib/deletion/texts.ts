@@ -196,38 +196,6 @@ export const CELL_REPORT_DELETION_TEXTS = {
   chosenDeletedMark: PERSON_DELETED,
 } as const;
 
-/** "Ver relatório" (T7): o painel de consulta (`Sheet`) do relatório de célula excluída. */
-export const CELL_REPORT_SHEET_TEXTS = {
-  /** O nome do painel enquanto carrega, com erro ou sem o relatório (o `Sheet` "Relatório" da T7); só para leitor de tela. */
-  title: "Relatório",
-  reportOf: (date: string) => `Relatório de ${date}`,
-  cellOf: (leader: string) => `Célula de ${leader}`,
-  /** Do wireframe da T7: "Quarta, 19/11/2026 às 20:00"; sem hora, "Quarta, 19/11/2026". */
-  dateTime: (weekday: string, date: string, time: string) =>
-    time ? `${weekday}, ${date} às ${time}` : `${weekday}, ${date}`,
-  fields: {
-    dateTime: "Data e hora",
-    status: "Situação",
-    reason: "Motivo",
-    theme: "Tema",
-    offering: "Oferta",
-    observations: "Observações",
-  },
-  participants: (count: number) => `Participantes (${count})`,
-  visitors: (count: number) => `Visitantes (${count})`,
-  notInformed: "Não informado",
-  noMembers: "Nenhum membro.",
-  /** Não está no spec: "Visitantes (0)", como o "Nenhum membro." dos participantes. */
-  noVisitors: "Nenhum visitante.",
-  /** Abre `/cells/deleted?q={Líder}`; só para o administrador. */
-  seeDeletedCells: "Ver células excluídas",
-  /** Não está no spec: anúncio do carregamento para leitor de tela. */
-  loading: "Carregando o relatório…",
-  loadFailed: "Não foi possível carregar o relatório.",
-  tryAgain: DELETION_TEXTS.tryAgain,
-  close: DELETION_TEXTS.close,
-} as const;
-
 /** Relatórios: restauração (T6). */
 export const CELL_REPORT_RESTORE_TEXTS = {
   // O spec diz "o relatório de {data}"; o líder entra pela mesma razão do

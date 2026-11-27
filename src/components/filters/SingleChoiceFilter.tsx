@@ -16,6 +16,11 @@ interface SingleChoiceFilterProps<T extends string> {
   variant: "radio" | "select";
   /** O texto do padrão ("Todas" na Situação das células). Padrão: "Todos". */
   allLabel?: string;
+  /**
+   * No `Sheet`: as opções lado a lado (`inline`, P52) ou uma por linha (`stacked`), para opções longas
+   * como a Reunião de Relatórios (E2.12, UXD-2). Padrão: `inline`.
+   */
+  layout?: "inline" | "stacked";
 }
 
 /** O valor de "Todos" no controle: o Radix não aceita valor vazio. */
@@ -32,6 +37,7 @@ export function SingleChoiceFilter<T extends string>({
   onChange,
   variant,
   allLabel = FILTER_TEXTS.all,
+  layout = "inline",
 }: SingleChoiceFilterProps<T>) {
   const baseId = useId();
   const legendId = `${baseId}-legend`;
@@ -71,7 +77,7 @@ export function SingleChoiceFilter<T extends string>({
         aria-labelledby={legendId}
         value={value ?? ALL}
         onValueChange={(raw) => onChange(toValue(raw))}
-        className="grid grid-cols-3 gap-2"
+        className={layout === "stacked" ? "grid grid-cols-1 gap-2" : "grid grid-cols-3 gap-2"}
       >
         {choices.map((choice) => {
           const itemId = `${baseId}-${choice.value}`;

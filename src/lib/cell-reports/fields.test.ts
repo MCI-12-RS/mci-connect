@@ -1,64 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { CELL_REPORT_ROW_SELECT, cellOfReport, withParticipantCounts, type CellReportPageRow } from "./fields";
-import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
+import { CELL_REPORT_DETAIL_SELECT, CELL_REPORT_LIST_SELECT } from "./fields";
 
-const row = (id: string, visitors_count = 0): CellReportPageRow => ({
-  id,
-  cell_id: `cell-${id}`,
-  date: "2026-11-22",
-  time: "20:00:00",
-  theme: null,
-  observations: null,
-  visitors: [],
-  offering: 0,
-  was_held: true,
-  reason_not_held: null,
-  visitors_count,
-  ...reportRowLeaderColumns,
-  snapshot_leader_name: "Ana",
-  cell_street: "Rua A",
-  cell_number: "10",
-  cell_complement: null,
-  cell_neighborhood: "Centro",
-  cell_deleted: false,
-});
+const columns = (select: string) => select.split(",").map((c) => c.trim());
 
-describe("lista de relatórios", () => {
-  it("a página não pede colunas calculadas para todas as linhas", () => {
-    const columns = CELL_REPORT_ROW_SELECT.split(",").map((c) => c.trim());
-    expect(columns).not.toContain("search_text");
-    expect(columns).not.toContain("participants_count");
+describe("colunas da lista e da consulta de Relatórios (E2.12, risco 8)", () => {
+  it("a lista nunca pede search_text nem cell_visible, e traz o número de participantes na linha (DT-03)", () => {
+    const list = columns(CELL_REPORT_LIST_SELECT);
+    expect(list).not.toContain("search_text");
+    expect(list).not.toContain("cell_visible");
+    expect(list).not.toContain("*");
+    expect(list).toContain("participants_count");
   });
 
-  it("junta o número de participantes de cada linha, na ordem da página", () => {
-    const rows = withParticipantCounts(
-      [row("r1", 2), row("r2"), row("r3")],
-      [
-        { id: "r2", participants_count: 7 },
-        { id: "r1", participants_count: 3 },
-        { id: "r3", participants_count: null },
-      ],
-    );
-    expect(rows.map((r) => [r.id, r.participants_count, r.visitors_count])).toEqual([
-      ["r1", 3, 2],
-      ["r2", 7, 0],
-      ["r3", 0, 0],
-    ]);
-  });
-
-  it("linha sem contagem fica com 0", () => {
-    expect(withParticipantCounts([row("r1")], [])[0].participants_count).toBe(0);
-  });
-});
-
-describe("cellOfReport", () => {
-  it("leva as colunas cell_* para o formato dos rótulos de célula", () => {
-    expect(cellOfReport(row("r1"))).toEqual({
-      id: "cell-r1",
-      street: "Rua A",
-      number: "10",
-      complement: null,
-      neighborhood: "Centro",
-    });
+  it("a consulta pede tudo o que a lista pede, mais as pessoas registradas, o endereço completo, cell_visible e a autoria", () => {
+    const detail = columns(CELL_REPORT_DETAIL_SELECT);
+    for (const column of columns(CELL_REPORT_LIST_SELECT)) expect(detail).toContain(column);
+    for (const column of ["snapshot_timothy_name", "snapshot_host_name", "snapshot_cell_type", "cell_city", "cell_state", "cell_zip_code", "cell_visible", "created_at", "updated_by_name"])
+      expect(detail).toContain(column);
+    expect(detail).not.toContain("search_text");
   });
 });

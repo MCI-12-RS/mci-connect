@@ -31,6 +31,8 @@ describe("useCellReportParticipants (RN-06)", () => {
       ["select", FORM_PARTICIPANT_SELECT],
       ["eq", "report_id", "r1"],
       ["order", "member_name"],
+      ["order", "member_id"],
+      ["range", 0, 999],
     ]);
     expect(result.current.data).toEqual(saved);
   });

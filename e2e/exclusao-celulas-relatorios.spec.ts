@@ -255,7 +255,9 @@ test("RN-11 (MB): o relatório da célula excluída aparece com 'Célula excluí
   const row = page.getByRole("row", { name: new RegExp(RUI) });
   await expect(row).toBeVisible();
   await expect(row.getByText("Célula excluída")).toBeVisible();
-  await expect(row.getByRole("button")).toHaveCount(0);
+  // Só o botão da consulta (E2.12, P91): nem "Editar" nem "Excluir".
+  await expect(row.getByRole("button", { name: /^(Editar|Excluir)/ })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /^Ver o relatório de / })).toHaveCount(1);
 });
 
 test("UX-01 e UX-25 (360×800): em Células e Relatórios, 'Excluir' fica só no '⋯'; 'Novo relatório', 'Editar' e '⋯' têm 44×44 px, a 8 px um do outro; o card da célula excluída tem o badge e não tem 'Editar'", async ({
@@ -292,7 +294,7 @@ test("UX-01 e UX-25 (360×800): em Células e Relatórios, 'Excluir' fica só no
   for (let i = 0; i < reportCount; i++) {
     const group = reportMenus.nth(i).locator("xpath=..");
     await expectTouchTargets(group, `relatório ${i + 1}`);
-    const card = group.locator("xpath=..");
+    const card = reportMenus.nth(i).locator("xpath=ancestor::li[1]");
     // Os rótulos trazem a data e o líder do card, como o do "⋯".
     const reportOf = (await reportMenus.nth(i).getAttribute("aria-label"))?.replace("Ações do relatório de ", "") ?? "";
     if ((await card.getByText("Célula excluída").count()) > 0) {
@@ -425,6 +427,8 @@ test("RN-13 e UX-29 (AD): editar o relatório com Sara excluída a mantém fora 
   const writes: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
+    // A lista de Relatórios é lida por RPC (POST) desde o E2.12: leitura, não gravação.
+    if (path.startsWith("/rest/v1/rpc/cell_reports_list")) return;
     if (path.startsWith("/rest/v1/") && request.method() !== "GET") writes.push(`${request.method()} ${path}`);
   });
   await form.getByRole("button", { name: "Salvar alterações" }).click();

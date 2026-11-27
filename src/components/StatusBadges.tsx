@@ -1,6 +1,7 @@
-import { Ban, Check, CheckCircle2, PauseCircle, X } from "lucide-react";
+import { Ban, CalendarX, Check, CheckCircle2, PauseCircle, X } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
+import { HELD_LABELS } from "@/lib/cell-reports/filter-texts";
 import { STATUS_TEXTS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,21 @@ export const HeldStatusBadge = ({ held, reason }: { held: boolean; reason?: stri
   ) : (
     <StatusBadge tone="destructive" icon={X} title={reason ?? undefined}>
       {STATUS_TEXTS.notHeld}
+    </StatusBadge>
+  );
+
+/**
+ * "Célula realizada" (`CheckCircle2`) ou "Não houve célula" (`CalendarX`), num relatório (E2.12, T1;
+ * o mesmo do detalhe da célula, T11 do E2.10).
+ */
+export const ReportMeetingBadge = ({ held }: { held: boolean }) =>
+  held ? (
+    <StatusBadge tone="success" icon={CheckCircle2} className="w-fit">
+      {HELD_LABELS.yes}
+    </StatusBadge>
+  ) : (
+    <StatusBadge tone="muted" icon={CalendarX} className="w-fit">
+      {HELD_LABELS.no}
     </StatusBadge>
   );
 
