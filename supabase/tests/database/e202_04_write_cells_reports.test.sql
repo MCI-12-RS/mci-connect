@@ -19,6 +19,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
@@ -178,6 +182,10 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
  (pg_temp.c(1), pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), 'Evangelística', 'Quarta', '20:00'),
  (pg_temp.c(2), pg_temp.m(14), pg_temp.m(15), pg_temp.m(9), 'Evangelística', 'Quinta', '20:00'),
  (pg_temp.c(3), pg_temp.m(13), pg_temp.m(20), pg_temp.m(21), 'Evangelística', 'Terça', '19:30');
+-- E2.11: as três células se reúnem hoje às 00:00 (o lançamento só é aceito depois da reunião, RN-06).
+UPDATE public.cells SET meeting_day = (public.cell_weekdays())[EXTRACT(dow FROM public.sp_today())::int + 1],
+                        meeting_time = '00:00'
+ WHERE id IN (pg_temp.c(1), pg_temp.c(2), pg_temp.c(3));
 -- Casos extras, isolados da árvore principal (só Rita e eles mesmos os veem).
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, auth_user_id, role_id, is_active, has_leadership) VALUES
@@ -190,10 +198,15 @@ INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, a
 -- também em replica). PastorComLider fica pastor sem líder, ao lado de Isolado.
  (pg_temp.m(34),'PastorComLider','M',true,NULL,NULL,pg_temp.u(34),pg_temp.role('Líder'),true,false);
 -- Relatórios da semana passada (a semana atual fica livre para os lançamentos).
-INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
- (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1'),
- (pg_temp.r(2), pg_temp.c(2), public.week_start(public.sp_today()) - 3, '20:00', true, 'R2'),
- (pg_temp.r(3), pg_temp.c(3), public.week_start(public.sp_today()) - 5, '20:00', true, 'R3');
+-- E2.11: oferta informada (obrigatória na edição da célula realizada, RN-13). O retrato de R2 vem "do
+-- legado" (em replica fica o enviado): Diego líder, Caio timóteo e anfitrião; Hugo é participante, mas não
+-- registrado, e pode ser retirado (RN-11). R1 e R3 recebem o retrato da célula.
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering,
+                                 snapshot_leader_id, snapshot_timothy_id, snapshot_host_id) VALUES
+ (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1', 0, NULL, NULL, NULL),
+ (pg_temp.r(2), pg_temp.c(2), public.week_start(public.sp_today()) - 3, '20:00', true, 'R2', 0,
+  pg_temp.m(14), pg_temp.m(9), pg_temp.m(9)),
+ (pg_temp.r(3), pg_temp.c(3), public.week_start(public.sp_today()) - 5, '20:00', true, 'R3', 0, NULL, NULL, NULL);
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
  (pg_temp.r(2), pg_temp.m(14)), (pg_temp.r(2), pg_temp.m(15)), (pg_temp.r(1), pg_temp.m(9));
 SET LOCAL session_replication_role = origin;
@@ -258,8 +271,12 @@ GRANT SELECT ON lbl TO authenticated;
 SELECT plan(77);
 
 -- Pessoas que lançam: relatório da semana atual (a massa tem só os da semana passada).
+-- E2.11 PR 2: o lançamento é só pela submit_cell_report (hoje, às 00:00, depois da reunião).
 CREATE FUNCTION pg_temp.ins_report(_cell uuid, _theme text DEFAULT 'tema') RETURNS text LANGUAGE sql AS
-$$ SELECT format($i$INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme) VALUES (%L, public.sp_today(), '23:59', true, %L)$i$, _cell, _theme) $$;
+$$ SELECT format($i$SELECT * FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', %L, 'offering', 0))$i$, _cell, _theme) $$;
+-- A edição dos participantes (conjunto final) pela save_cell_report.
+CREATE FUNCTION pg_temp.set_parts(_report text, _ids uuid[]) RETURNS text LANGUAGE sql IMMUTABLE AS
+$$ SELECT format($i$SELECT * FROM public.save_cell_report(%s, '{}', %L::uuid[])$i$, _report, _ids) $$;
 
 -- ===========================================================================
 -- 1. RN-12: células.
@@ -359,23 +376,23 @@ SELECT pg_temp.run('r13c',
   '',
   ARRAY[
     /* 1 */ pg_temp.pc(3, pg_temp.ins_report(pg_temp.c(1), 'pedro-c1')),
-    /* 2 */ pg_temp.pc(3, format($p$SELECT public.set_cell_report_participants((SELECT id FROM public.cell_reports WHERE theme = 'pedro-c1'), ARRAY[%L]::uuid[])$p$, pg_temp.m(13))),
-    /* 3 */ pg_temp.pm(3, format($p$SELECT public.set_cell_report_participants((SELECT id FROM public.cell_reports WHERE theme = 'pedro-c1'), ARRAY[%L]::uuid[])$p$, pg_temp.m(13))),
+    /* 2 */ pg_temp.pc(3, pg_temp.set_parts($r$(SELECT id FROM public.cell_reports WHERE theme = 'pedro-c1')$r$, ARRAY[pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), pg_temp.m(13)])),
+    /* 3 */ pg_temp.pm(3, pg_temp.set_parts($r$(SELECT id FROM public.cell_reports WHERE theme = 'pedro-c1')$r$, ARRAY[pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), pg_temp.m(13)])),
     /* 4 */ 'SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = (SELECT id FROM public.cell_reports WHERE theme = ''pedro-c1'')'
   ]);
 SELECT is(v[1], '00000', 'RN-13: Pedro lança o relatório de C1') FROM sb WHERE k = 'r13c';
 SELECT is(v[2], 'person_not_visible', 'RN-13: com Débora como participante, o de Pedro é recusado') FROM sb WHERE k = 'r13c';
 SELECT is(v[3], 'Você só pode escolher pessoas que você vê.', 'RN-13: com a mensagem do spec') FROM sb WHERE k = 'r13c';
-SELECT is(v[4], '0', 'RN-13: e Débora não entra no relatório') FROM sb WHERE k = 'r13c';
+SELECT is(v[4], '3', 'RN-13: e Débora não entra no relatório (só os três registrados, automáticos, E2.11)') FROM sb WHERE k = 'r13c';
 SELECT pg_temp.run('r13d',
   '',
   ARRAY[
     /* 1 */ pg_temp.pc(7, pg_temp.ins_report(pg_temp.c(1), 'andre-c1')),
-    /* 2 */ pg_temp.pc(7, format($p$SELECT public.set_cell_report_participants((SELECT id FROM public.cell_reports WHERE theme = 'andre-c1'), ARRAY[%L]::uuid[])$p$, pg_temp.m(13))),
+    /* 2 */ pg_temp.pc(7, pg_temp.set_parts($r$(SELECT id FROM public.cell_reports WHERE theme = 'andre-c1')$r$, ARRAY[pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), pg_temp.m(13)])),
     /* 3 */ 'SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = (SELECT id FROM public.cell_reports WHERE theme = ''andre-c1'')'
   ]);
 SELECT is(v[2], '00000', 'RN-13: o de André, com Débora (vista pela cônjuge), é aceito') FROM sb WHERE k = 'r13d';
-SELECT is(v[3], '1', 'RN-13: e Débora entra no relatório') FROM sb WHERE k = 'r13d';
+SELECT is(v[3], '4', 'RN-13: e Débora entra no relatório (com os três registrados, E2.11)') FROM sb WHERE k = 'r13d';
 
 -- ===========================================================================
 -- 3. RN-14: editar e excluir relatórios.
@@ -383,20 +400,20 @@ SELECT is(v[3], '1', 'RN-13: e Débora entra no relatório') FROM sb WHERE k = '
 SELECT pg_temp.run('r14',
   '',
   ARRAY[
-    /* 1 */ pg_temp.pr(3, format('UPDATE public.cell_reports SET theme = ''novo'' WHERE id = %L', pg_temp.r(2))),
-    /* 2 */ pg_temp.pr(3, format('UPDATE public.cell_reports SET theme = ''novo'' WHERE id = %L', pg_temp.r(3))),
-    /* 3 */ pg_temp.pr(9, format('UPDATE public.cell_reports SET theme = ''novo'' WHERE id = %L', pg_temp.r(1))),
+    /* 1 */ pg_temp.pr(3, format($i$SELECT * FROM public.save_cell_report(%L, '{"theme": "novo"}')$i$, pg_temp.r(2))),
+    /* 2 */ pg_temp.pr(3, format($i$SELECT * FROM public.save_cell_report(%L, '{"theme": "novo"}')$i$, pg_temp.r(3))),
+    /* 3 */ pg_temp.pr(9, format($i$SELECT * FROM public.save_cell_report(%L, '{"theme": "novo"}')$i$, pg_temp.r(1))),
     /* 4 */ pg_temp.pc(9, format('SELECT public.delete_cell_report(%L)', pg_temp.r(1))),
     /* 5 */ format('SELECT (deleted_at IS NULL)::text FROM public.cell_reports WHERE id = %L', pg_temp.r(1)),
     /* 6 */ pg_temp.pc(14, format('SELECT public.delete_cell_report(%L)', pg_temp.r(1))),
     /* 7 */ pg_temp.pm(14, format('SELECT public.delete_cell_report(%L)', pg_temp.r(1))),
     /* 8 */ pg_temp.pc(3, format('SELECT public.delete_cell_report(%L)', pg_temp.r(1))),
     /* 9 */ pg_temp.pc(16, format('SELECT public.delete_cell_report(%L)', pg_temp.r(3))),
-    /* 10 */ pg_temp.pc(3, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(3), pg_temp.r(2)))
+    /* 10 */ pg_temp.pc(3, format($i$SELECT * FROM public.save_cell_report(%L, jsonb_build_object('cell_id', %L::uuid))$i$, pg_temp.r(2), pg_temp.c(3)))
   ]);
 SELECT is(v[1], '1', 'RN-14: Pedro (Editar Relatórios de Células) edita R2: aceito') FROM sb WHERE k = 'r14';
-SELECT is(v[2], '0', 'RN-14: Pedro edita R3 pela API: nada muda (0 linhas)') FROM sb WHERE k = 'r14';
-SELECT is(v[3], '0', 'RN-14: Caio, Membro, que lançou R1: não edita (0 linhas)') FROM sb WHERE k = 'r14';
+SELECT is(v[2], 'not_found_or_deleted', 'RN-14: Pedro edita R3 (invisível) pela API: tratado como inexistente (E2.11)') FROM sb WHERE k = 'r14';
+SELECT is(v[3], '42501', 'RN-14: Caio, Membro, que lançou R1: não edita (42501, E2.11)') FROM sb WHERE k = 'r14';
 SELECT is(v[4], '42501', 'RN-14: Caio não exclui R1 (42501)') FROM sb WHERE k = 'r14';
 SELECT is(v[5], 'true', 'RN-14: e R1 continua') FROM sb WHERE k = 'r14';
 SELECT is(v[6], 'not_found_or_deleted', 'RN-14: Diego, com Excluir Relatórios de Células, exclui R1 (fora do escopo): recusado') FROM sb WHERE k = 'r14';
@@ -418,14 +435,14 @@ SELECT is(pg_temp.val(3, format($q$SELECT string_agg(member_name || '=' || membe
 SELECT pg_temp.run('part',
   '',
   ARRAY[
-    /* 1 */ pg_temp.pc(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(2), pg_temp.m(14))),
+    /* 1 */ pg_temp.pc(3, pg_temp.set_parts(quote_literal(pg_temp.r(2)), ARRAY[pg_temp.m(14)])),
     /* 2 */ format($q$SELECT string_agg(m.name, ',' ORDER BY m.name) FROM public.cell_report_participants p JOIN public.members m ON m.id = p.member_id WHERE p.report_id = %L$q$, pg_temp.r(2)),
-    /* 3 */ pg_temp.pc(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])', pg_temp.r(2), pg_temp.m(14), pg_temp.m(15))),
-    /* 4 */ pg_temp.pm(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])', pg_temp.r(2), pg_temp.m(14), pg_temp.m(15))),
+    /* 3 */ pg_temp.pc(3, pg_temp.set_parts(quote_literal(pg_temp.r(2)), ARRAY[pg_temp.m(14), pg_temp.m(15)])),
+    /* 4 */ pg_temp.pm(3, pg_temp.set_parts(quote_literal(pg_temp.r(2)), ARRAY[pg_temp.m(14), pg_temp.m(15)])),
     /* 5 */ format($q$SELECT string_agg(m.name, ',' ORDER BY m.name) FROM public.cell_report_participants p JOIN public.members m ON m.id = p.member_id WHERE p.report_id = %L$q$, pg_temp.r(2)),
-    /* 6 */ pg_temp.pc(14, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])', pg_temp.r(2), pg_temp.m(14), pg_temp.m(15))),
+    /* 6 */ pg_temp.pc(14, pg_temp.set_parts(quote_literal(pg_temp.r(2)), ARRAY[pg_temp.m(14), pg_temp.m(15)])),
     /* 7 */ format($q$SELECT string_agg(m.name, ',' ORDER BY m.name) FROM public.cell_report_participants p JOIN public.members m ON m.id = p.member_id WHERE p.report_id = %L$q$, pg_temp.r(2)),
-    /* 8 */ pg_temp.pc(16, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L]::uuid[])', pg_temp.r(2), pg_temp.m(14), pg_temp.m(15), pg_temp.m(1)))
+    /* 8 */ pg_temp.pc(16, pg_temp.set_parts(quote_literal(pg_temp.r(2)), ARRAY[pg_temp.m(14), pg_temp.m(15), pg_temp.m(1)]))
   ]);
 SELECT is(v[1], '00000', 'RN-09: Pedro retira Hugo de R2 (retirar não é escolher): aceito') FROM sb WHERE k = 'part';
 SELECT is(v[2], 'Diego Massa', 'RN-09: e só Hugo sai') FROM sb WHERE k = 'part';
@@ -443,9 +460,9 @@ SELECT pg_temp.run('gabdel',
             SET LOCAL session_replication_role = origin;
             UPDATE public.members SET deleted_at = now() WHERE id = %L$s$, pg_temp.r(1), pg_temp.m(11), pg_temp.m(11)),
   ARRAY[
-    /* 1 */ pg_temp.pc(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(1), pg_temp.m(9))),
-    /* 2 */ pg_temp.pm(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(1), pg_temp.m(9))),
-    /* 3 */ pg_temp.pc(16, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(1), pg_temp.m(9))),
+    /* 1 */ pg_temp.pc(3, pg_temp.set_parts(quote_literal(pg_temp.r(1)), ARRAY[pg_temp.m(9)])),
+    /* 2 */ pg_temp.pm(3, pg_temp.set_parts(quote_literal(pg_temp.r(1)), ARRAY[pg_temp.m(9)])),
+    /* 3 */ pg_temp.pc(16, pg_temp.set_parts(quote_literal(pg_temp.r(1)), ARRAY[pg_temp.m(9)])),
     /* 4 */ format('SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L', pg_temp.r(1), pg_temp.m(11)),
     /* 5 */ pg_temp.pc(3, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L', pg_temp.r(1), pg_temp.m(11))),
     /* 6 */ pg_temp.pc(16, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L', pg_temp.r(1), pg_temp.m(11)))
@@ -454,36 +471,36 @@ SELECT is(v[1], 'deleted_participant_removal', 'RN-09: Pedro tenta retirar Gabri
 SELECT is(v[2], 'Não é possível retirar um participante cujo cadastro foi excluído.', 'RN-09: com a mensagem do E2.01') FROM sb WHERE k = 'gabdel';
 SELECT is(v[3], 'deleted_participant_removal', 'RN-09: Rita também é recusada') FROM sb WHERE k = 'gabdel';
 SELECT is(v[4], '1', 'RN-09: e Gabriel continua em R1') FROM sb WHERE k = 'gabdel';
-SELECT is(v[5], 'deleted_participant_removal', 'RN-09: o DELETE direto de Pedro também é recusado') FROM sb WHERE k = 'gabdel';
-SELECT is(v[6], 'deleted_participant_removal', 'RN-09: e o de Rita') FROM sb WHERE k = 'gabdel';
+SELECT is(v[5], '42501', 'RN-09: o DELETE direto de Pedro também é recusado (42501 de privilégio, E2.11)') FROM sb WHERE k = 'gabdel';
+SELECT is(v[6], '42501', 'RN-09: e o de Rita') FROM sb WHERE k = 'gabdel';
 
 -- DA-5: quem só envia relatório (sem Editar Relatórios de Células).
 SELECT pg_temp.run('da5',
   '',
   ARRAY[
-    /* 1 */ pg_temp.pc(12, pg_temp.ins_report(pg_temp.c(1), 'carla')),
-    /* 2 */ pg_temp.pc(12, format($p$SELECT public.set_cell_report_participants((SELECT id FROM public.cell_reports WHERE theme = 'carla'), ARRAY[%L, %L]::uuid[])$p$, pg_temp.m(12), pg_temp.m(9))),
+    /* 1 */ pg_temp.pc(12, format($i$SELECT * FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'carla', 'offering', 0), ARRAY[%L, %L]::uuid[])$i$, pg_temp.c(1), pg_temp.m(12), pg_temp.m(9))),
+    /* 2 */ pg_temp.pc(12, pg_temp.set_parts($r$(SELECT id FROM public.cell_reports WHERE theme = 'carla')$r$, ARRAY[pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), pg_temp.m(8)])),
     /* 3 */ 'SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = (SELECT id FROM public.cell_reports WHERE theme = ''carla'')',
-    /* 4 */ pg_temp.pc(12, format($p$SELECT public.set_cell_report_participants((SELECT id FROM public.cell_reports WHERE theme = 'carla'), ARRAY[%L]::uuid[])$p$, pg_temp.m(12))),
+    /* 4 */ pg_temp.pc(12, pg_temp.set_parts($r$(SELECT id FROM public.cell_reports WHERE theme = 'carla')$r$, ARRAY[pg_temp.m(7), pg_temp.m(12)])),
     /* 5 */ pg_temp.pc(12, format($p$INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (%L, %L)$p$, pg_temp.r(1), pg_temp.m(12))),
-    /* 6 */ pg_temp.pc(12, format('SELECT public.set_cell_report_participants(%L, ARRAY[]::uuid[])', pg_temp.r(1))),
+    /* 6 */ pg_temp.pc(12, pg_temp.set_parts(quote_literal(pg_temp.r(1)), ARRAY[]::uuid[])),
     /* 7 */ pg_temp.pr(12, format('DELETE FROM public.cell_report_participants WHERE report_id = %L', pg_temp.r(1))),
     /* 8 */ 'SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = ' || quote_literal(pg_temp.r(1)),
-    /* 9 */ pg_temp.pc(9, format('SELECT public.set_cell_report_participants(%L, ARRAY[]::uuid[])', pg_temp.r(1))),
-    /* 10 */ pg_temp.pc(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[]::uuid[])', pg_temp.r(1))),
+    /* 9 */ pg_temp.pc(9, pg_temp.set_parts(quote_literal(pg_temp.r(1)), ARRAY[]::uuid[])),
+    /* 10 */ pg_temp.pc(3, format($i$SELECT * FROM public.save_cell_report(%L, '{"was_held": false, "reason_not_held": "Chuva forte"}')$i$, pg_temp.r(1))),
     /* 11 */ 'SELECT count(*)::text FROM public.cell_report_participants WHERE report_id = ' || quote_literal(pg_temp.r(1))
   ]);
-SELECT is(v[1], '00000', 'DA-5: Carla (só envia) lança o relatório da semana atual de C1') FROM sb WHERE k = 'da5';
-SELECT is(v[2], '00000', 'DA-5: e inclui participantes que vê nesse relatório') FROM sb WHERE k = 'da5';
-SELECT is(v[3], '2', 'DA-5: os dois entram') FROM sb WHERE k = 'da5';
-SELECT is(v[4], '42501', 'DA-5: mas retirar um participante exige Editar Relatórios de Células: 42501') FROM sb WHERE k = 'da5';
+SELECT is(v[1], '00000', 'DA-5: Carla (só envia) lança o relatório da semana atual de C1, com os participantes no envio') FROM sb WHERE k = 'da5';
+SELECT is(v[2], '42501', 'E2.11 (fim da DA-5): depois do envio, incluir participante é edição: 42501') FROM sb WHERE k = 'da5';
+SELECT is(v[3], '3', 'E2.11 RN-11: o relatório tem os três registrados (Carla e Caio escolhidos contam uma vez)') FROM sb WHERE k = 'da5';
+SELECT is(v[4], '42501', 'DA-5: e retirar um participante exige Editar Relatórios de Células: 42501') FROM sb WHERE k = 'da5';
 SELECT is(v[5], '42501', 'DA-5: Carla não inclui participante em relatório de semana passada (R1)') FROM sb WHERE k = 'da5';
 SELECT is(v[6], '42501', 'DA-5: nem o retira (RPC)') FROM sb WHERE k = 'da5';
-SELECT is(v[7], '0', 'DA-5: nem o DELETE direto retira (0 linhas)') FROM sb WHERE k = 'da5';
+SELECT is(v[7], '42501', 'DA-5: nem o DELETE direto retira (42501 de privilégio, E2.11)') FROM sb WHERE k = 'da5';
 SELECT is(v[8], '1', 'DA-5: R1 continua com o participante (Caio)') FROM sb WHERE k = 'da5';
 SELECT is(v[9], '42501', 'DA-5: Caio, timóteo de C1 e participante de R1, não retira o próprio nome (42501)') FROM sb WHERE k = 'da5';
-SELECT is(v[10], '00000', 'RN-14: Pedro, com Editar Relatórios de Células, retira os participantes de R1') FROM sb WHERE k = 'da5';
-SELECT is(v[11], '0', 'RN-14: e R1 fica sem participantes') FROM sb WHERE k = 'da5';
+SELECT is(v[10], '00000', 'RN-14 / RN-09 do E2.11: Pedro passa R1 para "Não houve célula"') FROM sb WHERE k = 'da5';
+SELECT is(v[11], '0', 'RN-09 do E2.11: e R1 fica sem participantes') FROM sb WHERE k = 'da5';
 
 SELECT * FROM finish();
 ROLLBACK;

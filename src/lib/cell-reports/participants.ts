@@ -42,9 +42,11 @@ export function splitSavedParticipants(saved: readonly ReportParticipant[]): Sav
 }
 
 /**
- * O conjunto final de participantes para `set_cell_report_participants`: os
- * escolhidos no seletor mais os de cadastro excluído, sem mudança e sem
- * repetição (RN-13, DT-15). Quem falta na lista é retirado do relatório.
+ * O conjunto final de participantes para a `save_cell_report` (que absorveu a
+ * `set_cell_report_participants` no E2.11): os escolhidos no seletor mais os de
+ * cadastro excluído, sem mudança e sem repetição (RN-13, DT-15). Quem falta na
+ * lista é retirado do relatório (o banco recusa retirar as pessoas registradas
+ * numa célula realizada, RN-11 do E2.11).
  */
 export function finalParticipantIds(chosenIds: readonly string[], kept: readonly KeptParticipant[]): string[] {
   return [...new Set([...chosenIds, ...kept.map((p) => p.id)])];

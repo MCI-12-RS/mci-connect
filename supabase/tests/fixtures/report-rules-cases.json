@@ -1,0 +1,909 @@
+{
+  "_comment": "E2.11 (DT-17): tabela única de casos das regras do relatório. Gera o pgTAP supabase/tests/database/e211_02_cases.test.sql (node supabase/tests/fixtures/generate-report-rules-cases.mjs) e alimenta o Vitest do formulário (PR 4). 'now' é o momento do envio (ISO com fuso); as datas e os horários do relatório são de Brasília; device_tz só vale para a tela. O horário do relatório usa os casos de horário do cell-rules-cases.json (E2.08).",
+  "limits": {
+    "theme": 300,
+    "reason": 2000,
+    "observations": 4000,
+    "visitor_name": 150,
+    "visitors": 1000,
+    "participants": 1000,
+    "offering_max": 999999.99
+  },
+  "launch": [
+    {
+      "id": "L01",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-06: a reunião da semana é aceita (sexta, C1 de quarta)"
+    },
+    {
+      "id": "L02",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-27",
+      "time": "10:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-27 10:00"
+      },
+      "note": "RN-05: o próprio minuto de agora"
+    },
+    {
+      "id": "L03",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-27",
+      "time": "10:01",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_in_future",
+        "final": "2026-11-27 10:01"
+      },
+      "note": "RN-05: um minuto depois"
+    },
+    {
+      "id": "L04",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-28",
+      "time": "09:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_in_future",
+        "final": "2026-11-28 09:00"
+      },
+      "note": "RN-05: amanhã"
+    },
+    {
+      "id": "L05",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "19:59",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_before_meeting",
+        "final": "2026-11-25 19:59"
+      },
+      "note": "RN-06: antes da reunião, no mesmo dia"
+    },
+    {
+      "id": "L06",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-24",
+      "time": "21:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_before_meeting",
+        "final": "2026-11-24 21:00"
+      },
+      "note": "RN-06: dia anterior ao da célula"
+    },
+    {
+      "id": "L07",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-21",
+      "time": "20:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_not_current_week",
+        "final": "2026-11-21 20:00"
+      },
+      "note": "RN-04: sábado da semana passada"
+    },
+    {
+      "id": "L08",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:00",
+      "week_has_report": true,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "already_sent",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": null,
+        "code": "report_week_taken",
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-07: a semana já tem relatório"
+    },
+    {
+      "id": "L09",
+      "now": "2026-11-25T19:59:59-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "19:59",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "not_yet",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "meeting_not_yet",
+        "final": "2026-11-25 19:59"
+      },
+      "note": "RN-06: às 19:59:59 a reunião das 20:00 ainda não aconteceu"
+    },
+    {
+      "id": "L10",
+      "now": "2026-11-25T20:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-06: o próprio momento da reunião"
+    },
+    {
+      "id": "L11",
+      "now": "2026-11-25T20:30:30-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:30",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-25 20:30"
+      },
+      "note": "RN-05: 20:30 aceito às 20:30:30"
+    },
+    {
+      "id": "L12",
+      "now": "2026-11-25T20:30:30-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:31",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_in_future",
+        "final": "2026-11-25 20:31"
+      },
+      "note": "RN-05: 20:31 recusado às 20:30:30"
+    },
+    {
+      "id": "L13",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": false,
+      "date": "2026-11-27",
+      "time": "09:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-09: 'Não houve célula' grava a reunião da semana; a data enviada é ignorada"
+    },
+    {
+      "id": "L14",
+      "now": "2026-11-25T19:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": false,
+      "date": null,
+      "time": null,
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "not_yet",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "meeting_not_yet",
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-06/RN-09: 'Não houve célula' antes da reunião"
+    },
+    {
+      "id": "L15",
+      "now": "2026-11-25T19:00:00-03:00",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "18:00",
+      "week_has_report": true,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "already_sent",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "report_week_taken",
+        "final": "2026-11-25 18:00"
+      },
+      "note": "RN-19/RN-20: (a) vem antes de (b)"
+    },
+    {
+      "id": "L16",
+      "now": "2026-11-29T00:02:00-03:00",
+      "meeting_day": "Sábado",
+      "meeting_time": "22:00",
+      "was_held": true,
+      "date": "2026-11-28",
+      "time": "22:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-29",
+        "week_end": "2026-12-05",
+        "meeting_at": "2026-12-05T22:00",
+        "status": "not_yet",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "report_not_current_week",
+        "final": "2026-11-28 22:00"
+      },
+      "note": "RN-04: aberto no sábado 23:50, enviado no domingo 00:02"
+    },
+    {
+      "id": "L17",
+      "now": "2026-11-28T23:50:00-03:00",
+      "meeting_day": "Sábado",
+      "meeting_time": "22:00",
+      "was_held": true,
+      "date": "2026-11-28",
+      "time": "22:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-28T22:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-28"
+        ],
+        "suggested": {
+          "date": "2026-11-28",
+          "time": "22:00"
+        },
+        "code": null,
+        "final": "2026-11-28 22:00"
+      },
+      "note": "RN-06: célula de sábado, no sábado às 23:50"
+    },
+    {
+      "id": "L18",
+      "now": "2026-11-29T03:00:00Z",
+      "meeting_day": "Domingo",
+      "meeting_time": "10:00",
+      "was_held": true,
+      "date": "2026-11-29",
+      "time": "00:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-29",
+        "week_end": "2026-12-05",
+        "meeting_at": "2026-11-29T10:00",
+        "status": "not_yet",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "meeting_not_yet",
+        "final": "2026-11-29 00:00"
+      },
+      "note": "Virada às 03:00 UTC de domingo: já é a semana nova"
+    },
+    {
+      "id": "L19",
+      "now": "2026-11-29T02:59:59Z",
+      "meeting_day": "Sábado",
+      "meeting_time": "22:00",
+      "was_held": true,
+      "date": "2026-11-28",
+      "time": "23:59",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-28T22:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-28"
+        ],
+        "suggested": {
+          "date": "2026-11-28",
+          "time": "22:00"
+        },
+        "code": null,
+        "final": "2026-11-28 23:59"
+      },
+      "note": "Virada: às 02:59:59 UTC ainda é sábado 23:59:59 em Brasília"
+    },
+    {
+      "id": "L20",
+      "now": "2026-11-29T09:59:00-03:00",
+      "meeting_day": "Domingo",
+      "meeting_time": "10:00",
+      "was_held": true,
+      "date": "2026-11-29",
+      "time": "09:59",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-29",
+        "week_end": "2026-12-05",
+        "meeting_at": "2026-11-29T10:00",
+        "status": "not_yet",
+        "allowed_dates": [],
+        "suggested": null,
+        "code": "meeting_not_yet",
+        "final": "2026-11-29 09:59"
+      },
+      "note": "RN-06: célula de domingo às 10:00, às 09:59"
+    },
+    {
+      "id": "L21",
+      "now": "2026-11-29T10:00:00-03:00",
+      "meeting_day": "Domingo",
+      "meeting_time": "10:00",
+      "was_held": true,
+      "date": "2026-11-29",
+      "time": "10:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-29",
+        "week_end": "2026-12-05",
+        "meeting_at": "2026-11-29T10:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-29"
+        ],
+        "suggested": {
+          "date": "2026-11-29",
+          "time": "10:00"
+        },
+        "code": null,
+        "final": "2026-11-29 10:00"
+      },
+      "note": "RN-06: célula de domingo às 10:00, às 10:00"
+    },
+    {
+      "id": "L22",
+      "now": "2026-11-27T10:00:00-03:00",
+      "meeting_day": "Quinta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:00",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-26T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-26",
+          "time": "20:00"
+        },
+        "code": "report_before_meeting",
+        "final": "2026-11-25 20:00"
+      },
+      "note": "RN-06: o dia mudou para quinta no meio da semana; vale o novo"
+    },
+    {
+      "id": "L23",
+      "now": "2026-11-27T23:30:00-03:00",
+      "device_tz": "Europe/Lisbon",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-28",
+      "time": "00:30",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": "report_in_future",
+        "final": "2026-11-28 00:30"
+      },
+      "note": "Aparelho em Lisboa (já é sábado lá): o dia é o de Brasília"
+    },
+    {
+      "id": "L24",
+      "now": "2026-11-25T20:30:00-03:00",
+      "device_tz": "America/Manaus",
+      "meeting_day": "Quarta",
+      "meeting_time": "20:00",
+      "was_held": true,
+      "date": "2026-11-25",
+      "time": "20:30",
+      "week_has_report": false,
+      "expected": {
+        "week_start": "2026-11-22",
+        "week_end": "2026-11-28",
+        "meeting_at": "2026-11-25T20:00",
+        "status": "can_submit",
+        "allowed_dates": [
+          "2026-11-25"
+        ],
+        "suggested": {
+          "date": "2026-11-25",
+          "time": "20:00"
+        },
+        "code": null,
+        "final": "2026-11-25 20:30"
+      },
+      "note": "Aparelho em Manaus (19:30 lá): vale o horário de Brasília"
+    }
+  ],
+  "edit": [
+    {
+      "id": "E01",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-18",
+      "date": "2026-11-19",
+      "time": "20:00",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-15",
+          "2026-11-16",
+          "2026-11-17",
+          "2026-11-18",
+          "2026-11-19",
+          "2026-11-20",
+          "2026-11-21"
+        ],
+        "code": null
+      },
+      "note": "RN-16: muda dentro da semana do relatório (semana passada)"
+    },
+    {
+      "id": "E02",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-18",
+      "date": "2026-11-22",
+      "time": "20:00",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-15",
+          "2026-11-16",
+          "2026-11-17",
+          "2026-11-18",
+          "2026-11-19",
+          "2026-11-20",
+          "2026-11-21"
+        ],
+        "code": "report_week_locked"
+      },
+      "note": "RN-16: para o domingo seguinte"
+    },
+    {
+      "id": "E03",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-25",
+      "date": "2026-11-14",
+      "time": "20:00",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-22",
+          "2026-11-23",
+          "2026-11-24",
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "code": "report_week_locked"
+      },
+      "note": "RN-16: para outra semana"
+    },
+    {
+      "id": "E04",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-25",
+      "date": "2026-11-27",
+      "time": "10:01",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-22",
+          "2026-11-23",
+          "2026-11-24",
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "code": "report_in_future"
+      },
+      "note": "RN-05: na edição, quando o momento muda"
+    },
+    {
+      "id": "E05",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-25",
+      "date": "2026-11-27",
+      "time": "10:00",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-22",
+          "2026-11-23",
+          "2026-11-24",
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "code": null
+      },
+      "note": "RN-05: o próprio minuto"
+    },
+    {
+      "id": "E06",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-27",
+      "date": "2026-11-27",
+      "time": "23:00",
+      "moment_changed": false,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-22",
+          "2026-11-23",
+          "2026-11-24",
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "code": null
+      },
+      "note": "RN-05: o momento não mudou (relatório antigo fica)"
+    },
+    {
+      "id": "E07",
+      "now": "2026-11-27T10:00:00-03:00",
+      "stored_date": "2026-11-24",
+      "date": "2026-11-23",
+      "time": "19:00",
+      "moment_changed": true,
+      "expected": {
+        "allowed_dates": [
+          "2026-11-22",
+          "2026-11-23",
+          "2026-11-24",
+          "2026-11-25",
+          "2026-11-26",
+          "2026-11-27"
+        ],
+        "code": null
+      },
+      "note": "RN-16: antes do horário atual da célula é aceito na edição"
+    }
+  ],
+  "offering": [
+    {
+      "id": "O01",
+      "api": 0,
+      "code": null
+    },
+    {
+      "id": "O02",
+      "api": 10.5,
+      "code": null
+    },
+    {
+      "id": "O03",
+      "api": "10.55",
+      "code": null
+    },
+    {
+      "id": "O04",
+      "api": 10.555,
+      "code": "offering_invalid"
+    },
+    {
+      "id": "O05",
+      "api": -5,
+      "code": "offering_negative"
+    },
+    {
+      "id": "O06",
+      "api": 1000000,
+      "code": "offering_too_large"
+    },
+    {
+      "id": "O07",
+      "api": 999999.99,
+      "code": null
+    },
+    {
+      "id": "O08",
+      "api": "abc",
+      "code": "offering_invalid"
+    },
+    {
+      "id": "O09",
+      "api": null,
+      "code": "offering_required"
+    },
+    {
+      "id": "O10",
+      "api": "",
+      "code": "offering_required"
+    },
+    {
+      "id": "O11",
+      "api": -5.555,
+      "code": "offering_invalid"
+    },
+    {
+      "id": "O12",
+      "api": "NaN",
+      "code": "offering_invalid"
+    },
+    {
+      "id": "O13",
+      "api": "1e3",
+      "code": null
+    }
+  ],
+  "visitors": [
+    {
+      "id": "V01",
+      "input": [
+        " Maria ",
+        "",
+        "  João   da  Silva ",
+        "Silva, João",
+        "Maria"
+      ],
+      "stored": [
+        "Maria",
+        "João da Silva",
+        "Silva, João",
+        "Maria"
+      ],
+      "code": null
+    },
+    {
+      "id": "V02",
+      "input": [
+        null,
+        "   "
+      ],
+      "stored": [],
+      "code": null
+    },
+    {
+      "id": "V03",
+      "input": "Maria, João",
+      "stored": null,
+      "code": "visitors_invalid"
+    },
+    {
+      "id": "V04",
+      "input": [
+        1
+      ],
+      "stored": null,
+      "code": "visitors_invalid"
+    },
+    {
+      "id": "V05",
+      "input": {
+        "repeat": "a",
+        "length": 151
+      },
+      "stored": null,
+      "code": "visitor_name_too_long",
+      "index": 0
+    },
+    {
+      "id": "V06",
+      "input": {
+        "repeat_names": "Visitante",
+        "count": 1001
+      },
+      "stored": null,
+      "code": "too_many_visitors"
+    },
+    {
+      "id": "V07",
+      "input": {
+        "repeat_names": "Visitante",
+        "count": 1000
+      },
+      "stored": "1000 nomes",
+      "code": null
+    }
+  ]
+}

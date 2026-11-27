@@ -3,7 +3,7 @@ import type { ReportParticipant } from "@/lib/cell-reports/fields";
 import { finalParticipantIds, splitSavedParticipants } from "./participants";
 
 // RN-13 (E2.01): ao editar um relatório, o participante de cadastro excluído
-// nunca sai do conjunto enviado a set_cell_report_participants, qualquer que
+// nunca sai do conjunto enviado à save_cell_report (antes, set_cell_report_participants), qualquer que
 // seja a escolha no seletor. Complementa participants.test.ts com invariantes.
 
 const participant = (id: string, name: string, deleted: boolean): ReportParticipant => ({

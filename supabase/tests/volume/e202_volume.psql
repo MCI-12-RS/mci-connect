@@ -1,4 +1,6 @@
 -- E2.02 (PR 1): volume de referência e metas do risco 8.
+-- Histórico: desde o E2.11 PR 2 o lançamento por INSERT direto e a set_cell_report_participants não existem;
+-- a medida do lançamento e da edição está em e211_volume.psql (este script não roda mais inteiro).
 -- Spec: docs/specs/e2-02-perfis-escopo.md (repositório apps-mci), Riscos, item 8:
 -- 20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações
 -- (o volume do E1.08), medidos com um pastor e um G12 com "Visualizar Seu

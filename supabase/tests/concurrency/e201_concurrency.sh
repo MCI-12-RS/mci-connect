@@ -240,15 +240,16 @@ echo "== 4a. Restauração do relatório R (trava primeiro) × relatório S na m
 base
 q "INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
      VALUES ('$C1', '$M_OLD', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
-   INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
-     VALUES ('$R1', '$C1', $WEEK, '10:00', 'R', true)" >/dev/null
+   SET LOCAL mci.cell_report_write = 'on';  -- E2.11 (DA-11): a massa grava direto, com a marca
+   INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held, offering)
+     VALUES ('$R1', '$C1', $WEEK, '00:00', 'R', true, 0)" >/dev/null
 session "$U1" "SELECT public.delete_cell_report('$R1');" >/dev/null
 pair s4a "$U1" "BEGIN; SELECT public.restore_cell_report('$R1'); SELECT pg_sleep($HOLD); COMMIT;" \
-         "$U3" "INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES ('$R2', '$C1', $WEEK, '11:00', 'S', true);"
+         "$U3" "SELECT * FROM public.submit_cell_report('$R2', jsonb_build_object('cell_id', '$C1', 'date', $WEEK, 'time', '00:00', 'theme', 'S', 'offering', 0));"
 show s4a
 check "R é restaurado" "SELECT deleted_at IS NULL FROM public.cell_reports WHERE id = '$R1'"
-check "S é recusado com a mensagem amigável de semana única (23505)" \
-  "SELECT $(grep -q '23505' "$TMP/s4a.B" && grep -q 'Já existe um relatório para esta célula nesta semana' "$TMP/s4a.B" && echo true || echo false)"
+check "S é recusado com report_week_taken (E2.11: o lançamento é pela submit_cell_report)" \
+  "SELECT $(grep -q '"code": "report_week_taken"' "$TMP/s4a.B" && grep -q 'O relatório para esta semana já foi enviado.' "$TMP/s4a.B" && echo true || echo false)"
 check "só um relatório não excluído na semana" \
   "SELECT count(*) = 1 FROM public.cell_reports WHERE cell_id = '$C1' AND deleted_at IS NULL"
 
@@ -256,10 +257,11 @@ echo "== 4b. Relatório S (trava primeiro) × restauração do relatório R na m
 base
 q "INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time)
      VALUES ('$C1', '$M_OLD', '$M_OLD', '$M_OLD', 'Evangelística', 'Domingo', '00:00');
-   INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
-     VALUES ('$R1', '$C1', $WEEK, '10:00', 'R', true)" >/dev/null
+   SET LOCAL mci.cell_report_write = 'on';  -- E2.11 (DA-11): a massa grava direto, com a marca
+   INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held, offering)
+     VALUES ('$R1', '$C1', $WEEK, '00:00', 'R', true, 0)" >/dev/null
 session "$U1" "SELECT public.delete_cell_report('$R1');" >/dev/null
-pair s4b "$U3" "BEGIN; INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held) VALUES ('$R2', '$C1', $WEEK, '11:00', 'S', true); SELECT pg_sleep($HOLD); COMMIT;" \
+pair s4b "$U3" "BEGIN; SELECT * FROM public.submit_cell_report('$R2', jsonb_build_object('cell_id', '$C1', 'date', $WEEK, 'time', '00:00', 'theme', 'S', 'offering', 0)); SELECT pg_sleep($HOLD); COMMIT;" \
          "$U1" "SELECT public.restore_cell_report('$R1');"
 show s4b
 check "S é gravado" "SELECT deleted_at IS NULL FROM public.cell_reports WHERE id = '$R2'"

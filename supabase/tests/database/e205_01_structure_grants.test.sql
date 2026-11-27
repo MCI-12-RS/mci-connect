@@ -11,6 +11,10 @@
 --   - o job de guarda no pg_cron.
 -- Rodar com: supabase test db
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SELECT plan(47);
 
@@ -188,11 +192,10 @@ SELECT is(
     WHERE has_function_privilege('anon', f, 'EXECUTE') OR NOT has_function_privilege('authenticated', f, 'EXECUTE')),
   NULL, 'as públicas novas: EXECUTE para authenticated, nada para anon');
 SELECT is(
-  (SELECT array_agg(f ORDER BY f) FROM unnest(ARRAY['public.save_cell_report(uuid,jsonb,uuid[])',
-                                                    'public.audit_record_label(public.event_entity,uuid)',
+  (SELECT array_agg(f ORDER BY f) FROM unnest(ARRAY['public.audit_record_label(public.event_entity,uuid)',
                                                     'public.audit_assert_access()']) f
     WHERE has_function_privilege('service_role', f, 'EXECUTE')),
-  NULL, 'as RPCs novas são só da sessão do usuário (sem service_role)');
+  NULL, 'as RPCs novas são só da sessão do usuário (sem service_role; a save_cell_report passou a ter no E2.11, RN-01)');
 SELECT is(
   (SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p
     WHERE p.pronamespace = 'private'::regnamespace

@@ -102,6 +102,7 @@ test.beforeAll(async () => {
   sql(
     env,
     `BEGIN;
+     SET LOCAL mci.cell_report_write = 'on';  -- E2.11 (DA-11): a massa grava relatórios direto, com a marca
      INSERT INTO public.roles (id, name) VALUES
        (${lit(role(1))}, '${NAME} LE'), (${lit(role(2))}, '${NAME} MB'), (${lit(role(3))}, '${NAME} Membro');
      INSERT INTO public.role_permissions (role_id, permission)

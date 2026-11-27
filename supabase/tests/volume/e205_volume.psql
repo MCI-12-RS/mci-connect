@@ -1,4 +1,6 @@
 -- E2.05 (PR 1): volume de referência e metas do risco 4 e de "Verificações obrigatórias" (volume).
+-- Histórico: desde o E2.11 PR 2 a save_cell_report confere as regras de edição (inclusive as pessoas registradas
+-- fixas); a medida atual do lançamento e da edição está em e211_volume.psql.
 -- Spec: docs/specs/e2-05-auditoria-autor.md (repositório apps-mci): o volume do E1.08 (20 mil membros,
 -- 1.500 células, 100 mil relatórios e 800 mil participações) mais 300 mil eventos (40 mil de dados, 200 mil
 -- de login e 60 mil de falhas).

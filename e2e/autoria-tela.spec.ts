@@ -224,7 +224,8 @@ test("UX-04: o relatório enviado mostra só 'Enviado por'; incluir um participa
   const date = sql(env, `SELECT public.sp_today()::text`);
   const sent = await callRpc(page, env, "save_cell_report", {
     _report_id: null,
-    _report: { cell_id: CELL, date, time: "20:00", was_held: true, theme: "Autoria" },
+    // E2.11: depois da reunião desta semana (hoje, 00:00) e com a oferta (obrigatória na célula realizada).
+    _report: { cell_id: CELL, date, time: "00:00", was_held: true, theme: "Autoria", offering: 0 },
     _participant_ids: PEOPLE.slice(0, 8).map((p) => p.id),
   });
   expect(sent.status).toBe(200);
@@ -247,7 +248,8 @@ test("UX-04: o relatório enviado mostra só 'Enviado por'; incluir um participa
   const changed = await callRpc(page, env, "save_cell_report", {
     _report_id: reportId,
     _report: {},
-    _participant_ids: PEOPLE.map((p) => p.id),
+    // O líder registrado (automático no envio, RN-11 do E2.11) continua no conjunto final.
+    _participant_ids: [LEADER.id, ...PEOPLE.map((p) => p.id)],
   });
   expect(changed.status).toBe(200);
   dialog = await openReport();

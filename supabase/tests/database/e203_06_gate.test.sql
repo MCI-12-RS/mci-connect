@@ -30,6 +30,10 @@
 
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT plan(54);
@@ -312,15 +316,18 @@ SELECT is(pg_temp.fn_offenders(4, 0, 'password_change_required'), NULL, 'DA-9: s
 SELECT is(pg_temp.count_as(3, 'public.members_view', 0) ? 'error', false, 'DA-9: sem session_id e sem marca, Ana lê normalmente');
 
 -- Inserções nas tabelas de negócio: o código do portão (Caio com a marca, Davi sem sessão).
+-- E2.11 PR 2: relatórios e participantes só pelas RPCs (o INSERT direto dá 42501 de privilégio antes do
+-- portão); as linhas deles chamam submit_cell_report e save_cell_report.
 CREATE FUNCTION pg_temp.ins(_n int, _k int, _sql text) RETURNS text LANGUAGE sql AS
-$$ SELECT pg_temp.api(_n, 'WITH w AS (' || _sql || ' RETURNING 1) SELECT to_jsonb(count(*)) FROM w', _k) ->> 'code' $$;
+$$ SELECT pg_temp.api(_n, CASE WHEN _sql LIKE 'SELECT%' THEN 'SELECT to_jsonb(count(*)) FROM (' || _sql || ') w'
+                               ELSE 'WITH w AS (' || _sql || ' RETURNING 1) SELECT to_jsonb(count(*)) FROM w' END, _k) ->> 'code' $$;
 CREATE TEMP TABLE ins_sql (tbl text, q text);
 INSERT INTO ins_sql VALUES
   ('members', format('INSERT INTO public.members (id, name, gender, leader_id, has_leadership, mobile_whatsapp) VALUES (%L, ''Novo Gate'', ''M'', %L, true, %L)',
                      pg_temp.m(98), pg_temp.m(5), pg_temp.mob(98))),
   ('cells', format('INSERT INTO public.cells (leader_id, timothy_id, host_id) VALUES (%L, %L, %L)', pg_temp.m(5), pg_temp.m(6), pg_temp.m(4))),
-  ('cell_reports', 'INSERT INTO public.cell_reports (cell_id, date, time, theme) VALUES (''ce036000-0000-0000-0000-000000000003'', public.sp_today(), ''08:30'', ''Tema'')'),
-  ('cell_report_participants', format('INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (''be036000-0000-0000-0000-000000000001'', %L)', pg_temp.m(5)));
+  ('cell_reports', 'SELECT * FROM public.submit_cell_report(gen_random_uuid(), ''{"cell_id": "ce036000-0000-0000-0000-000000000003", "time": "08:30", "theme": "Tema"}'')'),
+  ('cell_report_participants', format('SELECT * FROM public.save_cell_report(''be036000-0000-0000-0000-000000000001'', ''{}'', ARRAY[%L]::uuid[])', pg_temp.m(5)));
 SELECT is((SELECT array_agg(tbl || ': ' || coalesce(pg_temp.ins(4, 1, q), 'sem código') ORDER BY tbl) FROM ins_sql
             WHERE pg_temp.ins(4, 1, q) IS DISTINCT FROM 'password_change_required'), NULL,
   'RN-09: Caio com a marca não insere em members, cells, cell_reports nem cell_report_participants');

@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
-# E2.11 (PR 1): o retrato do relatório × troca das pessoas da célula, com duas conexões reais.
+# E2.11 (PRs 1 e 2): o lançamento e a edição do relatório em concorrência, com duas conexões reais.
 # Spec: docs/specs/e2-11-lancamento-relatorio.md (repositório apps-mci), "Retrato (migration 1)" (DT-02,
 # ponto 4: uma leitura da célula com FOR SHARE), "Bloqueios e concorrência" e "Verificações obrigatórias
 # (para o QA)", PR 1; RN-14, RN-07.
 #
-# No PR 1 a escrita direta ainda existe (o PR 2 a fecha); os cenários usam o INSERT direto de quem pode
-# lançar (Pedro: igreja toda e "Editar Célula"):
-#   1. troca das três pessoas e do tipo de C1 segura × lançamento: o lançamento espera e o retrato é
-#      todo de depois;
+# Desde o PR 2 o lançamento é só pela submit_cell_report e a edição pela save_cell_report (Pedro: igreja
+# toda, "Editar Célula" e "Editar Relatórios de Células"). C1 e C2 se reúnem no domingo às 00:00 (a
+# reunião desta semana já passou):
+#   1. troca das três pessoas e do tipo de C1 segura × lançamento: o lançamento espera e o retrato e os
+#      automáticos são todos de depois;
 #   2. lançamento seguro × troca das três pessoas: a troca espera e o retrato é todo de antes;
 #   3. troca só do timóteo segura × lançamento: o retrato tem o timóteo novo e as outras pessoas iguais;
-#   4. dois lançamentos da mesma célula e semana: um aceito, o outro recusado; um relatório só.
+#   4. dois lançamentos da mesma célula e semana: um aceito, o outro report_week_taken; um relatório só;
+#   5. repetição do mesmo id com a primeira tentativa em andamento (mesma célula): replayed, uma linha;
+#   6. repetição do mesmo id com outra célula: espera a chave primária e vira replayed (diferente);
+#   7. inativação de C1 segura × lançamento: cell_inactive;
+#   8. exclusão da célula segura × lançamento: cell_deleted;
+#   9. exclusão de um escolhido segura × lançamento: deleted_member_chosen;
+#  10. restauração de outro relatório da semana segura × lançamento: report_week_taken;
+#  11. duas edições do mesmo relatório com conjuntos de participantes diferentes: vale o conjunto inteiro
+#      da segunda.
 # Invariante (em cada cenário): nenhum relatório com retrato misturado (todas as pessoas e o tipo de
 # antes ou todas de depois) e nenhuma célula com dois relatórios na mesma semana.
 #
@@ -90,8 +99,8 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_us
   ('$M_HUGO',  'E211 Conc Hugo',  'M', '$M_PASTOR', true, NULL, NULL, '$M_HUGO@teste.invalid'),
   ('$M_LUCAS', 'E211 Conc Lucas', 'M', '$M_PASTOR', true, NULL, NULL, '$M_LUCAS@teste.invalid');
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
-  ('$C1', '$M_ANDRE', '$M_CAIO', '$M_CARLA', 'Evangelística', 'Quarta', '20:00'),
-  ('$C2', '$M_ANDRE', '$M_CAIO', '$M_ANDRE', 'Evangelística', 'Quinta', '20:00');
+  ('$C1', '$M_ANDRE', '$M_CAIO', '$M_CARLA', 'Evangelística', 'Domingo', '00:00'),
+  ('$C2', '$M_ANDRE', '$M_CAIO', '$M_ANDRE', 'Evangelística', 'Domingo', '00:00');
 COMMIT;
 SQL
 }
@@ -145,7 +154,11 @@ show() {
 }
 
 
-INS_C1="INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme) VALUES ('$C1', public.sp_today(), '23:59', true, 'conc');"
+# Lançamento pela RPC (o id \$1, a célula \$2, os escolhidos \$3).
+submit() {
+  echo "SELECT * FROM public.submit_cell_report('$1', jsonb_build_object('cell_id', '$2', 'date', public.week_start(public.sp_today()), 'time', '00:00', 'theme', 'conc', 'offering', 0), '{${3:-}}'::uuid[]);"
+}
+ins_c1() { submit "$(cat /proc/sys/kernel/random/uuid)" "$C1"; }
 SWAP_ALL="UPDATE public.cells SET leader_id = '$M_DIEGO', timothy_id = '$M_HUGO', host_id = '$M_LUCAS', type = 'Macrocélula' WHERE id = '$C1';"
 SWAP_TIM="UPDATE public.cells SET timothy_id = '$M_HUGO' WHERE id = '$C1';"
 SNAP="SELECT snapshot_leader_id::text || ',' || snapshot_timothy_id || ',' || snapshot_host_id || ',' || snapshot_cell_type
@@ -162,18 +175,21 @@ invariant() {
 echo "== 1. Troca das pessoas e do tipo de C1 segura × lançamento de Pedro"
 base
 pair s1 "" "BEGIN; $SWAP_ALL SELECT pg_sleep($HOLD); COMMIT;" \
-        "$U_PEDRO" "$INS_C1"
+        "$U_PEDRO" "$(ins_c1)"
 show s1
 check "A troca as pessoas de C1" "SELECT $(is_ok "$TMP/s1.A")"
 check "B esperou a troca" "SELECT $(waited "$TMP/s1.B")"
 check "B lança" "SELECT $(is_ok "$TMP/s1.B")"
 check "o retrato é todo de depois (Diego, Hugo, Lucas, Macrocélula)" "SELECT ($SNAP) = '$AFTER'"
+check "os automáticos também (Diego, Hugo e Lucas)" \
+  "SELECT (SELECT array_agg(p.member_id ORDER BY p.member_id) FROM public.cell_report_participants p JOIN public.cell_reports r ON r.id = p.report_id WHERE r.cell_id = '$C1')
+          = (SELECT array_agg(x ORDER BY x) FROM unnest(ARRAY['$M_DIEGO', '$M_HUGO', '$M_LUCAS']::uuid[]) x)"
 invariant
 
 # ---------------------------------------------------------------------------
 echo "== 2. Lançamento seguro de Pedro × troca das pessoas de C1"
 base
-pair s2 "$U_PEDRO" "BEGIN; $INS_C1 SELECT pg_sleep($HOLD); COMMIT;" \
+pair s2 "$U_PEDRO" "BEGIN; $(ins_c1) SELECT pg_sleep($HOLD); COMMIT;" \
         "" "$SWAP_ALL"
 show s2
 check "A lança" "SELECT $(is_ok "$TMP/s2.A")"
@@ -187,7 +203,7 @@ invariant
 echo "== 3. Troca só do timóteo segura × lançamento de Pedro"
 base
 pair s3 "" "BEGIN; $SWAP_TIM SELECT pg_sleep($HOLD); COMMIT;" \
-        "$U_PEDRO" "$INS_C1"
+        "$U_PEDRO" "$(ins_c1)"
 show s3
 check "B esperou a troca e lançou" "SELECT $(waited "$TMP/s3.B") AND $(is_ok "$TMP/s3.B")"
 check "o retrato tem o timóteo novo e as outras pessoas iguais" \
@@ -197,11 +213,91 @@ invariant
 # ---------------------------------------------------------------------------
 echo "== 4. Dois lançamentos de C1 na mesma semana"
 base
-pair s4 "$U_PEDRO" "BEGIN; $INS_C1 SELECT pg_sleep($HOLD); COMMIT;" \
-        "$U_PEDRO" "$INS_C1"
+pair s4 "$U_PEDRO" "BEGIN; $(ins_c1) SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(ins_c1)"
 show s4
 check "A lança" "SELECT $(is_ok "$TMP/s4.A")"
-check "B esperou e foi recusado" "SELECT $(waited "$TMP/s4.B") AND NOT $(is_ok "$TMP/s4.B")"
+check "B esperou e recebeu report_week_taken" "SELECT $(waited "$TMP/s4.B") AND '$(outcome "$TMP/s4.B")' LIKE '22023 report_week_taken%'"
+invariant
+
+ID5=f211c0de-0005-0000-0000-000000000005
+replayed() { grep -q "^$2|replayed|$3$" "$1" && echo true || echo false; }
+count_id() { q "SELECT count(*) FROM public.cell_reports WHERE id = '$1'"; }
+
+# ---------------------------------------------------------------------------
+echo "== 5. Repetição do mesmo id (mesma célula) com a primeira tentativa em andamento"
+base
+pair s5 "$U_PEDRO" "BEGIN; $(submit "$ID5" "$C1") SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(submit "$ID5" "$C1")"
+show s5
+check "A lança" "SELECT $(is_ok "$TMP/s5.A")"
+check "B esperou (trava da semana) e recebeu replayed, igual" "SELECT $(waited "$TMP/s5.B") AND $(replayed "$TMP/s5.B" "$ID5" t)"
+check "uma linha só com o id" "SELECT $(count_id "$ID5") = 1"
+invariant
+
+# ---------------------------------------------------------------------------
+echo "== 6. Repetição do mesmo id com outra célula"
+base
+pair s6 "$U_PEDRO" "BEGIN; $(submit "$ID5" "$C1") SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(submit "$ID5" "$C2")"
+show s6
+check "B esperou (chave primária) e recebeu replayed, diferente" "SELECT $(waited "$TMP/s6.B") AND $(replayed "$TMP/s6.B" "$ID5" f)"
+check "uma linha só com o id, em C1; C2 sem relatório" \
+  "SELECT $(count_id "$ID5") = 1 AND NOT EXISTS (SELECT 1 FROM public.cell_reports WHERE cell_id = '$C2')"
+invariant
+
+# ---------------------------------------------------------------------------
+echo "== 7. Inativação de C1 segura × lançamento"
+base
+pair s7 "" "BEGIN; UPDATE public.cells SET is_active = false WHERE id = '$C1'; SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(ins_c1)"
+show s7
+check "B esperou e recebeu cell_inactive" "SELECT $(waited "$TMP/s7.B") AND '$(outcome "$TMP/s7.B")' LIKE '22023 cell_inactive%'"
+check "C1 sem relatório" "SELECT ($COUNT_C1) = 0"
+
+# ---------------------------------------------------------------------------
+echo "== 8. Exclusão de C1 segura × lançamento"
+base
+pair s8 "" "BEGIN; SELECT 1 FROM public.cells WHERE id = '$C1' FOR UPDATE; UPDATE public.cells SET deleted_at = now() WHERE id = '$C1'; SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(ins_c1)"
+show s8
+check "B esperou e recebeu cell_deleted" "SELECT $(waited "$TMP/s8.B") AND '$(outcome "$TMP/s8.B")' LIKE '22023 cell_deleted%'"
+check "C1 sem relatório" "SELECT ($COUNT_C1) = 0"
+
+# ---------------------------------------------------------------------------
+echo "== 9. Exclusão de um escolhido (Lucas) segura × lançamento"
+base
+pair s9 "" "BEGIN; SELECT 1 FROM public.members WHERE id = '$M_LUCAS' FOR UPDATE; UPDATE public.members SET deleted_at = now() WHERE id = '$M_LUCAS'; SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U_PEDRO" "$(submit "$(cat /proc/sys/kernel/random/uuid)" "$C1" "$M_LUCAS")"
+show s9
+check "B esperou e recebeu deleted_member_chosen" "SELECT $(waited "$TMP/s9.B") AND '$(outcome "$TMP/s9.B")' LIKE '22023 deleted_member_chosen%'"
+check "C1 sem relatório" "SELECT ($COUNT_C1) = 0"
+
+# ---------------------------------------------------------------------------
+echo "== 10. Restauração de outro relatório da semana segura × lançamento"
+base
+R_DEL=f211c0de-0005-0000-0000-000000000010
+q "BEGIN; SET LOCAL mci.cell_report_write = 'on'; INSERT INTO public.cell_reports (id, cell_id, date, time, theme, offering, deleted_at) VALUES ('$R_DEL', '$C1', public.week_start(public.sp_today()), '00:00', 'excluído', 0, now()); COMMIT;" >/dev/null
+pair s10 "" "BEGIN; SELECT public._del_lock_cell_week('$C1', public.sp_today()); UPDATE public.cell_reports SET deleted_at = NULL, deleted_by = NULL WHERE id = '$R_DEL'; SELECT pg_sleep($HOLD); COMMIT;" \
+         "$U_PEDRO" "$(ins_c1)"
+show s10
+check "A restaura" "SELECT $(is_ok "$TMP/s10.A")"
+check "B esperou e recebeu report_week_taken" "SELECT $(waited "$TMP/s10.B") AND '$(outcome "$TMP/s10.B")' LIKE '22023 report_week_taken%'"
+invariant
+
+# ---------------------------------------------------------------------------
+echo "== 11. Duas edições do mesmo relatório com conjuntos diferentes"
+base
+ID11=f211c0de-0005-0000-0000-000000000011
+session "$U_PEDRO" "$(submit "$ID11" "$C1")" "$TMP/s11.0"
+AUTO="$M_ANDRE,$M_CAIO,$M_CARLA"
+pair s11 "$U_PEDRO" "BEGIN; SELECT * FROM public.save_cell_report('$ID11', '{}', '{$AUTO,$M_DIEGO}'::uuid[]); SELECT pg_sleep($HOLD); COMMIT;" \
+         "$U_PEDRO" "SELECT * FROM public.save_cell_report('$ID11', '{}', '{$AUTO,$M_HUGO,$M_LUCAS}'::uuid[]);"
+show s11
+check "as duas gravam; B esperou a A" "SELECT $(is_ok "$TMP/s11.A") AND $(is_ok "$TMP/s11.B") AND $(waited "$TMP/s11.B")"
+check "vale o conjunto inteiro da segunda (os três registrados, Hugo e Lucas; Diego saiu)" \
+  "SELECT (SELECT array_agg(member_id ORDER BY member_id) FROM public.cell_report_participants WHERE report_id = '$ID11')
+          = (SELECT array_agg(x ORDER BY x) FROM unnest('{$AUTO,$M_HUGO,$M_LUCAS}'::uuid[]) x)"
 invariant
 
 echo

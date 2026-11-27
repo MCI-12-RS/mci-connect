@@ -1,4 +1,6 @@
 -- E2.08 (PR 1): volume de referência e metas do risco 11.
+-- Histórico: desde o E2.11 PR 2 o lançamento por INSERT direto não existe; a medida do lançamento está em
+-- e211_volume.psql (este script não roda mais inteiro).
 -- Spec: docs/specs/e2-08-cadastro-celulas.md (repositório apps-mci), Riscos, item 11:
 -- o volume do E1.08 (20 mil membros, 1.500 células, 100 mil relatórios e 800 mil participações).
 --

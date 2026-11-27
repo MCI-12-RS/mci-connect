@@ -4,8 +4,9 @@
 --
 -- A permissão de inserir é a primeira conferência no INSERT:
 --   - members: regra 1 de enforce_member_write_rules (aa_);
---   - cells, cell_reports e cell_report_participants: trigger
---     a0_check_insert_permission, com a mesma função da política de INSERT;
+--   - cells: trigger a0_check_insert_permission, com a mesma função da política de INSERT;
+--   - cell_reports e cell_report_participants (E2.11 PR 2): sem INSERT para a API; a permissão é a
+--     primeira conferência dentro de submit_cell_report e save_cell_report;
 --   - anon: sem INSERT, UPDATE, DELETE e TRUNCATE nas quatro tabelas.
 --
 -- Cobre, com registros excluídos na massa:
@@ -29,6 +30,10 @@
 -- Rodar com: supabase test db
 
 BEGIN;
+
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
@@ -89,6 +94,15 @@ $$;
 CREATE FUNCTION pg_temp.ins_report(_cell uuid, _date date DEFAULT NULL) RETURNS text LANGUAGE sql STABLE AS $$
   SELECT format('INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
                  VALUES (%L, %L, %L, %L, true)', _cell, coalesce(_date, public.sp_today()), '20:00', 'Tema E201-07')
+$$;
+-- E2.11: o lançamento e a edição pelas RPCs (a data do relatório é hoje, às 00:00, depois da reunião).
+CREATE FUNCTION pg_temp.sub_report(_cell uuid, _date date DEFAULT NULL) RETURNS text LANGUAGE sql STABLE AS $$
+  SELECT format('SELECT * FROM public.submit_cell_report(gen_random_uuid(), %L::jsonb)',
+                jsonb_build_object('cell_id', _cell, 'date', coalesce(_date, public.sp_today()), 'time', '00:00',
+                                   'theme', 'Tema E201-07', 'offering', 0))
+$$;
+CREATE FUNCTION pg_temp.save_parts(_report uuid, _ids uuid[]) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT format('SELECT * FROM public.save_cell_report(%L, %L::jsonb, %L::uuid[])', _report, '{}', _ids)
 $$;
 CREATE FUNCTION pg_temp.ins_part(_report uuid, _member uuid) RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT format('INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (%L, %L)', _report, _member)
@@ -159,6 +173,10 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
   (pg_temp.c(6), pg_temp.m(25), pg_temp.m(25), pg_temp.m(25), 'Evangelística', 'Quarta', '20:00'),
   (pg_temp.c(7), pg_temp.m(31), pg_temp.m(27), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00'),
   (pg_temp.c(8), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Quarta', '20:00');
+-- E2.11: a reunião desta semana é hoje às 00:00 (o lançamento só é aceito depois dela, RN-06).
+UPDATE public.cells SET meeting_day = (public.cell_weekdays())[EXTRACT(dow FROM public.sp_today())::int + 1],
+                        meeting_time = '00:00'
+ WHERE id IN (SELECT pg_temp.c(k) FROM generate_series(1, 8) k);
 
 -- Relatórios da semana atual (antes das exclusões).
 --   r1: c4, excluído              r2: c3 (célula excluída)
@@ -180,32 +198,40 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held, delet
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(7), pg_temp.m(12)), (pg_temp.r(7), pg_temp.m(40));
 
+-- E2.11: a oferta não tem mais padrão e é obrigatória na edição da célula realizada (RN-13).
+UPDATE public.cell_reports SET offering = 0 WHERE offering IS NULL;
+
 UPDATE public.members SET deleted_at = now() WHERE id IN (pg_temp.m(10), pg_temp.m(11), pg_temp.m(12));
 UPDATE public.cells SET deleted_at = now() WHERE id IN (pg_temp.c(1), pg_temp.c(3));
 
 -- ===========================================================================
 -- 1. Catálogo: a mesma função na política e no trigger — 19 verificações
 -- ===========================================================================
+-- cells continua com a política e o trigger; relatórios e participantes ficaram sem INSERT para a API
+-- (E2.11 PR 2, RN-01): sem política de INSERT, sem o a0_check_insert_permission e sem as funções dele.
 SELECT is(
-  (SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = t AND cmd = 'INSERT'),
-  w, t || ': a política de INSERT usa a função de permissão')
-  FROM (VALUES
-    ('cells', '(viewer_can_insert_cell() AND (deleted_at IS NULL) AND (deleted_by IS NULL))'),
-    ('cell_reports', '(viewer_can_insert_cell_report(cell_id) AND can_submit_report(cell_id) AND (deleted_at IS NULL) AND (deleted_by IS NULL))'),
-    ('cell_report_participants', E'(viewer_can_insert_cell_report_participant(report_id) AND (EXISTS ( SELECT 1\n   FROM cell_reports r\n  WHERE ((r.id = cell_report_participants.report_id) AND (r.deleted_at IS NULL)))))')) v(t, w);
+  (SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'cells' AND cmd = 'INSERT'),
+  '(viewer_can_insert_cell() AND (deleted_at IS NULL) AND (deleted_by IS NULL))',
+  'cells: a política de INSERT usa a função de permissão');
+SELECT ok(NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t AND cmd <> 'SELECT'),
+          t || ': sem política de escrita (E2.11: só as RPCs gravam)')
+  FROM unnest(ARRAY['cell_reports', 'cell_report_participants']) t;
 
-SELECT ok(pg_get_functiondef('public.enforce_insert_permission()'::regprocedure) LIKE '%' || f || '%',
-          'enforce_insert_permission chama ' || f || ' (a mesma função da política)')
-  FROM unnest(ARRAY['public.viewer_can_insert_cell()',
-                    'public.viewer_can_insert_cell_report(NEW.cell_id)',
-                    'public.viewer_can_insert_cell_report_participant(NEW.report_id)']) f;
+SELECT ok(pg_get_functiondef('public.enforce_insert_permission()'::regprocedure) LIKE '%public.viewer_can_insert_cell()%',
+          'enforce_insert_permission chama public.viewer_can_insert_cell() (a mesma função da política)');
+SELECT ok(pg_get_functiondef('public.enforce_insert_permission()'::regprocedure) NOT LIKE '%' || f || '%',
+          'enforce_insert_permission não tem mais o ramo de ' || f || ' (E2.11)')
+  FROM unnest(ARRAY['viewer_can_insert_cell_report(', 'viewer_can_insert_cell_report_participant(']) f;
 
 SELECT is(
   (SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t
-    WHERE t.tgrelid = ('public.' || tb)::regclass AND t.tgname = 'a0_check_insert_permission'),
-  format('CREATE TRIGGER a0_check_insert_permission BEFORE INSERT ON public.%s FOR EACH ROW EXECUTE FUNCTION enforce_insert_permission()', tb),
-  tb || ': trigger a0_check_insert_permission, BEFORE INSERT, por linha')
-  FROM unnest(ARRAY['cells', 'cell_reports', 'cell_report_participants']) tb;
+    WHERE t.tgrelid = 'public.cells'::regclass AND t.tgname = 'a0_check_insert_permission'),
+  'CREATE TRIGGER a0_check_insert_permission BEFORE INSERT ON public.cells FOR EACH ROW EXECUTE FUNCTION enforce_insert_permission()',
+  'cells: trigger a0_check_insert_permission, BEFORE INSERT, por linha');
+SELECT ok(NOT EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = ('public.' || tb)::regclass
+                        AND t.tgname = 'a0_check_insert_permission'),
+          tb || ': sem a0_check_insert_permission (E2.11: sem INSERT para a API)')
+  FROM unnest(ARRAY['cell_reports', 'cell_report_participants']) tb;
 
 -- A ordem dos triggers BEFORE da mesma linha é alfabética.
 SELECT is(
@@ -213,8 +239,8 @@ SELECT is(
     WHERE t.tgrelid = ('public.' || tb)::regclass AND NOT t.tgisinternal
       AND (t.tgtype & 2) = 2 AND (t.tgtype & 1) = 1 AND (t.tgtype & 4) = 4),
   f, tb || ': ' || f || ' é o primeiro BEFORE INSERT')
-  FROM (VALUES ('cells', 'a0_check_insert_permission'), ('cell_reports', 'a0_check_insert_permission'),
-               ('cell_report_participants', 'a0_check_insert_permission'),
+  FROM (VALUES ('cells', 'a0_check_insert_permission'), ('cell_reports', 'a0_guard_cell_report_write'),
+               ('cell_report_participants', 'a0_guard_cell_report_write'),
                -- E2.04 (DT-04): a0_normalize_member vem antes de todos, mas só normaliza e nunca recusa.
                ('members', 'a0_normalize_member')) v(tb, f);
 SELECT is(
@@ -234,9 +260,10 @@ SELECT ok(p.prosecdef AND p.provolatile = 's' AND p.proconfig = ARRAY['search_pa
           AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0),
           p.oid::regprocedure::text || ': STABLE, definer, search_path fixo; EXECUTE só para authenticated (sem anon e PUBLIC)')
   FROM pg_proc p
- WHERE p.oid IN ('public.viewer_can_insert_cell()'::regprocedure,
-                 'public.viewer_can_insert_cell_report(uuid)'::regprocedure,
-                 'public.viewer_can_insert_cell_report_participant(uuid)'::regprocedure);
+ WHERE p.oid = 'public.viewer_can_insert_cell()'::regprocedure;
+SELECT ok(to_regprocedure(f) IS NULL, f || ': removida no E2.11 (sem escrita direta)')
+  FROM unnest(ARRAY['public.viewer_can_insert_cell_report(uuid)',
+                    'public.viewer_can_insert_cell_report_participant(uuid)']) f;
 SELECT ok(NOT has_function_privilege('authenticated', f, 'EXECUTE')
           AND NOT has_function_privilege('anon', f, 'EXECUTE')
           AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
@@ -316,137 +343,96 @@ SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_cell(pg_temp.m(31))),
 -- ===========================================================================
 -- 5. cell_reports — 16 verificações
 -- ===========================================================================
--- Sem permissão de lançar (Nilo): 42501 antes dos triggers aa_ e de semana.
-SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(3))), '42501',
+-- E2.11: o lançamento é só pela submit_cell_report; a permissão é o primeiro passo (RN-20 item 1, DA-8).
+-- Sem permissão de lançar (Nilo): 42501 antes das recusas de célula e de semana.
+SELECT is(pg_temp.code(2, pg_temp.sub_report(pg_temp.c(3))), '42501',
   'sem permissão de lançar: caso da RN-06 (célula) → 42501 (ordem das conferências)');
-SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(5))), '42501',
+SELECT is(pg_temp.code(2, pg_temp.sub_report(pg_temp.c(5))), '42501',
   'sem permissão de lançar: caso da semana única → 42501 (ordem das conferências)');
-SELECT is(pg_temp.code(2, pg_temp.ins_report(pg_temp.c(4), public.sp_today() - 14)), '42501',
+SELECT is(pg_temp.code(2, pg_temp.sub_report(pg_temp.c(4), public.sp_today() - 14)), '42501',
   'sem permissão de lançar: caso da semana atual → 42501 (ordem das conferências)');
-SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(3))), '42501',
+SELECT is(pg_temp.code(7, pg_temp.sub_report(pg_temp.c(3))), '42501',
   'edit_own_data sem ser líder ou timóteo: caso da RN-06 (célula de outra pessoa) → 42501');
 
 -- submit_own_cell_report (Yara).
-SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(3))), 'cell_deleted',
-  'submit_own_cell_report: célula excluída de outra pessoa → cell_deleted (E2.02: o excluído tem prioridade sobre o invisível)');
-SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(1))), 'cell_deleted',
+SELECT is(pg_temp.code(5, pg_temp.sub_report(pg_temp.c(3))), 'not_found_or_deleted',
+  'submit_own_cell_report: célula excluída de outra pessoa, que ela não vê → not_found_or_deleted (DA-7 do E2.11)');
+SELECT is(pg_temp.code(5, pg_temp.sub_report(pg_temp.c(1))), 'cell_deleted',
   'submit_own_cell_report: a própria célula excluída → cell_deleted (quem tem direito recebe a regra)');
-SELECT is(pg_temp.code(5, pg_temp.ins_report(pg_temp.c(4))), 'not_found_or_deleted',
+SELECT is(pg_temp.code(5, pg_temp.sub_report(pg_temp.c(4))), 'not_found_or_deleted',
   'submit_own_cell_report: célula invisível de outra pessoa, caso da semana única → not_found_or_deleted (E2.02, RN-13; a permissão vem antes, as recusas de escopo depois)');
-SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_report(pg_temp.c(6))),
+SELECT is(pg_temp.try('authenticated', 5, pg_temp.sub_report(pg_temp.c(6))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'submit_own_cell_report: relatório válido da própria célula funciona');
 
--- Com permissão em qualquer célula: as recusas de regra continuam iguais.
-SELECT is(pg_temp.code(6, pg_temp.ins_report(pg_temp.c(3))), 'cell_deleted',
+-- Com permissão em qualquer célula: as recusas de regra (agora da RPC).
+SELECT is(pg_temp.code(6, pg_temp.sub_report(pg_temp.c(3))), 'cell_deleted',
   'edit_cell: célula excluída → cell_deleted (RN-06)');
-SELECT is(pg_temp.code(8, pg_temp.ins_report(pg_temp.c(3))), 'cell_deleted',
+SELECT is(pg_temp.code(8, pg_temp.sub_report(pg_temp.c(3))), 'cell_deleted',
   'submit_any_visible_report: célula excluída → cell_deleted');
-SELECT is(pg_temp.code(6, pg_temp.ins_report(pg_temp.c(5))), '23505',
-  'edit_cell: semana já ocupada → mensagem do trigger de semana única (23505)');
-SELECT is(pg_temp.code(6, pg_temp.ins_report(pg_temp.c(4), public.sp_today() - 14)), '23514',
-  'edit_cell: data de outra semana → mensagem do trigger de semana atual (23514)');
-SELECT is(pg_temp.code(7, pg_temp.ins_report(pg_temp.c(7), public.sp_today() - 14)), '42501',
+SELECT is(pg_temp.code(6, pg_temp.sub_report(pg_temp.c(5))), 'report_week_taken',
+  'edit_cell: semana já ocupada → report_week_taken (E2.11, RN-07)');
+SELECT is(pg_temp.code(6, pg_temp.sub_report(pg_temp.c(4), public.sp_today() - 14)), 'report_not_current_week',
+  'edit_cell: data de outra semana → report_not_current_week (E2.11, RN-04)');
+SELECT is(pg_temp.code(7, pg_temp.sub_report(pg_temp.c(7), public.sp_today() - 14)), '42501',
   'edit_own_data como timóteo: não dá mais direito de lançar → 42501 (E2.02, RN-13)');
-SELECT is(pg_temp.try('authenticated', 6, pg_temp.ins_report(pg_temp.c(8))),
+SELECT is(pg_temp.try('authenticated', 6, pg_temp.sub_report(pg_temp.c(8))),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'edit_cell: relatório válido funciona');
-SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_report(pg_temp.c(3))) ->> 'code', 'cell_deleted',
+SELECT is(pg_temp.try('service_role', NULL, pg_temp.sub_report(pg_temp.c(3))) ->> 'code', 'cell_deleted',
   'service_role: célula excluída continua recusada (DT-27)');
-SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_report(pg_temp.c(1), public.sp_today() - 14)) ->> 'code', 'cell_deleted',
-  'service_role: passa pelo a0_ e chega à regra (cell_deleted antes da semana)');
+SELECT is(pg_temp.try('service_role', NULL, pg_temp.sub_report(pg_temp.c(1), public.sp_today() - 14)) ->> 'code', 'cell_deleted',
+  'service_role: chega à regra da célula (cell_deleted antes da semana)');
 
 -- ===========================================================================
 -- 6. cell_report_participants — 17 verificações
 -- ===========================================================================
+-- E2.11: incluir e retirar participantes depois do envio é edição (save_cell_report, RN-03); a DA-5 do
+-- E2.02 terminou.
 -- Sem permissão (Nilo).
-SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(1), pg_temp.m(40))), '42501',
+SELECT is(pg_temp.code(2, pg_temp.save_parts(pg_temp.r(1), ARRAY[pg_temp.m(40)])), '42501',
   'sem permissão: caso da RN-07 (relatório) → 42501 (ordem das conferências)');
-SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(2), pg_temp.m(40))), '42501',
+SELECT is(pg_temp.code(2, pg_temp.save_parts(pg_temp.r(2), ARRAY[pg_temp.m(40)])), '42501',
   'sem permissão: caso da RN-11 (relatório) → 42501 (ordem das conferências)');
-SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(11))), '42501',
+SELECT is(pg_temp.code(2, pg_temp.save_parts(pg_temp.r(7), ARRAY[pg_temp.m(12), pg_temp.m(40), pg_temp.m(11)])), '42501',
   'sem permissão: caso da RN-06 (participante) → 42501 (ordem das conferências)');
 SELECT is(pg_temp.code(2, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(40)) || ' ON CONFLICT DO NOTHING'), '42501',
-  'sem permissão: par que já existe, com ON CONFLICT DO NOTHING → 42501 (como antes: o RLS confere a linha proposta)');
+  'sem permissão: INSERT direto, par que já existe, com ON CONFLICT DO NOTHING → 42501 de privilégio');
 
--- Yara (submit_own_cell_report): mesma semântica da política antiga.
-SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(4), pg_temp.m(40))), 'report_cell_deleted',
-  'submit_own_cell_report: relatório da própria célula excluída → report_cell_deleted (RN-11)');
-SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(5), pg_temp.m(40))), 'not_found_or_deleted',
-  'submit_own_cell_report: relatório excluído da própria célula → not_found_or_deleted (E2.02: a função deixa a recusa para o trigger do E2.01)');
-SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(40))), '42501',
+-- Yara (só submit_own_cell_report): quem só lança não edita (RN-03 do E2.11).
+SELECT is(pg_temp.code(5, pg_temp.save_parts(pg_temp.r(4), ARRAY[pg_temp.m(40)])), '42501',
+  'submit_own_cell_report: relatório da própria célula excluída → 42501 (não edita)');
+SELECT is(pg_temp.code(5, pg_temp.save_parts(pg_temp.r(5), ARRAY[pg_temp.m(40)])), '42501',
+  'submit_own_cell_report: relatório excluído da própria célula → 42501 (não edita)');
+SELECT is(pg_temp.code(5, pg_temp.save_parts(pg_temp.r(7), ARRAY[pg_temp.m(40)])), '42501',
   'submit_own_cell_report: relatório de célula de outra pessoa → 42501');
-SELECT is(pg_temp.try('authenticated', 5, pg_temp.ins_part(pg_temp.r(3), pg_temp.m(25))),
-  '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
-  'submit_own_cell_report: participante válido no próprio relatório funciona');
-SELECT is(pg_temp.try('authenticated', 5, format('SELECT public.set_cell_report_participants(%L, %L)',
-                                                 pg_temp.r(3), ARRAY[pg_temp.m(25)])) ->> 'state',
-  '00000', 'submit_own_cell_report: set_cell_report_participants (INVOKER) continua funcionando');
+SELECT is(pg_temp.code(5, pg_temp.save_parts(pg_temp.r(3), ARRAY[pg_temp.m(25)])), '42501',
+  'submit_own_cell_report: incluir participante no próprio relatório depois do envio → 42501 (fim da DA-5)');
+SELECT is(pg_temp.code(5, pg_temp.ins_part(pg_temp.r(3), pg_temp.m(25))), '42501',
+  'submit_own_cell_report: o INSERT direto também → 42501 de privilégio');
 
--- Com permissão em qualquer relatório (Lucas): as recusas de regra continuam iguais.
-SELECT is(pg_temp.code(6, pg_temp.ins_part(pg_temp.r(1), pg_temp.m(41))), 'not_found_or_deleted',
-  'edit_cell: relatório excluído → not_found_or_deleted (RN-07)');
-SELECT is(pg_temp.code(6, pg_temp.ins_part(pg_temp.r(2), pg_temp.m(41))), 'report_cell_deleted',
-  'edit_cell: relatório de célula excluída → report_cell_deleted (RN-11)');
-SELECT is(pg_temp.code(6, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(11))), 'deleted_member_chosen',
-  'edit_cell: membro excluído → deleted_member_chosen (RN-06)');
-SELECT is(pg_temp.try('authenticated', 6, pg_temp.ins_part(pg_temp.r(7), pg_temp.m(41))),
+-- Com Editar Relatórios de Células (Lucas): as recusas de regra continuam iguais.
+SELECT is(pg_temp.code(6, pg_temp.save_parts(pg_temp.r(1), ARRAY[pg_temp.m(41)])), 'not_found_or_deleted',
+  'edit_cell_report: relatório excluído → not_found_or_deleted (RN-07)');
+SELECT is(pg_temp.code(6, pg_temp.save_parts(pg_temp.r(2), ARRAY[pg_temp.m(41)])), 'report_cell_deleted',
+  'edit_cell_report: relatório de célula excluída → report_cell_deleted (RN-11)');
+SELECT is(pg_temp.code(6, pg_temp.save_parts(pg_temp.r(7), ARRAY[pg_temp.m(12), pg_temp.m(40), pg_temp.m(11)])),
+  'deleted_member_chosen', 'edit_cell_report: membro excluído → deleted_member_chosen (RN-06)');
+SELECT is(pg_temp.try('authenticated', 6, pg_temp.save_parts(pg_temp.r(7), ARRAY[pg_temp.m(12), pg_temp.m(40), pg_temp.m(41)])),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
-  'edit_cell: participante válido funciona');
-SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_part(pg_temp.r(8), pg_temp.m(41))),
+  'edit_cell_report: participante válido funciona');
+SELECT is(pg_temp.try('service_role', NULL, pg_temp.save_parts(pg_temp.r(8), ARRAY[pg_temp.m(41)])),
   '{"state": "00000", "rows": 1, "code": "00000"}'::jsonb,
   'service_role: participante válido funciona');
-SELECT is(pg_temp.try('service_role', NULL, pg_temp.ins_part(pg_temp.r(1), pg_temp.m(41))) ->> 'code',
+SELECT is(pg_temp.try('service_role', NULL, pg_temp.save_parts(pg_temp.r(1), ARRAY[pg_temp.m(41)])) ->> 'code',
   'not_found_or_deleted', 'service_role: relatório excluído continua recusado (DT-27)');
 
--- A função repete a regra do E2.02 (DA-5 e RN-13), avaliada sob o RLS de quem
--- grava, para cada pessoa (com e sem permissão) e cada relatório da massa. O
--- oráculo usa só viewer_has() e can_submit_report: a expressão antiga
--- (user_has_permission e can_manage_own_cell) saiu de authenticated.
-CREATE FUNCTION pg_temp.participant_mismatches() RETURNS text[] LANGUAGE plpgsql AS $$
+-- As funções da escrita direta saíram (E2.11 PR 2); a de células continua igual à regra do E2.02.
+SELECT ok(to_regprocedure('public.set_cell_report_participants(uuid,uuid[])') IS NULL,
+  'participantes: set_cell_report_participants removida (absorvida pela save_cell_report, E2.11)');
+CREATE FUNCTION pg_temp.cell_mismatches() RETURNS text[] LANGUAGE plpgsql AS $$
 DECLARE
-  _n int; _rep uuid; _new boolean; _old boolean; _out text[] := '{}';
-  _reps uuid[] := ARRAY(SELECT pg_temp.r(k) FROM generate_series(1, 9) k);
-  _cell uuid; _live boolean; _week boolean;
-BEGIN
-  FOREACH _n IN ARRAY ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 10] LOOP
-    FOREACH _rep IN ARRAY _reps LOOP
-      -- Existência e situação do relatório, lidas como dono (a função é definer).
-      SELECT r.cell_id, (r.deleted_at IS NULL AND c.deleted_at IS NULL) INTO _cell, _live
-        FROM public.cell_reports r JOIN public.cells c ON c.id = r.cell_id WHERE r.id = _rep;
-      PERFORM set_config('request.jwt.claims', json_build_object('sub', pg_temp.u(_n), 'role', 'authenticated')::text, true);
-      EXECUTE 'SET LOCAL ROLE authenticated';
-      _new := public.viewer_can_insert_cell_report_participant(_rep);
-      _old := false;
-      IF public.viewer_has('edit_cell_report') OR public.viewer_has('edit_cell')
-         OR public.viewer_has('submit_any_visible_report') OR public.viewer_has('submit_own_cell_report') THEN
-        IF _cell IS NULL OR NOT _live THEN
-          _old := true;                      -- relatório inexistente ou excluído: a recusa é do trigger aa_
-        ELSE
-          SELECT (v.week_start = public.week_start(public.sp_today())) INTO _week
-            FROM public.cell_reports_view v WHERE v.id = _rep;
-          _old := (_week IS NOT NULL)
-                  AND (public.viewer_has('edit_cell_report')
-                       OR (public.can_submit_report(_cell) AND _week));
-        END IF;
-      END IF;
-      EXECUTE 'RESET ROLE';
-      PERFORM set_config('request.jwt.claims', '', true);
-      IF _new IS DISTINCT FROM _old THEN
-        _out := _out || format('usuário %s, relatório %s: nova %s, esperada %s', _n, _rep, _new, _old);
-      END IF;
-    END LOOP;
-  END LOOP;
-  RETURN _out;
-END $$;
-SELECT is(pg_temp.participant_mismatches(), '{}'::text[],
-  'participantes: viewer_can_insert_cell_report_participant = regra do E2.02 (DA-5) sob o RLS (9 pessoas × 9 relatórios)');
-
--- Idem para relatórios e células (a política antiga não lia tabela sob RLS).
-CREATE FUNCTION pg_temp.report_cell_mismatches() RETURNS text[] LANGUAGE plpgsql AS $$
-DECLARE
-  _n int; _cell uuid; _new boolean; _old boolean; _out text[] := '{}';
-  _cells uuid[] := ARRAY(SELECT pg_temp.c(k) FROM generate_series(1, 9) k);
+  _n int; _out text[] := '{}';
 BEGIN
   FOREACH _n IN ARRAY ARRAY[1, 2, 3, 4, 5, 6, 7, 8, 10] LOOP
     PERFORM set_config('request.jwt.claims', json_build_object('sub', pg_temp.u(_n), 'role', 'authenticated')::text, true);
@@ -454,44 +440,33 @@ BEGIN
     IF public.viewer_can_insert_cell() IS DISTINCT FROM public.viewer_has('create_cell') THEN
       _out := _out || format('usuário %s: células', _n);
     END IF;
-    FOREACH _cell IN ARRAY _cells LOOP
-      _new := public.viewer_can_insert_cell_report(_cell);
-      -- RN-13: "Editar Próprio Cadastro" deixou de ser direito de lançar.
-      _old := public.viewer_has('edit_cell') OR public.viewer_has('submit_any_visible_report')
-              OR public.viewer_has('submit_own_cell_report');
-      IF _new IS DISTINCT FROM _old THEN
-        _out := _out || format('usuário %s, célula %s: nova %s, esperada %s', _n, _cell, _new, _old);
-      END IF;
-    END LOOP;
     EXECUTE 'RESET ROLE';
     PERFORM set_config('request.jwt.claims', '', true);
   END LOOP;
   RETURN _out;
 END $$;
-SELECT is(pg_temp.report_cell_mismatches(), '{}'::text[],
-  'relatórios e células: as funções = regra do E2.02 (RN-13; 9 pessoas × 9 células)');
+SELECT is(pg_temp.cell_mismatches(), '{}'::text[],
+  'células: viewer_can_insert_cell = regra do E2.02 (9 pessoas)');
 
 -- ===========================================================================
 -- 7. UPDATE e DELETE: o USING filtra antes dos triggers — 6 verificações
 -- ===========================================================================
-SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.cell_reports SET theme = %L WHERE id = %L', 'x', pg_temp.r(2))),
-  '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem edit_cell_report: PATCH no caso da RN-11 volta com 0 linhas e sem erro');
+-- Relatórios e participantes (E2.11): sem UPDATE e DELETE para a API, 42501 de privilégio antes de tudo.
+SELECT is(pg_temp.code(2, format('UPDATE public.cell_reports SET theme = %L WHERE id = %L', 'x', pg_temp.r(2))),
+  '42501', 'sem edit_cell_report: PATCH direto no caso da RN-11 → 42501 de privilégio (E2.11)');
 SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.cells SET leader_id = %L WHERE id = %L', pg_temp.m(11), pg_temp.c(4))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
   'sem edit_cell: PATCH no caso da RN-06 (líder) volta com 0 linhas e sem erro');
 SELECT is(pg_temp.try('authenticated', 2, format('UPDATE public.members SET leader_id = %L WHERE id = %L', pg_temp.m(11), pg_temp.m(40))),
   '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
   'sem edit_member: PATCH de outra pessoa no caso da RN-06 (líder) volta com 0 linhas e sem erro');
-SELECT is(pg_temp.try('authenticated', 2, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
-                                                 pg_temp.r(7), pg_temp.m(12))),
-  '{"state": "00000", "rows": 0, "code": "00000"}'::jsonb,
-  'sem permissão: DELETE no caso da RN-13 volta com 0 linhas e sem erro');
--- Com a permissão, a regra continua.
-SELECT is(pg_temp.code(6, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
+SELECT is(pg_temp.code(2, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
                                  pg_temp.r(7), pg_temp.m(12))),
-  'deleted_participant_removal', 'edit_cell: retirar um participante excluído → deleted_participant_removal (RN-13)');
-SELECT is(pg_temp.code(1, format('UPDATE public.cell_reports SET theme = %L WHERE id = %L', 'x', pg_temp.r(2))),
+  '42501', 'sem permissão: DELETE direto no caso da RN-13 → 42501 de privilégio (E2.11)');
+-- Com a permissão, a regra continua (pela RPC).
+SELECT is(pg_temp.code(6, pg_temp.save_parts(pg_temp.r(7), ARRAY[pg_temp.m(40), pg_temp.m(41)])),
+  'deleted_participant_removal', 'edit_cell_report: retirar um participante excluído → deleted_participant_removal (RN-13)');
+SELECT is(pg_temp.code(1, format('SELECT * FROM public.save_cell_report(%L, %L::jsonb)', pg_temp.r(2), '{"theme": "x"}')),
   'report_cell_deleted', 'edit_cell_report: editar o relatório de célula excluída → report_cell_deleted (RN-11)');
 
 -- ===========================================================================

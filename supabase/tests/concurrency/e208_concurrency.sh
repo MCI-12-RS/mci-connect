@@ -89,8 +89,8 @@ INSERT INTO public.members (id, name, gender, leader_id, has_leadership, auth_us
   ('$M_ANDRE', 'E208 Conc Andre', 'M', '$M_PASTOR', true, NULL, NULL, '$M_ANDRE@teste.invalid'),
   ('$M_CAIO',  'E208 Conc Caio',  'M', '$M_PASTOR', true, NULL, NULL, '$M_CAIO@teste.invalid');
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
-  ('$C1', '$M_ANDRE', '$M_CAIO', '$M_CARLA', 'Evangelística', 'Quarta', '20:00'),
-  ('$C2', '$M_ANDRE', '$M_CAIO', '$M_ANDRE', 'Evangelística', 'Quinta', '20:00');
+  ('$C1', '$M_ANDRE', '$M_CAIO', '$M_CARLA', 'Evangelística', 'Domingo', '00:00'),
+  ('$C2', '$M_ANDRE', '$M_CAIO', '$M_ANDRE', 'Evangelística', 'Domingo', '00:00');
 COMMIT;
 SQL
 }
@@ -147,7 +147,12 @@ show() {
 }
 
 
-INS_C1="INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme) VALUES ('$C1', public.sp_today(), '23:59', true, 'conc');"
+# E2.11 PR 2: o lançamento só pela submit_cell_report e a edição pela save_cell_report; a massa grava direto
+# com a marca de manutenção (DA-11). As células se reúnem no domingo às 00:00 (a reunião já passou).
+INS_C1="SELECT * FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', '$C1', 'date', public.week_start(public.sp_today()), 'time', '00:00', 'theme', 'conc', 'offering', 0));"
+ins_r1() { q "SET LOCAL mci.cell_report_write = 'on'; INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering) VALUES ('$R1', '$1', public.week_start(public.sp_today()), '00:00', true, 'R1', 0)" >/dev/null; }
+MOVE_R1="SELECT * FROM public.save_cell_report('$R1', jsonb_build_object('cell_id', '$C1'));"
+THEME_R1="SELECT * FROM public.save_cell_report('$R1', '{\"theme\": \"novo tema\"}');"
 INACTIVATE="UPDATE public.cells SET is_active = false WHERE id = '$C1';"
 REACTIVATE="UPDATE public.cells SET is_active = true WHERE id = '$C1';"
 COUNT_C1="SELECT count(*) FROM public.cell_reports WHERE cell_id = '$C1' AND deleted_at IS NULL"
@@ -176,22 +181,23 @@ check "no fim, o relatório existe e C1 está inativa (RN-11 d)" "SELECT ($COUNT
 
 # ---------------------------------------------------------------------------
 echo "== 3a. Inativação de C1 segura × troca da célula de um relatório de C2 para C1"
+# Desde o E2.11 (RN-16), a troca de célula é recusada pela save_cell_report antes de tocar em C1: não espera.
 base
-q "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES ('$R1', '$C2', public.sp_today(), '23:59', true, 'R1')" >/dev/null
+ins_r1 "$C2"
 pair s3a "$U_PEDRO" "BEGIN; $INACTIVATE SELECT pg_sleep($HOLD); COMMIT;" \
-         "$U_PEDRO" "UPDATE public.cell_reports SET cell_id = '$C1' WHERE id = '$R1';"
+         "$U_PEDRO" "$MOVE_R1"
 show s3a
 check "A inativa C1" "SELECT $(is_ok "$TMP/s3a.A")"
-check "B esperou a inativação" "SELECT $(waited "$TMP/s3a.B")"
-check "B recebe cell_inactive" "SELECT $(is_inactive_refusal "$TMP/s3a.B")"
+check "B não esperou" "SELECT $(no_wait "$TMP/s3a.B")"
+check "B recebe report_cell_immutable (E2.11, RN-16)" "SELECT $(grep -q '"code": "report_cell_immutable"' "$TMP/s3a.B" && echo true || echo false)"
 check "o relatório continua em C2" "SELECT cell_id = '$C2' FROM public.cell_reports WHERE id = '$R1'"
 
 echo "== 3b. Troca da célula segura × inativação de C1"
 # Desde o E2.11 (RN-16), a célula de um relatório não pode ser trocada: a troca é recusada
 # (report_cell_immutable) e não segura nada; a inativação não espera.
 base
-q "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES ('$R1', '$C2', public.sp_today(), '23:59', true, 'R1')" >/dev/null
-pair s3b "$U_PEDRO" "BEGIN; UPDATE public.cell_reports SET cell_id = '$C1' WHERE id = '$R1'; SELECT pg_sleep($HOLD); COMMIT;" \
+ins_r1 "$C2"
+pair s3b "$U_PEDRO" "BEGIN; $MOVE_R1 SELECT pg_sleep($HOLD); COMMIT;" \
          "$U_PEDRO" "$INACTIVATE"
 show s3b
 check "A recebe report_cell_immutable (E2.11, RN-16)" "SELECT $(grep -q '"code": "report_cell_immutable"' "$TMP/s3b.A" && echo true || echo false)"
@@ -215,8 +221,8 @@ check "o relatório existe e C1 está ativa" "SELECT ($COUNT_C1) = 1 AND (SELECT
 # ---------------------------------------------------------------------------
 echo "== 5a. Troca do tema segura × inativação (sem espera)"
 base
-q "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES ('$R1', '$C1', public.sp_today(), '23:59', true, 'R1')" >/dev/null
-pair s5a "$U_PEDRO" "BEGIN; UPDATE public.cell_reports SET theme = 'novo tema' WHERE id = '$R1'; SELECT pg_sleep($HOLD); COMMIT;" \
+ins_r1 "$C1"
+pair s5a "$U_PEDRO" "BEGIN; $THEME_R1 SELECT pg_sleep($HOLD); COMMIT;" \
          "$U_PEDRO" "$INACTIVATE"
 show s5a
 check "A muda o tema" "SELECT $(is_ok "$TMP/s5a.A")"
@@ -226,9 +232,9 @@ check "no fim, o tema mudou e C1 está inativa" \
 
 echo "== 5b. Inativação segura × troca do tema (sem espera)"
 base
-q "INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES ('$R1', '$C1', public.sp_today(), '23:59', true, 'R1')" >/dev/null
+ins_r1 "$C1"
 pair s5b "$U_PEDRO" "BEGIN; $INACTIVATE SELECT pg_sleep($HOLD); COMMIT;" \
-         "$U_PEDRO" "UPDATE public.cell_reports SET theme = 'novo tema' WHERE id = '$R1';"
+         "$U_PEDRO" "$THEME_R1"
 show s5b
 check "A inativa C1" "SELECT $(is_ok "$TMP/s5b.A")"
 check "B muda o tema sem esperar (RN-11 d)" "SELECT $(is_ok "$TMP/s5b.B") AND $(no_wait "$TMP/s5b.B")"

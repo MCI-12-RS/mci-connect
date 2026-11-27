@@ -42,6 +42,10 @@
 
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT plan(148);
@@ -180,7 +184,8 @@ INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day,
   (pg_temp.c(2), pg_temp.m(26), pg_temp.m(26), pg_temp.m(25), 'Discipulado',   'Terça',   '20:00', true),
   (pg_temp.c(3), pg_temp.m(30), pg_temp.m(30), pg_temp.m(30), 'Evangelística', 'Segunda', '20:00', true),
   (pg_temp.c(4), pg_temp.m(31), pg_temp.m(31), pg_temp.m(31), 'Evangelística', 'Sexta',   '20:00', true),
-  (pg_temp.c(5), pg_temp.m(33), pg_temp.m(33), pg_temp.m(33), 'Evangelística', 'Domingo', '10:00', true),
+  -- E2.11: reunião no domingo às 00:00 (o lançamento desta semana é aceito a qualquer hora, RN-06).
+  (pg_temp.c(5), pg_temp.m(33), pg_temp.m(33), pg_temp.m(33), 'Evangelística', 'Domingo', '00:00', true),
   (pg_temp.c(6), pg_temp.m(40), pg_temp.m(40), pg_temp.m(40), 'Evangelística', 'Quinta',  '20:00', true),
   (pg_temp.c(7), pg_temp.m(34), pg_temp.m(34), pg_temp.m(34), 'Discipulado',   'Quinta',  '20:00', true),
   (pg_temp.c(8), pg_temp.m(36), pg_temp.m(36), pg_temp.m(36), 'Evangelística', 'Domingo', '09:00', true);
@@ -215,8 +220,17 @@ INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held, delet
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES
   (pg_temp.r(71), pg_temp.m(32)),
   (pg_temp.r(72), pg_temp.m(28)), (pg_temp.r(72), pg_temp.m(27));
+-- E2.11: a oferta não tem mais padrão e é obrigatória na edição da célula realizada (RN-13).
+UPDATE public.cell_reports SET offering = 0 WHERE offering IS NULL;
 SET LOCAL session_replication_role = origin;
 SELECT private.rebuild_member_hierarchy();
+
+-- E2.11 PR 2: lançamento e edição só pelas RPCs.
+CREATE FUNCTION pg_temp.edit(_report uuid, _patch jsonb, _parts uuid[] DEFAULT NULL) RETURNS text LANGUAGE sql IMMUTABLE AS
+$$ SELECT format('SELECT * FROM public.save_cell_report(%L, %L::jsonb, %L::uuid[])', _report, _patch, _parts) $$;
+CREATE FUNCTION pg_temp.submit(_cell uuid, _date date, _theme text, _id uuid DEFAULT NULL) RETURNS text LANGUAGE sql IMMUTABLE AS
+$$ SELECT format('SELECT * FROM public.submit_cell_report(%L, %L::jsonb)', coalesce(_id, gen_random_uuid()),
+                 jsonb_build_object('cell_id', _cell, 'date', _date, 'time', '00:00', 'theme', _theme, 'offering', 0)) $$;
 
 -- ===========================================================================
 -- 1. RN-01 e RN-02: excluir célula e relatório — 14
@@ -273,8 +287,8 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_cell_report(%
   'RN-07: excluir de novo um relatório excluído dá not_found_or_deleted');
 SELECT is(pg_temp.try(1, format('SELECT public.delete_cell_report(%L)', pg_temp.r(73))) ->> 'message',
   'Este relatório não existe ou já foi excluído.', 'RN-07: texto do relatório');
-SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Editado' WHERE id = %L$$, pg_temp.r(73))) ->> 'rows', '0',
-  'RN-07: PATCH num relatório excluído volta com 0 linhas');
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(73), '{"theme": "Editado"}'))), 'not_found_or_deleted',
+  'RN-07: editar um relatório excluído dá not_found_or_deleted (E2.11: pela save_cell_report)');
 SELECT is((pg_temp.rep(73)).theme, 'Excluído antes', 'RN-07: nada mudou no relatório excluído');
 
 -- ===========================================================================
@@ -312,28 +326,25 @@ SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_cell(%L)', pg
 SELECT is(pg_temp.dash(4, 'cells_pending', pg_temp.sat2350()), (SELECT pending - 1 FROM yara0),
   'RN-11: a célula excluída sai das pendentes');
 
-SELECT is(pg_temp.code(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Corrigido' WHERE id = %L$$, pg_temp.r(31)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(31), '{"theme": "Corrigido"}'))),
   'report_cell_deleted', 'RN-11: editar o relatório da célula excluída pela API é recusado');
-SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Corrigido' WHERE id = %L$$, pg_temp.r(31))) ->> 'message',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(31), '{"theme": "Corrigido"}')) ->> 'message',
   'A célula deste relatório foi excluída. Restaure a célula para editar o relatório.', 'RN-11: texto');
-SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Corrigido' WHERE id = %L$$, pg_temp.r(31))) -> 'detail',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(31), '{"theme": "Corrigido"}')) -> 'detail',
   jsonb_build_object('code', 'report_cell_deleted', 'cell_id', pg_temp.c(3)), 'RN-11: detalhe com cell_id (AQ-2)');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])',
-                                            pg_temp.r(30), pg_temp.m(35), pg_temp.m(37)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(30), '{}', ARRAY[pg_temp.m(35), pg_temp.m(37)]))),
   'report_cell_deleted', 'RN-11/DA-7: incluir participante no relatório da célula excluída é recusado');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[]::uuid[])', pg_temp.r(30)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(30), '{}', ARRAY[]::uuid[]))),
   'report_cell_deleted', 'RN-11/DA-7: retirar também');
-SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                              VALUES (%L, %L, '20:00', 'Novo', true)$$, pg_temp.c(3), pg_temp.ws()))),
+SELECT is(pg_temp.code(pg_temp.try(1, pg_temp.submit(pg_temp.c(3), pg_temp.ws(), 'Novo'))),
   'cell_deleted', 'RN-11/RN-06: um relatório novo para a célula excluída é recusado');
-SELECT is(pg_temp.code(pg_temp.try(5, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                              VALUES (%L, %L, '20:00', 'Novo da líder', true)$$, pg_temp.c(3), pg_temp.ws()))),
+SELECT is(pg_temp.code(pg_temp.try(5, pg_temp.submit(pg_temp.c(3), pg_temp.ws(), 'Novo da líder'))),
   'cell_deleted', 'RN-11/RN-06: também pela líder da célula (submit_own_cell_report)');
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_cell_report(%L)', pg_temp.r(31)))), '00000',
   'RN-11: quem tem "Excluir Relatórios" exclui um relatório da célula excluída');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.restore_cell_report(%L)', pg_temp.r(31)))), '00000',
   'RN-17: o relatório de uma célula excluída também pode ser restaurado');
-SELECT is(pg_temp.code(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Corrigido' WHERE id = %L$$, pg_temp.r(31)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(31), '{"theme": "Corrigido"}'))),
   'report_cell_deleted', 'RN-17: e continua só para consulta');
 
 -- ===========================================================================
@@ -348,19 +359,16 @@ SELECT is(pg_temp.val(1, format('SELECT last_report_date FROM public.cells_view 
   'RN-08/RN-12: last_report_date ignora o relatório excluído');
 SELECT is(pg_temp.dash(4, 'cells_pending', pg_temp.sat2350()), (SELECT pending + 1 FROM zeca0),
   'RN-12: a reunião da semana já passou (sábado 23:50), então a célula volta a pendente');
-SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.cell_reports (id, cell_id, date, time, theme, was_held)
-                                              VALUES (%L, %L, %L, '10:00', 'Relatório certo', true)$$, pg_temp.r(53), pg_temp.c(5), pg_temp.ws()))),
+SELECT is(pg_temp.code(pg_temp.try(1, pg_temp.submit(pg_temp.c(5), pg_temp.ws(), 'Relatório certo', pg_temp.r(53)))),
   '00000', 'RN-12: a semana liberada aceita outro relatório (índice parcial)');
 SELECT is(pg_temp.dash(4, 'cells_pending', pg_temp.sat2350()), (SELECT pending FROM zeca0),
   'RN-12: com o relatório novo, a célula deixa de estar pendente');
-SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                              VALUES (%L, %L, '10:00', 'Duplicado', true)$$, pg_temp.c(5), pg_temp.ws()))),
-  '23505', 'RN-12/REL-03: um segundo relatório não excluído na mesma semana continua recusado');
+SELECT is(pg_temp.code(pg_temp.try(1, pg_temp.submit(pg_temp.c(5), pg_temp.ws(), 'Duplicado'))),
+  'report_week_taken', 'RN-12/REL-03: um segundo relatório não excluído na mesma semana continua recusado (E2.11)');
 SELECT is(pg_temp.code(pg_temp.try(2, format('SELECT public.delete_cell_report(%L)', pg_temp.r(51)))), '00000',
   'RN-12: LE exclui o relatório da semana passada');
-SELECT is(pg_temp.code(pg_temp.try(1, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                              VALUES (%L, %L, '10:00', 'Atrasado', true)$$, pg_temp.c(5), pg_temp.ws(1)))),
-  '23514', 'RN-12/REL-02: a semana que já passou continua fechada para relatório novo');
+SELECT is(pg_temp.code(pg_temp.try(1, pg_temp.submit(pg_temp.c(5), pg_temp.ws(1), 'Atrasado'))),
+  'report_not_current_week', 'RN-12/REL-02: a semana que já passou continua fechada para relatório novo (E2.11)');
 
 -- ===========================================================================
 -- 5. RN-08 e RN-09: vínculo celular, link direto, busca e histórico — 13
@@ -400,50 +408,43 @@ SELECT is(pg_temp.val(1, format($$SELECT string_agg(DISTINCT action::text || ':'
 -- ===========================================================================
 -- 6. RN-13: participante excluído no histórico — 18
 -- ===========================================================================
-SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Ana, Bruno e Sara' WHERE id = %L$$, pg_temp.r(72))) ->> 'rows',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{"theme": "Ana, Bruno e Sara"}')) ->> 'rows',
   '1', 'RN-13: quem tem "Editar Relatórios" muda o tema');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)]::uuid[]))),
   '00000', 'RN-13: e grava Ana, Bruno e Sara (o conjunto final, com a excluída)');
 SELECT is(pg_temp.parts(72), (SELECT array_agg(x ORDER BY x) FROM unnest(ARRAY[pg_temp.m(27), pg_temp.m(28), pg_temp.m(29)]) x),
   'RN-13: o relatório fica com Ana, Bruno e Sara (Sara preservada, sem duplicar)');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(29)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29)]::uuid[]))),
   'deleted_participant_removal', 'RN-13: omitir Sara da lista é recusado');
-SELECT is(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])',
-                                pg_temp.r(72), pg_temp.m(28), pg_temp.m(29))) -> 'detail',
-  jsonb_build_object('code', 'deleted_participant_removal', 'member_id', pg_temp.m(27)), 'RN-13: detalhe com o member_id');
-SELECT is(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])',
-                                pg_temp.r(72), pg_temp.m(28), pg_temp.m(29))) ->> 'message',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29)]::uuid[])) -> 'detail',
+  jsonb_build_object('code', 'deleted_participant_removal', 'field', 'participant_ids', 'member_id', pg_temp.m(27)),
+  'RN-13: detalhe com o member_id (e o campo, E2.11)');
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29)]::uuid[])) ->> 'message',
   'Não é possível retirar um participante cujo cadastro foi excluído.', 'RN-13: texto');
 SELECT is(cardinality(pg_temp.parts(72)), 3, 'RN-13: e nada muda (Sara continua)');
 SELECT is(pg_temp.code(pg_temp.try(3, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
                                             pg_temp.r(72), pg_temp.m(27)))),
-  'deleted_participant_removal', 'RN-13: DELETE direto de Sara pela API é recusado');
+  '42501', 'RN-13: DELETE direto de Sara pela API é recusado (42501 de privilégio, E2.11)');
 SELECT is(pg_temp.code(pg_temp.try(NULL, format('DELETE FROM public.cell_report_participants WHERE report_id = %L AND member_id = %L',
                                                pg_temp.r(72), pg_temp.m(27)))),
   'deleted_participant_removal', 'RN-13/DT-27: também como postgres (service role)');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(27)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(27)]::uuid[]))),
   '00000', 'RN-13: retirar os participantes não excluídos, mantendo Sara, é aceito');
 SELECT is(pg_temp.parts(72), ARRAY[pg_temp.m(27)], 'RN-13: o relatório fica só com Sara');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L, %L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25)]::uuid[]))),
   '00000', 'RN-13 (controle): incluir Quintino enquanto ele não está excluído é aceito');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L, %L, %L, NULL]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25)]::uuid[]))),
   '00000', 'DT-15: ids repetidos e nulos são ignorados');
 SELECT is(cardinality(pg_temp.parts(72)), 4, 'DT-15: o conjunto continua com 4 participantes');
-SELECT is(pg_temp.code(pg_temp.try(6, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)))),
-  '42501', 'DT-15: sem política de DELETE, retirar um participante dá 42501 (INVOKER, o RLS vale)');
+SELECT is(pg_temp.code(pg_temp.try(6, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)]::uuid[]))),
+  '42501', 'DT-15: sem Editar Relatórios de Células, retirar um participante dá 42501 (E2.11)');
 SELECT is(cardinality(pg_temp.parts(72)), 4, 'DT-15: e nada muda');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, (SELECT array_agg(gen_random_uuid()) FROM generate_series(1, 1001)))',
-                                            pg_temp.r(72)))),
+SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT * FROM public.save_cell_report(%L, %L::jsonb, (SELECT array_agg(gen_random_uuid()) FROM generate_series(1, 1001)))',
+                                            pg_temp.r(72), '{}'))),
   'too_many_participants', 'DT-15: mais de 1000 participantes é recusado');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', gen_random_uuid(), pg_temp.m(28)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(gen_random_uuid(), '{}', ARRAY[pg_temp.m(28)]))),
   'not_found_or_deleted', 'DT-15: relatório inexistente → not_found_or_deleted');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(73), pg_temp.m(28)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(73), '{}', ARRAY[pg_temp.m(28)]::uuid[]))),
   'not_found_or_deleted', 'RN-07: relatório excluído não recebe participantes');
 
 -- ===========================================================================
@@ -451,8 +452,7 @@ SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_part
 -- ===========================================================================
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_cell(%L)', pg_temp.c(2)))), '00000',
   'RN-06: AD exclui a célula de Rui (anfitrião Quintino)');
-SELECT is(pg_temp.code(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L]::uuid[])',
-                                            pg_temp.r(72), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)))),
+SELECT is(pg_temp.code(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29), pg_temp.m(27)]::uuid[]))),
   '00000', 'RN-06 (preparação): Quintino sai do relatório antes de ser excluído');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.delete_member(%L)', pg_temp.m(25)))), '00000',
   'RN-06: AD exclui Quintino (a célula de Rui, excluída, não impede)');
@@ -477,19 +477,16 @@ SELECT is(pg_temp.try(1, format($$INSERT INTO public.cells (leader_id, host_id, 
   'host_id', 'RN-06: célula nova com anfitrião excluído → host_id');
 SELECT is(pg_temp.try(1, format('UPDATE public.cells SET timothy_id = %L WHERE id = %L', pg_temp.m(25), pg_temp.c(7))) -> 'detail' ->> 'field',
   'timothy_id', 'RN-06: trocar o timóteo por um excluído é recusado');
-SELECT is(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L, %L, %L]::uuid[])',
-                                pg_temp.r(72), pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25))) -> 'detail',
-  jsonb_build_object('code', 'deleted_member_chosen', 'field', 'member_id', 'member_id', pg_temp.m(25)),
-  'RN-06/RN-13: excluído como participante novo → deleted_member_chosen (member_id)');
-SELECT is(pg_temp.try(1, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                  VALUES (%L, %L, '20:00', 'Para célula excluída', true)$$, pg_temp.c(2), pg_temp.ws())) -> 'detail',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(72), '{}', ARRAY[pg_temp.m(28), pg_temp.m(29), pg_temp.m(27), pg_temp.m(25)]::uuid[])) -> 'detail',
+  jsonb_build_object('code', 'deleted_member_chosen', 'field', 'participant_ids', 'member_id', pg_temp.m(25)),
+  'RN-06/RN-13: excluído como participante novo → deleted_member_chosen (member_id; campo participant_ids, E2.11)');
+SELECT is(pg_temp.try(1, pg_temp.submit(pg_temp.c(2), pg_temp.ws(), 'Para célula excluída')) -> 'detail',
   jsonb_build_object('code', 'cell_deleted', 'cell_id', pg_temp.c(2)),
   'RN-06: relatório para a célula excluída de Rui → cell_deleted');
-SELECT is(pg_temp.try(1, format($$INSERT INTO public.cell_reports (cell_id, date, time, theme, was_held)
-                                  VALUES (%L, %L, '20:00', 'x', true)$$, pg_temp.c(2), pg_temp.ws())) ->> 'message',
+SELECT is(pg_temp.try(1, pg_temp.submit(pg_temp.c(2), pg_temp.ws(), 'x')) ->> 'message',
   'Esta célula foi excluída e não recebe relatórios.', 'RN-06: texto');
-SELECT is(pg_temp.code(pg_temp.try(1, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(2), pg_temp.r(75)))),
-  'cell_deleted', 'RN-06: passar um relatório para a célula excluída é recusado');
+SELECT is(pg_temp.code(pg_temp.try(1, pg_temp.edit(pg_temp.r(75), jsonb_build_object('cell_id', pg_temp.c(2))))),
+  'report_cell_immutable', 'RN-06: passar um relatório para a célula excluída é recusado (E2.11: a célula não muda, RN-16)');
 SELECT is(pg_temp.code(pg_temp.try(NULL, format('UPDATE public.members SET leader_id = %L WHERE id = %L', pg_temp.m(25), pg_temp.m(37)))),
   'deleted_member_chosen', 'RN-06/DT-27: vale também como postgres (service role)');
 
@@ -544,7 +541,7 @@ SELECT is(pg_temp.val(4, format('SELECT count(*) FROM public.cells_view WHERE id
   'RN-17: ela volta às listas');
 SELECT is((SELECT total_cells FROM private.member_hierarchy WHERE member_id = pg_temp.m(26)), (SELECT total_cells + 1 FROM rui0),
   'RN-17/RN-10: e aos totais');
-SELECT is(pg_temp.try(3, format($$UPDATE public.cell_reports SET theme = 'Editável de novo' WHERE id = %L$$, pg_temp.r(20))) ->> 'rows',
+SELECT is(pg_temp.try(3, pg_temp.edit(pg_temp.r(20), '{"theme": "Editável de novo"}')) ->> 'rows',
   '1', 'RN-17: os relatórios dela voltam a poder ser editados');
 SELECT is(pg_temp.code(pg_temp.try(1, format('SELECT public.restore_cell(%L)', pg_temp.c(2)))), 'not_deleted',
   'RN-15: restaurar uma célula que não está excluída é recusado');

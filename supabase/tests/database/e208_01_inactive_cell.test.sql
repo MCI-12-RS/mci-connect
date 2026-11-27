@@ -25,6 +25,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
@@ -92,10 +96,10 @@ BEGIN
   END;
 END $$;
 
--- INSERT de relatório da semana atual na célula dada.
+-- Lançamento do relatório da semana atual na célula dada (E2.11 PR 2: só pela submit_cell_report; hoje,
+-- às 00:00, depois da reunião, que a massa põe hoje às 00:00).
 CREATE FUNCTION pg_temp.ins(_cell uuid) RETURNS text LANGUAGE sql IMMUTABLE AS
-$$ SELECT format($i$INSERT INTO public.cell_reports (cell_id, date, time, was_held, theme)
-                   VALUES (%L, public.sp_today(), '23:59', true, 'tema')$i$, _cell) $$;
+$$ SELECT format($i$SELECT * FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'tema', 'offering', 0))$i$, _cell) $$;
 
 -- Paridade da coluna (DT-07): ids da cells_view com can_submit_report, contra
 -- is_active AND can_submit_report(id), como o usuário n. Devolve '' se iguais.
@@ -141,17 +145,21 @@ UPDATE public.members SET spouse_id = pg_temp.m(8) WHERE id = pg_temp.m(7);
 INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time) VALUES
  (pg_temp.c(1), pg_temp.m(7), pg_temp.m(9), pg_temp.m(12), 'Evangelística', 'Quarta', '20:00'),
  (pg_temp.c(2), pg_temp.m(14), pg_temp.m(15), pg_temp.m(9), 'Evangelística', 'Quinta', '20:00');
+-- E2.11: as duas se reúnem hoje às 00:00 (o lançamento só é aceito depois da reunião, RN-06).
+UPDATE public.cells SET meeting_day = (public.cell_weekdays())[EXTRACT(dow FROM public.sp_today())::int + 1],
+                        meeting_time = '00:00'
+ WHERE id IN (pg_temp.c(1), pg_temp.c(2));
 -- R1: C1, semana passada (em replica, por causa da semana atual). R4: C2, esta
 -- semana. R5: C1, esta semana, lançado antes da inativação (a 1ª das duas
 -- chamadas do lançamento de hoje, leitura técnica 7).
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
- (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1');
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering) VALUES
+ (pg_temp.r(1), pg_temp.c(1), public.week_start(public.sp_today()) - 4, '20:00', true, 'R1', 0);
 INSERT INTO public.cell_report_participants (report_id, member_id) VALUES (pg_temp.r(1), pg_temp.m(9));
 SET LOCAL session_replication_role = origin;
-INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme) VALUES
- (pg_temp.r(4), pg_temp.c(2), public.sp_today(), '23:59', true, 'R4'),
- (pg_temp.r(5), pg_temp.c(1), public.sp_today(), '23:59', true, 'R5');
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering) VALUES
+ (pg_temp.r(4), pg_temp.c(2), public.sp_today(), '00:00', true, 'R4', 0),
+ (pg_temp.r(5), pg_temp.c(1), public.sp_today(), '00:00', true, 'R5', 0);
 
 SELECT plan(89);
 
@@ -175,13 +183,11 @@ SELECT is(
   (SELECT array_agg(t.tgname::text ORDER BY t.tgname) FROM pg_trigger t
     WHERE t.tgrelid = 'public.cell_reports'::regclass AND NOT t.tgisinternal
       AND (t.tgtype & 2) <> 0                                   -- BEFORE
-      AND t.tgname IN ('a0_check_insert_permission', 'aa_enforce_cell_report_rules', 'ab_enforce_cell_report_scope',
-                       'ac_enforce_cell_report_active', 'enforce_cell_report_current_week_trigger',
-                       'enforce_unique_weekly_cell_report_trigger')),
-  ARRAY['a0_check_insert_permission', 'aa_enforce_cell_report_rules', 'ab_enforce_cell_report_scope',
-        'ac_enforce_cell_report_active', 'enforce_cell_report_current_week_trigger',
-        'enforce_unique_weekly_cell_report_trigger'],
-  'RN-14, DA-7: ac_ dispara depois do ab_ (escopo) e antes dos triggers de semana');
+      AND t.tgname IN ('a0_guard_cell_report_write', 'aa_enforce_cell_report_rules', 'ac_enforce_cell_report_active',
+                       'ad_cell_report_snapshot')),
+  ARRAY['a0_guard_cell_report_write', 'aa_enforce_cell_report_rules', 'ac_enforce_cell_report_active',
+        'ad_cell_report_snapshot'],
+  'RN-14, DA-7: ac_ dispara depois da guarda e do aa_ e antes do retrato (E2.11: escopo e semana na RPC)');
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attnum) FROM pg_attribute a
     WHERE a.attrelid = 'public.cells_view'::regclass AND a.attnum > 0 AND NOT a.attisdropped),
@@ -223,7 +229,7 @@ INSERT INTO res VALUES
   ('service', pg_temp.run_as('service_role', pg_temp.ins(pg_temp.c(1)))),
   ('pg',      pg_temp.run_as('postgres', pg_temp.ins(pg_temp.c(1)))),
   ('move_pedro',   pg_temp.try(3, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(1), pg_temp.r(4)))),
-  ('move_service', pg_temp.run_as('service_role', format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(1), pg_temp.r(4)))),
+  ('move_service', pg_temp.run_as('service_role', format($q$SELECT * FROM public.save_cell_report(%L, jsonb_build_object('cell_id', %L::uuid))$q$, pg_temp.r(4), pg_temp.c(1)))),
   ('move_pg',      pg_temp.run_as('postgres', format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(1), pg_temp.r(4))));
 
 SELECT is(v ->> 'code', 'cell_inactive', 'RN-11 (c): Carla (anfitriã) lança em C1 inativa: cell_inactive') FROM res WHERE k = 'carla';
@@ -242,8 +248,8 @@ SELECT is((SELECT count(*)::int FROM public.cell_reports
             WHERE cell_id = pg_temp.c(1) AND public.week_start(date) = public.week_start(public.sp_today())), 1,
   'RN-11 (c): nada foi gravado (só o R5, lançado antes da inativação)');
 
-SELECT is(v ->> 'code', 'cell_inactive', 'RN-11 (c): Pedro passa para C1 inativa um relatório de C2: cell_inactive') FROM res WHERE k = 'move_pedro';
-SELECT is(v ->> 'code', 'cell_inactive', 'RN-11 (c): a service role, também') FROM res WHERE k = 'move_service';
+SELECT is(v ->> 'code', '42501', 'RN-11 (c): Pedro passa para C1 inativa um relatório de C2 pelo UPDATE direto: 42501 (E2.11: sem escrita direta)') FROM res WHERE k = 'move_pedro';
+SELECT is(v ->> 'code', 'report_cell_immutable', 'RN-11 (c): a service role, pela save_cell_report: a célula do relatório não muda (E2.11, RN-16)') FROM res WHERE k = 'move_service';
 SELECT is(v ->> 'code', 'cell_inactive', 'RN-11 (c): o postgres, também') FROM res WHERE k = 'move_pg';
 SELECT is((SELECT cell_id FROM public.cell_reports WHERE id = pg_temp.r(4)), pg_temp.c(2), 'RN-11 (c): o relatório continua em C2');
 
@@ -265,24 +271,24 @@ SELECT is(pg_temp.code(14, pg_temp.ins(pg_temp.c(1))), 'not_found_or_deleted',
   'DA-7: Diego (não vê C1): not_found_or_deleted, não cell_inactive');
 SELECT is(pg_temp.code(10, pg_temp.ins(pg_temp.c(1))), 'report_submit_not_allowed',
   'DA-7: Fábio (vê C1, não é pessoa dela): report_submit_not_allowed, não cell_inactive');
-SELECT is(pg_temp.code(14, format('UPDATE public.cell_reports SET cell_id = %L WHERE id = %L', pg_temp.c(1), pg_temp.r(4))),
-  'not_found_or_deleted', 'DA-7: Diego passa o relatório de C2 para C1 (que não vê): not_found_or_deleted');
+SELECT is(pg_temp.code(14, format($q$SELECT * FROM public.save_cell_report(%L, jsonb_build_object('cell_id', %L::uuid))$q$, pg_temp.r(4), pg_temp.c(1))),
+  'report_cell_immutable', 'DA-7: Diego passa o relatório de C2 para C1: report_cell_immutable (E2.11, RN-16: a célula não muda)');
 
 -- ===========================================================================
 -- RN-11 (d), DA-5, DA-6: o que já existe continua editável
 -- ===========================================================================
-SELECT is(pg_temp.try(3, format($s$UPDATE public.cell_reports SET theme = 'novo tema' WHERE id = %L$s$, pg_temp.r(1))),
+SELECT is(pg_temp.try(3, format($s$SELECT * FROM public.save_cell_report(%L, '{"theme": "novo tema"}')$s$, pg_temp.r(1))),
   '{"state":"00000","code":"00000","rows":1}'::jsonb, 'RN-11 (d): Pedro muda o tema do relatório da semana passada de C1 inativa');
-SELECT is(pg_temp.try(3, format($s$UPDATE public.cell_reports SET cell_id = %L, theme = 'outro' WHERE id = %L$s$, pg_temp.c(1), pg_temp.r(1))),
+SELECT is(pg_temp.try(3, format($s$SELECT * FROM public.save_cell_report(%L, jsonb_build_object('cell_id', %L::uuid, 'theme', 'outro'))$s$, pg_temp.r(1), pg_temp.c(1))),
   '{"state":"00000","code":"00000","rows":1}'::jsonb, 'RN-11 (d): reenviar a mesma célula (cell_id sem mudança) é aceito');
-SELECT is(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L, %L]::uuid[])', pg_temp.r(1), pg_temp.m(9), pg_temp.m(11))) ->> 'code',
+SELECT is(pg_temp.try(3, format($s$SELECT * FROM public.save_cell_report(%L, '{}', ARRAY[%L, %L]::uuid[])$s$, pg_temp.r(1), pg_temp.m(9), pg_temp.m(11))) ->> 'code',
   '00000', 'DA-6: Pedro inclui um participante no relatório de C1 inativa');
-SELECT is(pg_temp.try(3, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(1), pg_temp.m(11))) ->> 'code',
+SELECT is(pg_temp.try(3, format($s$SELECT * FROM public.save_cell_report(%L, '{}', ARRAY[%L]::uuid[])$s$, pg_temp.r(1), pg_temp.m(9))) ->> 'code',
   '00000', 'DA-6: Pedro retira um participante do relatório de C1 inativa');
 SELECT is((SELECT array_agg(member_id) FROM public.cell_report_participants WHERE report_id = pg_temp.r(1)),
-  ARRAY[pg_temp.m(11)], 'DA-6: os participantes ficaram como Pedro gravou');
-SELECT is(pg_temp.try(12, format('SELECT public.set_cell_report_participants(%L, ARRAY[%L]::uuid[])', pg_temp.r(5), pg_temp.m(7))) ->> 'code',
-  '00000', 'DA-6: Carla grava os participantes do relatório desta semana, lançado antes da inativação');
+  ARRAY[pg_temp.m(9)], 'DA-6: os participantes ficaram como Pedro gravou');
+SELECT is(pg_temp.try(12, format($s$SELECT * FROM public.save_cell_report(%L, '{}', ARRAY[%L]::uuid[])$s$, pg_temp.r(5), pg_temp.m(7))) ->> 'code',
+  '42501', 'E2.11 (fim da DA-5): Carla, que só lança, não mexe nos participantes depois do envio');
 SELECT is(pg_temp.try(3, format('SELECT public.delete_cell_report(%L)', pg_temp.r(1))) ->> 'code', '00000',
   'RN-11 (d): Pedro exclui o relatório de C1 inativa');
 SELECT is(pg_temp.try(16, format('SELECT public.restore_cell_report(%L)', pg_temp.r(1))) ->> 'code', '00000',

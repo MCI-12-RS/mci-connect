@@ -7,7 +7,7 @@
 # começa no meio e espera. No fim, o estado é conferido: as duas gravações valem, nenhuma dá deadlock, e a
 # última alteração de cada registro é a do último evento dele (RN-13 b).
 #   1. duas alterações do mesmo membro: a autoria final é a do último evento;
-#   2. participantes pela API × save_cell_report no mesmo relatório;
+#   2. duas save_cell_report no mesmo relatório (desde o E2.11, a escrita direta acabou);
 #   3. participantes × delete_cell_report e restore_cell_report × participantes;
 #   4. troca do cônjuge × alteração do cônjuge;
 #   5. duas trocas da função padrão: a anterior certa em cada evento;
@@ -89,7 +89,9 @@ INSERT INTO public.roles (id, name) VALUES ('$RA', 'E205 Conc Função A'), ('$R
 INSERT INTO public.role_permissions (role_id, permission) VALUES ('$RA', 'view_dashboard'), ('$RB', 'view_dashboard');
 COMMIT;
 SELECT set_config('request.jwt.claims', '{"sub":"$U1","role":"authenticated"}', false);
-SELECT public.save_cell_report(NULL, jsonb_build_object('cell_id', '$C1'::uuid, 'date', public.sp_today(), 'time', '19:30', 'theme', 'Fé'),
+-- E2.11: o lançamento de transição, com as regras novas (00:00, depois da reunião; oferta obrigatória).
+-- O pastor, Otávio e Paula (líder, timóteo e anfitriã) entram como automáticos.
+SELECT public.save_cell_report(NULL, jsonb_build_object('cell_id', '$C1'::uuid, 'date', public.sp_today(), 'time', '00:00', 'theme', 'Fé', 'offering', 0),
                                ARRAY['$M_O']::uuid[]);
 SQL
 }
@@ -146,25 +148,27 @@ check "leitura técnica 1: o evento de Beto tem o momento maior que o de Ana" \
   "SELECT (SELECT max(occurred_at) FROM public.events WHERE entity_id = '$M_O' AND actor_user_id = '$U2')
         > (SELECT max(occurred_at) FROM public.events WHERE entity_id = '$M_O' AND actor_user_id = '$U1')"
 
-echo "2. participantes pela API × save_cell_report"
+# E2.11: só pela save_cell_report (a escrita direta acabou); os registrados (pastor, Otávio, Paula) ficam.
+AUTO="'$M_P', '$M_O', '$M_PA'"
+echo "2. participantes × save_cell_report (duas edições)"
 base; R=$(R1)
-pair c2 "$U1" "BEGIN; INSERT INTO public.cell_report_participants (report_id, member_id) VALUES ('$R', '$M_L'); SELECT pg_sleep($HOLD); COMMIT;" \
-        "$U2" "SELECT public.save_cell_report('$R', '{\"theme\": \"Nova\"}', ARRAY['$M_O', '$M_PA']::uuid[]);"
+pair c2 "$U1" "BEGIN; SELECT public.save_cell_report('$R', '{}', ARRAY[$AUTO, '$M_L']::uuid[]); SELECT pg_sleep($HOLD); COMMIT;" \
+        "$U2" "SELECT public.save_cell_report('$R', '{\"theme\": \"Nova\"}', ARRAY[$AUTO]::uuid[]);"
 both_ok c2
-check "o conjunto final é o da save_cell_report (Otávio e Paula; Lia, incluída antes, saiu)" \
-  "SELECT array_agg(member_id ORDER BY member_id) = ARRAY['$M_O', '$M_PA']::uuid[] FROM public.cell_report_participants WHERE report_id = '$R'"
-check "dois eventos de alteração: o de Ana (Lia incluída) e o de Beto (tema, Paula incluída e Lia retirada)" \
+check "o conjunto final é o da segunda (os três registrados; Lia, incluída antes, saiu)" \
+  "SELECT array_agg(member_id ORDER BY member_id) = (SELECT array_agg(x ORDER BY x) FROM unnest(ARRAY[$AUTO]::uuid[]) x) FROM public.cell_report_participants WHERE report_id = '$R'"
+check "dois eventos de alteração: o de Ana (Lia incluída) e o de Beto (tema e Lia retirada)" \
   "SELECT array_agg(jsonb_build_object('a', actor_user_id, 'add', changes #> '{participants,added}', 'rm', changes #> '{participants,removed}',
                                        'f', changed_fields) ORDER BY seq)
         = ARRAY[jsonb_build_object('a', '$U1', 'add', jsonb_build_array(jsonb_build_object('id', '$M_L', 'name', 'E205 Conc Lia')), 'rm', '[]'::jsonb, 'f', NULL),
-                jsonb_build_object('a', '$U2', 'add', jsonb_build_array(jsonb_build_object('id', '$M_PA', 'name', 'E205 Conc Paula')),
+                jsonb_build_object('a', '$U2', 'add', '[]'::jsonb,
                                    'rm', jsonb_build_array(jsonb_build_object('id', '$M_L', 'name', 'E205 Conc Lia')), 'f', ARRAY['theme'])]
      FROM public.events WHERE entity_id = '$R' AND action = 'update'"
 matches_last cell_reports cell_report "$R" "RN-13 b: a última alteração do relatório é a de Beto"
 
 echo "3a. participantes × delete_cell_report"
 base; R=$(R1)
-pair c3a "$U1" "BEGIN; INSERT INTO public.cell_report_participants (report_id, member_id) VALUES ('$R', '$M_R'); SELECT pg_sleep($HOLD); COMMIT;" \
+pair c3a "$U1" "BEGIN; SELECT public.save_cell_report('$R', '{}', ARRAY[$AUTO, '$M_R']::uuid[]); SELECT pg_sleep($HOLD); COMMIT;" \
          "$U2" "SELECT public.delete_cell_report('$R');"
 both_ok c3a
 check "o relatório ficou excluído por Beto, com Rita entre os participantes" \
@@ -173,9 +177,9 @@ check "o relatório ficou excluído por Beto, com Rita entre os participantes" \
 matches_last cell_reports cell_report "$R" "RN-13 b: a última alteração é a exclusão (o último evento)"
 echo "3b. restore_cell_report × participantes"
 pair c3b "$U1" "BEGIN; SELECT public.restore_cell_report('$R'); SELECT pg_sleep($HOLD); COMMIT;" \
-         "$U2" "INSERT INTO public.cell_report_participants (report_id, member_id) VALUES ('$R', '$M_L');"
-# Beto espera a trava do relatório; o WITH CHECK da política usa a foto do começo do comando (o relatório
-# ainda excluído) e recusa (42501, como no E2.01). Tentar de novo passa. O que importa: estado válido.
+         "$U2" "SELECT public.save_cell_report('$R', '{}', ARRAY[$AUTO, '$M_R', '$M_L']::uuid[]);"
+# Beto espera a trava do relatório (save_cell_report, FOR NO KEY UPDATE) e relê a linha já restaurada: passa.
+# Fica a tolerância ao 42501 do desenho do E2.05. O que importa: estado válido.
 A=$(outcome "$TMP/c3b.A"); B=$(outcome "$TMP/c3b.B")
 if [ "$A" = "OK" ] && { [ "$B" = "OK" ] || echo "$B" | grep -q '^42501'; }; then echo "  PASS  c3b: Ana restaura; Beto passa ou recebe 42501, sem deadlock (B=$B)"
 else echo "  FAIL  c3b: A=$A | B=$B"; FAILS=$((FAILS + 1)); fi
@@ -183,7 +187,7 @@ check "restaurado por Ana; Lia só entra se a gravação de Beto passou" \
   "SELECT r.deleted_at IS NULL AND (r.updated_by = '$M_B') = EXISTS (SELECT 1 FROM public.cell_report_participants p WHERE p.report_id = r.id AND p.member_id = '$M_L')
      FROM public.cell_reports r WHERE r.id = '$R'"
 matches_last cell_reports cell_report "$R" "RN-13 b: a última alteração é a do último evento"
-session "$U2" "INSERT INTO public.cell_report_participants (report_id, member_id) VALUES ('$R', '$M_L') ON CONFLICT DO NOTHING;" > "$TMP/c3c"
+session "$U2" "SELECT public.save_cell_report('$R', '{}', ARRAY[$AUTO, '$M_R', '$M_L']::uuid[]);" > "$TMP/c3c"
 check "a nova tentativa de Beto grava, e a última alteração passa a ser dele" \
   "SELECT r.updated_by = '$M_B' AND EXISTS (SELECT 1 FROM public.cell_report_participants p WHERE p.report_id = r.id AND p.member_id = '$M_L')
      FROM public.cell_reports r WHERE r.id = '$R'"

@@ -28,6 +28,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 
+-- E2.11 PR 2 (DA-11): as massas gravam relatórios e participantes direto (inclusive de semanas
+-- passadas); fora das RPCs, só com a marca de manutenção.
+SET LOCAL mci.cell_report_write = 'on';
+
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
@@ -427,8 +431,9 @@ INSERT INTO newfn VALUES
   ('public.my_access()', true), ('public.role_options(uuid)', true),
   ('public.save_role(uuid, text, text, public.permission_action[], boolean, timestamp with time zone)', true),
   ('public.delete_role(uuid)', true), ('public.check_member_insert(jsonb)', true),
-  ('public.viewer_can_insert_cell()', true), ('public.viewer_can_insert_cell_report(uuid)', true),
-  ('public.viewer_can_insert_cell_report_participant(uuid)', true),
+  -- E2.11 PR 2: viewer_can_insert_cell_report e _participant saíram; no lugar, as RPCs de relatório.
+  ('public.viewer_can_insert_cell()', true), ('public.submit_cell_report(uuid, jsonb, uuid[])', true),
+  ('public.cell_report_launch_check(uuid)', true),
   ('public.user_has_permission(uuid, public.permission_action)', false),
   ('public.role_effective_permissions(uuid)', false), ('public.viewer_permissions()', false),
   ('public._viewer_scope_anchors()', false);
@@ -492,8 +497,10 @@ SELECT is((SELECT count(*)::int FROM pg_indexes WHERE schemaname = 'public' AND 
   'existe o índice único da função padrão (no máximo uma)');
 SELECT is((SELECT count(*)::int FROM pg_trigger WHERE tgrelid = r.t::regclass AND tgname = r.n AND NOT tgisinternal), 1, 'trigger ' || r.n || ' em ' || r.t)
   FROM (VALUES ('public.members', 'ac_enforce_member_scope'), ('public.members', 'zz_enforce_member_visible_after'),
-               ('public.cells', 'ab_enforce_cell_scope'), ('public.cell_reports', 'ab_enforce_cell_report_scope'),
-               ('public.cell_report_participants', 'ab_enforce_participant_scope'),
+               -- E2.11 PR 2: o escopo de relatórios e participantes passou para as RPCs (sem escrita direta);
+               -- no lugar dos ab_, a guarda a0_guard_cell_report_write.
+               ('public.cells', 'ab_enforce_cell_scope'), ('public.cell_reports', 'a0_guard_cell_report_write'),
+               ('public.cell_report_participants', 'a0_guard_cell_report_write'),
                ('public.roles', 'aa_protect_roles'), ('public.role_permissions', 'aa_protect_role_permissions'),
                ('public.roles', 'zz_roles_exactly_one_default')) r(t, n);
 SELECT is((SELECT tgdeferrable AND tginitdeferred FROM pg_trigger WHERE tgrelid = 'public.roles'::regclass AND tgname = 'zz_roles_exactly_one_default'), true,
