@@ -386,13 +386,14 @@ test.describe("Dashboard (UX-13, UX-14)", () => {
       expect(box!.width).toBeGreaterThanOrEqual(360 - 2 * 24);
 
       await button.click();
-      const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+      const dialog = page.getByRole("dialog", { name: "Novo relatório" });
       await expect(dialog).toBeVisible();
-      await dialog.getByLabel("Tema da Palavra").fill("Tema do atalho");
+      await dialog.getByLabel("Tema *").fill("Tema do atalho");
+      await dialog.getByLabel("Oferta *").fill("0");
 
       const reloaded = page.waitForResponse((r) => new URL(r.url()).pathname === "/rest/v1/rpc/dashboard_summary" && r.request().method() === "POST");
-      await dialog.getByRole("button", { name: "Salvar" }).click();
-      await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+      await dialog.getByRole("button", { name: "Enviar relatório" }).click();
+      await expect(toast(page, "Relatório enviado.")).toBeVisible();
       await reloaded;
       expect(reportsOfCell(1)).toBe(1);
     } finally {
@@ -596,8 +597,8 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
   test("UX-26: o seletor de célula de Caio oferece só C1 e C2", async ({ page }) => {
     await signIn(page, CAIO);
     await openList(page, "/cell-reports", NAME);
-    await page.getByRole("button", { name: "Novo Relatório" }).click();
-    const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+    await page.getByRole("button", { name: "Novo relatório" }).click();
+    const dialog = page.getByRole("dialog", { name: "Novo relatório" });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel("Célula *").click();
     const options = page.getByRole("listbox").getByRole("option");
@@ -611,11 +612,12 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
   test("UX-26: o formulário de Carla abre com C1 escolhida e com a data e o horário preenchidos", async ({ page }) => {
     await signIn(page, CARLA);
     await openList(page, "/cell-reports", NAME);
-    await page.getByRole("button", { name: "Novo Relatório" }).click();
-    const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+    await page.getByRole("button", { name: "Novo relatório" }).click();
+    const dialog = page.getByRole("dialog", { name: "Novo relatório" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(ANDRE.name)).toBeVisible();
-    await expect(dialog.getByLabel("Data *")).not.toHaveValue("");
+    await expect(dialog.getByRole("region", { name: "Dados da célula" }).getByText(ANDRE.name)).toBeVisible();
+    // A reunião de hoje à 00:00: a data é um dia só, como texto (P104), e o horário vem da célula (RN-18).
+    await expect(dialog.getByText(/ \(hoje\)$/)).toBeVisible();
     await expect(dialog.getByLabel("Horário *")).toHaveValue("00:00");
   });
 
@@ -623,8 +625,8 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     setRoleOf(GABRIEL, ROLE_SEND_ANY_VISIBLE);
     await signIn(page, GABRIEL);
     await openList(page, "/cell-reports", NAME);
-    await page.getByRole("button", { name: "Novo Relatório" }).click();
-    const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+    await page.getByRole("button", { name: "Novo relatório" }).click();
+    const dialog = page.getByRole("dialog", { name: "Novo relatório" });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel("Célula *").click();
     const options = page.getByRole("listbox").getByRole("option");
@@ -767,14 +769,16 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     await signIn(page, PEDRO);
     await openList(page, "/cell-reports", NAME);
     await page.getByRole("button", { name: new RegExp(`^Editar o relatório de .* da célula de ${DIEGO.name}$`) }).click();
-    const dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+    const dialog = page.getByRole("dialog", { name: "Editar relatório" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(DIEGO.name, { exact: true }).first()).toBeVisible();
-    await expect(dialog.getByText(HUGO.name, { exact: true })).toBeVisible();
-    await expect(dialog.getByText("Alguns participantes não são do seu ministério: se você retirá-los, não poderá incluí-los de novo.")).toBeVisible();
+    // E2.11 (T9): Diego e Hugo são o líder e o timóteo registrados: ficam na lista fixa, como texto, sem "Retirar".
+    const fixedList = dialog.getByRole("group", { name: "Participantes" }).getByRole("listitem");
+    await expect(fixedList.filter({ hasText: DIEGO.name })).toHaveCount(1);
+    await expect(fixedList.filter({ hasText: HUGO.name })).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: `Retirar ${DIEGO.name}` })).toHaveCount(0);
 
     // O seletor oferece só quem Pedro vê.
-    const input = dialog.getByLabel("Participantes (Membros)");
+    const input = dialog.getByLabel("Outros participantes");
     await input.click();
     await input.fill(DIEGO.name);
     await expect(page.getByText("Nenhum membro do seu ministério encontrado.", { exact: true })).toBeVisible();
@@ -782,9 +786,9 @@ test.describe("Relatórios (RN-04, RN-13, RN-14, UX-26, UX-27)", () => {
     await input.fill("");
     await page.keyboard.press("Escape");
 
-    await dialog.getByLabel("Tema da Palavra").fill("Tema mudado");
-    await dialog.getByRole("button", { name: "Salvar" }).click();
-    await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+    await dialog.getByLabel("Tema *").fill("Tema mudado");
+    await dialog.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(toast(page, "Relatório atualizado.")).toBeVisible();
     expect(reportValue(2, "theme")).toBe("Tema mudado");
     expect(participantsOf(2)).toEqual(names(DIEGO, HUGO, CAIO));
   });
@@ -915,8 +919,8 @@ test.describe("Capturas da revisão de UI (E2E_CAPTURE_DIR)", () => {
       who: PEDRO,
       open: async (page) => {
         await openList(page, "/cell-reports", NAME);
-        await page.getByRole("button", { name: "Novo Relatório" }).click();
-        await expect(page.getByRole("dialog", { name: "Novo Relatório de Célula" })).toBeVisible();
+        await page.getByRole("button", { name: "Novo relatório" }).click();
+        await expect(page.getByRole("dialog", { name: "Novo relatório" })).toBeVisible();
       },
     },
     {
@@ -926,9 +930,9 @@ test.describe("Capturas da revisão de UI (E2E_CAPTURE_DIR)", () => {
       open: async (page) => {
         await openList(page, "/cell-reports", NAME);
         await page.getByRole("button", { name: new RegExp(`^Editar o relatório de .* da célula de ${DIEGO.name}$`) }).click();
-        const dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+        const dialog = page.getByRole("dialog", { name: "Editar relatório" });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByText("Alguns participantes não são do seu ministério", { exact: false })).toBeVisible();
+        await expect(dialog.getByLabel("Tema *")).toBeVisible();
       },
     },
     {
@@ -937,12 +941,13 @@ test.describe("Capturas da revisão de UI (E2E_CAPTURE_DIR)", () => {
       open: async (page) => {
         await openList(page, "/cells", NAME);
         await newReportButton(page, ANDRE).click();
-        const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+        const dialog = page.getByRole("dialog", { name: "Novo relatório" });
         await expect(dialog).toBeVisible();
-        await dialog.getByLabel("Tema da Palavra").fill("Tema");
+        await dialog.getByLabel("Tema *").fill("Tema");
+        await dialog.getByLabel("Oferta *").fill("0");
         // Enquanto o formulário está aberto, a pessoa perde a função: o servidor recusa o envio.
         setRoleOf(PEDRO, ROLE_MINISTRY_ONLY);
-        await dialog.getByRole("button", { name: "Salvar" }).click();
+        await dialog.getByRole("button", { name: "Enviar relatório" }).click();
         await expect(dialog.getByRole("alert").first()).toBeVisible();
       },
       restore: () => resetWorld(),

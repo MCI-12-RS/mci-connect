@@ -568,7 +568,7 @@ test("UX-13 (AD): 'Excluídos'/'Excluídas' no cabeçalho das três listas; em 3
   const lists = [
     { path: "/members", label: "Ver membros excluídos", text: "Excluídos", primary: "Novo membro" },
     { path: "/cells", label: "Ver células excluídas", text: "Excluídas", primary: "Nova célula" },
-    { path: "/cell-reports", label: "Ver relatórios excluídos", text: "Excluídos", primary: "Novo Relatório" },
+    { path: "/cell-reports", label: "Ver relatórios excluídos", text: "Excluídos", primary: "Novo relatório" },
   ];
 
   await page.setViewportSize({ width: 360, height: 800 });

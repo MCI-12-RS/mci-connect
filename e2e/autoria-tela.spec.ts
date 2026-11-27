@@ -235,7 +235,7 @@ test("UX-04: o relatório enviado mostra só 'Enviado por'; incluir um participa
   const openReport = async () => {
     await openList(page, "/cell-reports", LEADER.name);
     await page.getByRole("button", { name: `Editar o relatório de ${brDate} da célula de ${LEADER.name}`, exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+    const dialog = page.getByRole("dialog", { name: "Editar relatório" });
     await expect(dialog).toBeVisible();
     return dialog;
   };
@@ -338,8 +338,8 @@ test("UX-07 (ligação real do isDirty): sem alteração, 'Ver histórico' naveg
   const brDate = sql(env, `SELECT to_char(public.sp_today(), 'DD/MM/YYYY')`);
   await openList(page, "/cell-reports", LEADER.name);
   await page.getByRole("button", { name: `Editar o relatório de ${brDate} da célula de ${LEADER.name}`, exact: true }).click();
-  dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+  dialog = page.getByRole("dialog", { name: "Editar relatório" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel("Tema da Palavra").fill("Tema não salvo");
+  await dialog.getByLabel("Tema *").fill("Tema não salvo");
   await expectAsks(dialog);
 });

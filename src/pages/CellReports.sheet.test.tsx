@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, resetFakeSupabase, respondWith, type FakeResponse } from "@/test/fake-supabase";
 import type { CellReportDetailRow, CellReportPageRow } from "@/lib/cell-reports/fields";
 import CellReports from "./CellReports";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 // "Ver relatório" na lista de Relatórios (E2.01, T7, UXD-7, PO-UX-3): só nas
 // linhas de célula excluída e só com edit_cell_report; o ?report=<id> da URL
@@ -49,7 +50,8 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
   was_held: true,
   reason_not_held: null,
   visitors_count: 0,
-  cell_leader_name: "Carlos Lima",
+  ...reportRowLeaderColumns,
+  snapshot_leader_name: "Carlos Lima",
   cell_street: "Rua das Flores",
   cell_number: "120",
   cell_complement: null,
@@ -59,7 +61,7 @@ const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
 });
 
 // R1: célula de Carlos (não excluída); R2: célula de Rui (excluída).
-const rows = [row({}), row({ id: R2, date: "2026-11-12", cell_leader_name: "Rui Prado", cell_deleted: true })];
+const rows = [row({}), row({ id: R2, date: "2026-11-12", snapshot_leader_name: "Rui Prado", cell_deleted: true })];
 const listResponses: FakeResponse[] = [
   { data: rows, count: rows.length },
   { data: rows.map((r) => ({ id: r.id, participants_count: 3 })) },
@@ -83,6 +85,7 @@ const detail = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailR
   updated_at: null,
   updated_by_kind: null,
   updated_by_name: null,
+  ...reportSnapshotColumns(overrides.cell_leader_name !== undefined ? overrides.cell_leader_name : "Rui Prado"),
   ...overrides,
 });
 const SARA = { member_id: "m9", member_name: "Sara Reis", member_deleted: true };

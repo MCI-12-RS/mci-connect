@@ -123,8 +123,10 @@ async function openCellEdit(page: Page, leader: string) {
 async function openNewReport(page: Page, leader: string) {
   await openList(page, "/cells", leader);
   await page.getByRole("button", { name: `Novo relatório da célula de ${leader}`, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+  const dialog = page.getByRole("dialog", { name: "Novo relatório" });
   await expect(dialog).toBeVisible();
+  // E2.11 (P100): os campos aparecem depois da conferência.
+  await expect(dialog.getByLabel("Tema *")).toBeVisible();
   return dialog;
 }
 
@@ -132,15 +134,15 @@ async function openReportEdit(page: Page, leader: string) {
   const date = sql(env, `SELECT to_char(public.sp_today(), 'DD/MM/YYYY')`);
   await openList(page, "/cell-reports", leader);
   await page.getByRole("button", { name: `Editar o relatório de ${date} da célula de ${leader}`, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Editar Relatório" });
+  const dialog = page.getByRole("dialog", { name: "Editar relatório" });
   await expect(dialog).toBeVisible();
-  // Salvar fica desabilitado até os participantes salvos carregarem.
-  await expect(dialog.getByRole("button", { name: "Salvar", exact: true })).toBeEnabled();
+  // Os campos aparecem depois de ler o relatório, as datas e os participantes (E2.11, AQ-10).
+  await expect(dialog.getByRole("button", { name: "Salvar alterações", exact: true })).toBeEnabled();
   return dialog;
 }
 
 async function pickParticipants(page: Page, dialog: Locator, names: readonly string[]) {
-  const input = dialog.getByLabel("Participantes (Membros)");
+  const input = dialog.getByLabel("Outros participantes");
   await input.click();
   await input.fill(NAME);
   for (const name of names) await page.getByRole("option", { name, exact: true }).click();
@@ -218,13 +220,14 @@ test("RN-04 (d) e (e): o relatório com 8 participantes vai numa chamada e mostr
   const writes = trackWrites(page);
 
   let dialog = await openNewReport(page, LEADER.name);
-  await dialog.getByLabel("Tema da Palavra").fill("Fé que move montanhas");
+  await dialog.getByLabel("Tema *").fill("Fé que move montanhas");
   await pickParticipants(page, dialog, PEOPLE.slice(0, 8).map((p) => p.name));
-  await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+  await dialog.getByLabel("Oferta *").fill("0");
+  await dialog.getByRole("button", { name: "Enviar relatório", exact: true }).click();
+  await expect(toast(page, "Relatório enviado.")).toBeVisible();
 
-  // Uma chamada de gravação só, sem a chamada separada de participantes.
-  expect(writes).toEqual(["POST /rest/v1/rpc/save_cell_report"]);
+  // Uma chamada de gravação só, sem a chamada separada de participantes (E2.11: o lançamento é a submit_cell_report).
+  expect(writes).toEqual(["POST /rest/v1/rpc/submit_cell_report"]);
   const reportId = reportOf(CELL);
   expect(reportId).not.toBe("");
   // E2.11 (RN-11): o líder (também timóteo e anfitrião) entra como automático: 8 escolhidos + 1.
@@ -244,8 +247,8 @@ test("RN-04 (d) e (e): o relatório com 8 participantes vai numa chamada e mostr
   writes.length = 0;
   dialog = await openReportEdit(page, LEADER.name);
   await pickParticipants(page, dialog, [PEOPLE[8].name]);
-  await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(toast(page, "Relatório salvo com sucesso").last()).toBeVisible();
+  await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+  await expect(toast(page, "Relatório atualizado.").last()).toBeVisible();
   await expect(dialog).toBeHidden();
   expect(writes).toEqual(["POST /rest/v1/rpc/save_cell_report"]);
   const after = await reportAuthorship(page, reportId);
@@ -262,7 +265,7 @@ test("RN-04 (d) e (e): o relatório com 8 participantes vai numa chamada e mostr
   // Sem mudança: nada vai ao servidor.
   writes.length = 0;
   dialog = await openReportEdit(page, LEADER.name);
-  await dialog.getByRole("button", { name: "Salvar", exact: true }).click();
+  await dialog.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await expect(toast(page, "Nenhuma alteração para salvar.")).toBeVisible();
   await expect(dialog).toBeHidden();
   expect(writes).toEqual([]);
@@ -330,17 +333,19 @@ test("RN-14 e UX-09: com a Auditoria quebrada, membro, célula e relatório não
   // Relatório (envio).
   const reportDialog = await openNewReport(page, LEADER2.name);
   breakAudit();
-  await reportDialog.getByLabel("Tema da Palavra").fill("Tema durante a falha");
-  await reportDialog.getByRole("button", { name: "Salvar", exact: true }).click();
+  await reportDialog.getByLabel("Tema *").fill("Tema durante a falha");
+  await reportDialog.getByLabel("Oferta *").fill("0");
+  await reportDialog.getByRole("button", { name: "Enviar relatório", exact: true }).click();
   await expect(
-    reportDialog.getByRole("alert").filter({ hasText: "Não foi possível salvar o relatório. Verifique a conexão e tente de novo." }),
+    reportDialog.getByRole("alert").filter({ hasText: "Não foi possível enviar o relatório. Verifique a conexão e tente de novo." }),
   ).toBeVisible();
-  await expect(reportDialog.getByLabel("Tema da Palavra")).toHaveValue("Tema durante a falha");
-  await expect(reportDialog.getByRole("button", { name: "Salvar", exact: true })).toBeEnabled();
+  await expect(reportDialog.getByLabel("Tema *")).toHaveValue("Tema durante a falha");
+  await expect(reportDialog.getByRole("button", { name: "Enviar relatório", exact: true })).toBeEnabled();
   expect(reportOf(CELL2)).toBe("");
   unbreak();
-  await reportDialog.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(toast(page, "Relatório salvo com sucesso")).toBeVisible();
+  // A nova tentativa usa o mesmo id do formulário (P-REL-29) e grava um relatório só.
+  await reportDialog.getByRole("button", { name: "Enviar relatório", exact: true }).click();
+  await expect(toast(page, "Relatório enviado.")).toBeVisible();
   const reportId = reportOf(CELL2);
   expect(count(`SELECT count(*) FROM public.cell_reports WHERE cell_id = ${lit(CELL2)}`)).toBe(1);
   expect(count(`SELECT count(*) FROM public.events WHERE entity_id = ${lit(reportId)}`)).toBe(1);

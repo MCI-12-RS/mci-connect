@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   Users,
   UserCheck,
@@ -16,10 +16,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import CellReportForm from "@/components/CellReportForm";
+import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,7 +31,7 @@ import {
   type DashboardSummary,
 } from "@/hooks/use-dashboard";
 import { dashboardDeniedLines, dashboardHeader } from "@/lib/access/access";
-import { DASHBOARD_TEXTS, REPORT_FORM_TEXTS } from "@/lib/access/texts";
+import { DASHBOARD_TEXTS } from "@/lib/access/texts";
 import { formatWeekRange } from "@/lib/dashboard/week";
 import { isPermissionDenied } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
@@ -289,6 +288,7 @@ const DeniedDashboard = ({ lines }: { lines: readonly string[] }) => (
 const Dashboard = () => {
   const { access, permissionsLoaded } = useAuth();
   const [reportFormOpen, setReportFormOpen] = useState(false);
+  const reportOpener = useRef<HTMLButtonElement | null>(null);
 
   // O acesso já diz que não há Dashboard: nenhuma consulta e nenhum card (UX-13).
   const deniedByAccess = permissionsLoaded ? dashboardDeniedLines(access) : null;
@@ -328,7 +328,13 @@ const Dashboard = () => {
           {/* Enquanto o acesso carrega, o lugar do atalho fica reservado (Estados). */}
           {!permissionsLoaded && <Skeleton className="h-11 w-full sm:w-40" aria-hidden="true" />}
           {canSubmitReport && (
-            <Button className="h-11 w-full sm:w-auto shrink-0" onClick={() => setReportFormOpen(true)}>
+            <Button
+              className="h-11 w-full sm:w-auto shrink-0"
+              onClick={(event) => {
+                reportOpener.current = event.currentTarget;
+                setReportFormOpen(true);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
               {DASHBOARD_TEXTS.newReport}
             </Button>
@@ -362,14 +368,17 @@ const Dashboard = () => {
         <G12RankingSection rows={g12Ranking.data} failed={hasFailed(g12Ranking)} />
 
         {/* No sucesso, o formulário fecha com o toast, e a gravação recarrega os cards da semana (UX-14). */}
-        <Dialog open={reportFormOpen} onOpenChange={setReportFormOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
-            <DialogHeader>
-              <DialogTitle>{REPORT_FORM_TEXTS.newReportTitle}</DialogTitle>
-            </DialogHeader>
-            {reportFormOpen && <CellReportForm onClose={() => setReportFormOpen(false)} />}
-          </DialogContent>
-        </Dialog>
+        {reportFormOpen && (
+          <CellReportDialog
+            mode="launch"
+            onClose={() => setReportFormOpen(false)}
+            onCloseAutoFocus={(event) => {
+              // O foco volta ao "Novo relatório" que abriu o diálogo (Navegação e rotas).
+              event.preventDefault();
+              reportOpener.current?.focus();
+            }}
+          />
+        )}
       </div>
     </AppLayout>
   );

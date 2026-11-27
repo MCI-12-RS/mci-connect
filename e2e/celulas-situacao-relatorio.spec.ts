@@ -459,8 +459,9 @@ test("UX-10: Carla envia o relatório de C1 pela lista; sem recarregar, o cartã
     expect(await seenText(reportLine(card))).toBe("Relatório: Pendente");
     const opener = page.getByRole("button", { name: `Novo relatório da célula de ${ANDRE.name}` });
     await opener.click();
-    const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
-    await dialog.getByLabel("Tema da Palavra").fill("Fé que move montanhas");
+    const dialog = page.getByRole("dialog", { name: "Novo relatório" });
+    await dialog.getByLabel("Tema *").fill("Fé que move montanhas");
+    await dialog.getByLabel("Oferta *").fill("0");
 
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => (release = resolve));
@@ -469,7 +470,7 @@ test("UX-10: Carla envia o relatório de C1 pela lista; sem recarregar, o cartã
       if (route.request().method() === "GET" && route.request().url().includes("report_status")) await held;
       await route.continue();
     });
-    await dialog.getByRole("button", { name: "Salvar" }).click();
+    await dialog.getByRole("button", { name: "Enviar relatório" }).click();
     await expect(dialog).toHaveCount(0);
     const list = page.locator("main ul.divide-y");
     await expect(list).toHaveAttribute("aria-busy", "true");

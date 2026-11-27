@@ -87,10 +87,29 @@ export type CellStoredRow = Pick<
   | "is_active"
 >;
 
-/** Resumo da célula no formulário de relatório: rótulo, dia e horário sugeridos. */
-export const CELL_SUMMARY_SELECT = "id, leader_name, meeting_day, meeting_time, street, number, neighborhood";
+/**
+ * A célula no formulário de relatório (E2.11, RN-17, AQ-3): a opção do
+ * seletor, o bloco só de leitura, os participantes automáticos e a reunião.
+ */
+export const CELL_SUMMARY_SELECT =
+  "id, leader_id, leader_name, timothy_id, timothy_name, host_id, host_name, type, meeting_day, meeting_time, street, number, neighborhood, g12_leader_name, leader_g12_level, leader_is_pastor";
 
 export type CellSummary = Pick<
   CellViewRow,
-  "id" | "leader_name" | "meeting_day" | "meeting_time" | "street" | "number" | "neighborhood"
+  | "id"
+  | "leader_id"
+  | "leader_name"
+  | "timothy_id"
+  | "timothy_name"
+  | "host_id"
+  | "host_name"
+  | "type"
+  | "meeting_day"
+  | "meeting_time"
+  | "street"
+  | "number"
+  | "neighborhood"
+  | "g12_leader_name"
+  | "leader_g12_level"
+  | "leader_is_pastor"
 >;

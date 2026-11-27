@@ -33,6 +33,8 @@ export interface FormDialogActions {
   primaryRef?: Ref<HTMLButtonElement>;
   /** Algo mudou: fechar pede a confirmação (UXD-14, UX-26). */
   isDirty: () => boolean;
+  /** O aviso aos 3 s de envio; padrão: "Ainda salvando…" (E2.06). */
+  slowText?: string;
 }
 
 /** Os textos da casca: o "✕", os botões e o resumo (a confirmação de descartar é a comum, `DiscardChangesDialog`). */
@@ -94,7 +96,7 @@ export function FormDialog({ title, texts: TEXTS, onClose, onOpenAutoFocus, onCl
         <FormErrorSummary count={actions.errorCount} text={TEXTS.errorSummary} />
         {slow && (
           <p role="status" className="text-sm text-muted-foreground">
-            {SAVE_TEXTS.stillSaving}
+            {actions.slowText ?? SAVE_TEXTS.stillSaving}
           </p>
         )}
         {actions.failure && (

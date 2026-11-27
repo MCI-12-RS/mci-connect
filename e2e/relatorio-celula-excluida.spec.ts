@@ -475,7 +475,7 @@ test.describe("navegador em Honolulu (UTC−10)", () => {
     await expect(dialog.getByText("Célula excluída", { exact: true })).toBeVisible();
     await expect(dialog.getByRole("note")).toHaveText(`${NOTICE}Ver células excluídas`);
 
-    await expect(dialog.locator("dt")).toHaveText([
+    await expect(dialog.locator("dt:not(section dt)")).toHaveText([
       "Data e hora",
       "Situação",
       "Tema",
@@ -512,7 +512,7 @@ test("UX-27 (AD): 'Não houve célula' mostra 'Não realizada' e o motivo, sem t
   await button(page, viewName(R2, CARLOS)).click();
   let dialog = sheet(page);
   await expect(dialog).toHaveAccessibleName(`Relatório de ${dates[R2]}`);
-  await expect(dialog.locator("dt")).toHaveText(["Data e hora", "Situação", "Motivo", "Observações"]);
+  await expect(dialog.locator("dt:not(section dt)")).toHaveText(["Data e hora", "Situação", "Motivo", "Observações"]);
   await expect(field(dialog, "Data e hora")).toHaveText(`Quarta, ${dates[R2]} às 20:00`);
   await expect(field(dialog, "Situação")).toHaveText("Não realizada");
   await expect(field(dialog, "Motivo")).toHaveText(`${NAME} Chuva forte`);
@@ -524,7 +524,7 @@ test("UX-27 (AD): 'Não houve célula' mostra 'Não realizada' e o motivo, sem t
   await button(page, viewName(R3, CARLOS)).click();
   dialog = sheet(page);
   await expect(dialog).toHaveAccessibleName(`Relatório de ${dates[R3]}`);
-  await expect(dialog.locator("dt")).toHaveText([
+  await expect(dialog.locator("dt:not(section dt)")).toHaveText([
     "Data e hora",
     "Situação",
     "Tema",

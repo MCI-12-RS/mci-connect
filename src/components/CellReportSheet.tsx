@@ -11,6 +11,9 @@ import { toReportSheetView, type ReportSheetView } from "@/lib/cell-reports/repo
 import type { CellReportDetailRow } from "@/lib/cell-reports/fields";
 import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
 import { RecordAuthorship } from "@/components/RecordAuthorship";
+import { CellSnapshotBlock } from "@/components/cell-reports/CellSnapshotBlock";
+import { cellBlockFromReport } from "@/lib/cell-reports/snapshot";
+import { REPORT_CELL_TEXTS } from "@/lib/cell-reports/texts";
 import { SheetCloseButton } from "@/components/SheetCloseButton";
 import { CELL_REPORT_DELETION_TEXTS, CELL_REPORT_SHEET_TEXTS } from "@/lib/deletion/texts";
 
@@ -132,6 +135,12 @@ const ReportDetails = ({ view, report, canSeeDeletedCells }: ReportDetailsProps)
         />
       </div>
     )}
+
+    {/* O bloco da célula com as pessoas e o tipo registrados (E2.11, T10, P105). */}
+    <div className="mt-4 space-y-2">
+      <p className="text-sm font-medium">{REPORT_CELL_TEXTS.label}</p>
+      <CellSnapshotBlock block={cellBlockFromReport(report)} />
+    </div>
 
     <dl className="mt-4 space-y-4 text-sm">
       <Field label={TEXTS.fields.dateTime}>{view.dateTime}</Field>

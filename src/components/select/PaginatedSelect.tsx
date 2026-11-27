@@ -76,6 +76,8 @@ interface PaginatedMenuContextValue {
   descriptionId: string | undefined;
   /** Campo obrigatório (`aria-required` no campo de busca; E2.08, P64). */
   required: boolean;
+  /** O nome do "×" de cada escolhido (no múltiplo). */
+  removeLabel: (label: string) => string;
 }
 
 const PaginatedMenuContext = createContext<PaginatedMenuContextValue | null>(null);
@@ -100,12 +102,14 @@ function ItemOption(props: PaginatedOptionProps) {
     if (props.isFocused && nearEnd) loadMore();
   }, [props.isFocused, nearEnd, loadMore]);
   const reason = props.data.disabledReason;
-  if (!reason) return <components.Option {...props} />;
+  const description = props.data.description;
+  if (!reason && !description) return <components.Option {...props} />;
   return (
     <components.Option {...props}>
       <span className="flex min-w-0 flex-col">
-        <span className="break-words">{props.children}</span>
-        <span className="text-sm">{reason}</span>
+        <span className={description ? "break-words font-medium" : "break-words"}>{props.children}</span>
+        {description && <span className="break-words text-sm text-muted-foreground">{description}</span>}
+        {reason && <span className="text-sm">{reason}</span>}
       </span>
     </components.Option>
   );
@@ -240,10 +244,11 @@ function DeferredBlurInput(props: InputProps<SelectOption, boolean, GroupBase<Se
   );
 }
 
+const DEFAULT_REMOVE_LABEL = (label: string) => `Remover ${label}`;
+
 function MultiValueRemove(props: MultiValueRemoveProps<SelectOption, boolean, GroupBase<SelectOption>>) {
-  return (
-    <components.MultiValueRemove {...props} innerProps={{ ...props.innerProps, "aria-label": `Remover ${props.data.label}` }} />
-  );
+  const { removeLabel } = usePaginatedMenu();
+  return <components.MultiValueRemove {...props} innerProps={{ ...props.innerProps, "aria-label": removeLabel(props.data.label) }} />;
 }
 
 /**
@@ -295,6 +300,8 @@ export interface PaginatedSelectProps<IsMulti extends boolean> {
   "aria-describedby"?: string;
   /** Campo obrigatório, para o leitor de tela. */
   "aria-required"?: boolean;
+  /** O nome do "×" de cada escolhido (padrão: "Remover {nome}"). */
+  removeLabel?: (label: string) => string;
 }
 
 export function PaginatedSelect<IsMulti extends boolean = false>({
@@ -313,6 +320,7 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   "aria-errormessage": ariaErrorMessage,
   "aria-describedby": descriptionId,
   "aria-required": ariaRequired = false,
+  removeLabel = DEFAULT_REMOVE_LABEL,
 }: PaginatedSelectProps<IsMulti>) {
   const selectRef = useRef<SelectInstance<SelectOption, IsMulti, GroupBase<SelectOption>>>(null);
   const focusedAction = useRef<SelectOption | null>(null);
@@ -344,8 +352,8 @@ export function PaginatedSelect<IsMulti extends boolean = false>({
   // no AsyncMemberSelect.test.tsx acusa se uma atualização o quebrar.
   const hoverOption = useCallback((option: SelectOption) => selectRef.current?.onOptionHover(option), []);
   const menuContext = useMemo(
-    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput, descriptionId, required: ariaRequired }),
-    [pagination, prefetchValues, runAction, hoverOption, focusInput, descriptionId, ariaRequired],
+    () => ({ pagination, prefetchValues, focusedAction, runAction, hoverOption, focusInput, descriptionId, required: ariaRequired, removeLabel }),
+    [pagination, prefetchValues, runAction, hoverOption, focusInput, descriptionId, ariaRequired, removeLabel],
   );
 
   // Dentro de um Dialog do Radix, o Esc fecharia o diálogo inteiro (ele escuta

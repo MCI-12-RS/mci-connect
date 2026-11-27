@@ -76,52 +76,59 @@ test("UX-22: depois de inativar C1, o seletor de célula do relatório não a of
   await signIn(page, PEDRO);
   await openList(page, "/cell-reports", NAME);
   world.setCellActive(1, false);
-  await page.getByRole("button", { name: "Novo Relatório" }).click();
-  const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
+  await page.getByRole("button", { name: "Novo relatório" }).click();
+  const dialog = page.getByRole("dialog", { name: "Novo relatório" });
   const cell = dialog.getByLabel("Célula *");
   await cell.click();
   await cell.pressSequentially(NAME);
-  await expect(page.getByRole("option", { name: new RegExp(`Célula de ${CAIO.name}`) })).toBeVisible();
-  await expect(page.getByRole("option", { name: new RegExp(`Célula de ${ANDRE.name}`) })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: new RegExp(`^${CAIO.name} · `) })).toBeVisible();
+  await expect(page.getByRole("option", { name: new RegExp(`^${ANDRE.name} · `) })).toHaveCount(0);
 });
 
 test("UX-23 e RN-11 (c): aberto pela lista, Carla recebe a recusa no topo com a orientação, os dados ficam e 'Fechar' volta à lista atualizada", async ({ page }) => {
+  world.meetingAlreadyHappened(1);
   await signIn(page, CARLA);
   await openList(page, "/cells", NAME);
   await newReportButton(page, ANDRE).click();
-  const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
-  await dialog.getByLabel("Tema da Palavra").fill("Fé que move montanhas");
+  const dialog = page.getByRole("dialog", { name: "Novo relatório" });
+  await dialog.getByLabel("Tema *").fill("Fé que move montanhas");
+  await dialog.getByLabel("Oferta *").fill("0");
   world.setCellActive(1, false);
 
-  await dialog.getByRole("button", { name: "Salvar" }).click();
+  await dialog.getByRole("button", { name: "Enviar relatório" }).click();
 
   const alert = dialog.getByRole("alert").filter({ hasText: INACTIVE_TO_MEMBER });
   await expect(alert).toBeVisible();
   await expect(alert).toBeFocused();
-  await expect(dialog.getByLabel("Tema da Palavra")).toHaveValue("Fé que move montanhas");
+  await expect(dialog.getByLabel("Tema *")).toHaveValue("Fé que move montanhas");
   await expect(page.locator("li[role='status']")).toHaveCount(0);
   expect(world.reportsOfCell(1)).toBe(0);
 
-  await alert.getByRole("button", { name: "Fechar" }).click();
+  // Com a célula fixa, o rodapé tem só "Fechar" (T7), que fecha e recarrega a lista.
+  await expect(dialog.getByRole("button", { name: "Enviar relatório" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Fechar" }).last().click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText("Inativa").first()).toBeVisible();
   await expect(newReportButton(page, ANDRE)).toHaveCount(0);
 });
 
 test("UX-23: aberto por Relatórios, Pedro (com 'Editar Célula') recebe a orientação de reativar, e a célula fica desmarcada", async ({ page }) => {
+  world.meetingAlreadyHappened(1);
   await signIn(page, PEDRO);
   await openList(page, "/cell-reports", NAME);
-  await page.getByRole("button", { name: "Novo Relatório" }).click();
-  const dialog = page.getByRole("dialog", { name: "Novo Relatório de Célula" });
-  await pickPerson(page, dialog.getByLabel("Célula *"), ANDRE.name, new RegExp(`Célula de ${ANDRE.name}`));
-  await dialog.getByLabel("Tema da Palavra").fill("Fé");
+  await page.getByRole("button", { name: "Novo relatório" }).click();
+  const dialog = page.getByRole("dialog", { name: "Novo relatório" });
+  await pickPerson(page, dialog.getByLabel("Célula *"), ANDRE.name, new RegExp(`^${ANDRE.name} · `));
+  await dialog.getByLabel("Tema *").fill("Fé");
+  await dialog.getByLabel("Oferta *").fill("0");
   world.setCellActive(1, false);
 
-  await dialog.getByRole("button", { name: "Salvar" }).click();
+  await dialog.getByRole("button", { name: "Enviar relatório" }).click();
 
   await expect(dialog.getByRole("alert").filter({ hasText: INACTIVE_TO_EDITOR })).toBeVisible();
-  await expect(dialog.getByText(new RegExp(`Célula de ${ANDRE.name}`))).toHaveCount(0);
-  await expect(dialog.getByLabel("Tema da Palavra")).toHaveValue("Fé");
+  // A célula fica desmarcada (T3 c): o seletor volta à dica, e o bloco some.
+  await expect(dialog.getByText("Escolha a célula para preencher o relatório.")).toBeVisible();
+  await expect(dialog.getByRole("region", { name: "Dados da célula" })).toHaveCount(0);
   expect(world.reportsOfCell(1)).toBe(0);
 });
 

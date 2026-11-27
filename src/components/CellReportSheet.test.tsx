@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
 import type { CellReportDetailRow, ReportParticipant } from "@/lib/cell-reports/fields";
 import CellReportSheet from "./CellReportSheet";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 // O `Sheet` "Relatório" (E2.01, T7): consulta do relatório de célula excluída
 // (RN-09 b, RN-11, RN-13; "Estados"; UX-26 e UX-27).
@@ -37,6 +38,7 @@ const report = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailR
   updated_at: null,
   updated_by_kind: null,
   updated_by_name: null,
+  ...reportSnapshotColumns(overrides.cell_leader_name !== undefined ? overrides.cell_leader_name : "Carlos Lima"),
   ...overrides,
 });
 
@@ -72,7 +74,11 @@ function field(dialog: HTMLElement, label: string): HTMLElement {
   return value;
 }
 
-const termsOf = (dialog: HTMLElement) => Array.from(dialog.querySelectorAll("dt")).map((dt) => dt.textContent);
+/** Os campos do relatório, fora do bloco da célula (E2.11, P105). */
+const termsOf = (dialog: HTMLElement) =>
+  Array.from(dialog.querySelectorAll("dt"))
+    .filter((dt) => !dt.closest("section"))
+    .map((dt) => dt.textContent);
 
 describe("CellReportSheet: relatório de célula excluída", () => {
   beforeEach(() => resetFakeSupabase());

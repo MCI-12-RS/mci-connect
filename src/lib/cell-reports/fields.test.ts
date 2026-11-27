@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CELL_REPORT_ROW_SELECT, cellOfReport, withParticipantCounts, type CellReportPageRow } from "./fields";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 const row = (id: string, visitors_count = 0): CellReportPageRow => ({
   id,
@@ -13,7 +14,8 @@ const row = (id: string, visitors_count = 0): CellReportPageRow => ({
   was_held: true,
   reason_not_held: null,
   visitors_count,
-  cell_leader_name: "Ana",
+  ...reportRowLeaderColumns,
+  snapshot_leader_name: "Ana",
   cell_street: "Rua A",
   cell_number: "10",
   cell_complement: null,
@@ -53,7 +55,6 @@ describe("cellOfReport", () => {
   it("leva as colunas cell_* para o formato dos rótulos de célula", () => {
     expect(cellOfReport(row("r1"))).toEqual({
       id: "cell-r1",
-      leader_name: "Ana",
       street: "Rua A",
       number: "10",
       complement: null,

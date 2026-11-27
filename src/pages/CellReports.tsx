@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import AppLayout from "@/components/AppLayout";
-import CellReportForm from "@/components/CellReportForm";
+import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
 import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
 import CellReportSheet from "@/components/CellReportSheet";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, ClipboardList, Eye, ChevronRight } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useClampPage, useListSearchParams } from "@/hooks/use-list-search-params";
@@ -25,6 +24,8 @@ import { useSearchParam } from "@/hooks/use-search-param";
 import { formatStreetLine } from "@/lib/cells/labels";
 import { cellOfReport, type CellReportRow } from "@/lib/cell-reports/fields";
 import { formatReportDate } from "@/lib/cell-reports/labels";
+import { reportLeaderLines } from "@/lib/cell-reports/snapshot";
+import { CELL_BLOCK_TEXTS, REPORT_LIST_TEXTS } from "@/lib/cell-reports/texts";
 import { REPORT_PARAM, reportIdToRead, reportSheetState } from "@/lib/cell-reports/report-sheet";
 import { toCellReportDeletionTarget, type CellReportDeletionTarget } from "@/lib/deletion/targets";
 import { CELL_REPORT_DELETION_TEXTS, DELETED_LIST_TEXTS } from "@/lib/deletion/texts";
@@ -39,8 +40,8 @@ function findViewReportButton(reportId: string): HTMLElement | null {
 
 const CellReports = () => {
   const list = useListSearchParams();
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingReport, setEditingReport] = useState<CellReportRow | null>(null);
+  // O formulário de relatório (E2.11, T1): lançamento com a célula livre, ou a edição pelo id.
+  const [reportDialog, setReportDialog] = useState<{ mode: "launch" } | { mode: "edit"; reportId: string } | null>(null);
   const [deletingReport, setDeletingReport] = useState<CellReportDeletionTarget | null>(null);
   const { hasPermission, permissionsLoaded, access } = useAuth();
   const isMobile = useIsMobile();
@@ -58,10 +59,9 @@ const CellReports = () => {
 
   const handleEdit = (report: CellReportRow, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
-    setEditingReport(report);
-    setFormOpen(true);
+    setReportDialog({ mode: "edit", reportId: report.id });
   };
-  const handleClose = () => { setFormOpen(false); setEditingReport(null); };
+  const handleClose = () => setReportDialog(null);
 
   const canEditReport = hasPermission("edit_cell_report");
   // "Ver relatório" fica no lugar do "Editar", para quem edita relatórios (P-DEL-19).
@@ -215,11 +215,32 @@ const CellReports = () => {
   // As partes do card do celular, só com `span`: no card de célula excluída,
   // elas ficam dentro do botão "Ver relatório" (T7), que não aceita `div` nem `p`.
 
+  /** O líder registrado no relatório e o G12 atual dele embaixo (E2.11, RN-14 d, T10). */
+  const renderLeader = (r: CellReportRow, className: string) => {
+    const { leader, g12, g12None } = reportLeaderLines(r);
+    return (
+      <>
+        <span className={className || "block"}>{leader || REPORT_LIST_TEXTS.noLeader}</span>
+        <span className="block text-xs font-normal text-muted-foreground">
+          {g12None ? (
+            <>
+              {REPORT_LIST_TEXTS.g12("")}
+              <span aria-hidden="true">{g12}</span>
+              <span className="sr-only">{CELL_BLOCK_TEXTS.noneSr}</span>
+            </>
+          ) : (
+            REPORT_LIST_TEXTS.g12(g12)
+          )}
+        </span>
+      </>
+    );
+  };
+
   const renderCardSummary = (r: CellReportRow) => {
     const streetLine = formatStreetLine(cellOfReport(r));
     return (
       <>
-        <span className="block font-semibold text-sm">{r.cell_leader_name || "Célula sem líder"}</span>
+        {renderLeader(r, "block font-semibold text-sm")}
         {r.cell_deleted === true && <span className="mt-1 block">{cellDeletedBadge}</span>}
         {(streetLine || r.cell_neighborhood) && (
           <span className="block text-xs text-muted-foreground mt-0.5 leading-tight">
@@ -326,12 +347,12 @@ const CellReports = () => {
                 <Button
                   onClick={(e) => {
                     returnFocus.setOpener(e.currentTarget);
-                    setFormOpen(true);
+                    setReportDialog({ mode: "launch" });
                   }}
                   className="h-11 w-full sm:h-10 sm:w-auto"
                 >
                   <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-                  Novo Relatório
+                  {REPORT_LIST_TEXTS.newReport}
                 </Button>
               )}
             </div>
@@ -383,7 +404,7 @@ const CellReports = () => {
                         <TableRow key={r.id} className={isPlaceholderData ? "opacity-60" : undefined}>
                           <TableCell className="font-medium">
                             <div className="flex flex-col leading-tight">
-                              <span>{r.cell_leader_name || "Célula sem líder"}</span>
+                              {renderLeader(r, "")}
                               {r.cell_deleted === true && <div className="my-1">{cellDeletedBadge}</div>}
                               {streetLine && <span className="text-xs font-normal text-muted-foreground">{streetLine}</span>}
                               {r.cell_neighborhood && (
@@ -431,17 +452,14 @@ const CellReports = () => {
           )}
         </Card>
 
-        <Dialog open={formOpen} onOpenChange={handleClose}>
-          <DialogContent
-            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+        {/* O formulário traz o próprio diálogo responsivo (E2.11, T1, UXD-1). */}
+        {reportDialog && (
+          <CellReportDialog
+            {...(reportDialog.mode === "edit" ? { mode: "edit", reportId: reportDialog.reportId } : { mode: "launch" })}
+            onClose={handleClose}
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
-          >
-            <DialogHeader>
-              <DialogTitle>{editingReport ? "Editar Relatório" : "Novo Relatório de Célula"}</DialogTitle>
-            </DialogHeader>
-            <CellReportForm report={editingReport} onClose={handleClose} />
-          </DialogContent>
-        </Dialog>
+          />
+        )}
 
         <CellReportSheet
           reportId={reportToRead}

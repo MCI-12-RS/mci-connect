@@ -1,6 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { CellReportDetail, CellReportDetailRow } from "./fields";
 import { reportDateTime, reportIdToRead, reportSheetState, toReportSheetView, type ReportSheetInput } from "./report-sheet";
+import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
 // Consulta do relatório de célula excluída (E2.01, T7, UXD-7; RN-09 b, RN-11 e
 // RN-13; UX-26 e UX-27).
@@ -23,6 +24,7 @@ const report = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailR
   updated_at: null,
   updated_by_kind: null,
   updated_by_name: null,
+  ...reportSnapshotColumns(overrides.cell_leader_name !== undefined ? overrides.cell_leader_name : "Carlos Lima"),
   ...overrides,
 });
 

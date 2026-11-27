@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import CellForm from "@/components/CellForm";
-import CellReportForm from "@/components/CellReportForm";
+import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
 import CellDeletionFlow from "@/components/CellDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
 import ListPagination from "@/components/ListPagination";
@@ -13,7 +13,6 @@ import ReportStatusLegend from "@/components/cells/ReportStatusLegend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Pencil, Trash2, FilePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CELLS_TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
@@ -246,17 +245,15 @@ const Cells = () => {
         {/* O formulário traz o próprio diálogo (E2.08, T1 e T6: rodapé com o resumo e o descartar). */}
         {formOpen && <CellForm cell={editingCell} onClose={handleClose} onCloseAutoFocus={returnFocus.onCloseAutoFocus} />}
 
-        <Dialog open={reportFormOpen} onOpenChange={handleCloseReport}>
-          <DialogContent
-            className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full"
+        {/* O formulário de relatório com a célula fixa (E2.11, T1, T11). */}
+        {reportFormOpen && selectedCellForReport && (
+          <CellReportDialog
+            mode="launch"
+            cell={selectedCellForReport}
+            onClose={handleCloseReport}
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
-          >
-            <DialogHeader>
-              <DialogTitle>Novo Relatório de Célula</DialogTitle>
-            </DialogHeader>
-            {reportFormOpen && <CellReportForm initialCell={selectedCellForReport} onClose={handleCloseReport} />}
-          </DialogContent>
-        </Dialog>
+          />
+        )}
 
         {deletingCell && (
           <CellDeletionFlow

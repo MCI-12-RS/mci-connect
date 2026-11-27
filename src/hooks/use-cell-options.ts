@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CELL_SUMMARY_SELECT, type CellSummary } from "@/lib/cells/fields";
-import { formatCellLabel } from "@/lib/cells/labels";
+import { cellOptionLines } from "@/lib/cell-reports/snapshot";
 import { withSearch } from "@/lib/list-query";
 import { toSearchPatterns } from "@/lib/search";
 import {
@@ -19,8 +19,10 @@ export interface CellOptionsParams {
   enabled?: boolean;
 }
 
+/** A opção em duas linhas (E2.11, RN-17, T2): o valor escolhido mostra só a primeira. */
 export function toCellOption(cell: CellSummary): SelectOption {
-  return { value: cell.id, label: formatCellLabel(cell) };
+  const { title, description } = cellOptionLines({ ...cell, id: cell.id ?? "" });
+  return { value: cell.id ?? "", label: title, description };
 }
 
 /** Prefixo da chave das opções: recarregar o seletor depois de uma recusa (T8). */

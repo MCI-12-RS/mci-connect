@@ -19,7 +19,8 @@ describe("colunas lidas da cells_view (risco 6)", () => {
   });
 
   it("o resumo usado no seletor de células não pede colunas calculadas por subconsulta", () => {
-    for (const expensive of ["search_text", "last_report_date", "g12_leader_id", "g12_leader_name"]) {
+    // Desde o E2.06, o G12 vem por junção de chave (`private.member_hierarchy`), e o seletor do relatório o mostra (E2.11, RN-17).
+    for (const expensive of ["search_text", "last_report_date", "report_status", "report_missing_weeks"]) {
       expect(columns(CELL_SUMMARY_SELECT)).not.toContain(expensive);
     }
   });
