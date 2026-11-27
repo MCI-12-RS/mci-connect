@@ -166,9 +166,9 @@ SELECT is(pg_temp.cols('public.cell_reports_deleted_view'),
         'deleted_at','deleted_by','deleted_by_name','search_text','deleted_by_kind'],
   'cell_reports_deleted_view: colunas do contrato (AQ-3), na ordem (deleted_by_kind do E2.05 no fim)');
 
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 15],
-  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna antes das quatro da autoria do E2.05 e das onze do retrato do E2.11 (AQ-4)');
-SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 16],
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 19],
+  'cell_deleted', 'cell_reports_view: cell_deleted é a última coluna antes das quatro da autoria do E2.05, das onze do retrato do E2.11 e das quatro do E2.12 (AQ-4)');
+SELECT is((pg_temp.cols('public.cell_reports_view'))[array_length(pg_temp.cols('public.cell_reports_view'), 1) - 20],
   'search_text', 'cell_reports_view: as colunas do E1.08 continuam antes de cell_deleted');
 SELECT is((pg_temp.cols('public.cell_report_participants_view')),
   ARRAY['report_id','member_id','member_name','member_deleted','member_visible','is_snapshot_person','member_is_active','member_gender'],

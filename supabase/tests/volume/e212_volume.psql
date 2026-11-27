@@ -1,0 +1,270 @@
+-- E2.12 (PR 1): volume de referência e "Metas de tempo e índices".
+-- Spec: docs/specs/e2-12-listagem-relatorios.md (repositório apps-mci), "Metas de tempo e índices" e
+-- "Verificações obrigatórias (para o QA)": 20 mil membros, 1.500 células, 100 mil relatórios com cerca de
+-- 8 participantes cada (o gerador do E2.10, com o retrato do E2.11 preenchido pelo trigger), uma célula
+-- com 400 relatórios e um relatório com 1.000 participantes.
+--
+-- Metas (mediana de 5 execuções):
+--   - cell_reports_list (25 linhas) e cell_reports_list_count sem filtros: Administrador 150 ms cada;
+--     G12 (ministério) 250 ms cada;
+--   - só a busca ("fe"), Administrador: 400 ms cada; só G12 (1 pessoa): 150 ms cada;
+--   - só "Esta semana": 100 ms cada; só a Célula (400 relatórios): 100 ms cada;
+--   - a combinação da RN-02 (Líder com 2, G12 com 1, Período, Tipo com 2 e Reunião): 1 s cada;
+--   - cell_report_filter_options (Líder e G12, com e sem busca): Administrador 200 ms; G12 300 ms;
+--   - cell_report_filter_names com 10 ids: 50 ms;
+--   - cell_reports_view por id com as colunas da consulta: 50 ms;
+--   - cell_report_participants_view do relatório com 1.000 participantes: 150 ms;
+--   - server_weeks(): 5 ms.
+-- Planos conferidos: a etapa 2 usa cell_reports_pkey; sem filtros, a etapa 1 usa cell_reports_date_id_idx
+-- (sem ordenar os 100 mil); o Líder, o G12, o Período, a Célula, o Tipo e a Reunião entram na view; sem a
+-- busca, o plano não calcula search_normalize.
+--
+-- Roda numa transação desfeita no fim (nada fica no banco). Uso (banco local):
+--   docker exec -i supabase_db_<projeto> psql -U postgres -X -v ON_ERROR_STOP=1 \
+--     < supabase/tests/volume/e212_volume.psql > e212_explain.txt
+-- A saída traz os planos e uma linha "META" por medida, e uma "PLANO" por conferência de plano.
+
+\set ON_ERROR_STOP on
+\timing off
+BEGIN;
+SET LOCAL session_replication_role = replica;      -- carga: sem triggers
+SET LOCAL synchronous_commit = off;
+
+-- Pessoas (a árvore do volume do E2.02/E2.09): 2 pastores casados (1 e 2), 12 G12 (3 a 14) e 12
+-- discípulos por pessoa até 20.000. 1 = pastor (Líder), 2 = Administrador, 3 = G12 (Líder).
+INSERT INTO auth.users (id, email)
+SELECT ('a2120900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'e212-vol-' || n || '@teste.invalid' FROM generate_series(1, 3) n;
+
+INSERT INTO public.members (id, name, gender, is_pastor, leader_id, spouse_id, is_active, has_leadership, auth_user_id, role_id, created_at, mobile_whatsapp)
+SELECT ('c2120900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       'Membro Volume ' || n,
+       CASE WHEN n % 2 = 0 THEN 'F' ELSE 'M' END,
+       n <= 2,
+       CASE WHEN n <= 2 THEN NULL
+            WHEN n <= 14 THEN ('c2120900-0000-0000-0000-' || lpad((1 + (n % 2))::text, 12, '0'))::uuid
+            ELSE ('c2120900-0000-0000-0000-' || lpad((3 + (n - 15) / 12)::text, 12, '0'))::uuid END,
+       CASE WHEN n <= 14 THEN ('c2120900-0000-0000-0000-' || lpad((CASE WHEN n % 2 = 1 THEN n + 1 ELSE n - 1 END)::text, 12, '0'))::uuid END,
+       n % 10 <> 0,
+       n > 2,
+       CASE WHEN n <= 3 THEN ('a2120900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid END,
+       CASE n WHEN 1 THEN (SELECT id FROM public.roles WHERE name = 'Líder')
+              WHEN 2 THEN (SELECT id FROM public.roles WHERE name = 'Administrador')
+              WHEN 3 THEN (SELECT id FROM public.roles WHERE name = 'Líder') END,
+       now() - (n % 400) * interval '1 day',
+       '519' || lpad(n::text, 8, '0')
+  FROM generate_series(1, 20000) n;
+
+-- 1.500 células (10% inativas), cadastradas ao longo de 750 dias, mais a célula 1.501 (400 relatórios).
+INSERT INTO public.cells (id, leader_id, timothy_id, host_id, type, meeting_day, meeting_time, street, neighborhood, city, is_active, created_at)
+SELECT ('d2120900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('c2120900-0000-0000-0000-' || lpad((15 + (n * 13) % 19980)::text, 12, '0'))::uuid,
+       ('c2120900-0000-0000-0000-' || lpad((15 + (n * 17) % 19980)::text, 12, '0'))::uuid,
+       ('c2120900-0000-0000-0000-' || lpad((15 + (n * 19) % 19980)::text, 12, '0'))::uuid,
+       (ARRAY['Evangelística', 'Discipulado', 'Macrocélula'])[1 + n % 3],
+       (ARRAY['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'])[1 + n % 7],
+       (ARRAY['19:00', '20:00', '23:30'])[1 + n % 3]::time,
+       'Rua São João ' || n, 'Bairro ' || (n % 40), (ARRAY['Porto Alegre', 'Canoas', 'Alvorada'])[1 + n % 3],
+       n % 10 <> 0,
+       now() - (n % 750) * interval '1 day'
+  FROM generate_series(1, 1501) n;
+
+-- 100 mil relatórios em semanas passadas, com buracos (como no E2.09); nesta semana, metade tem.
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2120900-0000-0000-0000-' || lpad(i::text, 12, '0'))::uuid,
+       ('d2120900-0000-0000-0000-' || lpad((1 + i % 1500)::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()) - 7 * (1 + i / 1500) + 3, '20:00', i % 7 <> 0, 'Tema ' || i,
+       ARRAY['Visitante A', 'Visitante B'], 10
+  FROM generate_series(0, 99999) i
+ WHERE (i / 1500 + i % 1500) % 5 <> 0;
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, offering)
+SELECT ('e2120900-0000-0001-0000-' || lpad(n::text, 12, '0'))::uuid,
+       ('d2120900-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+       public.week_start(public.sp_today()), '20:00', true, 'Semana atual', 10
+  FROM generate_series(1, 1500, 2) n;
+-- A célula com 400 relatórios (uma por semana, para trás).
+INSERT INTO public.cell_reports (id, cell_id, date, time, was_held, theme, visitors, offering)
+SELECT ('e2120900-0000-0002-0000-' || lpad(w::text, 12, '0'))::uuid,
+       'd2120900-0000-0000-0000-000000001501'::uuid,
+       public.week_start(public.sp_today()) - 7 * w + 3, '20:00', w % 9 <> 0, 'Tema ' || w,
+       ARRAY['Visitante'], 10
+  FROM generate_series(1, 400) w;
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT r.id, ('c2120900-0000-0000-0000-' || lpad((15 + ((row_number() OVER ()) * 7919 + k) % 19980)::text, 12, '0'))::uuid
+  FROM public.cell_reports r, generate_series(0, 7) k
+ WHERE r.id::text LIKE 'e2120900-0000-000_-%';
+-- Um relatório com 1.000 participantes (o da semana atual da célula 1).
+INSERT INTO public.cell_report_participants (report_id, member_id)
+SELECT 'e2120900-0000-0001-0000-000000000001'::uuid, ('c2120900-0000-0000-0000-' || lpad((15 + k)::text, 12, '0'))::uuid
+  FROM generate_series(0, 999) k
+ON CONFLICT DO NOTHING;
+ANALYZE public.members; ANALYZE public.cells; ANALYZE public.cell_reports; ANALYZE public.cell_report_participants;
+SET LOCAL session_replication_role = origin;
+SELECT private.rebuild_member_hierarchy();
+SELECT 'BACKFILL linhas criadas', private.backfill_cell_active_periods();
+ANALYZE private.member_hierarchy; ANALYZE private.cell_active_periods;
+
+SELECT 'VOLUME members=' || (SELECT count(*) FROM public.members WHERE deleted_at IS NULL)
+    || ' cells=' || (SELECT count(*) FROM public.cells WHERE deleted_at IS NULL)
+    || ' reports=' || (SELECT count(*) FROM public.cell_reports WHERE deleted_at IS NULL)
+    || ' participants=' || (SELECT count(*) FROM public.cell_report_participants)
+    || ' participants_report_big=' || (SELECT count(*) FROM public.cell_report_participants WHERE report_id = 'e2120900-0000-0001-0000-000000000001')
+    || ' reports_cell_1501=' || (SELECT count(*) FROM public.cell_reports WHERE cell_id = 'd2120900-0000-0000-0000-000000001501') AS volume;
+
+CREATE FUNCTION pg_temp.as_member(_n int) RETURNS void LANGUAGE sql AS $$
+  SELECT set_config('request.jwt.claims', json_build_object('sub', 'a2120900-0000-0000-0000-' || lpad(_n::text, 12, '0'), 'role', 'authenticated')::text, true) $$;
+-- Tempo de uma leitura, em ms: a mediana de _rounds execuções (depois de uma de aquecimento).
+CREATE FUNCTION pg_temp.ms(_sql text, _rounds int DEFAULT 5) RETURNS numeric LANGUAGE plpgsql AS $$
+DECLARE _t timestamptz; _xs numeric[] := '{}'; i int;
+BEGIN
+  EXECUTE _sql;
+  FOR i IN 1.._rounds LOOP
+    _t := clock_timestamp();
+    EXECUTE _sql;
+    _xs := _xs || (extract(epoch FROM clock_timestamp() - _t) * 1000)::numeric;
+  END LOOP;
+  RETURN round((SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM unnest(_xs) x)::numeric, 1);
+END $$;
+CREATE FUNCTION pg_temp.plan_has(_sql text, _pat text) RETURNS boolean LANGUAGE plpgsql AS $$
+DECLARE _l text; _found boolean := false;
+BEGIN
+  FOR _l IN EXECUTE 'EXPLAIN (VERBOSE) ' || _sql LOOP
+    IF _l LIKE '%' || _pat || '%' THEN _found := true; END IF;
+  END LOOP;
+  RETURN _found;
+END $$;
+-- Em que nó do plano aparece um texto: o nome do nó mais próximo acima da linha que o tem.
+CREATE FUNCTION pg_temp.plan_node(_sql text, _pat text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE _l text; _node text := '';
+BEGIN
+  FOR _l IN EXECUTE 'EXPLAIN (VERBOSE) ' || _sql LOOP
+    IF _l ~ '->|^\S' THEN _node := btrim(regexp_replace(split_part(_l, '  (cost', 1), '^\s*->\s*', '')); END IF;
+    IF _l LIKE '%' || _pat || '%' AND _l !~ '->|^\S' THEN RETURN _node; END IF;
+  END LOOP;
+  RETURN NULL;
+END $$;
+CREATE FUNCTION pg_temp.show(_sql text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('client_min_messages', 'log', true);
+  EXECUTE _sql;
+  PERFORM set_config('client_min_messages', 'notice', true);
+END $$;
+
+SELECT 'd2120900-0000-0000-0000-000000001501' AS big_cell \gset
+SELECT 'e2120900-0000-0001-0000-000000000001' AS big_report \gset
+SELECT id AS g12_id FROM private.member_hierarchy h JOIN public.members m ON m.id = h.member_id
+ WHERE h.g12_level = 1 ORDER BY m.id LIMIT 1 \gset
+SELECT array_agg(DISTINCT snapshot_leader_id)::text AS ten_leaders
+  FROM (SELECT snapshot_leader_id FROM public.cell_reports WHERE id::text LIKE 'e2120900%' ORDER BY id LIMIT 10) x \gset
+SELECT array_agg(snapshot_leader_id)::text AS two_leaders
+  FROM (SELECT DISTINCT r.snapshot_leader_id FROM public.cell_reports r JOIN private.member_hierarchy h ON h.member_id = r.snapshot_leader_id
+         WHERE h.g12_id = :'g12_id' ORDER BY 1 LIMIT 2) x \gset
+SELECT this_week_start AS ws, this_week_end AS we FROM public.server_weeks() \gset
+\set report_cols 'id, cell_id, date, time, theme, observations, visitors, offering, was_held, reason_not_held, created_at, updated_at, visitors_count, participants_count, cell_type, cell_deleted, cell_street, cell_number, cell_complement, cell_neighborhood, cell_city, cell_state, cell_zip_code, cell_visible, cell_meeting_day, cell_meeting_time, cell_leader_name, snapshot_leader_id, snapshot_leader_name, snapshot_timothy_name, snapshot_host_name, snapshot_cell_type, snapshot_leader_g12_level, snapshot_leader_is_pastor, snapshot_g12_leader_id, snapshot_g12_leader_name, created_by_kind, created_by_name, updated_by_kind, updated_by_name'
+\set combo '_leader_ids => \'':two_leaders'\'::uuid[], _g12_ids => ARRAY[\'':g12_id'\']::uuid[], _date_from => (public.sp_today() - 365), _date_to => public.sp_today(), _types => \'{Evangelística,Discipulado}\', _held => true'
+
+SET auto_explain.log_min_duration = -1;
+
+\echo
+\echo '######## Planos das consultas internas das RPCs (auto_explain), Administrador ########'
+SET auto_explain.log_min_duration = 2;
+SET auto_explain.log_analyze = on;
+SET auto_explain.log_buffers = on;
+SET auto_explain.log_nested_statements = on;
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+\echo '--- cell_reports_list e cell_reports_list_count sem filtros'
+SELECT pg_temp.show('SELECT id FROM public.cell_reports_list()');
+SELECT pg_temp.show('SELECT public.cell_reports_list_count()');
+\echo '--- só a busca'
+SELECT pg_temp.show($$SELECT public.cell_reports_list_count(_search => '{%fe%}')$$);
+\echo '--- a combinação da RN-02'
+SELECT format('SELECT pg_temp.show(%L)', format('SELECT public.cell_reports_list_count(%s)', :'combo')) \gexec
+\echo '--- opções do Líder'
+SELECT pg_temp.show($$SELECT * FROM public.cell_report_filter_options('leader')$$);
+RESET ROLE;
+SET auto_explain.log_min_duration = -1;
+SET auto_explain.log_nested_statements = off;
+
+\echo
+\echo '######## Conferências de plano (Administrador) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SELECT 'PLANO etapa 2 (id = ANY): usa cell_reports_pkey? (esperado t)' AS plano,
+  pg_temp.plan_has(format('SELECT v.* FROM public.cell_reports_view v WHERE v.id = ANY (ARRAY[%L]::uuid[])', :'big_report'), 'cell_reports_pkey') AS sim;
+SELECT 'PLANO etapa 1 sem filtros: usa cell_reports_date_id_idx? (esperado t)' AS plano,
+  pg_temp.plan_has('SELECT v.id, v.date, v."time" FROM public.cell_reports_view v WHERE true ORDER BY v.date DESC, v."time" DESC, v.id LIMIT 25', 'cell_reports_date_id_idx') AS sim;
+SELECT 'PLANO etapa 1 sem a busca: calcula search_normalize? (esperado f)' AS plano,
+  pg_temp.plan_has('SELECT v.id, v.date, v."time" FROM public.cell_reports_view v WHERE true AND v.was_held = true ORDER BY v.date DESC, v."time" DESC, v.id LIMIT 25', 'search_normalize') AS sim;
+SELECT 'PLANO contagem sem filtros: calcula viewer_sees_cell_people (cell_visible)? (esperado f)' AS plano,
+  pg_temp.plan_has('SELECT count(*) FROM public.cell_reports_view v WHERE true', 'viewer_sees_cell_people') AS sim;
+SELECT 'PLANO G12 entra na view (nó)' AS plano,
+  pg_temp.plan_node(format('SELECT v.id FROM public.cell_reports_view v WHERE v.snapshot_g12_leader_id = ANY (ARRAY[%L]::uuid[])', :'g12_id'), 'g12_id = ANY') AS no;
+SELECT 'PLANO Líder entra na view (nó)' AS plano,
+  pg_temp.plan_node(format('SELECT v.id FROM public.cell_reports_view v WHERE v.snapshot_leader_id = ANY (%L::uuid[])', :'two_leaders'), 'snapshot_leader_id = ANY') AS no;
+SELECT 'PLANO Período entra na view (nó)' AS plano,
+  pg_temp.plan_node(format('SELECT v.id FROM public.cell_reports_view v WHERE v.date >= %L AND v.date <= %L', :'ws', :'we'), 'date >=') AS no;
+SELECT 'PLANO Célula entra na view (nó)' AS plano,
+  pg_temp.plan_node(format('SELECT v.id FROM public.cell_reports_view v WHERE v.cell_id = %L', :'big_cell'), 'cell_id =') AS no;
+SELECT 'PLANO Tipo e Reunião entram na view (nó)' AS plano,
+  pg_temp.plan_node($$SELECT v.id FROM public.cell_reports_view v WHERE v.snapshot_cell_type = ANY ('{Discipulado}') AND v.was_held = false$$, 'snapshot_cell_type = ANY') AS no;
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.cell_reports_list();
+EXPLAIN (ANALYZE, BUFFERS) SELECT public.cell_reports_list_count();
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT v.id, v.date, v."time" FROM public.cell_reports_view v WHERE true ORDER BY v.date DESC, v."time" DESC, v.id LIMIT 25') \gexec
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT %s FROM public.cell_reports_view WHERE id = %L', :'report_cols', :'big_report') \gexec
+SELECT format('EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM public.cell_report_participants_view WHERE report_id = %L', :'big_report') \gexec
+RESET ROLE;
+
+\echo
+\echo '######## Medidas: Administrador (igreja toda) ########'
+SELECT pg_temp.as_member(2);
+SET LOCAL ROLE authenticated;
+SELECT 'META Administrador: cell_reports_list sem filtros (ms, meta 150)', pg_temp.ms('SELECT * FROM public.cell_reports_list()') AS ms;
+SELECT 'META Administrador: cell_reports_list_count sem filtros (ms, meta 150)', pg_temp.ms('SELECT public.cell_reports_list_count()') AS ms,
+  (SELECT public.cell_reports_list_count()) AS total;
+SELECT 'META Administrador: cell_reports_list só a busca fe (ms, meta 400)', pg_temp.ms($$SELECT * FROM public.cell_reports_list(_search => '{%fe%}')$$) AS ms;
+SELECT 'META Administrador: cell_reports_list_count só a busca fe (ms, meta 400)', pg_temp.ms($$SELECT public.cell_reports_list_count(_search => '{%fe%}')$$) AS ms;
+SELECT format($q$SELECT 'META Administrador: cell_reports_list só G12 (ms, meta 150)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_reports_list(_g12_ids => ARRAY[%L]::uuid[])', :'g12_id')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list_count só G12 (ms, meta 150)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT public.cell_reports_list_count(_g12_ids => ARRAY[%L]::uuid[])', :'g12_id')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list só Esta semana (ms, meta 100)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_reports_list(_date_from => %L, _date_to => %L)', :'ws', :'we')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list_count só Esta semana (ms, meta 100)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT public.cell_reports_list_count(_date_from => %L, _date_to => %L)', :'ws', :'we')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list só a Célula, 400 relatórios (ms, meta 100)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_reports_list(_cell_id => %L)', :'big_cell')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list_count só a Célula, 400 relatórios (ms, meta 100)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT public.cell_reports_list_count(_cell_id => %L)', :'big_cell')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list combinação RN-02 (ms, meta 1000)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_reports_list(%s)', :'combo')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_list_count combinação RN-02 (ms, meta 1000)', pg_temp.ms(%L) AS ms, (SELECT public.cell_reports_list_count(%s)) AS total$q$,
+              format('SELECT public.cell_reports_list_count(%s)', :'combo'), :'combo') \gexec
+SELECT 'META Administrador: cell_reports_list última página (offset 99975) (ms)', pg_temp.ms('SELECT * FROM public.cell_reports_list(_offset => 99975)') AS ms;
+SELECT 'META Administrador: cell_report_filter_options Líder (ms, meta 200)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('leader')$$) AS ms;
+SELECT 'META Administrador: cell_report_filter_options Líder com busca (ms, meta 200)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('leader', '{%volume 1%}')$$) AS ms;
+SELECT 'META Administrador: cell_report_filter_options G12 (ms, meta 200)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('g12')$$) AS ms;
+SELECT 'META Administrador: cell_report_filter_options G12 com busca (ms, meta 200)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('g12', '{%volume 1%}')$$) AS ms;
+SELECT format($q$SELECT 'META Administrador: cell_report_filter_names 10 ids, Líder (ms, meta 50)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_report_filter_names(''leader'', %L::uuid[])', :'ten_leaders')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_report_filter_names 10 ids, G12 (ms, meta 50)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_report_filter_names(''g12'', %L::uuid[])', :'ten_leaders')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_reports_view por id, colunas da consulta (ms, meta 50)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT %s FROM public.cell_reports_view WHERE id = %L', :'report_cols', :'big_report')) \gexec
+SELECT format($q$SELECT 'META Administrador: cell_report_participants_view, 1.000 participantes (ms, meta 150)', pg_temp.ms(%L) AS ms$q$,
+              format('SELECT * FROM public.cell_report_participants_view WHERE report_id = %L', :'big_report')) \gexec
+SELECT 'META Administrador: server_weeks (ms, meta 5)', pg_temp.ms('SELECT * FROM public.server_weeks()') AS ms;
+RESET ROLE;
+
+\echo
+\echo '######## Medidas: G12 (Líder, o próprio ministério) ########'
+SELECT pg_temp.as_member(3);
+SET LOCAL ROLE authenticated;
+SELECT 'CONFERÊNCIA G12: relatórios visíveis', count(*) FROM public.cell_reports_view;
+SELECT 'META G12: cell_reports_list sem filtros (ms, meta 250)', pg_temp.ms('SELECT * FROM public.cell_reports_list()') AS ms;
+SELECT 'META G12: cell_reports_list_count sem filtros (ms, meta 250)', pg_temp.ms('SELECT public.cell_reports_list_count()') AS ms;
+SELECT 'META G12: cell_report_filter_options Líder (ms, meta 300)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('leader')$$) AS ms;
+SELECT 'META G12: cell_report_filter_options Líder com busca (ms, meta 300)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('leader', '{%volume 1%}')$$) AS ms;
+SELECT 'META G12: cell_report_filter_options G12 (ms, meta 300)', pg_temp.ms($$SELECT * FROM public.cell_report_filter_options('g12')$$) AS ms;
+RESET ROLE;
+
+ROLLBACK;

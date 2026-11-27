@@ -222,8 +222,9 @@ test("RN-07 e UX-06: quem não audita vê a autoria do próprio cadastro, sem 'V
 test("UX-04: o relatório enviado mostra só 'Enviado por'; incluir um participante mostra 'Alterado por'", async ({ page }) => {
   await login(page, env.admin);
   const date = sql(env, `SELECT public.sp_today()::text`);
-  const sent = await callRpc(page, env, "save_cell_report", {
-    _report_id: null,
+  // E2.12: o lançamento é só pela submit_cell_report (a save_cell_report sem id recusa).
+  const sent = await callRpc(page, env, "submit_cell_report", {
+    _report_id: crypto.randomUUID(),
     // E2.11: depois da reunião desta semana (hoje, 00:00) e com a oferta (obrigatória na célula realizada).
     _report: { cell_id: CELL, date, time: "00:00", was_held: true, theme: "Autoria", offering: 0 },
     _participant_ids: PEOPLE.slice(0, 8).map((p) => p.id),

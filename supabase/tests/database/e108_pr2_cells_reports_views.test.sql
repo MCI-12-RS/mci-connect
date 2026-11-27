@@ -294,8 +294,9 @@ SELECT is(
         'created_by_kind', 'created_by_name', 'updated_by_kind', 'updated_by_name',
         'snapshot_leader_id', 'snapshot_timothy_id', 'snapshot_host_id', 'snapshot_leader_name',
         'snapshot_timothy_name', 'snapshot_host_name', 'snapshot_cell_type', 'snapshot_leader_g12_level',
-        'snapshot_leader_is_pastor', 'snapshot_g12_leader_id', 'snapshot_g12_leader_name'],
-  'cell_reports_view: colunas na ordem do spec (cell_deleted, E2.01 AQ-4; as quatro da autoria do E2.05; as onze do retrato do E2.11)');
+        'snapshot_leader_is_pastor', 'snapshot_g12_leader_id', 'snapshot_g12_leader_name',
+        'cell_city', 'cell_state', 'cell_zip_code', 'cell_visible'],
+  'cell_reports_view: colunas na ordem do spec (cell_deleted, E2.01 AQ-4; as quatro da autoria do E2.05; as onze do retrato do E2.11; as quatro do E2.12)');
 SELECT is(
   (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute
     WHERE attrelid = 'public.cell_report_participants_view'::regclass AND attnum > 0 AND NOT attisdropped),

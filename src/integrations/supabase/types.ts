@@ -1051,6 +1051,7 @@ export type Database = {
       }
       cell_reports_view: {
         Row: {
+          cell_city: string | null
           cell_complement: string | null
           cell_deleted: boolean | null
           cell_host_id: string | null
@@ -1062,9 +1063,12 @@ export type Database = {
           cell_meeting_time: string | null
           cell_neighborhood: string | null
           cell_number: string | null
+          cell_state: string | null
           cell_street: string | null
           cell_timothy_id: string | null
           cell_type: string | null
+          cell_visible: boolean | null
+          cell_zip_code: string | null
           created_at: string | null
           created_by_kind: Database["public"]["Enums"]["author_kind"] | null
           created_by_name: string | null
@@ -1901,6 +1905,34 @@ export type Database = {
           week_start: string
         }[]
       }
+      cell_report_filter_names: {
+        Args: {
+          _ids: string[]
+          _person: Database["public"]["Enums"]["cell_filter_person"]
+        }
+        Returns: {
+          g12_level: number
+          gender: string
+          id: string
+          is_pastor: boolean
+          name: string
+        }[]
+      }
+      cell_report_filter_options: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _person: Database["public"]["Enums"]["cell_filter_person"]
+          _search?: string[]
+        }
+        Returns: {
+          g12_level: number
+          gender: string
+          id: string
+          is_pastor: boolean
+          name: string
+        }[]
+      }
       cell_report_launch_check: {
         Args: { _cell_id: string }
         Returns: {
@@ -1918,6 +1950,89 @@ export type Database = {
           week_end: string
           week_start: string
         }[]
+      }
+      cell_reports_list: {
+        Args: {
+          _cell_id?: string
+          _date_from?: string
+          _date_to?: string
+          _g12_ids?: string[]
+          _held?: boolean
+          _leader_ids?: string[]
+          _limit?: number
+          _offset?: number
+          _search?: string[]
+          _types?: string[]
+        }
+        Returns: {
+          cell_city: string | null
+          cell_complement: string | null
+          cell_deleted: boolean | null
+          cell_host_id: string | null
+          cell_id: string | null
+          cell_is_active: boolean | null
+          cell_leader_id: string | null
+          cell_leader_name: string | null
+          cell_meeting_day: string | null
+          cell_meeting_time: string | null
+          cell_neighborhood: string | null
+          cell_number: string | null
+          cell_state: string | null
+          cell_street: string | null
+          cell_timothy_id: string | null
+          cell_type: string | null
+          cell_visible: boolean | null
+          cell_zip_code: string | null
+          created_at: string | null
+          created_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          created_by_name: string | null
+          date: string | null
+          id: string | null
+          observations: string | null
+          offering: number | null
+          participants_count: number | null
+          reason_not_held: string | null
+          search_text: string | null
+          snapshot_cell_type: string | null
+          snapshot_g12_leader_id: string | null
+          snapshot_g12_leader_name: string | null
+          snapshot_host_id: string | null
+          snapshot_host_name: string | null
+          snapshot_leader_g12_level: number | null
+          snapshot_leader_id: string | null
+          snapshot_leader_is_pastor: boolean | null
+          snapshot_leader_name: string | null
+          snapshot_timothy_id: string | null
+          snapshot_timothy_name: string | null
+          theme: string | null
+          time: string | null
+          updated_at: string | null
+          updated_by_kind: Database["public"]["Enums"]["author_kind"] | null
+          updated_by_name: string | null
+          visitors: string[] | null
+          visitors_count: number | null
+          was_held: boolean | null
+          week_start: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cell_reports_view"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      cell_reports_list_count: {
+        Args: {
+          _cell_id?: string
+          _date_from?: string
+          _date_to?: string
+          _g12_ids?: string[]
+          _held?: boolean
+          _leader_ids?: string[]
+          _search?: string[]
+          _types?: string[]
+        }
+        Returns: number
       }
       cell_types: { Args: never; Returns: string[] }
       cell_weekdays: { Args: never; Returns: string[] }
@@ -2307,6 +2422,18 @@ export type Database = {
         Returns: string
       }
       search_normalize: { Args: { _value: string }; Returns: string }
+      server_weeks: {
+        Args: { _at?: string }
+        Returns: {
+          last_week_end: string
+          last_week_start: string
+          this_week_end: string
+          this_week_start: string
+          today: string
+          week_before_last_end: string
+          week_before_last_start: string
+        }[]
+      }
       set_initial_password: {
         Args: {
           _auth_user_id: string

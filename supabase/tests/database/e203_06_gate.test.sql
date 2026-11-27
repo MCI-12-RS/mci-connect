@@ -176,7 +176,7 @@ INSERT INTO exempt VALUES
   ('sp_local', 'relógio (E2.09)'), ('sp_instant', 'relógio (E2.09)'),
   ('legacy_author_label', 'texto: o nome do autor do legado (E2.05)'),
   ('cell_links_or_none', 'o próprio argumento (E2.07)'), ('sp_day_start', 'relógio (E2.07)'),
-  ('first_distinct_ids', 'o próprio argumento (E2.10)');
+  ('first_distinct_ids', 'o próprio argumento (E2.10)'), ('server_weeks', 'relógio (E2.12)');
 SELECT is((SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_proc p JOIN exempt e ON e.fn = p.proname
             WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND e.fn NOT IN ('my_password_status', 'log_auth_event')),
   NULL, 'RN-09: as utilitárias da lista fechada são todas SECURITY INVOKER');

@@ -9,7 +9,7 @@ BEGIN;
 -- passadas); fora das RPCs, só com a marca de manutenção.
 SET LOCAL mci.cell_report_write = 'on';
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(81);
+SELECT plan(82);
 
 -- ---------------------------------------------------------------------------
 -- Ids e chamadas pela API
@@ -309,13 +309,13 @@ SELECT ok((SELECT updated_by = pg_temp.m(2) AND created_by_kind = 'system' FROM 
 CREATE TEMP TABLE m13 AS SELECT pg_temp.mark() AS s;
 -- A célula se reúne no domingo às 00:00 (o começo da semana), e o horário enviado é o minuto atual: a
 -- reunião já aconteceu e o horário não é futuro a qualquer hora do dia (RN-05, RN-06; DT-08).
-SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) - 'report_id' FROM public.save_cell_report(NULL,
+SELECT is(pg_temp.api(3, format($$SELECT jsonb_build_object('outcome', r.outcome) FROM public.submit_cell_report(gen_random_uuid(),
                                    jsonb_build_object('cell_id', %L::uuid, 'date', public.sp_today(), 'time', to_char(public.sp_now(), 'HH24:MI'), 'theme', 'Fé',
-                                                      'offering', 50, 'visitors', ARRAY['Visitante Um'], 'id', gen_random_uuid()),
+                                                      'offering', 50, 'visitors', ARRAY['Visitante Um']),
                                    ARRAY[%L, %L, %L, %L, %L, %L, %L, %L]::uuid[]) r$$,
                                   pg_temp.c(1), pg_temp.m(3), pg_temp.m(4), pg_temp.m(5), pg_temp.m(6), pg_temp.m(14), pg_temp.m(30),
                                   pg_temp.m(31), pg_temp.m(15))),
-  '{"changed": true}'::jsonb, 'DT-09: Davi envia o relatório com 8 participantes numa chamada (save_cell_report)');
+  '{"outcome": "created"}'::jsonb, 'DT-09: Davi envia o relatório com 8 participantes numa chamada (submit_cell_report, E2.12)');
 CREATE TEMP TABLE rep AS SELECT id FROM public.cell_reports WHERE cell_id = pg_temp.c(1) AND deleted_at IS NULL;
 SELECT is((SELECT count(*)::int FROM public.events WHERE seq > (SELECT s FROM m13)), 1,
   'RN-04 d: o envio com 8 participantes dá um evento só');
@@ -450,10 +450,13 @@ SELECT is((SELECT count(*)::int FROM public.events WHERE entity <> 'auth' AND (d
   'RN-20 e: nenhuma descrição ou registro de evento com data aaaa-mm-dd');
 
 -- Revisão do PR 1: entrada sem a célula ou em formato inválido volta como app_error, nunca como erro cru.
+-- E2.12 (DT-10): o lançamento é só pela submit_cell_report; a save_cell_report sem id recusa.
+SELECT is(pg_temp.api(3, $$SELECT to_jsonb(r) FROM public.submit_cell_report(gen_random_uuid(), '{}') r$$),
+  '{"error": "22023", "code": "cell_required"}'::jsonb, 'submit_cell_report sem a célula: app_error cell_required');
+SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.submit_cell_report(gen_random_uuid(), jsonb_build_object('cell_id', %L::uuid, 'date', 'não é data')) r$$, pg_temp.c(1))),
+  '{"error": "22023", "code": "report_date_invalid"}'::jsonb, 'submit_cell_report com data inválida: app_error report_date_invalid (E2.11)');
 SELECT is(pg_temp.api(3, $$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, '{}') r$$),
-  '{"error": "22023", "code": "cell_required"}'::jsonb, 'save_cell_report sem a célula: app_error cell_required');
-SELECT is(pg_temp.api(3, format($$SELECT to_jsonb(r) FROM public.save_cell_report(NULL, jsonb_build_object('cell_id', %L::uuid, 'date', 'não é data')) r$$, pg_temp.c(1))),
-  '{"error": "22023", "code": "report_date_invalid"}'::jsonb, 'save_cell_report com data inválida: app_error report_date_invalid (E2.11)');
+  '{"error": "22023", "code": "report_id_required"}'::jsonb, 'E2.12: save_cell_report sem id: app_error report_id_required');
 
 SELECT * FROM finish();
 ROLLBACK;
