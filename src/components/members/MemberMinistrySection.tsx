@@ -16,6 +16,7 @@ import {
   setHasLeadership,
   setLeader,
   setPastor,
+  type LeaderRef,
   type MinistrySwitches,
   type SwitchNotice,
 } from "@/lib/members/leadership";
@@ -33,6 +34,10 @@ interface MemberMinistrySectionProps {
   memberId?: string;
   /** A busca sem resultado (P11). */
   noResultsLabel: string;
+  /** O líder gravado: o aviso do P20 só fala dele (E2.07, RN-16). Nulo no cadastro novo. */
+  savedLeader?: LeaderRef | null;
+  /** "Ir para o líder" (E2.07, P55): o Líder destacado por 2 s. */
+  highlightLeader?: boolean;
 }
 
 /** Os textos embaixo de um interruptor (P20): o aviso é anunciado como status. */
@@ -97,11 +102,18 @@ function SwitchRow({ id, label, checked, onChange, switchRef, invalid, described
  * Liderança?", Líder, "Ativo", "Batizado(a)?" e Data do batismo. Os
  * interruptores escondem o campo que apagam e avisam o que será apagado (P20).
  */
-export function MemberMinistrySection({ ui, view, memberId, noResultsLabel }: MemberMinistrySectionProps) {
+export function MemberMinistrySection({
+  ui,
+  view,
+  memberId,
+  noResultsLabel,
+  savedLeader = null,
+  highlightLeader = false,
+}: MemberMinistrySectionProps) {
   const { control, watch, setValue } = useFormContext<MemberFormFields>();
   const values = watch();
   const switches = switchesOf(values);
-  const notices = ministrySwitchNotices(switches);
+  const notices = ministrySwitchNotices(switches, savedLeader);
 
   const apply = (next: MinistrySwitches) => {
     const fields = switchFields(next);
@@ -160,24 +172,29 @@ export function MemberMinistrySection({ ui, view, memberId, noResultsLabel }: Me
       );
 
   const leaderBlock = showLeader && (
-    <div className={cn(FIELD_BLOCK, "md:col-span-2")}>
+    <div className={cn(FIELD_BLOCK, "md:col-span-2")} data-leader-field>
       <Label htmlFor="leader">{view.leader === "optional" ? TEXTS.labels.leaderOptional : TEXTS.labels.leader}</Label>
       <Controller
         name="leader_id"
         control={control}
         render={({ field }) => (
-          <AsyncMemberSelect
-            inputId="leader"
-            focusRef={field.ref}
-            value={field.value}
-            onChange={(id, name) => apply(setLeader(switches, id ? { id, name: name ?? "" } : null))}
-            excludeId={memberId}
-            descendantOf={memberId}
-            placeholder={TEXTS.placeholders.leader}
-            savedLabel={values.leader_name}
-            noResultsLabel={noResultsLabel}
-            {...fieldA11yProps("leader", { error: leaderError, hint: view.leaderHint })}
-          />
+          <div
+            className={cn("rounded-md", highlightLeader && "ring-2 ring-ring ring-offset-2 ring-offset-background")}
+            data-highlighted={highlightLeader || undefined}
+          >
+            <AsyncMemberSelect
+              inputId="leader"
+              focusRef={field.ref}
+              value={field.value}
+              onChange={(id, name) => apply(setLeader(switches, id ? { id, name: name ?? "" } : null))}
+              excludeId={memberId}
+              descendantOf={memberId}
+              placeholder={TEXTS.placeholders.leader}
+              savedLabel={values.leader_name}
+              noResultsLabel={noResultsLabel}
+              {...fieldA11yProps("leader", { error: leaderError, hint: view.leaderHint })}
+            />
+          </div>
         )}
       />
       <FieldMessages id="leader" error={leaderError} hint={view.leaderHint} />

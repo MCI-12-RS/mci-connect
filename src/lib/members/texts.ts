@@ -152,3 +152,9 @@ export const PERSON_MARK_TEXTS = {
   inactiveMale: "(inativo)",
   inactiveFemale: "(inativa)",
 } as const;
+
+/** O aviso do líder já preenchido no "Novo membro" de quem vê a igreja toda (E2.07, P55, RN-16). */
+export const PREFILLED_LEADER_TEXTS = {
+  notice: "O líder já vem preenchido com você.",
+  goToLeader: "Ir para o líder",
+} as const;

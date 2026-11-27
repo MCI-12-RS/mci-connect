@@ -29,7 +29,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(({ val
           placeholder={historyMode ? AUDIT_TEXTS.search.historyPlaceholder : AUDIT_TEXTS.search.placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-11 pl-9 md:h-10"
+          className="h-11 pl-9 lg:h-10"
         />
       </div>
     </div>

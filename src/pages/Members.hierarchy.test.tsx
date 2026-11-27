@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { resetFakeSupabase, respondWith } from "@/test/fake-supabase";
+import { resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
 import type { MemberRow } from "@/lib/members/fields";
 import Members from "./Members";
 
@@ -81,7 +81,9 @@ const setWidth = (width: number) => Object.defineProperty(window, "innerWidth", 
 
 function renderMembers(rows: MemberRow[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: rows, count: rows.length });
+  // A página pela `members_list` e o total pela `members_list_count` (E2.07, DT-01).
+  respondToRpc("members_list", { data: rows });
+  respondToRpc("members_list_count", { data: rows.length });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -275,9 +277,11 @@ describe("UX-05: cartões ou tabela conforme a largura, já no primeiro render",
   ])("A %i px o primeiro render já são %s", async (width, kind) => {
     setWidth(width);
     renderMembers([pedro]);
-    // Sem esperar a lista: a decisão vem do `matchMedia` no primeiro render.
-    if (kind === "tabela") expect(screen.getByRole("table")).toBeInTheDocument();
-    else expect(screen.queryByRole("table")).toBeNull();
+    // Sem esperar a lista: a decisão vem do `matchMedia` no primeiro render, e o `Skeleton` da
+    // primeira carga já tem o formato das linhas da tabela ou dos cartões (E2.07, UX-16).
+    const skeletons = screen.getByTestId("members-loading").children;
+    expect(skeletons).toHaveLength(5);
+    expect(skeletons[0]).toHaveClass(kind === "tabela" ? "h-12" : "h-28");
     await screen.findAllByText("Pedro Alves");
     if (kind === "tabela") expect(screen.getByRole("table")).toBeInTheDocument();
     else expect(screen.queryByRole("table")).toBeNull();

@@ -1,25 +1,29 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toRange } from "@/lib/pagination";
-import { toSearchPatterns } from "@/lib/search";
-import { fetchListPage, withSearch, type ListParams, type ListResult } from "@/lib/list-query";
+import type { ListParams, ListResult } from "@/lib/list-query";
 import { MEMBER_ROW_SELECT, type MemberRow } from "@/lib/members/fields";
+import { toMembersListArgs, type MemberFilters } from "@/lib/members/filters";
 
-/** Membros visíveis, paginados no servidor, com total exato (E1.08, RN-01 a RN-04). */
-export function useMembersList({ page, pageSize, search }: ListParams) {
+/**
+ * Membros visíveis, filtrados e paginados no servidor, com o total exato (E2.07, DT-01 a DT-05): a
+ * página pela `members_list` e o total pela `members_list_count`, em paralelo. A ordem (nível e nome,
+ * RN-15) é a da RPC: nada de `.order()` aqui.
+ */
+export function useMembersList({ page, pageSize, search }: ListParams, filters: MemberFilters) {
   return useQuery({
-    queryKey: ["members", "list", { page, pageSize, search }],
+    queryKey: ["members", "list", { page, pageSize, search, filters }],
     placeholderData: keepPreviousData,
-    queryFn: (): Promise<ListResult<MemberRow>> => {
-      const patterns = toSearchPatterns(search);
-      const [from, to] = toRange(page, pageSize);
-      return fetchListPage(
-        withSearch(supabase.from("members_view").select(MEMBER_ROW_SELECT, { count: "exact" }), patterns)
-          .order("name")
-          .order("id")
-          .range(from, to),
-        () => withSearch(supabase.from("members_view").select("id", { count: "exact", head: true }), patterns),
-      );
+    queryFn: async (): Promise<ListResult<MemberRow>> => {
+      const args = toMembersListArgs(filters, search);
+      const [rowsResult, countResult] = await Promise.all([
+        supabase
+          .rpc("members_list", { ...args, _limit: pageSize, _offset: (page - 1) * pageSize })
+          .select(MEMBER_ROW_SELECT),
+        supabase.rpc("members_list_count", args),
+      ]);
+      if (rowsResult.error) throw rowsResult.error;
+      if (countResult.error) throw countResult.error;
+      return { rows: rowsResult.data ?? [], total: countResult.data ?? 0 };
     },
   });
 }

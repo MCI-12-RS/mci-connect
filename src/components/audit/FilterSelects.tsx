@@ -37,7 +37,7 @@ function SelectField<T extends string>({ label, allLabel, value, options, option
         {label}
       </Label>
       <Select value={value ?? ALL} onValueChange={(next) => onChange(isOption(next) ? next : null)}>
-        <SelectTrigger id={id} className="h-11 md:h-10">
+        <SelectTrigger id={id} className="h-11 lg:h-10">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
