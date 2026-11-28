@@ -88,7 +88,7 @@ const Participants = ({ count, names, failed, onRetry }: ParticipantsProps) => {
   if (names) return <NameList heading={heading} names={names} emptyText={TEXTS.noMembers} />;
   return (
     <section className="space-y-1">
-      <h3 className="text-sm text-muted-foreground">{heading}</h3>
+      <h3 className="text-sm font-medium">{heading}</h3>
       {failed ? (
         <div className="space-y-1 text-sm">
           <p>{TEXTS.participantsLoadFailed}</p>
@@ -152,10 +152,11 @@ const ReportContent = ({ view, detail, actions, canSeeDeletedCells, participants
         }}
       />
     ) : (
-      <Skeleton className={`h-5 w-64 ${SKELETON}`} aria-hidden="true" />
+      <>
+        <Skeleton className={`h-5 w-64 ${SKELETON}`} aria-hidden="true" />
+        <Separator />
+      </>
     )}
-
-    <Separator />
 
     <section className="space-y-3">
       <h3 className="font-semibold">{TEXTS.sections.meeting}</h3>
@@ -285,7 +286,7 @@ const SheetFooter = ({ actions, dateBr, onEdit, onDelete }: FooterProps) => {
       <div className="flex items-center gap-2 md:hidden">
         {actions.edit ? (
           <>
-            {editButton("h-11 flex-1")}
+            {editButton("h-auto min-h-11 min-w-0 flex-1 whitespace-normal")}
             {actions.delete && (
               <RowActionsMenu
                 label={TEXTS.actionsLabel(dateBr)}
@@ -336,17 +337,24 @@ export function CellReportSheet({ reportId, preview, onClose, onCloseAutoFocus, 
 
   const detailQuery = useCellReport(shownId, { enabled: open });
   const participantsQuery = useCellReportParticipants(shownId, { enabled: open });
+  // Durante a saída, o corpo fica com o último relatório lido: excluir pela consulta tira o
+  // relatório do cache, e o painel não pisca para o carregando enquanto fecha.
+  const [shownDetail, setShownDetail] = useState(detailQuery.data);
+  if (open && detailQuery.data !== shownDetail) setShownDetail(detailQuery.data);
+  const [shownParticipants, setShownParticipants] = useState(participantsQuery.data);
+  if (open && participantsQuery.data !== shownParticipants) setShownParticipants(participantsQuery.data);
   const titleRef = useRef<HTMLHeadingElement>(null);
   // O erro em que a pessoa tocou "Tentar de novo": o carregando aparece no toque.
   const [retriedError, setRetriedError] = useState<unknown>(null);
 
-  const detail = detailQuery.data;
+  const detail = open ? detailQuery.data : shownDetail;
+  const participantNames = open ? participantsQuery.data : shownParticipants;
   const notFound = detail === null;
-  const failed = detailQuery.isError && detail === undefined && detailQuery.error !== retriedError;
+  const failed = open && detailQuery.isError && detail === undefined && detailQuery.error !== retriedError;
   const previewRow = shownPreview && shownPreview.id === shownId ? shownPreview : null;
   const view = notFound ? null : toReportSheetView(detail, previewRow);
   const actions = detail ? reportSheetActions(hasPermission, detail) : null;
-  const busy = !!detail && detailQuery.isFetching;
+  const busy = open && !!detail && detailQuery.isFetching;
 
   const retry = () => {
     setRetriedError(detailQuery.error);
@@ -383,8 +391,8 @@ export function CellReportSheet({ reportId, preview, onClose, onCloseAutoFocus, 
         canSeeDeletedCells={hasPermission("manage_roles")}
         participants={{
           count: view.meeting.participantsCount,
-          names: participantsQuery.data ? sortParticipantNames(participantsQuery.data) : undefined,
-          failed: participantsQuery.isError && !participantsQuery.data,
+          names: participantNames ? sortParticipantNames(participantNames) : undefined,
+          failed: open && participantsQuery.isError && !participantNames,
           onRetry: () => void participantsQuery.refetch(),
         }}
       />

@@ -15,14 +15,17 @@ interface ReportCardProps {
   onOpen: (opener: HTMLElement) => void;
 }
 
-/** Uma unidade dos números, que não quebra por dentro (UXD-6). */
-const NumberItem = ({ label, value }: { label: string; value: string | number }) => (
-  <span className="whitespace-nowrap">
+/**
+ * Uma unidade dos números, que não quebra por dentro (UXD-6). O "·" vem antes de cada unidade, num
+ * recuo que a linha corta quando a unidade abre a linha: quebrou, o separador não fica pendurado no
+ * fim nem no começo. O "·" não é lido (`content: '·' / ''`); o leitor de tela ouve a vírgula.
+ */
+const NumberItem = ({ label, value, first }: { label: string; value: string | number; first?: boolean }) => (
+  <span className="relative whitespace-nowrap pl-4 before:absolute before:left-1.5 before:text-muted-foreground before:content-['·'_/_'']">
+    {!first && <span className="sr-only">, </span>}
     <span className="text-muted-foreground">{label}</span> <span className="font-medium tabular-nums">{value}</span>
   </span>
 );
-
-const Dot = () => <span aria-hidden="true">·</span>;
 
 /**
  * Um relatório na lista em cartões, até 1279 px (E2.12, T1, UXD-6). De 1024 a 1279 px, o corpo vira
@@ -70,12 +73,12 @@ const ReportCard = ({ row, actions, onOpen }: ReportCardProps) => (
         <ReportBadges row={row} />
         <ReportText row={row} />
         {row.numbers && (
-          <p className="flex flex-wrap gap-x-2 text-sm">
-            <NumberItem label={TEXTS.participants} value={row.numbers.participants} />
-            <Dot />
-            <NumberItem label={TEXTS.visitors} value={row.numbers.visitors} />
-            <Dot />
-            <NumberItem label={TEXTS.offering} value={row.numbers.offering} />
+          <p className="overflow-hidden text-sm">
+            <span className="-ml-4 flex flex-wrap">
+              <NumberItem first label={TEXTS.participants} value={row.numbers.participants} />
+              <NumberItem label={TEXTS.visitors} value={row.numbers.visitors} />
+              <NumberItem label={TEXTS.offering} value={row.numbers.offering} />
+            </span>
           </p>
         )}
       </div>

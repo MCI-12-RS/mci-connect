@@ -17,7 +17,7 @@ export function NameList({ heading, names, emptyText }: NameListProps) {
   const headingId = useId();
   return (
     <section className="space-y-1">
-      <h3 id={headingId} className="text-sm text-muted-foreground">
+      <h3 id={headingId} className="text-sm font-medium">
         {heading}
       </h3>
       {names.length > 0 ? (
