@@ -41,8 +41,8 @@ export const CELL_DETAIL_TEXTS = {
     empty: "Nenhum relatório para mostrar.",
     /** "Quarta, 18/11/2026 às 20:00". */
     heading: (weekday: string, date: string, time: string) => (time ? `${weekday}, ${date} às ${time}` : `${weekday}, ${date}`),
-    held: "Célula realizada",
-    notHeld: "Não houve célula",
+    /** O nome do botão da consulta (E2.12, T14, P91): a ação e o texto visível do cabeçalho. */
+    openLabel: (heading: string) => `Ver o relatório de ${heading}`,
     theme: "Tema:",
     reason: "Motivo:",
     observations: "Observações:",

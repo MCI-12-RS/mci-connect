@@ -1,8 +1,10 @@
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowDown, ArrowRight, ArrowUp, CalendarX, CheckCircle2, Equal, Pencil, Trash2, type LucideIcon } from "lucide-react";
-import StatusBadge from "@/components/StatusBadge";
+import { AlertCircle, ArrowDown, ArrowRight, ArrowUp, ChevronRight, Equal, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import RowActionsMenu from "@/components/RowActionsMenu";
+import { ReportMeetingBadge } from "@/components/StatusBadges";
+import { REPORT_OPEN_ATTRIBUTE } from "@/components/cell-reports/report-open";
+import { AboveCardLink } from "@/components/cells/CellListParts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,12 +12,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { reportHeading, shownReports, type CellRecentReport } from "@/lib/cells/detail";
 import { CELL_DETAIL_TEXTS } from "@/lib/cells/detail-texts";
 import { anyTrend, trendOf, TREND_SPOKEN, type Trend } from "@/lib/cells/report-comparison";
+import { cellReportListHref } from "@/lib/cell-reports/filters";
 import { formatOffering } from "@/lib/cell-reports/labels";
 import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
 import { CELL_REPORT_DELETION_TEXTS } from "@/lib/deletion/texts";
 import { DetailSection } from "./DetailSection";
 
 const TEXTS = CELL_DETAIL_TEXTS.reports;
+
+/** O botão da consulta na tabela: o primeiro dado da linha (P91). */
+const TABLE_OPEN_BUTTON =
+  "rounded-sm text-left font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+/** No cartão, esticado sobre ele: o foco desenha o anel no cartão inteiro (P91). */
+const CARD_OPEN_BUTTON =
+  "break-words rounded-sm text-left font-semibold outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background";
 
 const TREND_ICONS: Readonly<Record<Trend, LucideIcon>> = { up: ArrowUp, down: ArrowDown, same: Equal };
 
@@ -35,18 +45,6 @@ export const CellReportTrend = ({ value, sign }: { value: number | null; sign: n
     </span>
   );
 };
-
-/** "Célula realizada" ou "Não houve célula" (P6), com os termos do Negócio (T11). */
-const HeldBadge = ({ held }: { held: boolean }) =>
-  held ? (
-    <StatusBadge tone="success" icon={CheckCircle2} className="w-fit">
-      {TEXTS.held}
-    </StatusBadge>
-  ) : (
-    <StatusBadge tone="muted" icon={CalendarX} className="w-fit">
-      {TEXTS.notHeld}
-    </StatusBadge>
-  );
 
 /** "Tema: …" ou "Motivo: …" e "Observações: …", só quando há (T11). */
 const ReportTexts = ({ report }: { report: CellRecentReport }) => {
@@ -91,23 +89,47 @@ interface CellRecentReportsProps {
   canDelete: boolean;
   onEdit: (report: CellRecentReport, opener: HTMLElement) => void;
   onDelete: (report: CellRecentReport, opener: HTMLElement | null) => void;
+  /** Abre a consulta "Ver relatório" do relatório (E2.12, T14, P91). */
+  onOpen: (report: CellRecentReport, opener: HTMLElement) => void;
 }
 
 /**
  * Últimos relatórios (RN-17, RN-18, RN-19; T11, P82): os 3 mais recentes
  * visíveis, em cartões até 1023 px e numa tabela a partir de 1024 px, com as
  * setas e as ações de cada relatório; "Ver todos os relatórios". Só números:
- * nenhum nome de participante ou de visitante.
+ * nenhum nome de participante ou de visitante: os nomes ficam na consulta "Ver
+ * relatório", que o cabeçalho de cada relatório abre (E2.12, T14, P91).
  */
 export const CellRecentReports = forwardRef<HTMLHeadingElement, CellRecentReportsProps>(
   (
-    { reports, isPending, isError, onRetry, cellId, leaderName, showTable, canEdit, canDelete, onEdit, onDelete },
+    { reports, isPending, isError, onRetry, cellId, leaderName, showTable, canEdit, canDelete, onEdit, onDelete, onOpen },
     headingRef,
   ) => {
     const shown = shownReports(reports ?? []);
     const showTrendHint = !isError && anyTrend(shown);
     const showActions = canEdit || canDelete;
     const dateOf = (r: CellRecentReport) => formatIsoDateBr(r.date);
+
+    /** O cabeçalho do relatório é o botão da consulta (P91); no cartão, esticado sobre ele. */
+    const openButton = (r: CellRecentReport, className: string) => (
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={TEXTS.openLabel(reportHeading(r))}
+        {...{ [REPORT_OPEN_ATTRIBUTE]: r.id }}
+        onClick={(event: MouseEvent<HTMLButtonElement>) => onOpen(r, event.currentTarget)}
+        className={className}
+      >
+        {reportHeading(r)}
+      </button>
+    );
+    /** Na tabela, o clique na linha é um atalho do mouse que ignora os botões (P91). */
+    const openRow = (r: CellRecentReport) => (event: MouseEvent<HTMLTableRowElement>) => {
+      if (event.target instanceof Element && event.target.closest("a, button, [role='menuitem']")) return;
+      if (window.getSelection()?.toString()) return;
+      const opener = event.currentTarget.querySelector<HTMLElement>(`[${REPORT_OPEN_ATTRIBUTE}]`);
+      if (opener) onOpen(r, opener);
+    };
 
     const editButton = (r: CellRecentReport, className: string) =>
       canEdit && (
@@ -179,11 +201,11 @@ export const CellRecentReports = forwardRef<HTMLHeadingElement, CellRecentReport
                 </>
               );
               return (
-                <TableRow key={r.id}>
-                  <TableCell className="align-top text-sm">{reportHeading(r)}</TableCell>
+                <TableRow key={r.id} className="cursor-pointer" onClick={openRow(r)}>
+                  <TableCell className="align-top text-sm">{openButton(r, TABLE_OPEN_BUTTON)}</TableCell>
                   <TableCell className="align-top">
                     <div className="flex flex-col items-start gap-1">
-                      <HeldBadge held={held} />
+                      <ReportMeetingBadge held={held} />
                       <ReportTexts report={r} />
                     </div>
                   </TableCell>
@@ -227,43 +249,48 @@ export const CellRecentReports = forwardRef<HTMLHeadingElement, CellRecentReport
             const held = r.was_held !== false;
             return (
               <li key={r.id}>
-                <article className="space-y-2 rounded-lg border p-4">
+                <article className="relative space-y-2 rounded-lg border p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="min-w-0 pt-2 font-body text-sm font-semibold">{reportHeading(r)}</h3>
+                    <h3 className="min-w-0 pt-2 font-body text-sm font-semibold">{openButton(r, CARD_OPEN_BUTTON)}</h3>
                     {showActions && (
-                      <div className="flex shrink-0 items-center gap-2">
-                        {editButton(r, "h-11 w-11")}
-                        <RowActionsMenu
-                          label={CELL_REPORT_DELETION_TEXTS.actionsLabel(dateOf(r), leaderName)}
-                          actions={
-                            canDelete
-                              ? [{ label: CELL_REPORT_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => onDelete(r, trigger) }]
-                              : []
-                          }
-                        />
-                      </div>
+                      <AboveCardLink>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {editButton(r, "h-11 w-11")}
+                          <RowActionsMenu
+                            label={CELL_REPORT_DELETION_TEXTS.actionsLabel(dateOf(r), leaderName)}
+                            actions={
+                              canDelete
+                                ? [{ label: CELL_REPORT_DELETION_TEXTS.deleteAction, icon: Trash2, onSelect: (trigger) => onDelete(r, trigger) }]
+                                : []
+                            }
+                          />
+                        </div>
+                      </AboveCardLink>
                     )}
                   </div>
-                  <HeldBadge held={held} />
-                  {held ? (
-                    <>
-                      <ReportTexts report={{ ...r, observations: null }} />
-                      <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        <NumberBlock label={TEXTS.participants}>
-                          <CellReportTrend value={r.participants_count} sign={r.participants_trend} />
-                        </NumberBlock>
-                        <NumberBlock label={TEXTS.visitors}>
-                          <CellReportTrend value={r.visitors_count} sign={r.visitors_trend} />
-                        </NumberBlock>
-                        <NumberBlock label={TEXTS.offering}>
-                          <span className="tabular-nums">{formatOffering(r.offering)}</span>
-                        </NumberBlock>
-                      </div>
-                      <ReportTexts report={{ ...r, theme: null }} />
-                    </>
-                  ) : (
-                    <ReportTexts report={r} />
-                  )}
+                  <div className="space-y-2 pr-6">
+                    <ReportMeetingBadge held={held} />
+                    {held ? (
+                      <>
+                        <ReportTexts report={{ ...r, observations: null }} />
+                        <div className="flex flex-wrap gap-x-6 gap-y-2">
+                          <NumberBlock label={TEXTS.participants}>
+                            <CellReportTrend value={r.participants_count} sign={r.participants_trend} />
+                          </NumberBlock>
+                          <NumberBlock label={TEXTS.visitors}>
+                            <CellReportTrend value={r.visitors_count} sign={r.visitors_trend} />
+                          </NumberBlock>
+                          <NumberBlock label={TEXTS.offering}>
+                            <span className="tabular-nums">{formatOffering(r.offering)}</span>
+                          </NumberBlock>
+                        </div>
+                        <ReportTexts report={{ ...r, theme: null }} />
+                      </>
+                    ) : (
+                      <ReportTexts report={r} />
+                    )}
+                  </div>
+                  <ChevronRight className="pointer-events-none absolute bottom-4 right-4 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </article>
               </li>
             );
@@ -283,7 +310,7 @@ export const CellRecentReports = forwardRef<HTMLHeadingElement, CellRecentReport
         {body}
         {!isPending && shown.length > 0 && (
           <Button asChild variant="outline" className="h-11 w-full md:h-10 md:w-auto">
-            <Link to={`/cell-reports?cell=${cellId}`}>
+            <Link to={cellReportListHref({ cellId })}>
               {TEXTS.viewAll}
               <span className="sr-only">{TEXTS.viewAllSpoken(leaderName)}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

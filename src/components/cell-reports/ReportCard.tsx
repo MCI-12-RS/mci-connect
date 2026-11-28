@@ -4,9 +4,7 @@ import { AboveCardLink } from "@/components/cells/CellListParts";
 import type { ReportRowView } from "@/lib/cell-reports/report-row";
 import { REPORT_ROW_TEXTS as TEXTS } from "@/lib/cell-reports/filter-texts";
 import { ReportAddress, ReportBadges, ReportDay, ReportG12, ReportText } from "./ReportRowParts";
-
-/** O atributo do botão que abre a consulta: a volta do foco o procura (T9). */
-export const REPORT_OPEN_ATTRIBUTE = "data-report-id";
+import { REPORT_OPEN_ATTRIBUTE } from "./report-open";
 
 interface ReportCardProps {
   row: ReportRowView;

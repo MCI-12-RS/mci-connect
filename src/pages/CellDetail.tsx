@@ -9,6 +9,8 @@ import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
 import RowActionsMenu from "@/components/RowActionsMenu";
 import { RecordAuthorship } from "@/components/RecordAuthorship";
 import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
+import { CellReportSheet } from "@/components/cell-reports/CellReportSheet";
+import { findReportOpenButton } from "@/components/cell-reports/report-open";
 import { CellDetailHeader } from "@/components/cells/detail/CellDetailHeader";
 import { CellDetailFooter } from "@/components/cells/detail/CellDetailFooter";
 import { CellReportStatusSection } from "@/components/cells/detail/CellReportStatusSection";
@@ -24,7 +26,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCell } from "@/hooks/use-cell";
 import { useCellListPreview } from "@/hooks/use-cell-list-preview";
-import { useCellRecentReports } from "@/hooks/use-cell-recent-reports";
+import { removeReportFromRecentCache, useCellRecentReports } from "@/hooks/use-cell-recent-reports";
+import { cellReportDetailKey } from "@/hooks/use-cell-report";
+import { useCellReportListPreview } from "@/hooks/use-cell-report-list-preview";
+import { cellReportParticipantsKey } from "@/hooks/use-cell-report-participants";
+import { useCellReportSheet } from "@/hooks/use-cell-report-sheet";
+import { useReportEditEntry } from "@/hooks/use-report-edit-entry";
 import { FROM_DETAIL_STATE, rememberOpenedCell } from "@/hooks/use-list-return-focus";
 import { TABLE_MIN_WIDTH, useMinWidth } from "@/hooks/use-min-width";
 import { useReturnFocus } from "@/hooks/use-return-focus";
@@ -126,8 +133,16 @@ const CellDetail = () => {
   const [editingCell, setEditingCell] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [deletingCell, setDeletingCell] = useState<CellDeletionTarget | null>(null);
-  const [editingReportId, setEditingReportId] = useState<string | null>(null);
-  const [deletingReport, setDeletingReport] = useState<CellReportDeletionTarget | null>(null);
+  const [editingReport, setEditingReport] = useState<{ id: string; fromSheet: boolean } | null>(null);
+  const [deletingReport, setDeletingReport] = useState<{ target: CellReportDeletionTarget; fromSheet: boolean } | null>(null);
+
+  // A consulta "Ver relatório" sobre o detalhe (E2.12, T14): `?report=<id>` no endereço da célula.
+  const sheet = useCellReportSheet({ cleanInvalid: true });
+  const sheetPreview = useCellReportListPreview(sheet.reportId);
+  const editEntry = useReportEditEntry();
+  // Aberta pelo relatório, o foco volta ao botão dele; por link, ao título "Últimos relatórios".
+  const sheetFromList = useRef(false);
+  if (sheet.reportId) sheetFromList.current = sheet.fromList;
 
   const goBack = () => {
     if (back.kind === "history") navigate(-1);
@@ -210,11 +225,38 @@ const CellDetail = () => {
   };
   const editReport = (report: CellRecentReport, opener: HTMLElement) => {
     reportFocus.setOpener(opener);
-    setEditingReportId(report.id);
+    setEditingReport({ id: report.id, fromSheet: false });
   };
   const deleteReport = (report: CellRecentReport, opener: HTMLElement | null) => {
     reportFocus.setOpener(opener);
-    setDeletingReport({ id: report.id, date: formatReportDate(report.date), leaderName: leader });
+    setDeletingReport({ target: { id: report.id, date: formatReportDate(report.date), leaderName: leader }, fromSheet: false });
+  };
+  // Pela consulta (T13): o formulário por cima, com a entrada no histórico (DA-11), e a exclusão do E2.01.
+  const editReportFromSheet = (reportId: string, opener: HTMLElement) => {
+    reportFocus.setOpener(opener);
+    setEditingReport({ id: reportId, fromSheet: true });
+    editEntry.start();
+  };
+  const deleteReportFromSheet = (target: CellReportDeletionTarget, opener: HTMLElement | null) => {
+    reportFocus.setOpener(opener);
+    setDeletingReport({ target, fromSheet: true });
+  };
+  const closeReportForm = () => {
+    if (editingReport?.fromSheet) editEntry.closed();
+    setEditingReport(null);
+  };
+  // Excluído pela consulta: fecha, tira o relatório dos últimos no cache e as leituras dele (como a DA-12).
+  const afterReportDeletedFromSheet = (reportId: string) => {
+    sheet.close();
+    removeReportFromRecentCache(queryClient, cell.id, reportId);
+    queryClient.removeQueries({ queryKey: cellReportDetailKey(reportId) });
+    queryClient.removeQueries({ queryKey: cellReportParticipantsKey(reportId) });
+  };
+  const onSheetCloseAutoFocus = (event: Event, reportId: string | null) => {
+    event.preventDefault();
+    const opener = sheetFromList.current ? findReportOpenButton(reportId) : null;
+    if (opener) opener.focus();
+    else reportsHeadingRef.current?.focus();
   };
 
   const newReportButton = (className: string) => (
@@ -295,6 +337,7 @@ const CellDetail = () => {
             canDelete={canDeleteReport}
             onEdit={editReport}
             onDelete={deleteReport}
+            onOpen={(report) => sheet.open(report.id)}
           />
           {evolutionPoints.length > 0 && <CellEvolution points={evolutionPoints} />}
         </div>
@@ -317,20 +360,40 @@ const CellDetail = () => {
           onDeleted={afterCellDeleted}
         />
       )}
-      {editingReportId && (
+      {/* A consulta fica ao lado dos formulários, e não dentro deles (T13, T14); sem "Ver célula". */}
+      <CellReportSheet
+        reportId={sheet.reportId}
+        preview={sheetPreview}
+        context="cell"
+        onClose={sheet.close}
+        onCloseAutoFocus={onSheetCloseAutoFocus}
+        onEdit={editReportFromSheet}
+        onDelete={deleteReportFromSheet}
+      />
+      {editingReport && (
         <CellReportDialog
           mode="edit"
-          reportId={editingReportId}
-          onClose={() => setEditingReportId(null)}
+          reportId={editingReport.id}
+          onClose={closeReportForm}
           onCloseAutoFocus={reportFocus.onCloseAutoFocus}
+          {...(editingReport.fromSheet ? { closeRequest: editEntry.closeRequest, onCloseRequestDeclined: editEntry.declined } : {})}
         />
       )}
       {deletingReport && (
         <CellReportDeletionFlow
-          key={deletingReport.id}
-          report={deletingReport}
+          key={deletingReport.target.id}
+          report={deletingReport.target}
           onClose={() => setDeletingReport(null)}
-          onCloseAutoFocus={reportFocus.onCloseAutoFocus}
+          onDeleted={deletingReport.fromSheet ? () => afterReportDeletedFromSheet(deletingReport.target.id) : undefined}
+          onCloseAutoFocus={(event) => {
+            // Excluído pela consulta, o foco vai para "Últimos relatórios"; recusado, volta à consulta.
+            if (!deletingReport.fromSheet || sheet.reportId === deletingReport.target.id) {
+              reportFocus.onCloseAutoFocus(event);
+              return;
+            }
+            event.preventDefault();
+            requestAnimationFrame(() => reportsHeadingRef.current?.focus());
+          }}
         />
       )}
     </AppLayout>

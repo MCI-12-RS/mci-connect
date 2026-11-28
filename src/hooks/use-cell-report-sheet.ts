@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { closeMode, openedFromList, readReportParam, REPORT_PARAM } from "@/lib/cell-reports/report-sheet";
 
@@ -8,14 +8,28 @@ const stateObject = (state: unknown): Record<string, unknown> =>
 /**
  * A consulta "Ver relatório" na URL (E2.12, AQ-8, UXD-11): abrir pela linha acrescenta `report=<id>`
  * com uma entrada nova no histórico (o voltar fecha a consulta); fechar volta essa entrada ou, se a
- * consulta veio por link, tira o parâmetro com `replace`. O `report` sem formato sai junto com a
- * limpeza dos filtros (`useCellReportFilters`).
+ * consulta veio por link, tira o parâmetro com `replace`. Em Relatórios, o `report` sem formato sai
+ * junto com a limpeza dos filtros (`useCellReportFilters`); nas telas sem filtros na URL (o detalhe
+ * da célula, T14), `cleanInvalid` o tira aqui, com `replace`.
  */
-export function useCellReportSheet() {
+export function useCellReportSheet({ cleanInvalid = false }: { cleanInvalid?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const reportId = readReportParam(searchParams);
+  const invalid = reportId === null && searchParams.has(REPORT_PARAM);
+
+  useEffect(() => {
+    if (!cleanInvalid || !invalid) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(REPORT_PARAM);
+        return next;
+      },
+      { replace: true, state: location.state },
+    );
+  }, [cleanInvalid, invalid, location.state, setSearchParams]);
 
   const open = useCallback(
     (id: string) =>

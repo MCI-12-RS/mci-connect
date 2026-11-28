@@ -15,6 +15,9 @@ interface ReportFormDialogProps {
   /** O fechar padrão, antes de o conteúdo informar o dele. */
   onClose: () => void;
   onCloseAutoFocus?: (event: Event) => void;
+  /** O pedido de fechar vindo de fora (DA-11 do E2.12), repassado à casca comum. */
+  closeRequest?: number;
+  onCloseRequestDeclined?: () => void;
   children: ReactNode;
 }
 
@@ -25,7 +28,14 @@ interface ReportFormDialogProps {
  * (UXD-13) trocam só o conteúdo, e o foco volta a quem abriu ao fechar. O foco
  * inicial fica no título (UXD-14), também quando o título muda.
  */
-export function ReportFormDialog({ initialTitle, onClose, onCloseAutoFocus, children }: ReportFormDialogProps) {
+export function ReportFormDialog({
+  initialTitle,
+  onClose,
+  onCloseAutoFocus,
+  closeRequest,
+  onCloseRequestDeclined,
+  children,
+}: ReportFormDialogProps) {
   const titleRef = useRef<HTMLSpanElement>(null);
   const config = useRef<ReportShellConfig>({ title: initialTitle, onClose });
   const [, rerender] = useReducer((n: number) => n + 1, 0);
@@ -59,6 +69,8 @@ export function ReportFormDialog({ initialTitle, onClose, onCloseAutoFocus, chil
           titleRef.current?.focus();
         }}
         onCloseAutoFocus={onCloseAutoFocus}
+        closeRequest={closeRequest}
+        onCloseRequestDeclined={onCloseRequestDeclined}
         actions={
           actions
             ? {
