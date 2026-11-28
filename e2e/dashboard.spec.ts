@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Response } from "@playwright/test";
 
-// Dashboard calculado no banco (E1.08, PR 3: RN-02, RN-08 e RN-09).
+// Dashboard calculado no banco (E1.08, PR 3: RN-02, RN-08 e RN-09; E2.14 PR 2: duas RPCs,
+// os títulos da RN-16, os tipos vindos do resumo e os cards com zero escondidos, RN-14).
 //
 // Faz login de verdade, então precisa de um banco com usuários de teste e do
 // front apontando para ele (VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY
@@ -10,32 +11,35 @@ import { test, expect, type Page, type Response } from "@playwright/test";
 //   E2E_NO_DASHBOARD_EMAIL / E2E_NO_DASHBOARD_PASSWORD: usuário sem
 //   view_dashboard e sem view_own_ministry_dashboard.
 
-const DASHBOARD_RPCS = ["dashboard_cells_by_type", "dashboard_g12_ranking", "dashboard_summary"];
+const DASHBOARD_RPCS = ["dashboard_g12_ranking", "dashboard_summary"];
 
 // O que o AuthContext lê depois do login, além do dashboard (o login em si é a função sign-in, que não passa pelo /rest/v1/; E1.04).
 const AUTH_PATHS = ["/rest/v1/members_view", "/rest/v1/rpc/my_access"];
 
 const WEEK_CARDS: Record<string, string> = {
-  "Relatórios Enviados": "reports_sent",
+  "Relatórios enviados": "reports_sent",
   "Células com relatório pendente": "cells_pending",
-  "Visitantes em Células": "visitors",
-  "Células Não Realizadas": "cells_not_held",
+  "Visitantes em células": "visitors",
+  "Células não realizadas": "cells_not_held",
+  "Novos membros": "members_new",
+  "Novas células": "cells_new",
 };
 
 const GENERAL_CARDS: Record<string, string> = {
-  "Total de Membros": "members_total",
-  "Membros Ativos": "members_active",
-  "Membros Inativos": "members_inactive",
+  "Total de membros": "members_total",
+  "Membros ativos": "members_active",
+  "Membros inativos": "members_inactive",
   Batizados: "members_baptized",
-  "Não Batizados": "members_not_baptized",
-  "Sem Liderança": "members_without_leader",
-  "Sem Vínculo Celular": "members_without_cell_link",
+  "Não batizados": "members_not_baptized",
+  "Sem liderança": "members_without_leader",
+  "Sem vínculo celular": "members_without_cell_link",
+  "Células evangelísticas": "cells_evangelistic",
+  "Células de discipulado": "cells_discipleship",
+  Macrocélulas: "cells_macrocell",
 };
 
-interface CellsByTypeRow {
-  cell_type: string;
-  total: number;
-}
+/** RN-14: à vista mesmo com zero. */
+const ALWAYS_VISIBLE = new Set(["reports_sent", "cells_pending", "visitors", "members_total", "members_active"]);
 
 interface G12Row {
   name: string;
@@ -78,17 +82,15 @@ const shownCount = (value: number | string) => Number(value).toLocaleString("pt-
 /** "2026-11-22" → "22/11". */
 const dayMonth = (isoDate: string) => `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}`;
 
-/** O número exibido no card com esse título. */
-function cardValue(page: Page, title: string) {
-  return page
-    .locator("div.rounded-lg", { has: page.getByRole("heading", { name: title, exact: true }) })
-    .locator("div.text-3xl");
+/** O card (o `li` da grade) com esse título. */
+function card(page: Page, title: string) {
+  return page.getByRole("listitem").filter({ has: page.getByText(title, { exact: true }) });
 }
 
 test.describe("Dashboard (RN-08, RN-09)", () => {
   test.setTimeout(60_000);
 
-  test("Dado um usuário com view_dashboard, quando abre o dashboard, então faz só as três chamadas e mostra os números delas", async ({
+  test("Dado um usuário com view_dashboard, quando abre o dashboard, então faz só as duas chamadas e mostra os números delas, sem os cards com zero", async ({
     page,
   }) => {
     const user = credentials("E2E_DASHBOARD_EMAIL", "E2E_DASHBOARD_PASSWORD");
@@ -98,42 +100,48 @@ test.describe("Dashboard (RN-08, RN-09)", () => {
 
     await login(page, user);
     await expect(page).toHaveURL(/\/$/);
-    const [cellsByTypeResponse, rankingResponse, summaryResponse] = await responses;
+    const [rankingResponse, summaryResponse] = await responses;
     await page.waitForLoadState("networkidle");
 
-    // Critério de pronto 8: só as três RPCs, uma vez cada; o resto é do login.
+    // Só as duas RPCs, uma vez cada; o resto é do login (a dos tipos saiu, AQ-3).
     const dashboardCalls = restCalls.filter((path) => !AUTH_PATHS.includes(path));
     expect(dashboardCalls.sort()).toEqual(DASHBOARD_RPCS.map((name) => `/rest/v1/rpc/${name}`));
 
     // Os números exibidos são os das RPCs, sem nenhuma conta no cliente.
     const summary: Record<string, number | string> = await summaryResponse.json();
-    const cellsByType: CellsByTypeRow[] = await cellsByTypeResponse.json();
     const ranking: G12Row[] = await rankingResponse.json();
 
-    const weekLabel = `Esta Semana (${dayMonth(String(summary.week_start))} - ${dayMonth(String(summary.week_end))})`;
-    await expect(page.getByRole("heading", { name: weekLabel })).toBeVisible();
+    const weekLabel = `Esta semana, de ${dayMonth(String(summary.week_start))} a ${dayMonth(String(summary.week_end))}`;
+    await expect(page.getByRole("heading", { level: 2, name: weekLabel })).toBeVisible();
 
     for (const [title, field] of Object.entries({ ...WEEK_CARDS, ...GENERAL_CARDS })) {
-      await expect(cardValue(page, title), title).toHaveText(shownCount(summary[field]));
-    }
-    for (const row of cellsByType) {
-      await expect(cardValue(page, `Células ${row.cell_type}`)).toHaveText(shownCount(row.total));
+      const value = Number(summary[field]);
+      if (ALWAYS_VISIBLE.has(field) || value > 0) {
+        await expect(card(page, title).locator("span.text-3xl"), title).toHaveText(shownCount(value));
+      } else {
+        await expect(card(page, title), title).toHaveCount(0);
+      }
     }
 
-    if (ranking.length > 0) {
+    // O gráfico só aparece com alguma parte maior que zero (RN-12).
+    const chartVisible = ["reports_held", "cells_not_held", "cells_pending"].some((field) => Number(summary[field]) > 0);
+    await expect(page.getByRole("heading", { level: 3, name: "Relatórios de células" })).toHaveCount(chartVisible ? 1 : 0);
+
+    const withCouples = ranking.length > 0;
+    await expect(page.getByRole("heading", { level: 2, name: "Células por G12" })).toHaveCount(withCouples ? 1 : 0);
+    if (withCouples) {
       const rows = page.getByRole("table").locator("tbody tr");
       await expect(rows).toHaveCount(ranking.length);
-      const expected = ranking.map((row) => [
-        row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name,
-        shownCount(row.male_cells),
-        shownCount(row.female_cells),
-        shownCount(row.total_cells),
-      ]);
-      // O casal é o cabeçalho da linha (`th`); os números ficam nos `td`.
+      // O casal é o cabeçalho da linha (`th`); os números ficam nos `td`, sem as pílulas (T5).
       const shown = await rows.evaluateAll((trs) =>
-        trs.map((tr) => Array.from(tr.querySelectorAll("th, td"), (cell) => cell.textContent?.trim() ?? "")),
+        trs.map((tr) => Array.from(tr.querySelectorAll("td"), (cell) => cell.textContent?.trim() ?? "")),
       );
-      expect(shown).toEqual(expected);
+      expect(shown).toEqual(
+        ranking.map((row) => [shownCount(row.male_cells), shownCount(row.female_cells), shownCount(row.total_cells)]),
+      );
+      for (const [index, row] of ranking.entries()) {
+        await expect(rows.nth(index).locator("th")).toContainText(row.name);
+      }
     }
   });
 
@@ -152,7 +160,7 @@ test.describe("Dashboard (RN-08, RN-09)", () => {
     expect((await response.json()).code).toBe("42501");
 
     await expect(page.getByText("Você não tem acesso ao dashboard.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Esta Semana", exact: false })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Esta semana", exact: false })).toHaveCount(0);
     await expect(page.getByRole("table")).toHaveCount(0);
   });
 });

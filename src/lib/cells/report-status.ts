@@ -41,6 +41,11 @@ const BADGES: Readonly<Record<ReportBadgeStatus, BadgeSpec>> = {
   next_week: { parts: ["Conta a partir da próxima semana"], tone: "muted", icon: "calendar-clock" },
 };
 
+/** O texto do badge de um valor da semana: "Pendente" (o gráfico do Dashboard, E2.14, T4). */
+export function reportBadgeLabel(status: ReportBadgeStatus): string {
+  return BADGES[status].parts.join(REPORT_STATUS_TEXTS.separator);
+}
+
 /** Os textos da situação fora do badge (Textos da UX). */
 export const REPORT_STATUS_TEXTS = {
   /** O rótulo da linha no cartão (P71). */

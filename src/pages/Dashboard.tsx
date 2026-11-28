@@ -1,278 +1,230 @@
-import { useRef, useState, type ReactNode } from "react";
-import {
-  Users,
-  UserCheck,
-  Church,
-  UserX,
-  Droplets,
-  Link2Off,
-  Shield,
-  FileText,
-  TriangleAlert,
-  UserPlus,
-  XCircle,
-  User,
-  Plus,
-  type LucideIcon,
-} from "lucide-react";
+import { useCallback, useRef, useState, type MouseEvent } from "react";
+import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
+import G12Ranking from "@/components/dashboard/G12Ranking";
+import SectionError from "@/components/dashboard/SectionError";
+import StatCard from "@/components/dashboard/StatCard";
+import StatGrid from "@/components/dashboard/StatGrid";
+import WeekChart from "@/components/dashboard/WeekChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  useDashboardCellsByType,
+  DASHBOARD_G12_RANKING_KEY,
+  DASHBOARD_SUMMARY_KEY,
   useDashboardG12Ranking,
   useDashboardSummary,
-  type DashboardCellsByType,
-  type DashboardG12Couple,
-  type DashboardSummary,
+  useInvalidatedByWrite,
 } from "@/hooks/use-dashboard";
-import { dashboardDeniedLines, dashboardHeader } from "@/lib/access/access";
+import { useReturnPosition } from "@/hooks/use-return-position";
+import { dashboardDeniedLines, dashboardHeader, type Access } from "@/lib/access/access";
 import { DASHBOARD_TEXTS } from "@/lib/access/texts";
-import { formatWeekRange } from "@/lib/dashboard/week";
+import {
+  GENERAL_CARDS,
+  WEEK_CARDS,
+  cardIcon,
+  cardTone,
+  chartRows,
+  showChart,
+  visibleCards,
+  type DashboardCard,
+  type DashboardG12Couple,
+  type DashboardSection,
+  type DashboardSummary,
+} from "@/lib/dashboard/cards";
+import {
+  DASHBOARD_RETURN_SCOPE,
+  cardReturnKey,
+  chartPartHref,
+  chartReturnKey,
+  numberHref,
+  rankingReturnKey,
+  rankingRowHref,
+  returnKeySection,
+} from "@/lib/dashboard/links";
+import { sectionView, type SectionView } from "@/lib/dashboard/section-state";
+import { DASHBOARD_CARD_TITLES, DASHBOARD_PAGE_TEXTS } from "@/lib/dashboard/texts";
+import { formatWeekRange, formatWeekRangeSpoken } from "@/lib/dashboard/week";
 import { isPermissionDenied } from "@/lib/errors";
-import { formatCount } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-// Todos os números vêm prontos das RPCs do dashboard (E1.08, RN-02 e RN-08);
-// a tela só exibe. Sem "Visualizar Dashboard" (pelo acesso, ou pela recusa do
-// banco), mostra o acesso negado sem nenhum card (E2.02, RN-07, T9).
-const LOAD_ERROR_MESSAGE = "Erro ao carregar o dashboard.";
-const LOADING_MESSAGE = "Carregando…";
+// Todos os números vêm prontos das duas RPCs do Dashboard (E1.08; E2.14,
+// DT-02); a tela só escolhe o que mostrar (o catálogo de `lib/dashboard`) e
+// compõe. Sem "Visualizar Dashboard" (pelo acesso, ou pela recusa do banco),
+// mostra o acesso negado sem nenhum card (E2.02, RN-07, T9).
 
-const CARD_GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4";
+/** O `id` do `h2` de cada seção: o `aria-labelledby` e o foco da volta quando o item sumiu (DA-4). */
+const SECTION_HEADINGS: Readonly<Record<DashboardSection, string>> = {
+  week: "dashboard-week",
+  general: "dashboard-general",
+  ranking: "dashboard-ranking",
+};
 
-// Cards de tipo de célula exibidos enquanto os tipos carregam.
-const CELL_TYPE_PLACEHOLDERS = 3;
-// Linhas do ranking G12 exibidas enquanto ele carrega.
-const G12_RANKING_PLACEHOLDERS = 4;
+const H2 = "text-xl font-semibold focus:outline-none";
 
-type SummaryCount = Exclude<keyof DashboardSummary, "week_start" | "week_end">;
+/** Guarda o item aberto e a rolagem (PR 3): `remember(key, event)`. */
+type Remember = (key: string, event?: MouseEvent) => void;
 
-interface SummaryCardSpec {
-  title: string;
-  field: SummaryCount;
-  icon: LucideIcon;
-  color: string;
+/** O estado da seção a partir da consulta (T7, RN-17), e a nova tentativa que anuncia a falha. */
+function useSectionView(query: UseQueryResult<unknown, unknown>, queryKey: readonly string[]) {
+  const invalidatedByWrite = useInvalidatedByWrite(queryKey);
+  // O `errorUpdateCount` no toque em "Tentar de novo": uma falha depois dele é anunciada.
+  const [retryMark, setRetryMark] = useState<number | null>(null);
+  const retried =
+    retryMark !== null && query.errorUpdateCount > retryMark && query.errorUpdatedAt >= query.dataUpdatedAt;
+  const view = sectionView({
+    hasData: query.data !== undefined,
+    isError: query.isError,
+    isFetching: query.isFetching,
+    invalidatedByWrite,
+    retried,
+  });
+  const { refetch, errorUpdateCount } = query;
+  const retry = useCallback(() => {
+    setRetryMark(errorUpdateCount);
+    void refetch();
+  }, [refetch, errorUpdateCount]);
+  return { view, retry };
 }
 
-const WEEK_CARDS: readonly SummaryCardSpec[] = [
-  { title: "Relatórios Enviados", field: "reports_sent", icon: FileText, color: "text-success" },
-  // O triângulo é o do "Pendente" da lista de Células (E2.09, RN-08, UXD-9); o relógio lá é "Ainda não ocorreu".
-  { title: "Células com relatório pendente", field: "cells_pending", icon: TriangleAlert, color: "text-warning" },
-  { title: "Visitantes em Células", field: "visitors", icon: UserPlus, color: "text-accent" },
-  { title: "Células Não Realizadas", field: "cells_not_held", icon: XCircle, color: "text-destructive" },
-];
-
-const GENERAL_CARDS: readonly SummaryCardSpec[] = [
-  { title: "Total de Membros", field: "members_total", icon: Users, color: "text-secondary" },
-  { title: "Membros Ativos", field: "members_active", icon: UserCheck, color: "text-success" },
-  { title: "Membros Inativos", field: "members_inactive", icon: UserX, color: "text-destructive" },
-  { title: "Batizados", field: "members_baptized", icon: Church, color: "text-accent" },
-  { title: "Não Batizados", field: "members_not_baptized", icon: Droplets, color: "text-warning" },
-  { title: "Sem Liderança", field: "members_without_leader", icon: Shield, color: "text-orange-500" },
-  { title: "Sem Vínculo Celular", field: "members_without_cell_link", icon: Link2Off, color: "text-orange-500" },
-];
-
-// No card (fundo branco), e não direto no fundo da página, para o vermelho ter contraste (WCAG 1.4.3).
-const LoadError = () => (
-  <Card>
-    <CardContent className="p-6 text-center text-destructive">
-      <p role="alert">{LOAD_ERROR_MESSAGE}</p>
-    </CardContent>
-  </Card>
-);
-
-/** Anuncia o carregamento ao leitor de tela; fica dentro da área com `aria-busy`. */
+/** "Carregando…" para o leitor de tela, dentro da área com `aria-busy` (E1.08). */
 const LoadingStatus = () => (
   <span role="status" className="sr-only">
-    {LOADING_MESSAGE}
+    {DASHBOARD_PAGE_TEXTS.loading}
   </span>
 );
 
-interface StatCardProps {
-  /** Sem título ou sem valor (carregando), mostra um placeholder no lugar. */
-  title?: string;
-  value?: number;
-  icon: LucideIcon;
-  color: string;
-}
-
-const StatCard = ({ title, value, icon: Icon, color }: StatCardProps) => (
-  <Card>
-    {/* O título quebra linha sem cortar, com o ícone no alto (E2.09, UXD-9). */}
-    <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-      {title === undefined ? (
-        <Skeleton className="h-4 w-32" />
-      ) : (
-        <CardTitle className="min-w-0 break-words text-sm font-medium leading-snug text-muted-foreground">{title}</CardTitle>
-      )}
-      <Icon className={`w-5 h-5 shrink-0 ${color}`} aria-hidden="true" />
-    </CardHeader>
-    <CardContent>
-      {value === undefined ? (
-        <Skeleton className="h-9 w-16" />
-      ) : (
-        <div className="text-3xl font-bold">{formatCount(value)}</div>
-      )}
-    </CardContent>
-  </Card>
-);
-
-interface SummaryCardsProps {
-  cards: readonly SummaryCardSpec[];
+interface CardsProps {
+  cards: readonly DashboardCard[];
   summary: DashboardSummary | undefined;
+  access: Access | null;
+  remember: Remember;
 }
 
-/** Os cards de `dashboard_summary`; enquanto carrega, cada número é um placeholder. */
-const SummaryCards = ({ cards, summary }: SummaryCardsProps) => (
-  <div className={CARD_GRID} aria-busy={!summary}>
-    {cards.map((card) => (
-      <StatCard key={card.field} title={card.title} value={summary?.[card.field]} icon={card.icon} color={card.color} />
-    ))}
-    {!summary && <LoadingStatus />}
-  </div>
-);
-
-/** Um card por tipo de célula; sem nenhuma célula, fica oculto. */
-const CellsByTypeCards = ({ rows }: { rows: DashboardCellsByType[] | undefined }) => {
-  if (!rows) {
-    return (
-      <div className={CARD_GRID} aria-busy="true">
-        {Array.from({ length: CELL_TYPE_PLACEHOLDERS }, (_, i) => (
-          <StatCard key={i} icon={Church} color="text-secondary" />
-        ))}
-        <LoadingStatus />
-      </div>
-    );
-  }
-  if (rows.length === 0) return null;
-  return (
-    <div className={CARD_GRID}>
-      {rows.map((row) => (
+/** Os cards de uma seção (RN-14, RN-15, P110 a P112, P114). Sem os números, só os sempre à vista, com o `Skeleton`. */
+const Cards = ({ cards, summary, access, remember }: CardsProps) => (
+  <StatGrid>
+    {visibleCards(cards, summary).map((card) => {
+      const value = summary?.[card.number];
+      const returnKey = cardReturnKey(card);
+      return (
         <StatCard
-          key={row.cell_type}
-          title={`Células ${row.cell_type}`}
-          value={row.total}
-          icon={Church}
-          color="text-secondary"
+          key={card.number}
+          title={DASHBOARD_CARD_TITLES[card.number]}
+          value={value}
+          icon={cardIcon(card, value)}
+          tone={cardTone(card.number, value)}
+          list={card.list}
+          href={summary ? numberHref(card, summary, access) : null}
+          returnKey={returnKey}
+          onOpen={(event) => remember(returnKey, event)}
         />
-      ))}
-    </div>
-  );
-};
-
-// Espaçamento menor no celular, para a coluna Total (a da ordenação) caber sem rolar.
-const RANKING_CELL = "px-2 sm:px-4 py-3";
-const RANKING_HEADER = `${RANKING_CELL} font-medium text-muted-foreground`;
-// Ícone do cabeçalho só a partir do `sm`; no celular, fica só o texto.
-const RANKING_HEADER_ICON = "hidden sm:inline-block w-4 h-4";
-// `min-w-8 px-2`: um círculo para poucos dígitos, que alarga para "1.234".
-const RANKING_BADGE = "inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full font-bold text-sm";
-
-const G12RankingTable = ({ rows }: { rows: DashboardG12Couple[] }) => (
-  <div className="overflow-x-auto">
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b">
-          <th scope="col" className={`${RANKING_HEADER} text-left`}>
-            G12 (Casal)
-          </th>
-          <th scope="col" className={RANKING_HEADER}>
-            <span className="flex items-center gap-1 justify-center">
-              <User className={`${RANKING_HEADER_ICON} text-blue-500`} aria-hidden="true" /> Homens
-            </span>
-          </th>
-          <th scope="col" className={RANKING_HEADER}>
-            <span className="flex items-center gap-1 justify-center">
-              <User className={`${RANKING_HEADER_ICON} text-pink-500`} aria-hidden="true" /> Mulheres
-            </span>
-          </th>
-          <th scope="col" className={`${RANKING_HEADER} text-center`}>
-            Total
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, idx) => (
-          <tr key={row.couple_key} className={idx % 2 === 0 ? "bg-muted/30" : ""}>
-            <th scope="row" className={`${RANKING_CELL} text-left font-medium`}>
-              {row.spouse_name ? `${row.name} & ${row.spouse_name}` : row.name}
-            </th>
-            <td className={`${RANKING_CELL} text-center`}>
-              <span className={`${RANKING_BADGE} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`}>
-                {formatCount(row.male_cells)}
-              </span>
-            </td>
-            <td className={`${RANKING_CELL} text-center`}>
-              <span className={`${RANKING_BADGE} bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300`}>
-                {formatCount(row.female_cells)}
-              </span>
-            </td>
-            <td className={`${RANKING_CELL} text-center font-semibold`}>{formatCount(row.total_cells)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+      );
+    })}
+  </StatGrid>
 );
 
-interface G12RankingSectionProps {
-  rows: DashboardG12Couple[] | undefined;
-  failed: boolean;
+interface SummarySectionProps {
+  section: "week" | "general";
+  view: SectionView;
+  summary: DashboardSummary | undefined;
+  access: Access | null;
+  remember: Remember;
+  onRetry: () => void;
 }
 
-/**
- * "Células por G12": tabela do ranking, que cabe no celular e só rola na
- * horizontal se não couber (nomes longos em 320 px); sem casais, fica oculta.
- */
-const G12RankingSection = ({ rows, failed }: G12RankingSectionProps) => {
-  if (rows?.length === 0) return null;
-
-  let content: ReactNode;
-  if (failed) {
-    content = <LoadError />;
-  } else if (rows) {
-    content = (
-      <Card>
-        <CardContent className="p-0">
-          <G12RankingTable rows={rows} />
-        </CardContent>
-      </Card>
-    );
-  } else {
-    content = (
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          {Array.from({ length: G12_RANKING_PLACEHOLDERS }, (_, i) => (
-            <Skeleton key={i} className="h-8 w-full" />
-          ))}
-          <LoadingStatus />
-        </CardContent>
-      </Card>
-    );
-  }
-
+/** "Esta semana" (os cards e o gráfico) ou "Geral": as duas do mesmo resumo (AQ-9). */
+const SummarySection = ({ section, view, summary, access, remember, onRetry }: SummarySectionProps) => {
+  const isWeek = section === "week";
+  const busy = view.kind === "loading" || (view.kind === "ready" && view.updating);
+  const shown = view.kind === "ready" ? summary : undefined;
   return (
-    <section className="space-y-4" aria-busy={!rows && !failed}>
-      <h2 className="text-xl font-semibold">Células por G12</h2>
-      {content}
+    <section aria-labelledby={SECTION_HEADINGS[section]} aria-busy={busy} className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-2">
+        <h2 id={SECTION_HEADINGS[section]} tabIndex={-1} className={H2}>
+          {isWeek ? DASHBOARD_PAGE_TEXTS.weekSection : DASHBOARD_PAGE_TEXTS.generalSection}
+          {isWeek && summary && (
+            <>
+              <span aria-hidden="true" className="text-sm font-normal text-muted-foreground">
+                {` (${formatWeekRange(summary.week_start, summary.week_end)})`}
+              </span>
+              <span className="sr-only">{`, ${formatWeekRangeSpoken(summary.week_start, summary.week_end)}`}</span>
+            </>
+          )}
+        </h2>
+        {isWeek && view.kind === "loading" && <Skeleton className="h-4 w-24" aria-hidden="true" />}
+      </div>
+      {view.kind === "error" ? (
+        <SectionError
+          message={isWeek ? DASHBOARD_PAGE_TEXTS.errors.week : DASHBOARD_PAGE_TEXTS.errors.general}
+          onRetry={onRetry}
+          retrying={view.retrying}
+          announce={view.announce}
+        />
+      ) : (
+        <div className={cn("space-y-4 transition-opacity motion-reduce:transition-none", busy && shown && "opacity-60")}>
+          <Cards cards={isWeek ? WEEK_CARDS : GENERAL_CARDS} summary={shown} access={access} remember={remember} />
+          {isWeek && shown && showChart(shown) && (
+            <WeekChart
+              rows={chartRows(shown)}
+              hrefFor={(row) => chartPartHref(row, shown, access)}
+              returnKeyFor={chartReturnKey}
+              onOpen={(row, event) => remember(chartReturnKey(row), event)}
+            />
+          )}
+        </div>
+      )}
+      {view.kind === "loading" && <LoadingStatus />}
     </section>
   );
 };
 
-/**
- * Falhou sem nada para mostrar. Se uma atualização em segundo plano falha, o
- * TanStack Query mantém os dados anteriores, e a tela continua com eles.
- */
-const hasFailed = (query: { isError: boolean; data: unknown }) => query.isError && query.data === undefined;
+interface RankingSectionProps {
+  view: SectionView;
+  rows: readonly DashboardG12Couple[] | undefined;
+  access: Access | null;
+  remember: Remember;
+  onRetry: () => void;
+}
+
+/** "Células por G12" (T5): não aparece enquanto carrega nem sem casais (P112, RN-11). */
+const RankingSection = ({ view, rows, access, remember, onRetry }: RankingSectionProps) => {
+  if (view.kind === "loading") return null;
+  if (view.kind === "ready" && (!rows || rows.length === 0)) return null;
+  const updating = view.kind === "ready" && view.updating;
+  return (
+    <section aria-labelledby={SECTION_HEADINGS.ranking} aria-busy={updating} className="space-y-4">
+      <h2 id={SECTION_HEADINGS.ranking} tabIndex={-1} className={H2}>
+        {DASHBOARD_PAGE_TEXTS.rankingSection}
+      </h2>
+      {view.kind === "error" ? (
+        <SectionError
+          message={DASHBOARD_PAGE_TEXTS.errors.ranking}
+          onRetry={onRetry}
+          retrying={view.retrying}
+          announce={view.announce}
+        />
+      ) : (
+        <div className={cn("transition-opacity motion-reduce:transition-none", updating && "opacity-60")}>
+          <G12Ranking
+            rows={rows ?? []}
+            hrefFor={(row) => rankingRowHref(row, access)}
+            returnKeyFor={rankingReturnKey}
+            onOpen={(row, event) => remember(rankingReturnKey(row), event)}
+          />
+        </div>
+      )}
+    </section>
+  );
+};
 
 /** Sem acesso (RN-07, T9): a linha do Negócio e, sem cadastro ou sem função, a orientação. */
 const DeniedDashboard = ({ lines }: { lines: readonly string[] }) => (
   <AppLayout>
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in motion-reduce:animate-none">
       <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
       <div className="space-y-1">
         {lines.map((line) => (
@@ -287,34 +239,40 @@ const DeniedDashboard = ({ lines }: { lines: readonly string[] }) => (
 
 const Dashboard = () => {
   const { access, permissionsLoaded } = useAuth();
+  const queryClient = useQueryClient();
   const [reportFormOpen, setReportFormOpen] = useState(false);
   const reportOpener = useRef<HTMLButtonElement | null>(null);
 
-  // O acesso já diz que não há Dashboard: nenhuma consulta e nenhum card (UX-13).
+  // O acesso já diz que não há Dashboard: nenhuma consulta e nenhum card (UX-13 do E2.02).
   const deniedByAccess = permissionsLoaded ? dashboardDeniedLines(access) : null;
   const enabled = permissionsLoaded && deniedByAccess === null;
 
   const summary = useDashboardSummary({ enabled });
-  const cellsByType = useDashboardCellsByType({ enabled });
-  const g12Ranking = useDashboardG12Ranking({ enabled });
+  const ranking = useDashboardG12Ranking({ enabled });
+  const summarySection = useSectionView(summary, DASHBOARD_SUMMARY_KEY);
+  const rankingSection = useSectionView(ranking, DASHBOARD_G12_RANKING_KEY);
 
-  // RN-09: as três RPCs checam a mesma permissão; basta uma recusar. A recusa
-  // faz a tela reler o acesso (P13), e as linhas seguem o acesso relido.
-  const deniedByServer = [summary, cellsByType, g12Ranking].some((query) => isPermissionDenied(query.error));
+  // A volta de uma lista (DA-4): só com o resumo no cache já no primeiro render.
+  const [restorable] = useState(() => queryClient.getQueryData(DASHBOARD_SUMMARY_KEY) !== undefined);
+  const remember = useReturnPosition(DASHBOARD_RETURN_SCOPE, {
+    restorable,
+    fallback: (key) => document.getElementById(SECTION_HEADINGS[returnKeySection(key)]),
+  });
+
+  // As duas RPCs checam a mesma permissão; basta uma recusar. A recusa faz a
+  // tela reler o acesso (P13), e as linhas seguem o acesso relido.
+  const deniedByServer = [summary, ranking].some((query) => isPermissionDenied(query.error));
 
   if (deniedByAccess) return <DeniedDashboard lines={deniedByAccess} />;
   if (deniedByServer) return <DeniedDashboard lines={[DASHBOARD_TEXTS.noAccess]} />;
 
   const { subtitle, badge } = dashboardHeader(access);
-  // Atalho "Novo relatório" (RN-22, UXD-10): para quem pode lançar o relatório de pelo menos uma célula.
+  // Atalho "Novo relatório" (RN-22, UXD-10 do E2.02): para quem pode lançar o relatório de pelo menos uma célula.
   const canSubmitReport = access?.can_submit_some_report === true;
-  const summaryRow = summary.data;
-  const summaryFailed = hasFailed(summary);
-  const cellsByTypeFailed = hasFailed(cellsByType);
 
   return (
     <AppLayout>
-      <div className="space-y-8 animate-fade-in">
+      <div className="space-y-8 animate-fade-in motion-reduce:animate-none">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -340,32 +298,29 @@ const Dashboard = () => {
             </Button>
           )}
         </div>
-        {/* SEMANAL */}
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center gap-x-2">
-            <h2 className="text-xl font-semibold">
-              Esta Semana
-              {summaryRow && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  {" "}({formatWeekRange(summaryRow.week_start, summaryRow.week_end)})
-                </span>
-              )}
-            </h2>
-            {summary.isPending && <Skeleton className="h-4 w-24" />}
-          </div>
-          {summaryFailed ? <LoadError /> : <SummaryCards cards={WEEK_CARDS} summary={summaryRow} />}
-        </section>
-
-        {/* GERAL: o erro aparece no lugar do que falhou, uma vez só se as duas consultas falharem */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Geral</h2>
-          {summaryFailed ? <LoadError /> : <SummaryCards cards={GENERAL_CARDS} summary={summaryRow} />}
-          {!cellsByTypeFailed && <CellsByTypeCards rows={cellsByType.data} />}
-          {cellsByTypeFailed && !summaryFailed && <LoadError />}
-        </section>
-
-        {/* G12 CELLS */}
-        <G12RankingSection rows={g12Ranking.data} failed={hasFailed(g12Ranking)} />
+        <SummarySection
+          section="week"
+          view={summarySection.view}
+          summary={summary.data}
+          access={access}
+          remember={remember}
+          onRetry={summarySection.retry}
+        />
+        <SummarySection
+          section="general"
+          view={summarySection.view}
+          summary={summary.data}
+          access={access}
+          remember={remember}
+          onRetry={summarySection.retry}
+        />
+        <RankingSection
+          view={rankingSection.view}
+          rows={ranking.data}
+          access={access}
+          remember={remember}
+          onRetry={rankingSection.retry}
+        />
 
         {/* No sucesso, o formulário fecha com o toast, e a gravação recarrega os cards da semana (UX-14). */}
         {reportFormOpen && (
