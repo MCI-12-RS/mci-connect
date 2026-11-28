@@ -313,6 +313,7 @@ export type Database = {
       cells: {
         Row: {
           city: string | null
+          code: number | null
           complement: string | null
           created_at: string | null
           created_by: string | null
@@ -325,6 +326,7 @@ export type Database = {
           host_id: string
           id: string
           is_active: boolean
+          issued_code: number | null
           leader_id: string
           legacy_id: number | null
           meeting_day: string
@@ -343,6 +345,7 @@ export type Database = {
         }
         Insert: {
           city?: string | null
+          code?: number | null
           complement?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -355,6 +358,7 @@ export type Database = {
           host_id: string
           id?: string
           is_active?: boolean
+          issued_code?: number | null
           leader_id: string
           legacy_id?: number | null
           meeting_day: string
@@ -373,6 +377,7 @@ export type Database = {
         }
         Update: {
           city?: string | null
+          code?: number | null
           complement?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -385,6 +390,7 @@ export type Database = {
           host_id?: string
           id?: string
           is_active?: boolean
+          issued_code?: number | null
           leader_id?: string
           legacy_id?: number | null
           meeting_day?: string
@@ -1951,6 +1957,20 @@ export type Database = {
           week_start: string
         }[]
       }
+      cell_reports_export: {
+        Args: {
+          _cell_id?: string
+          _date_from?: string
+          _date_to?: string
+          _g12_ids?: string[]
+          _held?: boolean
+          _leader_ids?: string[]
+          _search?: string[]
+          _search_label?: string
+          _types?: string[]
+        }
+        Returns: Json
+      }
       cell_reports_list: {
         Args: {
           _cell_id?: string
@@ -2547,6 +2567,7 @@ export type Database = {
         | "password_change_failed"
         | "password_change_blocked"
         | "password_change_required"
+        | "export"
       event_actor_kind: "member" | "system" | "none"
       event_entity:
         | "member"
@@ -2582,6 +2603,7 @@ export type Database = {
         | "edit_cell_report"
         | "delete_cell_report"
         | "view_audit_log"
+        | "export_cell_reports"
       report_launch_status:
         | "can_submit"
         | "already_sent"
@@ -2744,6 +2766,7 @@ export const Constants = {
         "password_change_failed",
         "password_change_blocked",
         "password_change_required",
+        "export",
       ],
       event_actor_kind: ["member", "system", "none"],
       event_entity: [
@@ -2781,6 +2804,7 @@ export const Constants = {
         "edit_cell_report",
         "delete_cell_report",
         "view_audit_log",
+        "export_cell_reports",
       ],
       report_launch_status: [
         "can_submit",

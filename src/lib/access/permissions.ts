@@ -63,6 +63,10 @@ const PERMISSION_TEXTS = {
     label: "Visualizar Relatórios do Seu Ministério",
     hint: "Só os relatórios. Não abre Membros nem Células.",
   },
+  export_cell_reports: {
+    label: "Exportar Relatórios de Células",
+    hint: "Baixa a planilha dos relatórios, com as células sem relatório, só do que a pessoa vê.",
+  },
   submit_own_cell_report: {
     label: "Enviar Relatório das Próprias Células",
     hint: "Células em que a pessoa é líder, timóteo ou anfitrião.",
@@ -105,6 +109,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       "view_all_reports",
       "view_own_reports",
+      "export_cell_reports",
       "submit_own_cell_report",
       "submit_any_visible_report",
       "edit_cell_report",
