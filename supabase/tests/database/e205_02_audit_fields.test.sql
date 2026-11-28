@@ -92,12 +92,12 @@ SELECT is((SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_tr
 SELECT is(
   (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a
     WHERE a.attrelid = 'public.cells'::regclass AND a.attnum > 0 AND NOT a.attisdropped
-      AND a.attname::text <> ALL (ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[])),
+      AND a.attname::text <> ALL (ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id', 'issued_code', 'code']::text[])),
   NULL,
   'classificação: toda coluna de cells está na lista de campos ou na de "não é dado"');
 
 SELECT is(
-  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id']::text[]) c
+  (SELECT array_agg(c ORDER BY c) FROM unnest(ARRAY['leader_id', 'timothy_id', 'host_id', 'type', 'meeting_day', 'meeting_time', 'neighborhood', 'city', 'zip_code', 'street', 'number', 'complement', 'state', 'is_active', 'id', 'created_at', 'created_by', 'created_by_kind', 'created_by_legacy', 'updated_at', 'updated_by', 'updated_by_kind', 'updated_by_legacy', 'deleted_at', 'deleted_by', 'deleted_by_kind', 'deleted_by_legacy', 'legacy_id', 'issued_code', 'code']::text[]) c
     WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = 'public.cells'::regclass
                        AND a.attname::text = c AND a.attnum > 0 AND NOT a.attisdropped)),
   NULL,

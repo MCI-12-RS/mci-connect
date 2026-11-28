@@ -303,7 +303,9 @@
         "deleted_by",
         "deleted_by_kind",
         "deleted_by_legacy",
-        "legacy_id"
+        "legacy_id",
+        "issued_code",
+        "code"
       ]
     },
     "cell_reports": {

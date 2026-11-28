@@ -22,6 +22,7 @@ export const ACTION_LABELS: Record<EventAction, string> = {
   update: "Alteração",
   delete: "Exclusão",
   restore: "Restauração",
+  export: "Exportação",
   ...AUTH_ACTION_LABELS,
 };
 

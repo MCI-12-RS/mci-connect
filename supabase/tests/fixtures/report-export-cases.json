@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "E2.13 (DT-04, DT-08): a tabela de casos da exportação, a mesma para o banco e para a tela.",
+    "weeks: private.cell_report_export_weeks e a função pura da tela (src/lib/cell-reports/export.ts) dão o mesmo resultado.",
+    "labels: os textos dos filtros de private.cell_report_export_labels, iguais aos chips da lista (src/lib/cell-reports/filter-texts.ts e filters.ts).",
+    "O pgTAP e213 e o Vitest de sincronia leem este arquivo (rodada de testes do fim da fase 2)."
+  ],
+  "max_weeks": 13,
+  "now": "2026-11-24T21:00:00-03:00",
+  "weeks": [
+    { "from": "2026-11-20", "to": "2026-11-24", "first_week": "2026-11-15", "end": "2026-11-28", "count": 2 },
+    { "from": "2026-11-15", "to": "2026-11-21", "first_week": "2026-11-15", "end": "2026-11-21", "count": 1 },
+    { "from": "2026-11-22", "to": "2026-12-12", "first_week": "2026-11-22", "end": "2026-11-28", "count": 1 },
+    { "from": "2026-08-30", "to": "2026-11-28", "first_week": "2026-08-30", "end": "2026-11-28", "count": 13 },
+    { "from": "2026-08-29", "to": "2026-11-28", "error": "export_period_too_long" },
+    { "from": "2026-11-29", "to": "2026-12-05", "error": "export_period_not_started" },
+    { "from": null, "to": "2026-11-24", "error": "export_period_required" },
+    { "from": "2026-11-20", "to": null, "error": "export_period_required" },
+    { "from": "2026-11-24", "to": "2026-11-20", "error": "export_period_required" }
+  ],
+  "labels": {
+    "cell": "Célula de {leader} · {day} · {time}",
+    "cell_unnamed_leader": "Membro sem nome",
+    "cell_unavailable": "Célula indisponível",
+    "leader": "Líder: {name}",
+    "g12": "G12: {name}",
+    "person_unavailable": "Pessoa indisponível",
+    "type": "Tipo: {type}",
+    "held_yes": "Reunião: Célula realizada",
+    "held_no": "Reunião: Não houve célula",
+    "search": "Busca: “{text}”",
+    "search_max_length": 100,
+    "order": ["cell", "leader", "g12", "type", "held", "search"]
+  },
+  "situations": ["held", "not_held", "not_sent", "not_yet"],
+  "g12_kinds": ["pastors", "name", "none"]
+}
