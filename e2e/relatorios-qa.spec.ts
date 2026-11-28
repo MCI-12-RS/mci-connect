@@ -582,7 +582,7 @@ test("UX-24: Rita lança, exclui e restaura um relatório: a lista (por navegaç
   sql(env, `BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM public.cell_report_participants WHERE report_id = ${lit(created)}; DELETE FROM public.cell_reports WHERE id = ${lit(created)}; COMMIT;`);
 });
 
-test("Divergência 1: o voltar do aparelho com o formulário de edição aberto, com e sem alteração, não perde o que foi digitado nem deixa a tela travada", async ({ page }) => {
+test("DA-11: o voltar do aparelho com o formulário de edição aberto pela consulta fecha só o formulário (com a pergunta, se houver alteração) e a consulta continua", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await F.signIn(page, F.RITA);
   await openReports(page, `?cell=${F.cellId(1)}`);
@@ -595,28 +595,37 @@ test("Divergência 1: o voltar do aparelho com o formulário de edição aberto,
   const theme = form.getByLabel("Tema");
   await theme.fill("Tema digitado antes do voltar");
   await page.goBack();
-  // O que se observa: a consulta sai da URL; o formulário e o que foi digitado continuam.
-  await expect(page).not.toHaveURL(/report=/);
-  await expect(form, "o formulário não some sozinho com alteração não salva").toBeVisible();
+  // Com alteração: a pergunta; a consulta continua no endereço.
+  const discard = page.getByRole("alertdialog", { name: "Descartar as alterações?" });
+  await expect(discard).toBeVisible();
+  await expect(page).toHaveURL(/report=/);
+  await discard.getByRole("button", { name: "Continuar editando" }).click();
   await expect(form.getByLabel("Tema")).toHaveValue("Tema digitado antes do voltar");
   await form.getByRole("button", { name: "Salvar alterações" }).click();
   await expect(form).toHaveCount(0);
+  await expect(consult).toContainText("Tema digitado antes do voltar");
+  // A entrada da edição saiu ao salvar: o voltar fecha a consulta.
+  await page.goBack();
+  await expect(page).not.toHaveURL(/report=/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const pointerEvents = await page.evaluate(() => getComputedStyle(document.body).pointerEvents);
   expect(pointerEvents, "o corpo não fica com pointer-events: none").not.toBe("none");
   await expect(page.locator("body[data-scroll-locked]")).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: "Tema digitado antes do voltar" }).or(page.getByRole("listitem").filter({ hasText: "Tema digitado antes do voltar" }))).toBeVisible();
-  // Sem alteração: abre, edita, volta, cancela.
+  // Sem alteração: abre, edita, volta (só o formulário fecha), volta de novo (a consulta fecha).
   await page.locator(`[data-report-id="${F.reportId(4)}"]`).first().click();
   await page.getByRole("dialog", { name: /^Relatório de / }).getByRole("button", { name: "Editar relatório" }).click();
   const second = page.getByRole("dialog", { name: "Editar relatório" });
+  await expect(second.getByLabel("Tema")).toBeVisible();
+  await page.goBack();
+  await expect(second).toHaveCount(0);
+  await expect(page).toHaveURL(/report=/);
+  await expect(page.getByRole("dialog", { name: /^Relatório de / }).getByRole("button", { name: "Editar relatório" })).toBeFocused();
   await page.goBack();
   await expect(page).not.toHaveURL(/report=/);
-  await expect(second).toBeVisible();
-  await second.getByRole("button", { name: "Cancelar" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(await page.evaluate(() => getComputedStyle(document.body).pointerEvents)).not.toBe("none");
-  // A lista segue usável: o foco e um clique no cartão abrem a consulta de novo.
+  // A lista segue usável: um clique no cartão abre a consulta de novo.
   await page.locator(`[data-report-id="${F.reportId(4)}"]`).first().click();
   await expect(page.getByRole("dialog", { name: /^Relatório de / })).toBeVisible();
   sql(env, `BEGIN; SET LOCAL mci.cell_report_write = 'on'; UPDATE public.cell_reports SET theme = ${lit(WILDCARD_THEME)} WHERE id = ${lit(F.reportId(4))}; COMMIT;`);

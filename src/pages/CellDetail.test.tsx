@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
 import type { PermissionAction } from "@/lib/access/permissions";
 import type { CellDetailRow } from "@/lib/cells/fields";
 import type { CellRecentReport } from "@/lib/cells/detail";
+import { reportDetailRow } from "@/test/report-snapshot-fixture";
 import CellDetail from "./CellDetail";
 
 // Detalhe da célula (E2.10, PR 5, tarefas 13 e 15): UX-16, UX-18, UX-19,
@@ -467,5 +468,113 @@ describe("UX-24, UX-30: carregando e erro", () => {
     expect(screen.queryByRole("heading", { name: "Evolução" })).not.toBeInTheDocument();
     expect(await section("Pessoas da célula")).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("network");
+  });
+});
+
+describe("E2.12, T14: os últimos relatórios abrem a consulta Ver relatório", () => {
+  const R1_ID = "22222222-2222-4222-8222-222222222222";
+  const R1_UUID = { ...R1, id: R1_ID };
+
+  /** O endereço atual, para conferir o `report` (AQ-8). */
+  const LocationProbe = () => {
+    const location = useLocation();
+    return <output data-testid="location">{location.pathname + location.search}</output>;
+  };
+  function renderWithProbe(path: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/cells", path]} initialIndex={1}>
+          <Routes>
+            <Route
+              path="/cells/:id"
+              element={
+                <>
+                  <CellDetail />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/cells" element={<h1>Lista de Células</h1>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+  const location = () => screen.getByTestId("location").textContent;
+
+  it("em 360 px, o cabeçalho do cartão é o botão da consulta (P91), com o cartão inteiro e as ações por cima", async () => {
+    permissions = ["view_own_ministry", "edit_cell_report", "delete_cell_report"];
+    respondCell(cellRow(), [R1_UUID, R2]);
+    renderWithProbe(`/cells/${C1_ID}`);
+    const reports = await section("Últimos relatórios");
+    const open = await within(reports).findByRole("button", { name: "Ver o relatório de Quarta, 18/11/2026 às 20:00" });
+    expect(open).toHaveAttribute("aria-haspopup", "dialog");
+    expect(open).toHaveAttribute("data-report-id", R1_ID);
+    expect(open).toHaveTextContent("Quarta, 18/11/2026 às 20:00");
+    expect(open.className).toContain("after:inset-0");
+    // As ações ficam por cima do botão esticado (AboveCardLink).
+    const edit = within(reports).getByRole("button", { name: "Editar o relatório de 18/11/2026 da célula de André Souza" });
+    expect(edit.closest(".relative.z-10")).not.toBeNull();
+    // O badge é o mesmo da lista de Relatórios (ReportMeetingBadge).
+    expect(within(reports).getByText("Não houve célula")).toBeInTheDocument();
+  });
+
+  it("abre a consulta com ?report= no endereço do detalhe, sem Ver célula; fechar volta a entrada e o foco ao botão", async () => {
+    permissions = ["view_own_ministry"];
+    respondCell(cellRow(), [R1_UUID]);
+    renderWithProbe(`/cells/${C1_ID}`);
+    const reports = await section("Últimos relatórios");
+    const open = await within(reports).findByRole("button", { name: "Ver o relatório de Quarta, 18/11/2026 às 20:00" });
+
+    respondWith(
+      { data: reportDetailRow({ id: R1_ID, cell_id: C1_ID }) },
+      { data: [{ member_id: "m-1", member_name: "Bruno Rocha", member_deleted: false, member_visible: true, is_snapshot_person: false, member_is_active: true, member_gender: "M" }] },
+    );
+    fireEvent.click(open);
+    expect(location()).toBe(`/cells/${C1_ID}?report=${R1_ID}`);
+    const dialog = await screen.findByRole("dialog", { name: "Relatório de 18/11/2026" });
+    expect(await within(dialog).findByText("Bruno Rocha")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("link", { name: /^Ver a célula/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Ver célula")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "Ver todos os relatórios da célula de André Souza" })).toHaveAttribute(
+      "href",
+      `/cell-reports?cell=${C1_ID}`,
+    );
+    const reportQuery = fakeQueries().find((query) => query.table === "cell_reports_view");
+    expect(reportQuery?.calls).toContainEqual(["eq", "id", R1_ID]);
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(location()).toBe(`/cells/${C1_ID}`));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(within(reports).getByRole("button", { name: "Ver o relatório de Quarta, 18/11/2026 às 20:00" })).toHaveFocus());
+    // O voltar do aparelho depois de fechar sai do detalhe (a entrada da consulta não ficou).
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("André Souza");
+  });
+
+  it("na tabela (1024 px), a data é o botão e o clique na linha também abre", async () => {
+    setWidth(1280);
+    permissions = ["view_own_ministry"];
+    respondCell(cellRow(), [R1_UUID]);
+    renderWithProbe(`/cells/${C1_ID}`);
+    const reports = await section("Últimos relatórios");
+    const open = await within(reports).findByRole("button", { name: "Ver o relatório de Quarta, 18/11/2026 às 20:00" });
+    expect(open.closest("td")).not.toBeNull();
+    respondWith({ data: reportDetailRow({ id: R1_ID, cell_id: C1_ID }) }, { data: [] });
+    const row = open.closest("tr");
+    expect(row).not.toBeNull();
+    fireEvent.click(within(row as HTMLElement).getByText("A fé que vence"));
+    expect(location()).toBe(`/cells/${C1_ID}?report=${R1_ID}`);
+    expect(await screen.findByRole("dialog", { name: "Relatório de 18/11/2026" })).toBeInTheDocument();
+  });
+
+  it("report sem formato sai do endereço, sem nenhuma leitura do relatório", async () => {
+    permissions = ["view_own_ministry"];
+    respondCell(cellRow(), [R1_UUID]);
+    renderWithProbe(`/cells/${C1_ID}?report=xyz`);
+    await section("Últimos relatórios");
+    await waitFor(() => expect(location()).toBe(`/cells/${C1_ID}`));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fakeQueries().some((query) => query.table === "cell_reports_view")).toBe(false);
   });
 });

@@ -1,6 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { RECENT_REPORTS_LIMIT, type CellRecentReport } from "@/lib/cells/detail";
+
+export const cellRecentReportsKey = (cellId: string) => ["cells", "detail", cellId, "reports"] as const;
+
+/**
+ * Tira um relatório dos últimos da célula no cache (E2.12, T14, como a DA-12 na lista): depois de
+ * excluir pela consulta, o detalhe não mostra o excluído enquanto recarrega.
+ */
+export function removeReportFromRecentCache(queryClient: QueryClient, cellId: string, reportId: string): void {
+  queryClient.setQueryData<CellRecentReport[]>(cellRecentReportsKey(cellId), (data) =>
+    data?.some((report) => report.id === reportId) ? data.filter((report) => report.id !== reportId) : data,
+  );
+}
 
 /**
  * Os até 10 relatórios mais recentes de uma célula, visíveis e não excluídos,
@@ -10,7 +22,7 @@ import { RECENT_REPORTS_LIMIT, type CellRecentReport } from "@/lib/cells/detail"
  */
 export function useCellRecentReports(cellId: string, { enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: ["cells", "detail", cellId, "reports"],
+    queryKey: cellRecentReportsKey(cellId),
     enabled,
     queryFn: async (): Promise<CellRecentReport[]> => {
       const { data, error } = await supabase.rpc("cell_recent_reports", {

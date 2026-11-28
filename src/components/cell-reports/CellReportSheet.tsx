@@ -20,6 +20,7 @@ import {
   sortParticipantNames,
   toReportSheetView,
   type ReportSheetActions,
+  type ReportSheetContext,
   type ReportSheetView,
 } from "@/lib/cell-reports/report-sheet";
 import { REPORT_SHEET_TEXTS as TEXTS } from "@/lib/cell-reports/texts";
@@ -318,15 +319,26 @@ export interface CellReportSheetProps {
   onEdit: (reportId: string, opener: HTMLElement) => void;
   /** "Excluir relatório": a confirmação do E2.01 por cima da consulta. */
   onDelete: (target: CellReportDeletionTarget, opener: HTMLElement | null) => void;
+  /** No detalhe da célula (T14), sem "Ver célula": a pessoa já está nela. */
+  context?: ReportSheetContext;
 }
 
 /**
  * A consulta "Ver relatório" (E2.12, T10 a T13; P92): para todos que veem o relatório, com a autoria,
  * os participantes e os visitantes pelo nome, as pessoas registradas, o endereço atual, os links da
  * célula e, no rodapé, editar e excluir. "Relatório não encontrado" único para o invisível, o
- * excluído e o inexistente, sem nenhum dado do relatório.
+ * excluído e o inexistente, sem nenhum dado do relatório. A mesma consulta abre no detalhe da célula
+ * (T14, `context="cell"`), sem "Ver célula".
  */
-export function CellReportSheet({ reportId, preview, onClose, onCloseAutoFocus, onEdit, onDelete }: CellReportSheetProps) {
+export function CellReportSheet({
+  reportId,
+  preview,
+  onClose,
+  onCloseAutoFocus,
+  onEdit,
+  onDelete,
+  context = "list",
+}: CellReportSheetProps) {
   const { hasPermission } = useAuth();
   const open = reportId !== null;
   // Ao fechar, o painel continua com o último relatório durante a animação de saída, sem ler de novo.
@@ -353,7 +365,7 @@ export function CellReportSheet({ reportId, preview, onClose, onCloseAutoFocus, 
   const failed = open && detailQuery.isError && detail === undefined && detailQuery.error !== retriedError;
   const previewRow = shownPreview && shownPreview.id === shownId ? shownPreview : null;
   const view = notFound ? null : toReportSheetView(detail, previewRow);
-  const actions = detail ? reportSheetActions(hasPermission, detail) : null;
+  const actions = detail ? reportSheetActions(hasPermission, detail, context) : null;
   const busy = open && !!detail && detailQuery.isFetching;
 
   const retry = () => {

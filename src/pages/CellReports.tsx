@@ -6,7 +6,8 @@ import AppLayout from "@/components/AppLayout";
 import { CellReportDialog } from "@/components/cell-reports/CellReportDialog";
 import { CellReportFilters, type CellReportFiltersHandle } from "@/components/cell-reports/CellReportFilters";
 import { CellReportSheet } from "@/components/cell-reports/CellReportSheet";
-import ReportCard, { REPORT_OPEN_ATTRIBUTE } from "@/components/cell-reports/ReportCard";
+import ReportCard from "@/components/cell-reports/ReportCard";
+import { findReportOpenButton } from "@/components/cell-reports/report-open";
 import ReportsTable from "@/components/cell-reports/ReportsTable";
 import CellReportDeletionFlow from "@/components/CellReportDeletionFlow";
 import RowActionsMenu, { type RowAction } from "@/components/RowActionsMenu";
@@ -32,6 +33,7 @@ import { useCellReportFilters } from "@/hooks/use-cell-report-filters";
 import { useCellReportFilterPeople } from "@/hooks/use-cell-report-filter-options";
 import { removeReportFromListCache, useCellReportListPreview } from "@/hooks/use-cell-report-list-preview";
 import { useCellReportSheet } from "@/hooks/use-cell-report-sheet";
+import { useReportEditEntry } from "@/hooks/use-report-edit-entry";
 import { cellReportDetailKey } from "@/hooks/use-cell-report";
 import { cellReportParticipantsKey } from "@/hooks/use-cell-report-participants";
 import { useCellIdentity } from "@/hooks/use-cell-identity";
@@ -69,14 +71,7 @@ function LoadingCards() {
   );
 }
 
-/** O botão que abre a consulta de um relatório, se a linha está na página. */
-function findOpenButton(reportId: string | null): HTMLElement | null {
-  if (!reportId) return null;
-  const buttons = document.querySelectorAll<HTMLElement>(`[${REPORT_OPEN_ATTRIBUTE}]`);
-  return Array.from(buttons).find((button) => button.getAttribute(REPORT_OPEN_ATTRIBUTE) === reportId) ?? null;
-}
-
-type ReportDialog = { mode: "launch" } | { mode: "edit"; reportId: string };
+type ReportDialog = { mode: "launch" } | { mode: "edit"; reportId: string; fromSheet: boolean };
 
 const CellReports = () => {
   const list = useListSearchParams();
@@ -170,7 +165,7 @@ const CellReports = () => {
   if (sheet.reportId) sheetFromList.current = sheet.fromList;
   const onSheetCloseAutoFocus = (event: Event, reportId: string | null) => {
     event.preventDefault();
-    const opener = sheetFromList.current ? findOpenButton(reportId) : null;
+    const opener = sheetFromList.current ? findReportOpenButton(reportId) : null;
     if (opener) opener.focus();
     else headingRef.current?.focus();
   };
@@ -190,7 +185,18 @@ const CellReports = () => {
 
   const startEdit = (reportId: string, opener: HTMLElement) => {
     returnFocus.setOpener(opener);
-    setReportDialog({ mode: "edit", reportId });
+    setReportDialog({ mode: "edit", reportId, fromSheet: false });
+  };
+  // Pela consulta, o formulário ganha uma entrada no histórico: o voltar fecha só ele (DA-11).
+  const editEntry = useReportEditEntry();
+  const startEditFromSheet = (reportId: string, opener: HTMLElement) => {
+    returnFocus.setOpener(opener);
+    setReportDialog({ mode: "edit", reportId, fromSheet: true });
+    editEntry.start();
+  };
+  const closeReportDialog = () => {
+    if (reportDialog?.mode === "edit" && reportDialog.fromSheet) editEntry.closed();
+    setReportDialog(null);
   };
   const startDeletion = (target: CellReportDeletionTarget, opener: HTMLElement | null, fromSheet: boolean) => {
     returnFocus.setOpener(opener);
@@ -493,7 +499,7 @@ const CellReports = () => {
           preview={preview}
           onClose={sheet.close}
           onCloseAutoFocus={onSheetCloseAutoFocus}
-          onEdit={startEdit}
+          onEdit={startEditFromSheet}
           onDelete={(target, opener) => startDeletion(target, opener, true)}
         />
 
@@ -501,8 +507,11 @@ const CellReports = () => {
         {reportDialog && (
           <CellReportDialog
             {...(reportDialog.mode === "edit" ? { mode: "edit", reportId: reportDialog.reportId } : { mode: "launch" })}
-            onClose={() => setReportDialog(null)}
+            onClose={closeReportDialog}
             onCloseAutoFocus={returnFocus.onCloseAutoFocus}
+            {...(reportDialog.mode === "edit" && reportDialog.fromSheet
+              ? { closeRequest: editEntry.closeRequest, onCloseRequestDeclined: editEntry.declined }
+              : {})}
           />
         )}
 

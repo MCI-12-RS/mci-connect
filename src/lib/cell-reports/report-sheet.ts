@@ -24,14 +24,20 @@ export function readReportParam(params: URLSearchParams): string | null {
   return raw !== null && isUuid(raw) ? raw : null;
 }
 
-/** O estado da navegação que a lista põe ao abrir a consulta pela linha (AQ-8). */
+/** O estado da navegação que a lista põe ao abrir a consulta pela linha (AQ-8) e a edição por cima dela (DA-11). */
 export interface ReportSheetLocationState {
   reportFromList?: boolean;
+  reportEdit?: boolean;
 }
 
 /** Aberta pela linha? (o estado da navegação traz `reportFromList`). */
 export function openedFromList(state: unknown): boolean {
   return typeof state === "object" && state !== null && "reportFromList" in state && state.reportFromList === true;
+}
+
+/** A entrada do histórico de "Editar relatório" aberto pela consulta (DA-11): o estado traz `reportEdit`. */
+export function onReportEditEntry(state: unknown): boolean {
+  return typeof state === "object" && state !== null && "reportEdit" in state && state.reportEdit === true;
 }
 
 /**
@@ -192,13 +198,20 @@ export interface ReportSheetActions {
   cellId: string | null;
 }
 
+/** Onde a consulta abre: na lista de Relatórios ou no detalhe da própria célula (T14, sem "Ver célula"). */
+export type ReportSheetContext = "list" | "cell";
+
 /** As ações da consulta, só com a leitura por id (antes dela, nenhuma: T12). */
-export function reportSheetActions(has: HasPermission, detail: CellReportDetailRow): ReportSheetActions {
+export function reportSheetActions(
+  has: HasPermission,
+  detail: CellReportDetailRow,
+  context: ReportSheetContext = "list",
+): ReportSheetActions {
   const cellDeleted = detail.cell_deleted === true;
   return {
     edit: has("edit_cell_report") && !cellDeleted,
     delete: has("delete_cell_report"),
-    viewCell: detail.cell_visible === true && !cellDeleted,
+    viewCell: context === "list" && detail.cell_visible === true && !cellDeleted,
     seeDeletedCells: has("manage_roles"),
     cellId: detail.cell_id,
   };

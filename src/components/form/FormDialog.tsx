@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,13 @@ export interface FormDialogProps {
   onCloseAutoFocus?: (event: Event) => void;
   /** Sem ações: só "Fechar" ("Meus dados" só para leitura e o carregando). */
   actions?: FormDialogActions;
+  /**
+   * Pedido de fechar vindo de fora (o voltar do aparelho, DA-11 do E2.12): cada valor novo vale como o
+   * "Cancelar", com o "Descartar as alterações?" quando houver mudança.
+   */
+  closeRequest?: number;
+  /** O pedido de fora não fechou: o envio estava em andamento ou a pessoa tocou "Continuar editando". */
+  onCloseRequestDeclined?: () => void;
   children: ReactNode;
 }
 
@@ -67,9 +74,48 @@ export interface FormDialogProps {
  * fora) pede "Descartar as alterações?". Durante o envio nada fecha, e aos 3 s
  * aparece "Ainda salvando…" (E2.06, T5 e P44).
  */
-export function FormDialog({ title, texts: TEXTS, onClose, onOpenAutoFocus, onCloseAutoFocus, actions, children }: FormDialogProps) {
+export function FormDialog({
+  title,
+  texts: TEXTS,
+  onClose,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
+  actions,
+  closeRequest,
+  onCloseRequestDeclined,
+  children,
+}: FormDialogProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const slow = useSlowPending(actions?.busy === true);
+
+  // O pedido de fora lê o estado da hora, sem refazer o efeito a cada render.
+  const latest = useRef({ actions, onClose, onCloseRequestDeclined });
+  latest.current = { actions, onClose, onCloseRequestDeclined };
+  const handledRequest = useRef(closeRequest);
+  // O aviso de descartar aberto por um pedido de fora: "Continuar editando" o recusa.
+  const externalPending = useRef(false);
+  useEffect(() => {
+    if (closeRequest === undefined || closeRequest === handledRequest.current) return;
+    handledRequest.current = closeRequest;
+    const current = latest.current;
+    if (current.actions?.busy) current.onCloseRequestDeclined?.();
+    else if (current.actions?.isDirty()) {
+      externalPending.current = true;
+      setConfirmDiscard(true);
+    } else current.onClose();
+  }, [closeRequest]);
+
+  const onDiscardOpenChange = (open: boolean) => {
+    setConfirmDiscard(open);
+    if (open || !externalPending.current) return;
+    externalPending.current = false;
+    onCloseRequestDeclined?.();
+  };
+  const discard = () => {
+    // "Descartar" fecha o aviso logo depois (`onOpenChange(false)`): não é recusa.
+    externalPending.current = false;
+    onClose();
+  };
 
   const requestClose = () => {
     if (actions?.busy) return;
@@ -151,7 +197,7 @@ export function FormDialog({ title, texts: TEXTS, onClose, onOpenAutoFocus, onCl
         </ResponsiveDialogContent>
       </Dialog>
 
-      <DiscardChangesDialog open={confirmDiscard} onOpenChange={setConfirmDiscard} onDiscard={onClose} />
+      <DiscardChangesDialog open={confirmDiscard} onOpenChange={onDiscardOpenChange} onDiscard={discard} />
     </>
   );
 }

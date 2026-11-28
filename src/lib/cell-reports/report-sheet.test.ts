@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   closeMode,
+  onReportEditEntry,
   readReportParam,
   reportSheetActions,
   reportSheetDateTime,
@@ -25,6 +26,13 @@ describe("readReportParam e closeMode (AQ-8)", () => {
     expect(closeMode({ reportFromList: true })).toBe("back");
     expect(closeMode(null)).toBe("replace");
     expect(closeMode({ fromList: true })).toBe("replace");
+  });
+
+  it("a entrada da edição por cima da consulta é a que traz reportEdit (DA-11)", () => {
+    expect(onReportEditEntry({ reportFromList: true, reportEdit: true })).toBe(true);
+    expect(onReportEditEntry({ reportFromList: true })).toBe(false);
+    expect(onReportEditEntry({ reportEdit: "true" })).toBe(false);
+    expect(onReportEditEntry(null)).toBe(false);
   });
 });
 
@@ -147,5 +155,10 @@ describe("reportSheetActions (RN-16 c, UXD-9)", () => {
   it("célula excluída: sem Editar e sem Ver célula; Excluir continua", () => {
     const actions = reportSheetActions(has("edit_cell_report", "delete_cell_report", "manage_roles"), reportDetailRow({ cell_deleted: true }));
     expect(actions).toMatchObject({ edit: false, delete: true, viewCell: false, seeDeletedCells: true });
+  });
+
+  it("no detalhe da célula (T14): sem Ver célula; editar, excluir e Ver todos os relatórios continuam", () => {
+    const actions = reportSheetActions(has("edit_cell_report", "delete_cell_report"), reportDetailRow(), "cell");
+    expect(actions).toEqual({ edit: true, delete: true, viewCell: false, seeDeletedCells: false, cellId: reportDetailRow().cell_id });
   });
 });

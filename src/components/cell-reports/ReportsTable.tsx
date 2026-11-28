@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ReportRowView } from "@/lib/cell-reports/report-row";
 import { CELL_REPORT_FILTER_TEXTS, REPORT_ROW_TEXTS } from "@/lib/cell-reports/filter-texts";
 import { cn } from "@/lib/utils";
-import { REPORT_OPEN_ATTRIBUTE } from "./ReportCard";
+import { REPORT_OPEN_ATTRIBUTE } from "./report-open";
 import { CellDeletedBadge, ReportMeetingBadge } from "@/components/StatusBadges";
 import { ReportAddress, ReportDay, ReportG12, ReportText } from "./ReportRowParts";
 
