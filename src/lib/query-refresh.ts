@@ -13,8 +13,11 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
  *   situação do relatório (E2.09);
  * - `["cell_reports"]`: a lista, os excluídos, o relatório aberto e os
  *   participantes, que mostram os dados da célula e das pessoas (DA-6);
- * - `["dashboard"]`: os números (inclusive o card de pendentes, E2.09), as
- *   células por tipo e o ranking por G12.
+ * - `["dashboard"]`: os números (inclusive o card de pendentes, E2.09, e os
+ *   tipos de célula, E2.14) e o ranking por G12.
+ *
+ * Nunca `resetQueries` (E2.14, AQ-7, DT-08): com a tela aberta, ele traria de
+ * volta o `Skeleton` e esconderia os cards condicionais do Dashboard.
  */
 const HIERARCHY_QUERY_ROOTS: readonly QueryKey[] = [["members"], ["cells"], ["cell_reports"], ["dashboard"]];
 
@@ -28,6 +31,11 @@ async function refreshHierarchyQueries(queryClient: QueryClient): Promise<void> 
   await Promise.all(
     HIERARCHY_QUERY_ROOTS.map((queryKey) => queryClient.invalidateQueries({ queryKey, refetchType: "active" })),
   );
+}
+
+/** A chave é de uma das raízes acima? (Para o `use-access` não invalidar essas duas vezes.) */
+export function isHierarchyQueryKey(queryKey: QueryKey): boolean {
+  return HIERARCHY_QUERY_ROOTS.some((root) => root[0] === queryKey[0]);
 }
 
 /** Depois de toda gravação de membro: cadastro, edição, inativação, exclusão e restauração. */
@@ -62,4 +70,14 @@ export async function refreshAfterCellWrite(queryClient: QueryClient): Promise<v
     refreshHierarchyQueries(queryClient),
     queryClient.invalidateQueries({ queryKey: ACCESS_ROOT }, { cancelRefetch: false }),
   ]);
+}
+
+/**
+ * Quando o próprio acesso muda (função ou permissões; a impressão digital do
+ * `my_access()`, E2.02): desatualiza os números como uma gravação (E2.14,
+ * DA-6). Sem isso, uma tela em cache mostraria por um instante os números do
+ * escopo antigo como atuais.
+ */
+export function refreshAfterAccessChange(queryClient: QueryClient): Promise<void> {
+  return refreshHierarchyQueries(queryClient);
 }

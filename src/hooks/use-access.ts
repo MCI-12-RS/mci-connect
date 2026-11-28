@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { NO_ACCESS, accessFingerprint, type Access } from "@/lib/access/access";
 import { ACCESS_TEXTS } from "@/lib/access/texts";
 import { retryUnlessPermissionDenied } from "@/lib/errors";
+import { isHierarchyQueryKey, refreshAfterAccessChange } from "@/lib/query-refresh";
 
 // O acesso de quem está logado (E2.02, RN-08, UXD-11, P13): a linha de
 // `my_access()`, relida sem sair e entrar:
@@ -98,7 +99,10 @@ export function useAccessQuery(userId: string | null): AccessQueryResult {
     seen.current = { userId, fingerprint };
     if (!previous || previous.userId !== userId || previous.fingerprint === fingerprint) return;
     toast({ title: ACCESS_TEXTS.updated });
-    void queryClient.invalidateQueries({ predicate: (other) => !isAccessQueryKey(other.queryKey) });
+    void refreshAfterAccessChange(queryClient);
+    void queryClient.invalidateQueries({
+      predicate: (other) => !isAccessQueryKey(other.queryKey) && !isHierarchyQueryKey(other.queryKey),
+    });
   }, [data, userId, queryClient]);
 
   const { refetch } = query;

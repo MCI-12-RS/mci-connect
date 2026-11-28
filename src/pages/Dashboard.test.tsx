@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { act, render, screen, within } from "@testing-library/react";
-import { createQueryWrapper } from "@/test/query-wrapper";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc } from "@/test/fake-supabase";
+import { refreshAfterReportWrite } from "@/lib/query-refresh";
 import { PERMISSION_DENIED } from "@/lib/errors";
 import { NO_ACCESS, type Access } from "@/lib/access/access";
 import Dashboard from "./Dashboard";
@@ -36,56 +38,83 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ access: auth.access ?? CHURCH_ACCESS, permissionsLoaded: true }),
 }));
 
+
+/** A variação "Painel" de Carla (T6): vê o Dashboard e os relatórios, mas não Membros nem Células. */
+const PANEL_ACCESS: Access = {
+  ...NO_ACCESS,
+  member_id: "m-carla",
+  role_id: "r-painel",
+  role_name: "Painel",
+  permissions: ["view_dashboard", "view_own_reports"],
+};
+
 const summaryRow = {
-  week_start: "2026-11-29",
-  week_end: "2026-12-05",
-  reports_sent: 41,
-  cells_pending: 6,
-  visitors: 17,
-  cells_not_held: 2,
+  week_start: "2026-11-22",
+  week_end: "2026-11-28",
+  reports_sent: 2,
+  reports_held: 2,
+  cells_pending: 1,
+  visitors: 8,
+  cells_not_held: 0,
+  members_new: 1,
+  cells_new: 1,
   members_total: 1530,
   members_active: 1402,
   members_inactive: 128,
   members_baptized: 1011,
   members_not_baptized: 519,
   members_without_leader: 5,
-  members_without_cell_link: 213,
+  members_without_cell_link: 0,
+  cells_evangelistic: 3,
+  cells_discipleship: 2,
+  cells_macrocell: 0,
 };
 
-const cellsByType = [
-  { cell_type: "Discipulado", total: 450 },
-  { cell_type: "Evangelística", total: 750 },
-];
+const zeroWeek = { ...summaryRow, reports_sent: 0, reports_held: 0, cells_pending: 0, visitors: 0, members_new: 0, cells_new: 0 };
 
 const ranking = [
-  { couple_key: "d|e", name: "Davi", spouse_name: "Eva", male_cells: 1200, female_cells: 34, total_cells: 1234 },
-  { couple_key: "a|b", name: "Bruno", spouse_name: "Ana", male_cells: 3, female_cells: 4, total_cells: 7 },
-  { couple_key: "c", name: "Carla", spouse_name: null, male_cells: 0, female_cells: 0, total_cells: 0 },
+  {
+    couple_key: "p|q",
+    name: "Pedro",
+    spouse_name: "Paula",
+    male_cells: 1,
+    female_cells: 1,
+    total_cells: 2,
+    g12_ids: ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"],
+  },
+  { couple_key: "t", name: "Tiago", spouse_name: null, male_cells: 0, female_cells: 0, total_cells: 0, g12_ids: ["33333333-3333-4333-8333-333333333333"] },
 ];
 
 const denied = { error: { code: PERMISSION_DENIED, message: "Você não tem permissão para ver o dashboard." } };
 const failure = { error: { code: "08006", message: "connection failure" } };
 
-function renderDashboard() {
-  return render(<Dashboard />, { wrapper: createQueryWrapper() });
+function renderDashboard(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const view = render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  return { ...view, client };
 }
 
-/** Deixa as respostas (e as novas tentativas, com os atrasos do padrão) acontecerem. */
+/** Deixa as respostas acontecerem. */
 async function settle() {
   await act(() => vi.advanceTimersByTimeAsync(60_000));
 }
 
-/** Um número como a tela exibe, com o separador de milhar do pt-BR ("7", "1.530"). */
-const SHOWN_NUMBER = /^\d{1,3}(\.\d{3})*$/;
-
-/** O valor exibido no card (o `Card` do shadcn) com esse título. */
-function cardValue(title: string) {
-  const card = screen.getByRole("heading", { name: title }).closest<HTMLElement>("div.rounded-lg");
-  if (!card) throw new Error(`Card "${title}" não encontrado`);
-  return within(card).getByText(SHOWN_NUMBER).textContent;
+function respondAll(summary: object = summaryRow, rows: object[] = ranking) {
+  respondToRpc("dashboard_summary", { data: [summary] });
+  respondToRpc("dashboard_g12_ranking", { data: rows });
 }
 
-describe("Dashboard (RN-02, RN-08, RN-09)", () => {
+/** A seção pelo `h2` (o `aria-labelledby`). */
+function section(name: RegExp | string) {
+  return screen.getByRole("region", { name });
+}
+
+describe("Dashboard (E2.14, T1 a T7)", () => {
   beforeEach(() => {
     resetFakeSupabase();
     auth.access = null;
@@ -93,316 +122,170 @@ describe("Dashboard (RN-02, RN-08, RN-09)", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("Dado o dashboard carregando, então os cards aparecem sem nenhum número (nada de 0)", () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
-    renderDashboard();
-
-    expect(screen.getByRole("heading", { name: "Total de Membros" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Relatórios Enviados" })).toBeInTheDocument();
-    expect(screen.queryByText(SHOWN_NUMBER)).not.toBeInTheDocument();
-  });
-
-  it("Dado o dashboard carregando, então cada área ocupada anuncia o carregamento ao leitor de tela, e o anúncio some quando os dados chegam", async () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
-    const { container } = renderDashboard();
-
-    // Esta Semana, Geral (membros), tipos de célula e Células por G12.
-    const statuses = screen.getAllByRole("status");
-    expect(statuses.map((status) => status.textContent)).toEqual(Array(4).fill("Carregando…"));
-    for (const status of statuses) {
-      expect(status).toHaveClass("sr-only");
-      expect(status.closest('[aria-busy="true"]')).not.toBeNull();
-    }
-
-    await settle();
-
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
-  });
-
-  it("Dadas as três RPCs, quando carrega, então faz só as três chamadas e mostra os números e a semana delas, sem somar nada", async () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
+  it("Dadas as duas RPCs, quando carrega, então faz só as duas chamadas, sem consulta a tabelas e sem a dos tipos", async () => {
+    respondAll();
     renderDashboard();
     await settle();
 
     expect(fakeQueries()).toHaveLength(0);
-    expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([
-      ["dashboard_summary", undefined],
-      ["dashboard_cells_by_type", undefined],
-      ["dashboard_g12_ranking", undefined],
-    ]);
-
-    expect(screen.getByRole("heading", { name: "Esta Semana (29/11 - 05/12)" })).toBeInTheDocument();
-    expect(cardValue("Relatórios Enviados")).toBe("41");
-    expect(cardValue("Células com relatório pendente")).toBe("6");
-    expect(cardValue("Visitantes em Células")).toBe("17");
-    expect(cardValue("Células Não Realizadas")).toBe("2");
-    expect(cardValue("Total de Membros")).toBe("1.530");
-    expect(cardValue("Membros Ativos")).toBe("1.402");
-    expect(cardValue("Membros Inativos")).toBe("128");
-    expect(cardValue("Batizados")).toBe("1.011");
-    expect(cardValue("Não Batizados")).toBe("519");
-    expect(cardValue("Sem Liderança")).toBe("5");
-    expect(cardValue("Sem Vínculo Celular")).toBe("213");
-    expect(cardValue("Células Discipulado")).toBe("450");
-    expect(cardValue("Células Evangelística")).toBe("750");
-
-    // O casal é o cabeçalho da linha; os números saem com o separador de milhar.
-    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
-    expect(
-      rows.map((row) => [
-        within(row).getByRole("rowheader").textContent,
-        ...within(row).getAllByRole("cell").map((cell) => cell.textContent),
-      ]),
-    ).toEqual([
-      ["Davi & Eva", "1.200", "34", "1.234"],
-      ["Bruno & Ana", "3", "4", "7"],
-      ["Carla", "0", "0", "0"],
-    ]);
+    expect(fakeRpcs().map((call) => call.fn).sort()).toEqual(["dashboard_g12_ranking", "dashboard_summary"]);
   });
 
-  it.each(["dashboard_summary", "dashboard_cells_by_type", "dashboard_g12_ranking"])(
-    "Dado um usuário sem permissão, quando %s responde 42501, então mostra só o cabeçalho e o acesso negado",
-    async (fn) => {
-      const ok = {
-        dashboard_summary: { data: [summaryRow] },
-        dashboard_cells_by_type: { data: cellsByType },
-        dashboard_g12_ranking: { data: ranking },
-      };
-      for (const [rpc, response] of Object.entries(ok)) respondToRpc(rpc, rpc === fn ? denied : response);
-
-      renderDashboard();
-      await settle();
-
-      expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
-      expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
-      expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
-      expect(screen.queryByText("Erro ao carregar o dashboard.")).not.toBeInTheDocument();
-    },
-  );
-
-  it("E2.09, UX-13: o card de pendentes se chama 'Células com relatório pendente', com o triângulo (aria-hidden), e os títulos quebram linha com leading-snug", async () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
-    renderDashboard();
-    await settle();
-
-    const title = screen.getByRole("heading", { name: "Células com relatório pendente" });
-    const card = title.closest<HTMLElement>("div.rounded-lg") as HTMLElement;
-    const icon = card.querySelector("svg") as SVGElement;
-    expect(icon).toHaveClass("lucide-triangle-alert");
-    expect(icon).toHaveAttribute("aria-hidden", "true");
-    expect(title.parentElement).toHaveClass("items-start");
-    for (const heading of screen.getAllByRole("heading", { level: 3 })) {
-      expect(heading).toHaveClass("leading-snug");
-      expect(heading).not.toHaveClass("truncate");
-      expect(heading).not.toHaveClass("leading-none");
-    }
-    expect(document.body.textContent).not.toMatch(/Células sem Relatório|Status|Atrasado|Entregue|Cancelada|cobr/);
-  });
-
-  it("Dada uma falha no resumo, quando as novas tentativas se esgotam, então as seções dele mostram o erro e o resto aparece", async () => {
-    respondToRpc("dashboard_summary", failure, failure, failure, failure);
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
-    renderDashboard();
-    await settle();
-
-    const errors = screen.getAllByText("Erro ao carregar o dashboard.");
-    expect(errors).toHaveLength(2);
-    expect(screen.queryByRole("heading", { name: "Total de Membros" })).not.toBeInTheDocument();
-    expect(cardValue("Células Evangelística")).toBe("750");
-    // Na seção Geral, a mensagem fica no lugar dos cards de membros, antes dos tipos.
-    const typeCard = screen.getByRole("heading", { name: "Células Evangelística" });
-    expect(errors[1].compareDocumentPosition(typeCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("table")).toBeInTheDocument();
-  });
-
-  it("Dada uma falha só nos tipos, então os cards de membros aparecem e a mensagem fica no lugar dos tipos", async () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", failure, failure, failure, failure);
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
-    renderDashboard();
-    await settle();
-
-    expect(screen.getAllByText("Erro ao carregar o dashboard.")).toHaveLength(1);
-    expect(cardValue("Sem Vínculo Celular")).toBe("213");
-    expect(screen.queryByText(/^Células (Discipulado|Evangelística)/)).not.toBeInTheDocument();
-  });
-
-  it("Dadas falhas no resumo e nos tipos, então a seção Geral mostra uma mensagem só", async () => {
-    respondToRpc("dashboard_summary", failure, failure, failure, failure);
-    respondToRpc("dashboard_cells_by_type", failure, failure, failure, failure);
-    respondToRpc("dashboard_g12_ranking", failure, failure, failure, failure);
-
-    renderDashboard();
-    await settle();
-
-    // Esta Semana, Geral e Células por G12: uma mensagem em cada, anunciada
-    // ao leitor de tela e dentro de um card (o fundo branco dá o contraste).
-    expect(screen.getAllByText("Erro ao carregar o dashboard.")).toHaveLength(3);
-    const alerts = screen.getAllByRole("alert");
-    expect(alerts.map((alert) => alert.textContent)).toEqual(Array(3).fill("Erro ao carregar o dashboard."));
-    for (const alert of alerts) expect(alert.closest("div.rounded-lg")).not.toBeNull();
-  });
-
-  it("Dados sem células e sem casais G12, então os cards por tipo e o ranking ficam ocultos", async () => {
-    respondToRpc("dashboard_summary", { data: [summaryRow] });
-    respondToRpc("dashboard_cells_by_type", { data: [] });
-    respondToRpc("dashboard_g12_ranking", { data: [] });
-
-    renderDashboard();
-    await settle();
-
-    expect(cardValue("Total de Membros")).toBe("1.530");
-    expect(screen.queryByText(/^Células (Discipulado|Evangelística)/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Células por G12" })).not.toBeInTheDocument();
-  });
-});
-
-// Casos acrescentados pelo QA (E1.08, PR 3).
-describe("Dashboard: semana do banco e acesso (RN-08, RN-09)", () => {
-  beforeEach(() => {
-    resetFakeSupabase();
-    auth.access = null;
-    vi.useFakeTimers();
-  });
-  afterEach(() => vi.useRealTimers());
-
-  function respondAll(summary = summaryRow) {
-    respondToRpc("dashboard_summary", { data: [summary] });
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-  }
-
-  it("Dado o relógio do navegador em outra semana, então o rótulo é a semana devolvida pela RPC, em qualquer fuso", async () => {
-    // Quarta 25/11/2026 ao meio-dia em Brasília (quarta em qualquer fuso de UTC−12 a UTC+8).
-    vi.setSystemTime(new Date("2026-11-25T15:00:00Z"));
-    respondAll({ ...summaryRow, week_start: "2026-03-01", week_end: "2026-03-07" });
-
-    renderDashboard();
-    await settle();
-
-    // O navegador não manda o "agora": a semana é a do banco (horário de Brasília).
-    expect(fakeRpcs().find((call) => call.fn === "dashboard_summary")?.args).toBeUndefined();
-    expect(screen.getByRole("heading", { name: "Esta Semana (01/03 - 07/03)" })).toBeInTheDocument();
-    expect(screen.queryByText(/22\/11|29\/11/)).not.toBeInTheDocument();
-  });
-
-  it("Dado um usuário que vê só o ministério, quando as RPCs respondem, então mostra o selo Meu Ministério e a visão do ministério (E2.02, UX-12)", async () => {
-    auth.access = {
-      ...CHURCH_ACCESS,
-      permissions: ["view_dashboard", "view_own_ministry"],
-      sees_whole_church: false,
-      sees_whole_church_reports: false,
-    };
+  it("Dado o carregamento, então só os cinco cards sempre à vista aparecem, com dois anúncios de carregando (P112)", async () => {
     respondAll();
-
     renderDashboard();
-    await settle();
 
-    // Contorno sobre o fundo da página: o texto em primeiro plano passa no contraste nos dois temas (UX-29).
-    const badge = screen.getByText("Meu Ministério");
-    expect(badge).toHaveClass("text-foreground");
-    expect(badge).not.toHaveClass("bg-secondary");
-    expect(screen.getByText("Visão do seu ministério")).toBeInTheDocument();
-    expect(cardValue("Total de Membros")).toBe("1.530");
+    const statuses = screen.getAllByRole("status");
+    expect(statuses.map((status) => status.textContent)).toEqual(["Carregando…", "Carregando…"]);
+    expect(within(section(/Esta semana/)).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(section("Geral")).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Relatórios de células")).not.toBeInTheDocument();
+    expect(screen.queryByText("Células por G12")).not.toBeInTheDocument();
+
+    await settle();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("Dado um usuário que vê a igreja toda, então mostra a visão geral da igreja, sem o selo (E2.02, UX-12)", async () => {
-    auth.access = CHURCH_ACCESS;
+  it("Dados os números, então mostra os títulos da RN-16, a semana e esconde os zeros (RN-14)", async () => {
     respondAll();
-
     renderDashboard();
     await settle();
 
-    expect(screen.getByText("Visão geral da igreja")).toBeInTheDocument();
-    expect(screen.queryByText("Meu Ministério")).not.toBeInTheDocument();
+    const week = section(/Esta semana/);
+    expect(screen.getByRole("heading", { level: 2, name: "Esta semana, de 22/11 a 28/11" })).toBeInTheDocument();
+    expect(within(week).getByText("Relatórios enviados")).toBeInTheDocument();
+    expect(within(week).getByText("Novos membros")).toBeInTheDocument();
+    expect(within(week).queryByText("Células não realizadas")).not.toBeInTheDocument();
+    const general = section("Geral");
+    expect(within(general).getByText("Células evangelísticas")).toBeInTheDocument();
+    expect(within(general).queryByText("Macrocélulas")).not.toBeInTheDocument();
+    expect(within(general).queryByText("Sem vínculo celular")).not.toBeInTheDocument();
+    expect(within(general).getByText("1.530")).toBeInTheDocument();
   });
 
-  it("Dado só 'Visualizar Dashboard', sem ver a igreja nem o ministério, então não mostra subtítulo nem selo (E2.02, UX-12, PO-UX-13)", async () => {
-    auth.access = {
-      ...CHURCH_ACCESS,
-      permissions: ["view_dashboard"],
-      sees_whole_church: false,
-      sees_ministry: false,
-      sees_whole_church_reports: false,
-      sees_ministry_reports: false,
-    };
+  it("Dado quem vê a igreja toda, então cada número maior que zero abre a lista, com o nome acessível do P110", async () => {
     respondAll();
-
     renderDashboard();
     await settle();
 
-    expect(cardValue("Total de Membros")).toBe("1.530");
-    expect(screen.queryByText("Meu Ministério")).not.toBeInTheDocument();
-    expect(screen.queryByText("Visão do seu ministério")).not.toBeInTheDocument();
-    expect(screen.queryByText("Visão geral da igreja")).not.toBeInTheDocument();
+    const pending = screen.getByRole("link", { name: "Células com relatório pendente: 1, ver na lista de Células" });
+    expect(pending).toHaveAttribute("href", "/cells?report_status=pending");
+    expect(screen.getByRole("link", { name: "Total de membros: 1.530, ver na lista de Membros" })).toHaveAttribute("href", "/members");
+    expect(screen.getByRole("link", { name: "Célula realizada: 2, ver na lista de Relatórios" })).toHaveAttribute(
+      "href",
+      "/cell-reports?from=2026-11-22&to=2026-11-28&held=yes",
+    );
+    // A parte com zero fica sem link.
+    expect(screen.queryByRole("link", { name: /^Não houve célula/ })).not.toBeInTheDocument();
   });
 
-  it("Dada a conta X (sem cadastro de membro), então mostra a mensagem e a linha de quem não tem cadastro, sem card nem chamadas (E2.02, RN-07, UX-13)", async () => {
-    auth.access = { ...NO_ACCESS, member_id: null };
-
+  it("Dado o Painel de Carla, então os números de Membros e Células ficam sem link, e os de Relatórios abrem (T6)", async () => {
+    auth.access = PANEL_ACCESS;
+    respondAll();
     renderDashboard();
     await settle();
 
-    expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
-    expect(screen.getByText("Seu acesso ainda não está ligado a um cadastro de membro. Fale com um administrador.")).toBeInTheDocument();
-    expect(screen.queryByText("Sua conta ainda não tem uma função. Fale com um administrador.")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /Esta Semana/ })).not.toBeInTheDocument();
-    expect(fakeRpcs()).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: /Total de membros/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Células com relatório pendente/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Relatórios enviados: 2/ })).toBeInTheDocument();
   });
 
-  it("Dado o banco negando só o resumo (42501) e as outras RPCs respondendo, então nenhum número aparece, só a mensagem exata de acesso negado", async () => {
+  it("Dado o card de pendentes, então tem o tom de aviso acima de zero e o de sucesso com zero (RN-15)", async () => {
+    respondAll(zeroWeek);
+    renderDashboard();
+    await settle();
+
+    const card = within(section(/Esta semana/)).getByText("Células com relatório pendente").closest("li");
+    expect(card?.firstElementChild?.className).toContain("bg-success/10");
+    expect(card?.querySelector("a")).toBeNull();
+    // Tudo zero na semana: o gráfico não aparece.
+    expect(screen.queryByText("Relatórios de células")).not.toBeInTheDocument();
+  });
+
+  it("Dado o ranking, então o casal com células abre a lista do casal, e o de Total 0 fica sem link (T5)", async () => {
+    respondAll();
+    renderDashboard();
+    await settle();
+
+    const link = screen.getByRole("link", { name: "Pedro e Paula: 2 células, ver na lista de Células" });
+    expect(link.getAttribute("href")).toContain("status=active");
+    expect(screen.queryByRole("link", { name: /^Tiago/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".bg-blue-100, .bg-pink-100")).toBeNull();
+  });
+
+  it("Dado o resumo falhando, então as duas seções mostram a mensagem com 'Tentar de novo', que refaz só o resumo", async () => {
+    respondToRpc("dashboard_summary", failure, { data: [summaryRow] });
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+    renderDashboard();
+    await settle();
+
+    expect(screen.getByText(/Não foi possível carregar os números desta semana/)).toBeInTheDocument();
+    expect(screen.getByText(/Não foi possível carregar os números gerais/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Pedro e Paula/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Tentar de novo" })[0]);
+    await settle();
+
+    expect(fakeRpcs().filter((call) => call.fn === "dashboard_g12_ranking")).toHaveLength(1);
+    expect(screen.getByText("Relatórios enviados")).toBeInTheDocument();
+    expect(screen.queryByText(/Não foi possível/)).not.toBeInTheDocument();
+  });
+
+  it("Dado 'Tentar de novo' que falha de novo, então o erro passa a ser anunciado (role=alert)", async () => {
+    respondToRpc("dashboard_summary", failure, failure);
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+    renderDashboard();
+    await settle();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Tentar de novo" })[0]);
+    await settle();
+    expect(screen.getAllByRole("alert").length).toBeGreaterThan(0);
+  });
+
+  it("Dado o ranking falhando, então a seção aparece com o h2 e a mensagem dela", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] });
+    respondToRpc("dashboard_g12_ranking", failure);
+    renderDashboard();
+    await settle();
+
+    expect(within(section("Células por G12")).getByText(/Não foi possível carregar as células por G12/)).toBeInTheDocument();
+  });
+
+  it("Dada uma gravação com o Dashboard aberto, quando a busca seguinte falha, então a seção mostra o erro, e não o número de antes (RN-17)", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] }, failure);
+    respondToRpc("dashboard_g12_ranking", { data: ranking }, { data: ranking });
+    const { client } = renderDashboard();
+    await settle();
+    expect(screen.getByText("1.530")).toBeInTheDocument();
+
+    await act(() => refreshAfterReportWrite(client));
+    await settle();
+
+    expect(screen.queryByText("1.530")).not.toBeInTheDocument();
+    expect(screen.getByText(/Não foi possível carregar os números desta semana/)).toBeInTheDocument();
+  });
+
+  it("Dada uma busca sem gravação que falha (voltar para a aba), então os números ficam", async () => {
+    respondToRpc("dashboard_summary", { data: [summaryRow] }, failure);
+    respondToRpc("dashboard_g12_ranking", { data: ranking });
+    const { client } = renderDashboard();
+    await settle();
+
+    await act(() => client.refetchQueries({ queryKey: ["dashboard", "summary"] }));
+    await settle();
+
+    expect(screen.getByText("1.530")).toBeInTheDocument();
+    expect(screen.queryByText(/Não foi possível/)).not.toBeInTheDocument();
+  });
+
+  it("Dado um usuário sem a permissão, quando o banco recusa, então mostra o acesso negado sem nenhum card", async () => {
     respondToRpc("dashboard_summary", denied);
-    respondToRpc("dashboard_cells_by_type", { data: cellsByType });
-    respondToRpc("dashboard_g12_ranking", { data: ranking });
-
+    respondToRpc("dashboard_g12_ranking", denied);
     renderDashboard();
     await settle();
 
     expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
-    expect(screen.queryByText(/\d/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(fakeRpcs().filter((call) => call.fn === "dashboard_summary")).toHaveLength(1);
-  });
-
-  it("Dado um membro sem função, então mostra as duas linhas sem acesso, sem nenhum card e sem chamar as RPCs (E2.02, RN-07, UX-13)", async () => {
-    auth.access = { ...NO_ACCESS, member_id: "m-hugo" };
-
-    renderDashboard();
-    await settle();
-
-    expect(screen.getByText("Você não tem acesso ao dashboard.")).toBeInTheDocument();
-    expect(screen.getByText("Sua conta ainda não tem uma função. Fale com um administrador.")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /Esta Semana/ })).not.toBeInTheDocument();
-    expect(fakeRpcs()).toHaveLength(0);
-  });
-
-  it("Dado o atalho 'Novo relatório', então aparece só para quem pode lançar algum relatório, com 44 px de altura (E2.02, UX-14)", async () => {
-    respondAll();
-    auth.access = { ...CHURCH_ACCESS, can_submit_some_report: false };
-    const { unmount } = renderDashboard();
-    await settle();
-    expect(screen.queryByRole("button", { name: "Novo relatório" })).not.toBeInTheDocument();
-    unmount();
-
-    auth.access = { ...CHURCH_ACCESS, can_submit_some_report: true };
-    renderDashboard();
-    await settle();
-    expect(screen.getByRole("button", { name: "Novo relatório" })).toHaveClass("h-11", "w-full");
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 });

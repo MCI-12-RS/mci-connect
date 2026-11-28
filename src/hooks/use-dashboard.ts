@@ -1,20 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { DashboardG12Couple, DashboardSummary } from "@/lib/dashboard/cards";
 import { retryUnlessPermissionDenied } from "@/lib/errors";
 
-// Dashboard calculado no banco (E1.08, RN-02, RN-08 e RN-09): cada hook chama
-// uma RPC, sem agregar nada no cliente. Sem view_dashboard e sem
-// view_own_ministry_dashboard as três respondem 42501, que não é repetido.
+// Dashboard calculado no banco (E1.08, RN-02; E2.14, DT-02): duas RPCs, sem
+// agregar nada no cliente. Os tipos de célula vêm no resumo (AQ-3). Sem
+// "Visualizar Dashboard" as duas respondem 42501, que não é repetido.
 
-type DashboardFunctions = Database["public"]["Functions"];
+export type { DashboardG12Couple, DashboardSummary } from "@/lib/dashboard/cards";
 
-/** Os cards da semana e os cards gerais de membros, com a semana (`YYYY-MM-DD`) no horário de Brasília. */
-export type DashboardSummary = DashboardFunctions["dashboard_summary"]["Returns"][number];
-/** Total de células visíveis de um tipo. */
-export type DashboardCellsByType = DashboardFunctions["dashboard_cells_by_type"]["Returns"][number];
-/** Um casal G12, com as células da subárvore. `spouse_name` é nulo quando não há cônjuge visível e ativo. */
-export type DashboardG12Couple = DashboardFunctions["dashboard_g12_ranking"]["Returns"][number];
+export const DASHBOARD_SUMMARY_KEY = ["dashboard", "summary"] as const;
+export const DASHBOARD_G12_RANKING_KEY = ["dashboard", "g12-ranking"] as const;
 
 /** `enabled`: falso para quem o acesso já diz que não tem o Dashboard (RN-07, T9): nenhuma consulta. */
 export interface DashboardQueryOptions {
@@ -25,7 +21,7 @@ export interface DashboardQueryOptions {
 export function useDashboardSummary({ enabled = true }: DashboardQueryOptions = {}) {
   return useQuery({
     enabled,
-    queryKey: ["dashboard", "summary"],
+    queryKey: DASHBOARD_SUMMARY_KEY,
     retry: retryUnlessPermissionDenied,
     queryFn: async (): Promise<DashboardSummary> => {
       const { data, error } = await supabase.rpc("dashboard_summary").single();
@@ -35,25 +31,11 @@ export function useDashboardSummary({ enabled = true }: DashboardQueryOptions = 
   });
 }
 
-/** Já vem ordenado pelo tipo. */
-export function useDashboardCellsByType({ enabled = true }: DashboardQueryOptions = {}) {
-  return useQuery({
-    enabled,
-    queryKey: ["dashboard", "cells-by-type"],
-    retry: retryUnlessPermissionDenied,
-    queryFn: async (): Promise<DashboardCellsByType[]> => {
-      const { data, error } = await supabase.rpc("dashboard_cells_by_type");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
-
 /** Já vem ordenado pelo total de células (maior primeiro); inclui casais com 0 células. */
 export function useDashboardG12Ranking({ enabled = true }: DashboardQueryOptions = {}) {
   return useQuery({
     enabled,
-    queryKey: ["dashboard", "g12-ranking"],
+    queryKey: DASHBOARD_G12_RANKING_KEY,
     retry: retryUnlessPermissionDenied,
     queryFn: async (): Promise<DashboardG12Couple[]> => {
       const { data, error } = await supabase.rpc("dashboard_g12_ranking");
@@ -61,4 +43,15 @@ export function useDashboardG12Ranking({ enabled = true }: DashboardQueryOptions
       return data ?? [];
     },
   });
+}
+
+/**
+ * A consulta foi invalidada (por uma gravação desta aba, pelas funções de
+ * `query-refresh.ts`, ou pela mudança do próprio acesso) e ainda não buscou com
+ * sucesso (E2.14, DT-07, DA-3). Lido no render, que se repete a cada mudança
+ * da consulta; a busca que falha não limpa a marca, e a que dá certo limpa.
+ */
+export function useInvalidatedByWrite(queryKey: QueryKey): boolean {
+  const queryClient = useQueryClient();
+  return queryClient.getQueryState(queryKey)?.isInvalidated === true;
 }

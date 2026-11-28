@@ -1,5 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
 import { ActionsCell, ActionsHead } from "@/components/ActionsColumn";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CellStatusBadge } from "@/components/StatusBadges";
 import { CellDetailLink, CellG12, CellMeeting } from "@/components/cells/CellListParts";
 import { cellDetailPath } from "@/lib/cells/detail";
+import { useRowLink } from "@/hooks/use-row-link";
 import ReportStatus from "@/components/cells/ReportStatus";
 import type { CellListRow } from "@/lib/cells/fields";
 import { REPORT_STATUS_TEXTS } from "@/lib/cells/report-status";
@@ -35,12 +35,8 @@ interface CellsTableProps {
  * link recebe o foco.
  */
 const CellsTable = ({ rows, isLoading, refreshing, renderActions, caption }: CellsTableProps) => {
-  const navigate = useNavigate();
-  const openRow = (cellId: string) => (event: MouseEvent<HTMLTableRowElement>) => {
-    if (event.target instanceof Element && event.target.closest("a, button, [role='menuitem']")) return;
-    if (window.getSelection()?.toString()) return;
-    navigate(cellDetailPath(cellId), { state: { fromList: true } });
-  };
+  const rowLink = useRowLink();
+  const openRow = (cellId: string) => rowLink(cellDetailPath(cellId), { state: { fromList: true } });
   const actions = rows.map(renderActions);
   const showActions = actions.some((a) => a !== null);
   const columnCount = showActions ? 7 : 6;

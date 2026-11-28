@@ -18,3 +18,8 @@ function toDayMonth(isoDate: string): string {
 export function formatWeekRange(weekStart: string, weekEnd: string): string {
   return `${toDayMonth(weekStart)} - ${toDayMonth(weekEnd)}`;
 }
+
+/** "de 22/11 a 28/11": a semana para o leitor de tela (Textos da UX), sem `Date`. */
+export function formatWeekRangeSpoken(weekStart: string, weekEnd: string): string {
+  return `de ${toDayMonth(weekStart)} a ${toDayMonth(weekEnd)}`;
+}
