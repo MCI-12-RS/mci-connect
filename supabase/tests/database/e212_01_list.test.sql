@@ -393,7 +393,7 @@ BEGIN
   _l := pg_temp.run_as(_n, format($q$
     SELECT jsonb_build_object(
       'sent', public.cell_reports_list_count(_date_from => w.this_week_start, _date_to => w.this_week_end),
-      'visitors', (SELECT coalesce(sum(t.visitors_count), 0) FROM public.cell_reports_list(_date_from => w.this_week_start,
+      'visitors', (SELECT coalesce(sum(t.visitors_count) FILTER (WHERE t.was_held), 0) FROM public.cell_reports_list(_date_from => w.this_week_start,
                                                                    _date_to => w.this_week_end, _limit => 100) t),
       'not_held', public.cell_reports_list_count(_date_from => w.this_week_start, _date_to => w.this_week_end, _held => false),
       'held', public.cell_reports_list_count(_date_from => w.this_week_start, _date_to => w.this_week_end, _held => true))

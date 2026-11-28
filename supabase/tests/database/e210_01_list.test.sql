@@ -439,7 +439,7 @@ SELECT is(pg_temp.run_as(n, 'SELECT to_jsonb(bool_and(d.total = public.cells_lis
   'true'::jsonb, 'RN-21: ' || nm || ': cada tipo de "Células por tipo" = a lista com o Tipo')
   FROM (VALUES (15, 'Rita'), (3, 'Pedro'), (7, 'André')) p(n, nm);
 SELECT is(pg_temp.run_as(n, $q$SELECT to_jsonb(bool_and(d.total_cells = public.cells_list_count(
-      _g12_ids => string_to_array(d.couple_key, '|')::uuid[], _is_active => true)) AND count(*) > 0)
+      _g12_ids => d.g12_ids, _is_active => true)) AND count(*) > 0)
     FROM public.dashboard_g12_ranking() d$q$),
   'true'::jsonb, 'RN-21: ' || nm || ': cada casal de "Células por G12" = a lista com os dois no G12 e Ativa')
   FROM (VALUES (15, 'Rita'), (3, 'Pedro'), (7, 'André')) p(n, nm);
