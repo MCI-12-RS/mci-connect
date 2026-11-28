@@ -1,9 +1,10 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
+import { clearReturnPosition, readReturnPosition, sessionStore, writeReturnPosition } from "@/lib/navigation/return-position";
 
-/** A chave do `sessionStorage` com o id da célula aberta no detalhe (AQ-8). */
-const STORAGE_KEY = "mci:cells:return-focus";
+/** A tela no `return-position.ts` (o mesmo armazenamento da volta do Dashboard, E2.14). */
+const RETURN_SCOPE = "cells";
 
 /** O atributo do link de cada célula na lista (P81), que a volta procura. */
 export const CELL_LINK_ATTRIBUTE = "data-cell-link";
@@ -15,17 +16,9 @@ export interface ListReturnState {
 
 export const FROM_DETAIL_STATE: ListReturnState = { fromDetail: true };
 
-function storage(): Storage | null {
-  try {
-    return typeof window === "undefined" ? null : window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
 /** Grava o id da célula aberta no detalhe: a lista volta a ela (E2.10, UXD-10, AQ-8). */
 export function rememberOpenedCell(cellId: string): void {
-  storage()?.setItem(STORAGE_KEY, cellId);
+  writeReturnPosition(sessionStore(), RETURN_SCOPE, { key: cellId, y: typeof window === "undefined" ? 0 : window.scrollY });
 }
 
 function fromDetail(state: unknown): boolean {
@@ -50,17 +43,17 @@ export function useListReturnFocus(ready: boolean, headingRef: RefObject<HTMLEle
   // Lido uma vez, na montagem da lista: só a volta do detalhe vale.
   const pending = useRef<string | null | undefined>(undefined);
   if (pending.current === undefined) {
-    const stored = storage()?.getItem(STORAGE_KEY) ?? null;
+    const stored = readReturnPosition(sessionStore(), RETURN_SCOPE)?.key ?? null;
     const returning = navigationType === "POP" || fromDetail(location.state);
     pending.current = returning ? stored : null;
-    if (stored !== null && !returning) storage()?.removeItem(STORAGE_KEY);
+    if (stored !== null && !returning) clearReturnPosition(sessionStore(), RETURN_SCOPE);
   }
 
   useEffect(() => {
     const cellId = pending.current;
     if (!ready || !cellId) return;
     pending.current = null;
-    storage()?.removeItem(STORAGE_KEY);
+    clearReturnPosition(sessionStore(), RETURN_SCOPE);
     const link = Array.from(document.querySelectorAll<HTMLElement>(`[${CELL_LINK_ATTRIBUTE}]`)).find(
       (element) => element.getAttribute(CELL_LINK_ATTRIBUTE) === cellId,
     );
