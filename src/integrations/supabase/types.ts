@@ -2171,6 +2171,7 @@ export type Database = {
         Returns: {
           couple_key: string
           female_cells: number
+          g12_ids: string[]
           male_cells: number
           name: string
           spouse_name: string
@@ -2180,15 +2181,21 @@ export type Database = {
       dashboard_summary: {
         Args: { _at?: string }
         Returns: {
+          cells_discipleship: number
+          cells_evangelistic: number
+          cells_macrocell: number
+          cells_new: number
           cells_not_held: number
           cells_pending: number
           members_active: number
           members_baptized: number
           members_inactive: number
+          members_new: number
           members_not_baptized: number
           members_total: number
           members_without_cell_link: number
           members_without_leader: number
+          reports_held: number
           reports_sent: number
           visitors: number
           week_end: string

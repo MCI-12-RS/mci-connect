@@ -313,7 +313,9 @@ BEGIN
 
   RETURN NEXT is(
     ARRAY[s.reports_sent, s.visitors, s.cells_not_held],
-    (SELECT ARRAY[count(*), coalesce(sum(cardinality(r.visitors)), 0), count(*) FILTER (WHERE NOT r.was_held)]
+    -- E2.14 (RN-05): os visitantes só de célula realizada.
+    (SELECT ARRAY[count(*), coalesce(sum(cardinality(r.visitors)) FILTER (WHERE r.was_held), 0),
+                  count(*) FILTER (WHERE NOT r.was_held)]
        FROM public.cell_reports r
       WHERE r.date BETWEEN _ws AND _we),
     _who || ': relatórios, visitantes e não realizadas = cell_reports da semana sob RLS (RN-05)');
@@ -410,13 +412,15 @@ SELECT is(pg_get_function_result('public.dashboard_summary(timestamptz)'::regpro
   'TABLE(week_start date, week_end date, reports_sent bigint, cells_pending bigint, visitors bigint, '
   || 'cells_not_held bigint, members_total bigint, members_active bigint, members_inactive bigint, '
   || 'members_baptized bigint, members_not_baptized bigint, members_without_leader bigint, '
-  || 'members_without_cell_link bigint)',
+  || 'members_without_cell_link bigint, reports_held bigint, members_new bigint, cells_new bigint, '
+  || 'cells_evangelistic bigint, cells_discipleship bigint, cells_macrocell bigint)',
   'dashboard_summary: colunas na ordem do contrato do spec');
 SELECT is(pg_get_function_result('public.dashboard_cells_by_type()'::regprocedure),
   'TABLE(cell_type text, total bigint)',
   'dashboard_cells_by_type: colunas do contrato');
 SELECT is(pg_get_function_result('public.dashboard_g12_ranking()'::regprocedure),
-  'TABLE(couple_key text, name text, spouse_name text, male_cells bigint, female_cells bigint, total_cells bigint)',
+  'TABLE(couple_key text, name text, spouse_name text, male_cells bigint, female_cells bigint, total_cells bigint, '
+  || 'g12_ids uuid[])',
   'dashboard_g12_ranking: colunas do contrato');
 SELECT is(pg_get_function_arguments('public.dashboard_summary(timestamptz)'::regprocedure),
   '_at timestamp with time zone DEFAULT now()',
