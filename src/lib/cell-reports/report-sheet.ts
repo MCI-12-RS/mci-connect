@@ -1,182 +1,205 @@
-// Consulta do relatório ("Ver relatório", E2.01 T7 e UXD-7): quando o painel
-// abre e o que ele mostra.
-import { getDay, isValid, parseISO } from "date-fns";
-import { formatMeetingTime } from "@/lib/cells/labels";
-import { WEEKDAYS } from "@/lib/cells/weekdays";
-import { sortAlphabetically } from "@/lib/collation";
+// A consulta "Ver relatório" (E2.12, T10 a T13; P92; RN-16 e RN-17): o parâmetro da URL, como fechar,
+// o que o painel mostra (com a prévia da linha da lista, T12) e as ações. Sem React e sem Supabase.
+
+import { addressLines, weekdayOfDate } from "@/lib/cells/detail";
+import { formatG12Label, cellG12, formatMeetingTime } from "@/lib/cells/labels";
+import { formatIsoDateBr } from "@/lib/dates/sao-paulo";
 import { leaderLabel } from "@/lib/deletion/targets";
-import { CELL_REPORT_SHEET_TEXTS } from "@/lib/deletion/texts";
-import { formatCurrency } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { UNNAMED_MEMBER_LABEL } from "@/lib/members/fields";
 import { withSearchParam } from "@/lib/navigation";
-import type { CellReportDetail, CellReportDetailRow } from "./fields";
-import { formatReportDate } from "./labels";
+import type { CellReportDetailRow, CellReportListRow } from "./fields";
+import { cellIdentityChipText, REPORT_PARAM } from "./filters";
+import { formatOffering } from "./labels";
+import { REPORT_SHEET_TEXTS as TEXTS } from "./texts";
 
-const TEXTS = CELL_REPORT_SHEET_TEXTS;
-
-/** O parâmetro da URL que abre o painel: `/cell-reports?report=<id>`. */
-export const REPORT_PARAM = "report";
+export { REPORT_PARAM };
 
 /** A lista de células excluídas, para onde o "Ver células excluídas" leva. */
 const DELETED_CELLS_PATH = "/cells/deleted";
 
-/**
- * - `closed`: sem parâmetro, ou esperando as permissões (o parâmetro fica na URL);
- * - `open`: o painel abre (carregando, com erro, sem o relatório ou com ele);
- * - `dismiss`: o parâmetro é ignorado e sai da URL.
- */
-export type ReportSheetState = "closed" | "open" | "dismiss";
-
-export interface ReportSheetInput {
-  /** O `report` da URL. */
-  reportId: string | null;
-  /** As permissões do usuário já chegaram (`AuthContext`). */
-  permissionsLoaded: boolean;
-  /** Quem consulta o relatório: `edit_cell_report` (P-DEL-19). */
-  canView: boolean;
-  /** O relatório lido: `undefined` enquanto carrega (ou se falhou); `null` se ele não veio. */
-  detail: CellReportDetail | null | undefined;
-  /**
-   * A linha desse relatório, na lista da tela, já diz que a célula foi
-   * excluída (o "Ver relatório" foi tocado): o painel abre na hora, com o
-   * `Skeleton`, sem esperar a leitura.
-   */
-  knownCellDeleted: boolean;
-  /** A leitura do relatório falhou. */
-  failed: boolean;
-  /**
-   * O painel já está aberto para este relatório. Ele continua aberto enquanto
-   * lê de novo: no "Tentar de novo", a leitura volta a carregar, sem o erro.
-   */
-  alreadyOpen: boolean;
+/** O `report` da URL, só com o formato de id; o inválido sai na limpeza dos filtros (`parseCellReportFilters`). */
+export function readReportParam(params: URLSearchParams): string | null {
+  const raw = params.get(REPORT_PARAM);
+  return raw !== null && isUuid(raw) ? raw : null;
 }
 
-/** O que decide se o relatório da URL é lido. */
-type ReportToReadInput = Pick<ReportSheetInput, "reportId" | "permissionsLoaded" | "canView">;
+/** O estado da navegação que a lista põe ao abrir a consulta pela linha (AQ-8). */
+export interface ReportSheetLocationState {
+  reportFromList?: boolean;
+}
 
-/**
- * O relatório da URL que a tela lê para o painel: só depois que as permissões
- * chegam, para quem consulta e com um id bem formado (UUID). Nos demais
- * casos, nada é lido (`reportSheetState` decide o que fazer com o parâmetro).
- */
-export function reportIdToRead({ reportId, permissionsLoaded, canView }: ReportToReadInput): string | null {
-  return reportId && permissionsLoaded && canView && isUuid(reportId) ? reportId : null;
+/** Aberta pela linha? (o estado da navegação traz `reportFromList`). */
+export function openedFromList(state: unknown): boolean {
+  return typeof state === "object" && state !== null && "reportFromList" in state && state.reportFromList === true;
 }
 
 /**
- * O que fazer com o `report` da URL (Navegação e rotas, PO-UX-3). Ele só abre
- * o painel para quem tem `edit_cell_report` e para relatório de célula
- * excluída; nos demais casos, é ignorado e sai da URL. Um id malformado sai
- * da URL na hora, sem consultar o banco. Enquanto as permissões não chegam,
- * nada mais é decidido.
- *
- * Quando a tela ainda não sabe se a célula foi excluída (link direto ou
- * recarregar, antes da leitura), o painel espera fechado: abrir e fechar em
- * seguida faria o painel piscar e levaria o foco para a busca. Se a leitura
- * falhar, ele abre com "Tentar de novo".
- *
- * Uma vez aberto para um relatório, o painel só fecha pela pessoa ou quando
- * o parâmetro sai da URL (QA-E201-PR4-1): ler de novo não o fecha.
- *
- * O relatório que não vem (excluído no meio tempo, fora do escopo ou um id
- * que não existe) abre o painel com "Este relatório não existe ou já foi
- * excluído.": a tela não sabe dizer de qual caso se trata.
+ * Como fechar (AQ-8): `back` quando a consulta foi aberta pela linha (volta a entrada que ela criou);
+ * `replace` quando veio por link (tira o `report` sem mexer no histórico).
  */
-export function reportSheetState({
-  reportId,
-  permissionsLoaded,
-  canView,
-  detail,
-  knownCellDeleted,
-  failed,
-  alreadyOpen,
-}: ReportSheetInput): ReportSheetState {
-  if (!reportId) return "closed";
-  if (!isUuid(reportId)) return "dismiss";
-  if (!permissionsLoaded) return "closed";
-  if (!canView) return "dismiss";
-  if (detail) return detail.report.cell_deleted === true ? "open" : "dismiss";
-  if (detail === null || knownCellDeleted || failed || alreadyOpen) return "open";
-  return "closed";
+export function closeMode(state: unknown): "back" | "replace" {
+  return openedFromList(state) ? "back" : "replace";
 }
 
-/** O que o painel mostra nos dois casos. */
-interface ReportSheetCommon {
-  /** "Relatório de 19/11/2026". */
+/** "Quarta, 18/11/2026 às 20:00": a data e a hora do relatório já são as de Brasília. */
+export function reportSheetDateTime(date: string | null, time: string | null): string {
+  if (!date) return "";
+  return TEXTS.dateTime(weekdayOfDate(date), formatIsoDateBr(date), formatMeetingTime(time));
+}
+
+export interface SheetLine {
+  label: string;
+  value: string;
+  /** "—" lido como "nenhum" (`sr-only`). */
+  none?: boolean;
+}
+
+/** O que a consulta mostra (T10). Os campos `null` ainda não chegaram (`Skeleton`, T12). */
+export interface ReportSheetView {
+  /** "Relatório de 18/11/2026". */
   title: string;
-  /** "Célula de Carlos Lima". */
+  /** "18/11/2026", para os nomes acessíveis. */
+  dateBr: string;
+  /** "Célula de André Souza · Quarta · 20:00", com os dados atuais da célula (P-LRE-22). */
   cellLine: string;
+  held: boolean;
   cellDeleted: boolean;
-  /** "/cells/deleted?q=Carlos+Lima": a lista de células excluídas, já buscando o líder. */
+  /** O líder atual, nos nomes acessíveis dos links ("Ver a célula de …"). */
+  cellLeader: string;
   deletedCellsPath: string;
-  /** "Quarta, 19/11/2026 às 20:00". */
-  dateTime: string;
-  observations: string;
+  meeting: {
+    /** "Data e horário" ou, em "Não houve célula", "Reunião prevista". */
+    dateLabel: string;
+    dateTime: string;
+    theme: string | null;
+    reason: string | null;
+    offering: string | null;
+    observations: string | null;
+    /** O número que a linha já tem, para reservar a altura dos nomes (AQ-6). */
+    participantsCount: number;
+    /** Na ordem registrada, só os com nome. */
+    visitors: string[];
+  };
+  /** Pessoas da célula (o retrato) e o tipo registrado; `null` até a leitura chegar. */
+  people: SheetLine[] | null;
+  /** O endereço atual em até quatro linhas (vazio: "Sem endereço"); `null` até a leitura chegar. */
+  address: string[] | null;
 }
 
-/** Relatório de célula realizada. */
-export interface HeldReportSheetView extends ReportSheetCommon {
-  // Um texto, e não `held: boolean`: sem o modo estrito do TypeScript, só o
-  // texto separa os dois casos.
-  status: "held";
-  theme: string;
-  /** Todos os participantes, pelo nome, inclusive os excluídos (RN-13), em ordem alfabética do português. */
-  participants: string[];
-  /** Quantos visitantes têm nome. */
-  visitorsCount: number;
-  /** "João, Maria", ou "Nenhum visitante.". */
-  visitors: string;
-  /** "R$ 50,00", ou "Não informado". */
-  offering: string;
-}
-
-/** "Não houve célula": a situação e o motivo, sem tema, participantes, visitantes e oferta (T7). */
-export interface NotHeldReportSheetView extends ReportSheetCommon {
-  status: "notHeld";
-  reason: string;
-}
-
-export type ReportSheetView = HeldReportSheetView | NotHeldReportSheetView;
-
-/** O texto, ou "Não informado" quando vazio. */
-function orNotInformed(value: string | null | undefined): string {
-  return value?.trim() || TEXTS.notInformed;
-}
+const trimmed = (value: string | null | undefined): string | null => value?.trim() || null;
 
 /**
- * "Quarta, 19/11/2026 às 20:00". A data e a hora do relatório já são as de
- * Brasília (colunas `date` e `time`, sem fuso): nada é convertido, e o dia
- * não muda com o fuso do navegador.
+ * O que a consulta mostra (T10, T12): com a leitura por id, tudo; só com a linha da lista, o topo e o
+ * conteúdo do relatório, e as pessoas e o endereço completo ficam para a leitura. Em "Não houve
+ * célula", só o motivo e as observações (P-LRE-34), mesmo que o legado traga mais.
  */
-export function reportDateTime(report: Pick<CellReportDetailRow, "date" | "time">): string {
-  const day = report.date ? parseISO(report.date) : null;
-  if (!day || !isValid(day)) return TEXTS.notInformed;
-  return TEXTS.dateTime(WEEKDAYS[getDay(day)], formatReportDate(report.date), formatMeetingTime(report.time));
+export function toReportSheetView(
+  detail: CellReportDetailRow | null | undefined,
+  preview: CellReportListRow | null | undefined,
+): ReportSheetView | null {
+  const source: CellReportListRow | null = detail ?? preview ?? null;
+  if (!source) return null;
+  const held = source.was_held === true;
+  const dateBr = source.date ? formatIsoDateBr(source.date) : "";
+  const cellLeader = leaderLabel(source.cell_leader_name);
+  const visitors = held ? (source.visitors ?? []).map((name) => name.trim()).filter(Boolean) : [];
+  return {
+    title: dateBr ? TEXTS.reportOf(dateBr) : TEXTS.title,
+    dateBr,
+    cellLine: cellIdentityChipText({
+      leader_name: source.cell_leader_name,
+      meeting_day: source.cell_meeting_day,
+      meeting_time: source.cell_meeting_time,
+    }),
+    held,
+    cellDeleted: source.cell_deleted === true,
+    cellLeader,
+    deletedCellsPath: source.cell_leader_name ? withSearchParam(DELETED_CELLS_PATH, source.cell_leader_name) : DELETED_CELLS_PATH,
+    meeting: {
+      dateLabel: held ? TEXTS.fields.dateTime : TEXTS.fields.plannedMeeting,
+      dateTime: reportSheetDateTime(source.date, source.time),
+      theme: held ? trimmed(source.theme) : null,
+      reason: held ? null : trimmed(source.reason_not_held),
+      offering: held ? formatOffering(source.offering) : null,
+      observations: trimmed(source.observations),
+      participantsCount: held ? (source.participants_count ?? 0) : 0,
+      visitors,
+    },
+    people: detail ? peopleLines(detail) : null,
+    address: detail
+      ? addressLines({
+          street: detail.cell_street,
+          number: detail.cell_number,
+          complement: detail.cell_complement,
+          neighborhood: detail.cell_neighborhood,
+          city: detail.cell_city,
+          state: detail.cell_state,
+          zip_code: detail.cell_zip_code,
+        })
+      : null,
+  };
 }
 
-/** O que o painel mostra de um relatório (T7). */
-export function toReportSheetView({ report, participants }: CellReportDetail): ReportSheetView {
-  // "Célula de {líder registrado}" (E2.11, T10); a busca das células excluídas é pelo líder de hoje.
-  const leader = leaderLabel(report.snapshot_leader_name);
-  const common: ReportSheetCommon = {
-    title: report.date ? TEXTS.reportOf(formatReportDate(report.date)) : TEXTS.title,
-    cellLine: TEXTS.cellOf(leader),
-    cellDeleted: report.cell_deleted === true,
-    deletedCellsPath: report.cell_leader_name ? withSearchParam(DELETED_CELLS_PATH, report.cell_leader_name) : DELETED_CELLS_PATH,
-    dateTime: reportDateTime(report),
-    observations: orNotInformed(report.observations),
+/** Líder, Timóteo e Anfitrião do retrato, o G12 atual do líder registrado e o tipo registrado (UXD-12). */
+function peopleLines(detail: CellReportDetailRow): SheetLine[] {
+  const L = TEXTS.peopleLabels;
+  const g12Parts = {
+    g12_leader_name: detail.snapshot_g12_leader_name,
+    leader_g12_level: detail.snapshot_leader_g12_level,
+    leader_is_pastor: detail.snapshot_leader_is_pastor,
+    leader_name: detail.snapshot_leader_name,
   };
-  if (report.was_held !== true) return { ...common, status: "notHeld", reason: orNotInformed(report.reason_not_held) };
+  const name = (value: string | null) => value?.trim() || UNNAMED_MEMBER_LABEL;
+  return [
+    { label: L.leader, value: name(detail.snapshot_leader_name) },
+    { label: L.timothy, value: name(detail.snapshot_timothy_name) },
+    { label: L.host, value: name(detail.snapshot_host_name) },
+    { label: L.g12, value: formatG12Label(g12Parts), none: cellG12(g12Parts).kind === "none" },
+    { label: L.type, value: detail.snapshot_cell_type ?? "" },
+  ];
+}
 
-  const visitors = (report.visitors ?? []).map((name) => name.trim()).filter(Boolean);
+const PT_BR_BASE = new Intl.Collator("pt-BR", { sensitivity: "base" });
+
+/** Um participante como a consulta o mostra: o nome e o id (desempate da ordem). */
+export interface SheetParticipant {
+  member_id: string | null;
+  member_name: string | null;
+}
+
+/** Os nomes dos participantes, sem diferenciar acentos, e o id no empate (DA-8). O excluído aparece igual. */
+export function sortParticipantNames(participants: readonly SheetParticipant[]): string[] {
+  return [...participants]
+    .map((p) => ({ id: p.member_id ?? "", name: p.member_name?.trim() || UNNAMED_MEMBER_LABEL }))
+    .sort((a, b) => PT_BR_BASE.compare(a.name, b.name) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((p) => p.name);
+}
+
+/** As permissões de quem consulta que decidem as ações. */
+export type HasPermission = (permission: "edit_cell_report" | "delete_cell_report" | "manage_roles") => boolean;
+
+export interface ReportSheetActions {
+  /** "Editar relatório": "Editar Relatórios de Células" e a célula não excluída (RN-16 c). */
+  edit: boolean;
+  /** "Excluir relatório": "Excluir Relatórios de Células". */
+  delete: boolean;
+  /** "Ver célula": quem consulta vê a célula, e ela não foi excluída (DA-9). */
+  viewCell: boolean;
+  /** "Ver células excluídas", no aviso da célula excluída: só para quem restaura. */
+  seeDeletedCells: boolean;
+  /** "Ver todos os relatórios desta célula": sempre, com a célula. */
+  cellId: string | null;
+}
+
+/** As ações da consulta, só com a leitura por id (antes dela, nenhuma: T12). */
+export function reportSheetActions(has: HasPermission, detail: CellReportDetailRow): ReportSheetActions {
+  const cellDeleted = detail.cell_deleted === true;
   return {
-    ...common,
-    status: "held",
-    theme: orNotInformed(report.theme),
-    participants: sortAlphabetically(participants.map((p) => p.member_name?.trim() || UNNAMED_MEMBER_LABEL)),
-    visitorsCount: visitors.length,
-    visitors: visitors.length > 0 ? visitors.join(", ") : TEXTS.noVisitors,
-    offering: report.offering === null || report.offering === undefined ? TEXTS.notInformed : formatCurrency(report.offering),
+    edit: has("edit_cell_report") && !cellDeleted,
+    delete: has("delete_cell_report"),
+    viewCell: detail.cell_visible === true && !cellDeleted,
+    seeDeletedCells: has("manage_roles"),
+    cellId: detail.cell_id,
   };
 }

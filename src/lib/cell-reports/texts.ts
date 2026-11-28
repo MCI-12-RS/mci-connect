@@ -186,23 +186,49 @@ export const REPORT_RULE_TEXTS = {
   permission_denied: "Você não tem permissão para esta ação.",
 } as const;
 
-/** A lista de Relatórios (T10). */
-export const REPORT_LIST_TEXTS = {
-  newReport: "Novo relatório",
-  g12: (name: string) => `G12: ${name}`,
-  noLeader: "Célula sem líder",
-} as const;
-
-/** O filtro Célula em Relatórios (E2.10, T15, P84; RN-19). */
-export const CELL_REPORT_FILTER_TEXTS = {
-  chip: {
-    loading: "Célula: carregando…",
-    failed: "Célula: não carregada",
-    unavailable: "Célula indisponível",
-    unavailableHint: "Esta célula não está disponível para você.",
+/** A consulta "Ver relatório" (E2.12, T10 a T13; P92 e P94). */
+export const REPORT_SHEET_TEXTS = {
+  /** Enquanto carrega por link e no erro. */
+  title: "Relatório",
+  reportOf: (date: string) => `Relatório de ${date}`,
+  close: "Fechar",
+  /** "Quarta, 18/11/2026 às 20:00"; sem hora, "Quarta, 18/11/2026". */
+  dateTime: (weekday: string, date: string, time: string) =>
+    [weekday, time ? `${date} às ${time}` : date].filter(Boolean).join(", "),
+  sections: {
+    meeting: "Reunião",
+    people: "Pessoas da célula",
+    address: "Endereço da célula",
   },
-  /** "Célula de André Souza · Quarta · 20:00" (o dia na forma curta). */
-  chipText: (leader: string, day: string, time: string) => [`Célula de ${leader}`, day, time].filter(Boolean).join(" · "),
-  clearAll: "Limpar filtros",
-  emptyFiltered: "Nenhum relatório encontrado com estes filtros.",
+  fields: {
+    dateTime: "Data e horário",
+    plannedMeeting: "Reunião prevista",
+    theme: "Tema",
+    reason: "Motivo",
+    offering: "Oferta",
+    observations: "Observações",
+  },
+  participants: (count: number) => `Participantes (${count})`,
+  visitors: (count: number) => `Visitantes (${count})`,
+  noMembers: "Nenhum membro.",
+  noVisitors: "Nenhum visitante.",
+  peopleHint: "Líder, timóteo, anfitrião e tipo como estavam no envio. O G12 é o de hoje.",
+  peopleLabels: { leader: "Líder", timothy: "Timóteo", host: "Anfitrião", g12: "G12", type: "Tipo" },
+  noAddress: "Sem endereço",
+  viewCell: "Ver célula",
+  viewCellLabel: (leader: string) => `Ver a célula de ${leader}`,
+  viewAllReports: "Ver todos os relatórios desta célula",
+  viewAllReportsLabel: (leader: string) => `Ver todos os relatórios da célula de ${leader}`,
+  editReport: "Editar relatório",
+  deleteReport: "Excluir relatório",
+  actionsLabel: (date: string) => `Ações do relatório de ${date}`,
+  seeDeletedCells: "Ver células excluídas",
+  cellDeletedNote: "A célula deste relatório foi excluída. Restaure a célula para editar o relatório.",
+  notFoundTitle: "Relatório não encontrado",
+  notFoundText: "Ele não existe, foi excluído ou não está disponível para você.",
+  loadFailed: "Não foi possível carregar o relatório. Verifique a conexão e tente de novo.",
+  participantsLoadFailed: "Não foi possível carregar os participantes. Verifique a conexão e tente de novo.",
+  tryAgain: "Tentar de novo",
+  /** Não está no spec: anúncio do carregamento para o leitor de tela. */
+  loading: "Carregando o relatório…",
 } as const;

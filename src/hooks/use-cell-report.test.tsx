@@ -2,17 +2,18 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/query-wrapper";
 import { fakeQueries, resetFakeSupabase, respondWith } from "@/test/fake-supabase";
-import { CELL_REPORT_DETAIL_SELECT, REPORT_PARTICIPANT_SELECT } from "@/lib/cell-reports/fields";
+import { CELL_REPORT_DETAIL_SELECT, FORM_PARTICIPANT_SELECT } from "@/lib/cell-reports/fields";
 import { useCellReport } from "./use-cell-report";
+import { useCellReportParticipants } from "./use-cell-report-participants";
 
-// Consulta do relatório de célula excluída (E2.01, T7; RN-09 b, RN-11, RN-13).
+// A consulta "Ver relatório" (E2.12, T10, T12, DT-09): a linha por id e os participantes à parte.
 
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
   return { supabase: fakeSupabase };
 });
 
-const report = { id: "r1", date: "2026-11-19", cell_deleted: true };
+const report = { id: "r1", date: "2026-11-19", cell_deleted: false };
 const participants = [
   { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
   { member_id: "m9", member_name: "Sara Reis", member_deleted: true },
@@ -21,57 +22,30 @@ const participants = [
 describe("useCellReport", () => {
   beforeEach(() => resetFakeSupabase());
 
-  it("lê o relatório na cell_reports_view e todos os participantes na cell_report_participants_view, juntos e na ordem do nome e do id", async () => {
-    respondWith({ data: report }, { data: participants });
+  it("lê só a linha da cell_reports_view por id, sem tocar na tabela", async () => {
+    respondWith({ data: report });
 
     const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data).toEqual({ report, participants });
-    const [reportQuery, participantsQuery] = fakeQueries();
-    expect(reportQuery.table).toBe("cell_reports_view");
-    expect(reportQuery.calls).toEqual([
+    expect(result.current.data).toEqual(report);
+    const [query] = fakeQueries();
+    expect(query.table).toBe("cell_reports_view");
+    expect(query.calls).toEqual([
       ["select", CELL_REPORT_DETAIL_SELECT],
       ["eq", "id", "r1"],
       ["maybeSingle"],
     ]);
-    // Nenhuma leitura da tabela members: o nome vem da view (inclusive o do excluído).
-    expect(participantsQuery.table).toBe("cell_report_participants_view");
-    expect(participantsQuery.calls).toEqual([
-      ["select", REPORT_PARTICIPANT_SELECT],
-      ["eq", "report_id", "r1"],
-      ["order", "member_name"],
-      ["order", "member_id"],
-      ["range", 0, 999],
-    ]);
-    expect(fakeQueries().map((q) => q.table)).not.toContain("members");
+    expect(fakeQueries()).toHaveLength(1);
   });
 
-  it("com mais de 1000 participantes, pede o bloco seguinte (sem o corte do PostgREST)", async () => {
-    const block = Array.from({ length: 1000 }, (_, i) => ({ member_id: `m${i}`, member_name: `Membro ${i}`, member_deleted: false }));
-    respondWith({ data: report }, { data: block }, { data: [participants[1]] });
-
-    const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(result.current.data?.participants).toHaveLength(1001);
-    expect(fakeQueries()[2].calls).toContainEqual(["range", 1000, 1999]);
-  });
-
-  it("relatório que não veio (excluído no meio tempo ou fora do escopo): null", async () => {
-    respondWith({ data: null }, { data: [] });
+  it("relatório que não veio (excluído, fora do escopo ou inexistente): null", async () => {
+    respondWith({ data: null });
 
     const { result } = renderHook(() => useCellReport("sumiu"), { wrapper: createQueryWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toBeNull();
-  });
-
-  it("um erro no relatório ou nos participantes vira erro da consulta", async () => {
-    respondWith({ data: report }, { error: { code: "XX000", message: "falhou" } });
-
-    const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
-    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
   describe("novas tentativas", () => {
@@ -80,41 +54,28 @@ describe("useCellReport", () => {
 
     it("um erro do servidor aparece na hora, sem nova tentativa", async () => {
       vi.useFakeTimers();
-      respondWith({ error: { code: "XX000", message: "falhou" } }, { data: [] }, { data: report }, { data: participants });
+      respondWith({ error: { code: "XX000", message: "falhou" } }, { data: report });
 
       const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
       await act(() => vi.advanceTimersByTimeAsync(60_000));
 
       expect(result.current.isError).toBe(true);
-      expect(fakeQueries()).toHaveLength(2);
+      expect(fakeQueries()).toHaveLength(1);
     });
 
-    it("na queda de conexão, tenta de novo uma vez só, e o erro aparece em seguida", async () => {
+    it("na queda de conexão, tenta de novo uma vez só", async () => {
       vi.useFakeTimers();
-      respondWith({ error: offline }, { data: [] }, { error: offline }, { data: [] }, { data: report }, { data: participants });
-
-      const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
-      await act(() => vi.advanceTimersByTimeAsync(1_100));
-      expect(result.current.isError).toBe(true);
-      await act(() => vi.advanceTimersByTimeAsync(60_000));
-
-      expect(result.current.isError).toBe(true);
-      expect(fakeQueries()).toHaveLength(4);
-    });
-
-    it("na queda de conexão, a nova tentativa que dá certo traz o relatório", async () => {
-      vi.useFakeTimers();
-      respondWith({ error: offline }, { data: [] }, { data: report }, { data: participants });
+      respondWith({ error: offline }, { data: report });
 
       const { result } = renderHook(() => useCellReport("r1"), { wrapper: createQueryWrapper() });
       await act(() => vi.advanceTimersByTimeAsync(1_100));
 
-      expect(result.current.data).toEqual({ report, participants });
+      expect(result.current.data).toEqual(report);
     });
   });
 
-  it("desligado (painel fechando), não consulta, mas devolve o que já leu desse relatório", async () => {
-    respondWith({ data: report }, { data: participants });
+  it("desligado (painel fechando), não consulta, mas devolve o que já leu", async () => {
+    respondWith({ data: report });
     const { result, rerender } = renderHook(({ enabled }) => useCellReport("r1", { enabled }), {
       wrapper: createQueryWrapper(),
       initialProps: { enabled: true },
@@ -122,8 +83,8 @@ describe("useCellReport", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     rerender({ enabled: false });
-    expect(result.current.data).toEqual({ report, participants });
-    expect(fakeQueries()).toHaveLength(2);
+    expect(result.current.data).toEqual(report);
+    expect(fakeQueries()).toHaveLength(1);
   });
 
   it("sem relatório escolhido, não consulta nada", () => {
@@ -131,5 +92,37 @@ describe("useCellReport", () => {
 
     expect(result.current.fetchStatus).toBe("idle");
     expect(fakeQueries()).toHaveLength(0);
+  });
+});
+
+describe("useCellReportParticipants (RN-17)", () => {
+  beforeEach(() => resetFakeSupabase());
+
+  it("lê todos os participantes na cell_report_participants_view, na ordem do nome e do id, em blocos de 1000", async () => {
+    const block = Array.from({ length: 1000 }, (_, i) => ({ member_id: `m${i}`, member_name: `Membro ${i}`, member_deleted: false }));
+    respondWith({ data: block }, { data: [participants[1]] });
+
+    const { result } = renderHook(() => useCellReportParticipants("r1"), { wrapper: createQueryWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toHaveLength(1001);
+    const [first, second] = fakeQueries();
+    expect(first.table).toBe("cell_report_participants_view");
+    expect(first.calls).toEqual([
+      ["select", FORM_PARTICIPANT_SELECT],
+      ["eq", "report_id", "r1"],
+      ["order", "member_name"],
+      ["order", "member_id"],
+      ["range", 0, 999],
+    ]);
+    expect(second.calls).toContainEqual(["range", 1000, 1999]);
+    expect(fakeQueries().map((q) => q.table)).not.toContain("members");
+  });
+
+  it("um erro só nos participantes fica nos participantes", async () => {
+    respondWith({ error: { code: "XX000", message: "falhou" } });
+
+    const { result } = renderHook(() => useCellReportParticipants("r1"), { wrapper: createQueryWrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

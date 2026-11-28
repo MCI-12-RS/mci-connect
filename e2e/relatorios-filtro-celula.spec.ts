@@ -38,14 +38,14 @@ test("Pedro: o chip de C1, R1, R2, R4 e R5 ('4 relatórios'); tirar o chip mostr
   const chip = page.getByRole("button", { name: `Remover filtro ${C1_CHIP}` });
   await expect(chip).toBeVisible();
   await expect(total(page)).toHaveText("4 relatórios");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Relatórios de Células");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Relatórios");
   // UX-26: o chip tem 36 px e "Limpar filtros", 44 px.
   expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(36);
   expect((await page.getByRole("button", { name: "Limpar filtros" }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await chip.click();
   await expect(chip).toHaveCount(0);
   await expect(page).not.toHaveURL(/cell=/);
-  await expect(page.getByLabel("Buscar relatórios")).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Filtros/ })).toBeFocused();
   // Sem o filtro, Pedro vê também os de C6 (R9) e de C5 (R6, pelos discípulos).
   await expect(total(page)).not.toHaveText("4 relatórios");
 });

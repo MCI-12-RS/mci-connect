@@ -1,266 +1,151 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
-import type { CellReportDetail, CellReportDetailRow } from "./fields";
-import { reportDateTime, reportIdToRead, reportSheetState, toReportSheetView, type ReportSheetInput } from "./report-sheet";
-import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
+import { describe, it, expect } from "vitest";
+import {
+  closeMode,
+  readReportParam,
+  reportSheetActions,
+  reportSheetDateTime,
+  sortParticipantNames,
+  toReportSheetView,
+  type HasPermission,
+} from "./report-sheet";
+import { reportDetailRow, reportListRow } from "@/test/report-snapshot-fixture";
 
-// Consulta do relatório de célula excluída (E2.01, T7, UXD-7; RN-09 b, RN-11 e
-// RN-13; UX-26 e UX-27).
+// A consulta "Ver relatório" (E2.12, T10 a T13; RN-16, RN-17; AQ-8; DA-8, DA-9).
 
-const report = (overrides: Partial<CellReportDetailRow> = {}): CellReportDetailRow => ({
-  id: "r1",
-  date: "2026-11-19",
-  time: "20:00:00",
-  theme: "Fé que move montanhas",
-  observations: null,
-  visitors: ["João", "Maria"],
-  offering: 50,
-  was_held: true,
-  reason_not_held: null,
-  cell_leader_name: "Carlos Lima",
-  cell_deleted: true,
-  created_at: "2026-11-19T23:30:00Z",
-  created_by_kind: "member",
-  created_by_name: "Carla Dias",
-  updated_at: null,
-  updated_by_kind: null,
-  updated_by_name: null,
-  ...reportSnapshotColumns(overrides.cell_leader_name !== undefined ? overrides.cell_leader_name : "Carlos Lima"),
-  ...overrides,
-});
+const ID = "11111111-1111-4111-8111-111111111111";
 
-const detail = (overrides: Partial<CellReportDetailRow> = {}, participants: CellReportDetail["participants"] = []): CellReportDetail => ({
-  report: report(overrides),
-  participants,
-});
-
-// O Intl separa o "R$" do valor com um espaço inseparável.
-const brl = (text: string) => text.replace(" ", " ");
-
-const REPORT_ID = "3f2b8c1e-9a4d-4e6f-8b7a-1c2d3e4f5a6b";
-
-describe("reportIdToRead: o relatório da URL que a tela lê", () => {
-  const input = { reportId: REPORT_ID, permissionsLoaded: true, canView: true };
-
-  it("lê o relatório depois das permissões, para quem consulta", () => {
-    expect(reportIdToRead(input)).toBe(REPORT_ID);
+describe("readReportParam e closeMode (AQ-8)", () => {
+  it("só o id com formato abre a consulta", () => {
+    expect(readReportParam(new URLSearchParams(`report=${ID}`))).toBe(ID);
+    expect(readReportParam(new URLSearchParams("report=xyz"))).toBeNull();
+    expect(readReportParam(new URLSearchParams(""))).toBeNull();
   });
 
-  it("não lê nada sem o parâmetro, antes das permissões ou sem edit_cell_report", () => {
-    expect(reportIdToRead({ ...input, reportId: null })).toBeNull();
-    expect(reportIdToRead({ ...input, permissionsLoaded: false })).toBeNull();
-    expect(reportIdToRead({ ...input, canView: false })).toBeNull();
-  });
-
-  it("id malformado: não lê o banco", () => {
-    expect(reportIdToRead({ ...input, reportId: "abc" })).toBeNull();
-    expect(reportIdToRead({ ...input, reportId: `${REPORT_ID}x` })).toBeNull();
+  it("aberta pela linha, fechar volta a entrada; por link, tira o parâmetro com replace", () => {
+    expect(closeMode({ reportFromList: true })).toBe("back");
+    expect(closeMode(null)).toBe("replace");
+    expect(closeMode({ fromList: true })).toBe("replace");
   });
 });
 
-describe("reportSheetState: o ?report=<id> da URL (Navegação e rotas, PO-UX-3)", () => {
-  const input = (overrides: Partial<ReportSheetInput>): ReportSheetInput => ({
-    reportId: REPORT_ID,
-    permissionsLoaded: true,
-    canView: true,
-    detail: undefined,
-    knownCellDeleted: false,
-    failed: false,
-    alreadyOpen: false,
-    ...overrides,
-  });
-
-  it("sem o parâmetro, o painel fica fechado", () => {
-    expect(reportSheetState(input({ reportId: null }))).toBe("closed");
-  });
-
-  it("enquanto as permissões não chegam, nada é decidido: o parâmetro fica e o painel não abre", () => {
-    expect(reportSheetState(input({ permissionsLoaded: false, canView: false }))).toBe("closed");
-  });
-
-  it("id malformado: sai da URL na hora, mesmo antes das permissões, sem abrir o painel", () => {
-    expect(reportSheetState(input({ reportId: "abc" }))).toBe("dismiss");
-    expect(reportSheetState(input({ reportId: "abc", permissionsLoaded: false }))).toBe("dismiss");
-    expect(reportSheetState(input({ reportId: "abc", failed: true, alreadyOpen: true }))).toBe("dismiss");
-  });
-
-  it("sem edit_cell_report, o parâmetro é ignorado e sai da URL", () => {
-    expect(reportSheetState(input({ canView: false }))).toBe("dismiss");
-    expect(reportSheetState(input({ canView: false, detail: detail() }))).toBe("dismiss");
-    expect(reportSheetState(input({ canView: false, knownCellDeleted: true }))).toBe("dismiss");
-  });
-
-  it("com a permissão, abre quando o relatório é de célula excluída", () => {
-    expect(reportSheetState(input({ detail: detail({ cell_deleted: true }) }))).toBe("open");
-  });
-
-  it("tocado na lista (a linha já diz 'Célula excluída'): abre enquanto carrega, com o Skeleton", () => {
-    expect(reportSheetState(input({ knownCellDeleted: true }))).toBe("open");
-  });
-
-  it("link direto ou recarregar: espera a leitura fechado, sem piscar; se ela falhar, abre com 'Tentar de novo'", () => {
-    expect(reportSheetState(input({}))).toBe("closed");
-    expect(reportSheetState(input({ failed: true }))).toBe("open");
-  });
-
-  it("já aberto para o relatório (QA-E201-PR4-1): continua aberto enquanto lê de novo, até o resultado", () => {
-    // "Tentar de novo" num link direto: a leitura volta a carregar, sem o erro.
-    expect(reportSheetState(input({ alreadyOpen: true }))).toBe("open");
-    // O resultado ainda decide: relatório de célula não excluída sai da URL.
-    expect(reportSheetState(input({ alreadyOpen: true, detail: detail({ cell_deleted: false }) }))).toBe("dismiss");
-    expect(reportSheetState(input({ alreadyOpen: true, canView: false }))).toBe("dismiss");
-    expect(reportSheetState(input({ alreadyOpen: true, reportId: null }))).toBe("closed");
-  });
-
-  it("relatório de célula não excluída: ignorado e sai da URL (a consulta é só desse relatório neste passo)", () => {
-    expect(reportSheetState(input({ detail: detail({ cell_deleted: false }) }))).toBe("dismiss");
-    expect(reportSheetState(input({ detail: detail({ cell_deleted: null }) }))).toBe("dismiss");
-    // A lista estava desatualizada (a célula foi restaurada): vale a leitura.
-    expect(reportSheetState(input({ knownCellDeleted: true, detail: detail({ cell_deleted: false }) }))).toBe("dismiss");
-  });
-
-  it("relatório que não veio (excluído no meio tempo ou fora do escopo): abre com 'não existe ou já foi excluído'", () => {
-    expect(reportSheetState(input({ detail: null }))).toBe("open");
-  });
-});
-
-describe("toReportSheetView: célula realizada (T7, UX-27)", () => {
-  it("cabeçalho, data e hora, tema, participantes, visitantes, oferta em BRL e observações", () => {
-    const view = toReportSheetView(
-      detail({ observations: "Muito boa" }, [
-        { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
-        { member_id: "m2", member_name: "Bruno Lima", member_deleted: false },
-      ]),
-    );
-    expect(view).toEqual({
-      status: "held",
-      title: "Relatório de 19/11/2026",
-      cellLine: "Célula de Carlos Lima",
-      cellDeleted: true,
-      deletedCellsPath: "/cells/deleted?q=Carlos+Lima",
-      dateTime: "Quinta, 19/11/2026 às 20:00",
-      theme: "Fé que move montanhas",
-      participants: ["Ana Souza", "Bruno Lima"],
-      visitorsCount: 2,
-      visitors: "João, Maria",
-      offering: brl("R$ 50,00"),
-      observations: "Muito boa",
-    });
-  });
-
-  it("o participante excluído aparece só pelo nome, em ordem alfabética, e conta no total (RN-13)", () => {
-    const view = toReportSheetView(
-      detail({}, [
-        { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
-        { member_id: "m9", member_name: "Sara Reis", member_deleted: true },
-      ]),
-    );
-    expect(view.status === "held" && view.participants).toEqual(["Ana Souza", "Sara Reis"]);
-  });
-
-  it("campos vazios: 'Não informado'; sem participantes, a lista vazia; sem visitantes, 'Nenhum visitante.'; oferta 0 é R$ 0,00", () => {
-    const view = toReportSheetView(detail({ theme: "  ", observations: "", visitors: [], offering: 0 }));
+describe("toReportSheetView (T10, T11, T12)", () => {
+  it("R1 lido por id: o título, a célula atual, a reunião, os visitantes, a oferta, as pessoas registradas e o endereço", () => {
+    const view = toReportSheetView(reportDetailRow(), null);
     expect(view).toMatchObject({
-      status: "held",
-      theme: "Não informado",
-      observations: "Não informado",
-      participants: [],
-      visitorsCount: 0,
-      visitors: "Nenhum visitante.",
-      offering: brl("R$ 0,00"),
+      title: "Relatório de 18/11/2026",
+      cellLine: "Célula de André Souza · Quarta · 20:00",
+      held: true,
+      cellDeleted: false,
+      meeting: {
+        dateLabel: "Data e horário",
+        dateTime: "Quarta, 18/11/2026 às 20:00",
+        theme: "A fé que vence",
+        reason: null,
+        offering: "R$ 50,00",
+        observations: "Dois visitantes do trabalho do Caio",
+        participantsCount: 8,
+        visitors: ["João Pereira", "Maria Lima"],
+      },
+      address: ["Rua das Flores, 100", "Centro · Porto Alegre, RS", "CEP 90010-000"],
     });
+    expect(view?.people).toEqual([
+      { label: "Líder", value: "André Souza" },
+      { label: "Timóteo", value: "Caio Lima" },
+      { label: "Anfitrião", value: "Carla Dias" },
+      { label: "G12", value: "Pedro Alves", none: false },
+      { label: "Tipo", value: "Evangelística" },
+    ]);
   });
 
-  it("sem oferta, 'Não informado'; visitantes sem nome não contam", () => {
-    const view = toReportSheetView(detail({ offering: null, visitors: ["João", " ", ""] }));
-    expect(view).toMatchObject({ offering: "Não informado", visitorsCount: 1, visitors: "João" });
+  it("R5, com o retrato: o topo é a célula atual, e as pessoas são as registradas (P-LRE-22)", () => {
+    const view = toReportSheetView(reportDetailRow({ snapshot_leader_name: "Fábio Lima", snapshot_cell_type: "Discipulado" }), null);
+    expect(view?.cellLine).toBe("Célula de André Souza · Quarta · 20:00");
+    expect(view?.people?.[0]).toEqual({ label: "Líder", value: "Fábio Lima" });
+    expect(view?.people?.[4]).toEqual({ label: "Tipo", value: "Discipulado" });
   });
 
-  it("participantes em ordem alfabética do português, qualquer que seja a ordem da consulta", () => {
-    // A ordem do banco depende da collation dele: outra poria "Álvaro" depois de "Zuleica".
+  it("Não houve célula: Reunião prevista e o motivo, sem tema, oferta, visitantes e participantes, mesmo vindos do legado", () => {
     const view = toReportSheetView(
-      detail({}, [
-        { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
-        { member_id: "m2", member_name: "Zuleica Zanetti", member_deleted: false },
-        { member_id: "m3", member_name: "Álvaro Dias", member_deleted: true },
-        { member_id: "m4", member_name: " Bruno Lima ", member_deleted: false },
-      ]),
+      reportDetailRow({ was_held: false, reason_not_held: "Chuva forte no bairro", date: "2026-11-11", theme: "Legado", offering: 10 }),
+      null,
     );
-    expect(view.status === "held" && view.participants).toEqual(["Álvaro Dias", "Ana Souza", "Bruno Lima", "Zuleica Zanetti"]);
+    expect(view?.meeting).toMatchObject({
+      dateLabel: "Reunião prevista",
+      reason: "Chuva forte no bairro",
+      theme: null,
+      offering: null,
+      visitors: [],
+      participantsCount: 0,
+    });
   });
 
-  it("participante sem nome: 'Membro sem nome'", () => {
-    const view = toReportSheetView(detail({}, [{ member_id: "m1", member_name: null, member_deleted: true }]));
-    expect(view.status === "held" && view.participants).toEqual(["Membro sem nome"]);
+  it("só com a linha da lista (prévia): o topo e o relatório na hora, as pessoas e o endereço completo ainda não", () => {
+    const view = toReportSheetView(undefined, reportListRow());
+    expect(view?.title).toBe("Relatório de 18/11/2026");
+    expect(view?.meeting.theme).toBe("A fé que vence");
+    expect(view?.people).toBeNull();
+    expect(view?.address).toBeNull();
+  });
+
+  it("sem leitura nem prévia, nada (o corpo em Skeleton); sem observações, nada; sem endereço, lista vazia", () => {
+    expect(toReportSheetView(undefined, null)).toBeNull();
+    expect(toReportSheetView(reportDetailRow({ observations: "  " }), null)?.meeting.observations).toBeNull();
+    expect(
+      toReportSheetView(
+        reportDetailRow({ cell_street: null, cell_number: null, cell_neighborhood: null, cell_city: null, cell_state: null, cell_zip_code: null }),
+        null,
+      )?.address,
+    ).toEqual([]);
+  });
+
+  it("G12 nenhum: o — com a marca para o leitor de tela", () => {
+    const view = toReportSheetView(reportDetailRow({ snapshot_leader_g12_level: null, snapshot_g12_leader_name: null }), null);
+    expect(view?.people?.[3]).toEqual({ label: "G12", value: "—", none: true });
+  });
+
+  it("a data por extenso, sem hora quando não há", () => {
+    expect(reportSheetDateTime("2026-11-22", "18:00:00")).toBe("Domingo, 22/11/2026 às 18:00");
+    expect(reportSheetDateTime("2026-11-22", null)).toBe("Domingo, 22/11/2026");
   });
 });
 
-describe("toReportSheetView: 'Não houve célula' (T7)", () => {
-  it("situação 'Não realizada' com o motivo, sem tema, participantes, visitantes e oferta", () => {
-    const view = toReportSheetView(
-      detail({ was_held: false, theme: null, reason_not_held: "Chuva forte", offering: 0 }, [
-        { member_id: "m1", member_name: "Ana Souza", member_deleted: false },
+describe("sortParticipantNames (DA-8)", () => {
+  it("sem diferenciar acentos e maiúsculas, com o id no empate; o excluído aparece igual", () => {
+    expect(
+      sortParticipantNames([
+        { member_id: "2", member_name: "Débora Lins" },
+        { member_id: "1", member_name: "André Souza" },
+        { member_id: "4", member_name: "ana Paula" },
+        { member_id: "3", member_name: "Ana Paula" },
+        { member_id: "5", member_name: null },
       ]),
-    );
-    expect(view).toEqual({
-      status: "notHeld",
-      title: "Relatório de 19/11/2026",
-      cellLine: "Célula de Carlos Lima",
-      cellDeleted: true,
-      deletedCellsPath: "/cells/deleted?q=Carlos+Lima",
-      dateTime: "Quinta, 19/11/2026 às 20:00",
-      reason: "Chuva forte",
-      observations: "Não informado",
-    });
-  });
-
-  it("sem motivo, 'Não informado'", () => {
-    expect(toReportSheetView(detail({ was_held: false, reason_not_held: null }))).toMatchObject({ reason: "Não informado" });
+    ).toEqual(["Ana Paula", "ana Paula", "André Souza", "Débora Lins", "Membro sem nome"]);
   });
 });
 
-describe("toReportSheetView: a célula e o líder", () => {
-  it("célula não excluída: sem a indicação (para o E2.12 reaproveitar o painel)", () => {
-    expect(toReportSheetView(detail({ cell_deleted: false })).cellDeleted).toBe(false);
-  });
+describe("reportSheetActions (RN-16 c, UXD-9)", () => {
+  const has =
+    (...perms: string[]): HasPermission =>
+    (permission) =>
+      perms.includes(permission);
 
-  it("célula sem líder: 'Membro sem nome', como nos rótulos da linha, e a lista de excluídas sem busca", () => {
-    const view = toReportSheetView(detail({ cell_leader_name: null }));
-    expect(view.cellLine).toBe("Célula de Membro sem nome");
-    expect(view.deletedCellsPath).toBe("/cells/deleted");
-  });
-
-  it("o nome do líder vai codificado na busca", () => {
-    expect(toReportSheetView(detail({ cell_leader_name: "Ana & Zé" })).deletedCellsPath).toBe("/cells/deleted?q=Ana+%26+Z%C3%A9");
-  });
-});
-
-describe("reportDateTime", () => {
-  it("dia da semana, data dd/MM/aaaa e hora em 24 h", () => {
-    expect(reportDateTime({ date: "2026-11-22", time: "09:05:00" })).toBe("Domingo, 22/11/2026 às 09:05");
-    expect(reportDateTime({ date: "2026-11-28", time: "23:30:00" })).toBe("Sábado, 28/11/2026 às 23:30");
-  });
-
-  it("sem hora, só o dia e a data; sem data, 'Não informado'", () => {
-    expect(reportDateTime({ date: "2026-11-19", time: null })).toBe("Quinta, 19/11/2026");
-    expect(reportDateTime({ date: null, time: "20:00:00" })).toBe("Não informado");
-  });
-
-  describe("não depende do fuso do navegador", () => {
-    const originalTz = process.env.TZ;
-    afterEach(() => {
-      if (originalTz === undefined) delete process.env.TZ;
-      else process.env.TZ = originalTz;
-      vi.resetModules();
+  it("Caio, sem editar nem excluir: só os links", () => {
+    expect(reportSheetActions(has(), reportDetailRow())).toEqual({
+      edit: false,
+      delete: false,
+      viewCell: true,
+      seeDeletedCells: false,
+      cellId: reportDetailRow().cell_id,
     });
+  });
 
-    // A data e a hora do relatório são colunas sem fuso, já no horário de
-    // Brasília: o dia não pode mudar em Tóquio (UTC+9) nem em Los Angeles (UTC-8).
-    it.each(["Asia/Tokyo", "America/Los_Angeles"])("%s", async (tz) => {
-      process.env.TZ = tz;
-      vi.resetModules();
-      const { reportDateTime: format } = await import("./report-sheet");
-      expect(format({ date: "2026-11-22", time: "00:30:00" })).toBe("Domingo, 22/11/2026 às 00:30");
-      expect(format({ date: "2026-11-28", time: "23:30:00" })).toBe("Sábado, 28/11/2026 às 23:30");
-    });
+  it("Pedro edita e exclui; Lia, sem ver a célula, não tem Ver célula", () => {
+    expect(reportSheetActions(has("edit_cell_report", "delete_cell_report"), reportDetailRow())).toMatchObject({ edit: true, delete: true });
+    expect(reportSheetActions(has(), reportDetailRow({ cell_visible: false })).viewCell).toBe(false);
+  });
+
+  it("célula excluída: sem Editar e sem Ver célula; Excluir continua", () => {
+    const actions = reportSheetActions(has("edit_cell_report", "delete_cell_report", "manage_roles"), reportDetailRow({ cell_deleted: true }));
+    expect(actions).toMatchObject({ edit: false, delete: true, viewCell: false, seeDeletedCells: true });
   });
 });

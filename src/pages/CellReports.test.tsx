@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup as cleanupRender, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fakeQueries, fakeRpcs, resetFakeSupabase, respondToRpc, respondWith } from "@/test/fake-supabase";
-import type { CellReportPageRow } from "@/lib/cell-reports/fields";
+import type { CellReportListRow } from "@/lib/cell-reports/fields";
 import CellReports from "./CellReports";
-import { reportRowLeaderColumns, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
+import { reportListRow, reportSnapshotColumns } from "@/test/report-snapshot-fixture";
 
-// Ação "Excluir" e relatório de célula excluída na lista de Relatórios
-// (E2.01, T1, T2, T7, UX-01 a UX-04, UX-25 e a parte do UX-26 deste PR).
+// A lista de Relatórios (E2.12, T1 a T13): as ações da linha (E2.01), os atalhos, os estados, a
+// consulta e quem lança (E2.02).
 
 vi.mock("@/integrations/supabase/client", async () => {
   const { fakeSupabase } = await import("@/test/fake-supabase");
@@ -37,40 +37,52 @@ vi.mock("@/contexts/AuthContext", () => ({
 const toast = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 
-const row = (overrides: Partial<CellReportPageRow>): CellReportPageRow => ({
-  id: "r1",
-  cell_id: "c1",
-  date: "2026-11-19",
-  time: "20:00:00",
-  theme: "Fé",
-  observations: null,
-  visitors: [],
-  offering: 0,
-  was_held: true,
-  reason_not_held: null,
-  visitors_count: 0,
-  ...reportRowLeaderColumns,
-  snapshot_leader_name: "Carlos Lima",
-  cell_street: "Rua das Flores",
-  cell_number: "120",
-  cell_complement: null,
-  cell_neighborhood: "Centro",
-  cell_deleted: false,
-  ...overrides,
-});
+const R1 = "11111111-1111-4111-8111-111111111111";
+const R2 = "22222222-2222-4222-8222-222222222222";
+const row = (overrides: Partial<CellReportListRow>): CellReportListRow =>
+  reportListRow({
+    id: R1,
+    date: "2026-11-19",
+    theme: "Fé",
+    offering: 0,
+    visitors: [],
+    visitors_count: 0,
+    participants_count: 3,
+    snapshot_leader_name: "Carlos Lima",
+    cell_leader_name: "Carlos Lima",
+    cell_number: "120",
+    ...overrides,
+  });
 
-const rows = [row({}), row({ id: "r2", date: "2026-11-12", snapshot_leader_name: "Rui Prado", cell_deleted: true })];
+const rows = [row({}), row({ id: R2, date: "2026-11-12", snapshot_leader_name: "Rui Prado", cell_leader_name: "Rui Prado", cell_deleted: true })];
 
-function renderReports() {
+const WEEKS = {
+  today: "2026-11-24",
+  this_week_start: "2026-11-22",
+  this_week_end: "2026-11-28",
+  last_week_start: "2026-11-15",
+  last_week_end: "2026-11-21",
+  week_before_last_start: "2026-11-08",
+  week_before_last_end: "2026-11-14",
+};
+
+function respondList(list: CellReportListRow[]) {
+  respondToRpc("cell_reports_list", { data: list });
+  respondToRpc("cell_reports_list_count", { data: list.length });
+}
+
+function renderReports({ list = rows, weeks = true, path = "/cell-reports" }: { list?: CellReportListRow[]; weeks?: boolean; path?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  respondWith({ data: rows, count: rows.length }, { data: rows.map((r) => ({ id: r.id, participants_count: 3 })) });
+  respondList(list);
+  if (weeks) respondToRpc("server_weeks", { data: [WEEKS] });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <CellReports />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 const originalWidth = window.innerWidth;
@@ -113,7 +125,7 @@ describe("Relatórios: ação Excluir e célula excluída", () => {
     respondToRpc("delete_cell_report", {});
     fireEvent.click(within(dialog).getByRole("button", { name: "Excluir relatório" }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Relatório excluído." }));
-    expect(fakeRpcs().map((call) => [call.fn, call.args])).toEqual([["delete_cell_report", { _report_id: "r1" }]]);
+    expect(fakeRpcs().filter((call) => call.fn === "delete_cell_report").map((call) => call.args)).toEqual([{ _report_id: R1 }]);
     expect(fakeQueries().some((query) => query.methods().includes("delete"))).toBe(false);
   });
 
@@ -185,11 +197,11 @@ describe("Relatórios: o foco volta a quem abriu o diálogo (Acessibilidade, WCA
     const dialog = await screen.findByRole("alertdialog");
     respondToRpc("delete_cell_report", {});
     // A lista recarregada, só com o relatório de Rui.
-    respondWith({ data: [rows[1]], count: 1 }, { data: [{ id: "r2", participants_count: 3 }] });
+    respondList([rows[1]]);
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Excluir relatório" }));
 
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "Buscar relatórios" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("searchbox", { name: "Buscar" })).toHaveFocus());
     expect(trash).not.toBeInTheDocument();
     expect(screen.getByText("Rui Prado")).toBeInTheDocument();
   });
@@ -262,5 +274,102 @@ describe("Relatórios: quem lança e o alcance (E2.02)", () => {
     renderReports();
     expect(screen.queryByRole("button", { name: "Novo relatório" })).not.toBeInTheDocument();
     expect(document.querySelector('[aria-hidden="true"].h-11')).not.toBeNull();
+  });
+});
+
+// E2.12: atalhos, estados, textos e a consulta (UX-02, UX-03, UX-05, UX-25, UX-26, UX-31).
+describe("Relatórios: atalhos, estados e consulta (E2.12)", () => {
+  beforeAll(() => vi.stubGlobal("ResizeObserver", NoopResizeObserver));
+  afterAll(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    resetFakeSupabase();
+    auth.permissions = new Set(["delete_cell_report", "edit_cell_report"]);
+    auth.permissionsLoaded = true;
+    auth.access = null;
+    setWidth(360);
+  });
+  afterEach(() => setWidth(originalWidth));
+
+  it("UX-05: sem a data do servidor, os atalhos ficam desabilitados no lugar; com ela, o toque grava as datas e chama a lista com o Período (UX-03)", async () => {
+    renderReports({ weeks: false });
+    await screen.findByText("Carlos Lima");
+    const group = screen.getByRole("group", { name: "Atalhos de semana" });
+    expect(group).toHaveAttribute("aria-busy", "true");
+    expect(within(group).getAllByRole("radio")).toHaveLength(3);
+    for (const radio of within(group).getAllByRole("radio")) expect(radio).toBeDisabled();
+    expect(fakeRpcs().some((call) => call.fn === "server_weeks")).toBe(true);
+  });
+
+  it("UX-03: o atalho marca, aplica o Período e não desmarca no segundo toque", async () => {
+    renderReports();
+    const thisWeek = await screen.findByRole("radio", { name: "Esta semana, de 22/11/2026 a 28/11/2026" });
+    await waitFor(() => expect(thisWeek).toBeEnabled());
+    respondList([rows[0]]);
+    fireEvent.click(thisWeek);
+    await waitFor(() => expect(thisWeek).toHaveAttribute("aria-checked", "true"));
+    await screen.findByRole("button", { name: "Remover filtro De: 22/11/2026" });
+    const listCalls = () => fakeRpcs().filter((call) => call.fn === "cell_reports_list");
+    expect(listCalls().at(-1)?.args).toMatchObject({ _date_from: "2026-11-22", _date_to: "2026-11-28", _offset: 0 });
+    const before = listCalls().length;
+    fireEvent.click(thisWeek);
+    expect(thisWeek).toHaveAttribute("aria-checked", "true");
+    expect(listCalls()).toHaveLength(before);
+  });
+
+  it("UX-26, UX-31: na falha, o Alert do Negócio com Tentar de novo, sem texto técnico; a busca e os atalhos continuam", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    respondToRpc("cell_reports_list", { error: { code: "57014", message: "canceling statement due to statement timeout" } });
+    respondToRpc("cell_reports_list_count", { data: 0 });
+    respondToRpc("server_weeks", { data: [WEEKS] });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/cell-reports"]}>
+          <CellReports />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Não foi possível carregar os relatórios. Verifique a conexão e tente de novo.")).toBeInTheDocument();
+    expect(screen.queryByText(/statement timeout|57014/)).not.toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Buscar" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Atalhos de semana" })).toBeInTheDocument();
+    respondList(rows);
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByText("Carlos Lima")).toBeInTheDocument();
+  });
+
+  it("UX-26: vazio sem filtros e vazio com filtros, com Limpar filtros", async () => {
+    renderReports({ list: [] });
+    expect(await screen.findByText("Nenhum relatório encontrado.")).toBeInTheDocument();
+    cleanupRender();
+    resetFakeSupabase();
+    renderReports({ list: [], path: "/cell-reports?held=no" });
+    expect(await screen.findByText("Nenhum relatório encontrado com estes filtros.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Limpar filtros" })).toHaveLength(2);
+    expect(screen.getByRole("status")).toHaveTextContent("0 relatórios");
+  });
+
+  it("UX-02: nenhum dos textos evitados na lista", async () => {
+    renderReports({ list: [...rows, row({ id: "33333333-3333-4333-8333-333333333333", was_held: false, reason_not_held: "Chuva" })] });
+    await screen.findAllByText("Carlos Lima");
+    const text = document.body.textContent ?? "";
+    for (const forbidden of ["presenças", "Presenças", "Não Realizada", "Não realizada", "Cancelada", "Status", "Relatórios de Células", "Célula sem líder", "Close", "Desde"])
+      expect(text).not.toContain(forbidden);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Relatórios");
+  });
+
+  it("UX-25: a falha só dos participantes mostra a mensagem da seção, e o resto da consulta funciona", async () => {
+    renderReports();
+    const open = await screen.findByRole("button", { name: "Ver o relatório de 19/11/2026, Carlos Lima" });
+    respondWith(
+      { data: { ...row({}), ...reportSnapshotColumns("Carlos Lima"), cell_city: null, cell_state: null, cell_zip_code: null, cell_visible: true, created_at: null, created_by_kind: "unknown", created_by_name: null, updated_at: null, updated_by_kind: null, updated_by_name: null } },
+      { error: { code: "XX000", message: "falhou" } },
+    );
+    fireEvent.click(open);
+    const dialog = await screen.findByRole("dialog", { name: "Relatório de 19/11/2026" });
+    expect(await within(dialog).findByText("Não foi possível carregar os participantes. Verifique a conexão e tente de novo.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Fé")).toBeInTheDocument();
+    // Um para cada tamanho (P80): o CSS esconde o do outro, e o jsdom não aplica o CSS.
+    expect(within(dialog).getAllByRole("button", { name: "Editar relatório" })).toHaveLength(2);
+    expect(within(dialog).queryByText(/XX000|falhou/)).not.toBeInTheDocument();
   });
 });

@@ -1,58 +1,36 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toRange } from "@/lib/pagination";
-import { toSearchPatterns } from "@/lib/search";
-import { fetchListPage, withSearch, type ListParams, type ListResult } from "@/lib/list-query";
-import {
-  CELL_REPORT_ROW_SELECT,
-  PARTICIPANT_COUNT_SELECT,
-  withParticipantCounts,
-  type CellReportRow,
-} from "@/lib/cell-reports/fields";
+import type { ListParams, ListResult } from "@/lib/list-query";
+import { CELL_REPORT_LIST_SELECT, type CellReportListRow } from "@/lib/cell-reports/fields";
+import { EMPTY_CELL_REPORT_FILTERS, toCellReportsListArgs, type CellReportFilters } from "@/lib/cell-reports/filters";
+
+/** A chave das páginas da lista (a exclusão pela consulta tira o relatório delas, DA-12). */
+export const CELL_REPORTS_LIST_KEY = ["cell_reports", "list"] as const;
 
 /**
- * Relatórios visíveis, paginados no servidor, com total exato (E1.08, RN-01 a
- * RN-04). Da data mais recente para a mais antiga.
- *
- * O número de participantes vem de uma segunda consulta, só com os ids da
- * página: pedido junto com a página, ele seria calculado para todos os
- * relatórios visíveis (ver CELL_REPORT_ROW_SELECT).
- *
- * `cellId` é o filtro Célula (E2.10, RN-19): só os relatórios visíveis daquela célula, na página e
- * no total.
+ * Relatórios visíveis, filtrados e paginados no servidor, com o total exato (E2.12, RN-01 a RN-03):
+ * a página pela `cell_reports_list` e o total pela `cell_reports_list_count`, em paralelo. A ordem
+ * (data e horário mais recentes primeiro, RN-13) é a da RPC: nada de `.order()` aqui. O número de
+ * participantes vem na linha, calculado só para a página (DT-03).
  */
-export function useCellReportsList({ page, pageSize, search }: ListParams, cellId: string | null = null) {
+export function useCellReportsList(
+  { page, pageSize, search }: ListParams,
+  filters: CellReportFilters = EMPTY_CELL_REPORT_FILTERS,
+) {
   return useQuery({
-    queryKey: ["cell_reports", "list", { page, pageSize, search, cellId }],
+    queryKey: [...CELL_REPORTS_LIST_KEY, { page, pageSize, search, filters }],
     placeholderData: keepPreviousData,
-    queryFn: async (): Promise<ListResult<CellReportRow>> => {
-      const patterns = toSearchPatterns(search);
-      const [from, to] = toRange(page, pageSize);
-      let pageQuery = withSearch(supabase.from("cell_reports_view").select(CELL_REPORT_ROW_SELECT, { count: "exact" }), patterns);
-      if (cellId) pageQuery = pageQuery.eq("cell_id", cellId);
-      const countAll = () => {
-        const countQuery = withSearch(supabase.from("cell_reports_view").select("id", { count: "exact", head: true }), patterns);
-        return cellId ? countQuery.eq("cell_id", cellId) : countQuery;
-      };
-      const { rows, total } = await fetchListPage(
-        pageQuery
-          .order("date", { ascending: false })
-          .order("time", { ascending: false })
-          .order("id")
-          .range(from, to),
-        countAll,
-      );
-      if (rows.length === 0) return { rows: [], total };
-
-      const { data: counts, error } = await supabase
-        .from("cell_reports_view")
-        .select(PARTICIPANT_COUNT_SELECT)
-        .in(
-          "id",
-          rows.map((r) => r.id),
-        );
-      if (error) throw error;
-      return { rows: withParticipantCounts(rows, counts ?? []), total };
+    queryFn: async (): Promise<ListResult<CellReportListRow>> => {
+      const args = toCellReportsListArgs(filters, search);
+      const [rowsResult, countResult] = await Promise.all([
+        supabase
+          .rpc("cell_reports_list", { ...args, _limit: pageSize, _offset: (page - 1) * pageSize })
+          .select(CELL_REPORT_LIST_SELECT),
+        supabase.rpc("cell_reports_list_count", args),
+      ]);
+      if (rowsResult.error) throw rowsResult.error;
+      if (countResult.error) throw countResult.error;
+      return { rows: rowsResult.data ?? [], total: countResult.data ?? 0 };
     },
   });
 }

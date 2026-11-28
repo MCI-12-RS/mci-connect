@@ -7,7 +7,7 @@ import { PersonMultiFilter } from "./PersonMultiFilter";
 import type { OptionsPagination, SelectSearch } from "@/hooks/use-paginated-select";
 import { REPORT_STATUS_FILTER, reportStatusFilterLabel, type ReportStatusFilterOption } from "@/lib/cells/report-status";
 import { CELL_FILTER_TEXTS } from "@/lib/cells/filter-texts";
-import { CELL_REPORT_FILTER_TEXTS } from "@/lib/cell-reports/texts";
+import { CELL_REPORT_FILTER_TEXTS } from "@/lib/cell-reports/filter-texts";
 import type { SelectOption } from "@/lib/selectors";
 
 // Componentes de filtro do E2.10 (tarefa 6): P85 (múltipla escolha em subgrupos), P84 (filtro por
@@ -73,7 +73,7 @@ describe("GroupedMultiChoiceFilter (P85, UX-10, UX-28)", () => {
 });
 
 describe("RecordFilterChip (P84, UX-25, UX-30)", () => {
-  const texts = CELL_REPORT_FILTER_TEXTS.chip;
+  const texts = CELL_REPORT_FILTER_TEXTS.cell;
   it.each([
     [{ kind: "loading" } as const, "Célula: carregando…"],
     [{ kind: "failed" } as const, "Célula: não carregada"],

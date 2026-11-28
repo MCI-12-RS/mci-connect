@@ -20,6 +20,20 @@ export const WEEKDAY_OPTIONS: ReadonlyArray<{ readonly label: string; readonly v
   { label: "Domingo", value: "Domingo" },
 ];
 
+/**
+ * O dia abreviado da lista de Relatórios (E2.12, UXD-15, RN-15): "Qua, 18/11/2026". O leitor de
+ * tela ouve o dia gravado ("Quarta"). Um dia novo em `WEEKDAYS` quebra a compilação até ganhar a sua.
+ */
+export const WEEKDAY_ABBREVIATIONS = {
+  Domingo: "Dom",
+  Segunda: "Seg",
+  Terça: "Ter",
+  Quarta: "Qua",
+  Quinta: "Qui",
+  Sexta: "Sex",
+  Sábado: "Sáb",
+} as const satisfies Record<Weekday, string>;
+
 /** O rótulo por extenso do dia gravado ("Quarta" → "Quarta-feira"); um valor desconhecido volta como veio. */
 export function weekdayLongLabel(day: string): string {
   return WEEKDAY_OPTIONS.find((option) => option.value === day)?.label ?? day;
